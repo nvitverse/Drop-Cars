@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dc_yellow">#F59E0B</color>
+    <color name="dc_yellow_dark">#D97706</color>
+    <color name="dc_black">#111827</color>
+    <color name="dc_white">#FFFFFF</color>
+    <color name="dc_surface">#F9FAFB</color>
+    <color name="dc_gray">#6B7280</color>
+    <color name="dc_green">#10B981</color>
+    <color name="dc_red">#EF4444</color>
+    <color name="dc_blue">#3B82F6</color>
+    <color name="statusBarColor">#D97706</color>
+</resources>

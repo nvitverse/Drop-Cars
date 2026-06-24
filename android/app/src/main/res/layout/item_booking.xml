@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp"
+    android:layout_marginBottom="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <TextView android:id="@+id/tvVehicleHistory"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textStyle="bold" android:textColor="@color/dc_black"/>
+
+            <TextView android:id="@+id/tvStatusHistory"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:background="#FFF9E6"
+                android:textColor="@color/dc_yellow"
+                android:textStyle="bold"
+                android:textSize="11sp"
+                android:padding="4dp"/>
+        </LinearLayout>
+
+        <TextView android:id="@+id/tvPickupHistory"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="13sp" android:textColor="@color/dc_gray"
+            android:drawableStart="@drawable/ic_car"
+            android:drawablePadding="4dp"
+            android:layout_marginBottom="2dp"/>
+
+        <TextView android:id="@+id/tvDropHistory"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="13sp" android:textColor="@color/dc_gray"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView android:id="@+id/tvDateHistory"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp" android:textColor="@color/dc_gray"/>
+
+            <TextView android:id="@+id/tvFareHistory"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textStyle="bold" android:textSize="16sp"
+                android:textColor="@color/dc_black"/>
+        </LinearLayout>
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

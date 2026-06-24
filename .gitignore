@@ -1,0 +1,23 @@
+# Node / Backend
+node_modules/
+backend/.env
+backend/firebase-service-account.json
+
+# Admin Panel
+admin-panel/node_modules/
+admin-panel/dist/
+
+# Android
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/google-services.json
+*.keystore
+*.jks
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store

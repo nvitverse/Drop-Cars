@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main_nav"
+    app:startDestination="@id/homeFragment">
+
+    <fragment android:id="@+id/homeFragment"
+        android:name="in.dropcars.app.ui.home.HomeFragment"
+        android:label="Home">
+        <action android:id="@+id/action_home_to_booking"
+            app:destination="@id/bookingFragment"/>
+    </fragment>
+
+    <fragment android:id="@+id/bookingFragment"
+        android:name="in.dropcars.app.ui.booking.BookingFragment"
+        android:label="Book a Ride">
+        <action android:id="@+id/action_booking_to_ride"
+            app:destination="@id/rideFragment"/>
+    </fragment>
+
+    <fragment android:id="@+id/rideFragment"
+        android:name="in.dropcars.app.ui.ride.RideFragment"
+        android:label="Active Ride">
+        <argument android:name="bookingId" app:argType="string"/>
+        <action android:id="@+id/action_ride_to_home"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/homeFragment"
+            app:popUpToInclusive="true"/>
+        <action android:id="@+id/action_ride_to_history"
+            app:destination="@id/historyFragment"
+            app:popUpTo="@id/homeFragment"/>
+    </fragment>
+
+    <fragment android:id="@+id/historyFragment"
+        android:name="in.dropcars.app.ui.history.HistoryFragment"
+        android:label="My Rides"/>
+
+    <fragment android:id="@+id/profileFragment"
+        android:name="in.dropcars.app.ui.profile.ProfileFragment"
+        android:label="Profile"/>
+</navigation>

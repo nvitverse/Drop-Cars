@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="120dp"
+    android:layout_height="110dp"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="8dp"
+    android:layout_marginEnd="10dp"
+    android:background="@drawable/bg_vehicle_selector"
+    android:clickable="true"
+    android:focusable="true">
+
+    <ImageView
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_car"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/tvVehicleLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:textColor="@color/dc_black"/>
+
+    <TextView
+        android:id="@+id/tvVehicleExamples"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="@color/dc_gray"
+        android:gravity="center"
+        android:maxLines="1"
+        android:ellipsize="end"/>
+
+    <TextView
+        android:id="@+id/tvVehicleCapacity"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="@color/dc_gray"/>
+
+    <TextView
+        android:id="@+id/tvBasefare"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="@color/dc_yellow"
+        android:textStyle="bold"/>
+</LinearLayout>

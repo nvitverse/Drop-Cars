@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DropCars" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/dc_yellow</item>
+        <item name="colorPrimaryVariant">@color/dc_yellow_dark</item>
+        <item name="colorOnPrimary">@color/dc_black</item>
+        <item name="colorSecondary">@color/dc_black</item>
+        <item name="colorOnSecondary">@color/dc_white</item>
+        <item name="android:statusBarColor">@color/statusBarColor</item>
+        <item name="android:windowBackground">@color/dc_surface</item>
+    </style>
+
+    <style name="Theme.DropCars.Splash" parent="Theme.DropCars">
+        <item name="android:windowBackground">@color/dc_black</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+</resources>

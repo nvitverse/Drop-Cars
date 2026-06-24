@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Full-screen map -->
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <!-- Bottom Sheet -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/dc_white"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp"
+        android:elevation="8dp"
+        app:layout_anchor="@id/map"
+        app:layout_anchorGravity="bottom">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Where to?"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/dc_black"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Trip type chips -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupTrip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:singleSelection="true"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.chip.Chip android:id="@+id/chipOneWay"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="One Way" android:checked="true"/>
+            <com.google.android.material.chip.Chip android:id="@+id/chipRoundTrip"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Round Trip"/>
+            <com.google.android.material.chip.Chip android:id="@+id/chipAirport"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Airport"/>
+            <com.google.android.material.chip.Chip android:id="@+id/chipOutstation"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Outstation"/>
+            <com.google.android.material.chip.Chip android:id="@+id/chipHourly"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Hourly"/>
+        </com.google.android.material.chip.ChipGroup>
+
+        <!-- Vehicle types -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvVehicles"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:orientation="horizontal"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            android:layout_marginBottom="16dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBookNow"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="@string/btn_book_now"
+            android:backgroundTint="@color/dc_yellow"
+            android:textColor="@color/dc_black"
+            android:textStyle="bold"
+            android:textSize="16sp"/>
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

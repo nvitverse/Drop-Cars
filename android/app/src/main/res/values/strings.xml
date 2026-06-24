@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Drop Cars</string>
+    <string name="label_home">Home</string>
+    <string name="label_bookings">My Rides</string>
+    <string name="label_profile">Profile</string>
+    <string name="btn_book_now">Book Now</string>
+    <string name="btn_estimate">Get Estimate</string>
+    <string name="btn_confirm_booking">Confirm Booking</string>
+    <string name="hint_phone">Phone number</string>
+    <string name="hint_otp">Enter OTP</string>
+    <string name="hint_name">Full name</string>
+    <string name="hint_email">Email (optional)</string>
+    <string name="hint_promo">Promo code (optional)</string>
+    <string name="trip_one_way">One Way</string>
+    <string name="trip_round">Round Trip</string>
+    <string name="trip_airport">Airport Transfer</string>
+    <string name="trip_outstation">Outstation</string>
+    <string name="trip_hourly">Hourly Rental</string>
+</resources>

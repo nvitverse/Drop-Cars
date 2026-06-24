@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="vehicle_types">
+        <item>Hatchback</item>
+        <item>Sedan</item>
+        <item>SUV</item>
+        <item>Luxury</item>
+    </string-array>
+
+    <string-array name="trip_types">
+        <item>One Way</item>
+        <item>Round Trip</item>
+        <item>Airport</item>
+        <item>Outstation</item>
+        <item>Hourly</item>
+    </string-array>
+</resources>

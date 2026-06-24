@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dc_surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Book a Ride"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="@color/dc_black"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Pickup autocomplete (Places SDK) -->
+        <fragment
+            android:id="@+id/pickupAutocomplete"
+            android:name="com.google.android.libraries.places.widget.AutocompleteSupportFragment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Destination autocomplete -->
+        <fragment
+            android:id="@+id/destAutocomplete"
+            android:name="com.google.android.libraries.places.widget.AutocompleteSupportFragment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerVehicle"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_card_default"
+            android:padding="8dp"
+            android:entries="@array/vehicle_types"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerTripType"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_card_default"
+            android:padding="8dp"
+            android:entries="@array/trip_types"
+            android:layout_marginBottom="8dp"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/hint_promo"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_marginBottom="16dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etPromo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapCharacters"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Payment method -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Payment Method" android:textStyle="bold"
+            android:textColor="@color/dc_black" android:layout_marginBottom="8dp"/>
+
+        <RadioGroup android:id="@+id/rgPayment"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginBottom="16dp">
+            <RadioButton android:id="@+id/rbCash"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Cash" android:checked="true"/>
+            <RadioButton android:id="@+id/rbRazorpay"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Online (Razorpay)"/>
+        </RadioGroup>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEstimate"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="@string/btn_estimate"
+            android:backgroundTint="@color/dc_black"
+            android:textColor="@color/dc_yellow"
+            android:layout_marginBottom="12dp"/>
+
+        <ProgressBar
+            android:id="@+id/progressEstimate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:indeterminateTint="@color/dc_yellow"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Fare card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardFare"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView android:id="@+id/tvDistance"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:textColor="@color/dc_gray" android:textSize="13sp"/>
+                    <TextView android:id="@+id/tvDuration"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:textColor="@color/dc_gray"
+                        android:textSize="13sp" android:gravity="end"/>
+                </LinearLayout>
+
+                <TextView android:id="@+id/tvFareBreakdown"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textColor="@color/dc_gray" android:textSize="12sp"
+                    android:layout_marginTop="8dp"/>
+
+                <TextView android:id="@+id/tvFareTotal"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textSize="28sp" android:textStyle="bold"
+                    android:textColor="@color/dc_yellow" android:layout_marginTop="4dp"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnConfirm"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/btn_confirm_booking"
+            android:backgroundTint="@color/dc_yellow"
+            android:textColor="@color/dc_black"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:visibility="gone"/>
+    </LinearLayout>
+</ScrollView>
