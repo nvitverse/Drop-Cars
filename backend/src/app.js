@@ -39,7 +39,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/payments', paymentRoutes);
 
-app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Drop Cars API', ts: new Date() }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Drop Cars App API', ts: new Date() }));
 
 app.use(errorHandler);
 
@@ -49,7 +49,7 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('MongoDB connected');
-    server.listen(PORT, () => console.log(`Drop Cars API running on port ${PORT}`));
+    server.listen(PORT, () => console.log(`Drop Cars App API running on port ${PORT}`));
   })
   .catch((err) => {
     console.error('MongoDB connection error:', err);

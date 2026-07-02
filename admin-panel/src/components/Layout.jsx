@@ -23,7 +23,7 @@ export default function Layout() {
     <div className="flex h-screen overflow-hidden">
       <aside className={`${collapsed ? 'w-16' : 'w-56'} bg-gray-900 text-white flex flex-col transition-all duration-200 shrink-0`}>
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          {!collapsed && <span className="font-bold text-lg text-yellow-400">Drop Cars</span>}
+          {!collapsed && <span className="font-bold text-lg text-yellow-400">Drop Cars App</span>}
           <button onClick={() => setCollapsed((c) => !c)} className="text-gray-400 hover:text-white text-xl">
             {collapsed ? '→' : '←'}
           </button>

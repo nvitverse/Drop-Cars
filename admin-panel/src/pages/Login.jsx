@@ -28,7 +28,7 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8">
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">🚗</div>
-          <h1 className="text-2xl font-bold text-gray-900">Drop Cars</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Drop Cars App</h1>
           <p className="text-sm text-gray-500 mt-1">Admin Panel</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

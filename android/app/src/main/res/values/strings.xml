@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Drop Cars</string>
+    <string name="app_name">Drop Cars App</string>
     <string name="label_home">Home</string>
     <string name="label_bookings">My Rides</string>
     <string name="label_profile">Profile</string>
