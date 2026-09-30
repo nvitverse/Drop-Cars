@@ -406,3 +406,42 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
         )
 
     return admin
+
+
+def get_current_user_flexible(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> dict:
+    """
+    Flexible token authentication:
+    Validates any valid JWT issued by Drop Cars (Customer, Driver, Vehicle Owner, or Admin).
+    Returns dict with user_id, role, and payload.
+    """
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        role = payload.get("user") or payload.get("role") or "CUSTOMER"
+        if "driver" in str(role).lower():
+            role = "DRIVER"
+        elif "vehicle_owner" in str(role).lower() or "owner" in str(role).lower():
+            role = "VEHICLE_OWNER"
+        elif "admin" in str(role).lower():
+            role = "ADMIN"
+        else:
+            role = "CUSTOMER"
+
+        return {
+            "user_id": user_id,
+            "role": role,
+            "payload": payload
+        }
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

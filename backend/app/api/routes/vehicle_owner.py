@@ -176,6 +176,19 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     from app.crud.vehicle_owner import get_user_by_mobile
     existing = get_user_by_mobile(db, user.mobile_number)
     if not existing:
+        # Check if the user is registered as a duty driver
+        from app.models.car_driver import CarDriver
+        from app.core.security import verify_password
+        duty_driver = db.query(CarDriver).filter(CarDriver.primary_number == user.mobile_number).first()
+        if duty_driver and verify_password(user.password, duty_driver.hashed_password):
+            return {
+                "status": "REDIRECT_REQUIRED",
+                "redirect_hint": {
+                    "role": "DUTY_DRIVER",
+                    "phone": user.mobile_number,
+                    "message": "Your account is registered as a Duty Driver. Please sign in using the Duty Driver login."
+                }
+            }
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT_REGISTERED")
 
     db_user = authenticate_user(db, user)

@@ -192,6 +192,19 @@ async def signin_car_driver(
 
     existing = get_driver_by_mobile(db, signin_data.primary_number)
     if not existing:
+        # Check if the user is registered as a fleet owner
+        from app.models.vehicle_owner import VehicleOwnerCredentials
+        from app.core.security import verify_password
+        owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.mobile_number == signin_data.primary_number).first()
+        if owner and verify_password(signin_data.password, owner.hashed_password):
+            return {
+                "status": "REDIRECT_REQUIRED",
+                "redirect_hint": {
+                    "role": "VEHICLE_OWNER",
+                    "phone": signin_data.primary_number,
+                    "message": "Your account is registered as a Fleet / Vehicle Owner. Please sign in using the Fleet Owner login."
+                }
+            }
         raise HTTPException(status_code=404, detail="NOT_REGISTERED")
 
     # Authenticate driver
