@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
 
-from app.models.orders import Orders
+from app.models.orders import Order, Trip_status
 from app.models.vendor import Vendor
 from app.models.vendor_details import VendorDetails
 
@@ -30,11 +30,11 @@ def generate_vendor_monthly_statement(
     business_name = getattr(vendor_detail, "company_name", None) or getattr(vendor, "full_name", "Vendor")
 
     # Fetch completed orders for the specified month/year
-    completed_orders = db.query(Orders).filter(
-        Orders.vendor_id == vendor_id,
-        Orders.status == "COMPLETED",
-        extract('year', Orders.created_at) == year,
-        extract('month', Orders.created_at) == month
+    completed_orders = db.query(Order).filter(
+        Order.vendor_id == vendor_id,
+        Order.trip_status == Trip_status.COMPLETED,
+        extract('year', Order.start_date_time) == year,
+        extract('month', Order.start_date_time) == month
     ).all()
 
     total_trips = len(completed_orders)

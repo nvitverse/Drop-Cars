@@ -71,8 +71,7 @@ def bump_order_driver_fare(
     Manual Peak / Festival Demand Fare Adjustment:
     Allows Vendor or Admin to increase/adjust driver_fare for pending unassigned bookings.
     """
-    from app.models.orders import Orders
-    import uuid
+    from app.models.orders import Order, Trip_status
 
     new_driver_fare = payload.get("new_driver_fare")
     reason = payload.get("reason", "Peak / Festival demand fare bump")
@@ -82,33 +81,25 @@ def bump_order_driver_fare(
 
     order = None
     try:
-        order_uuid = uuid.UUID(order_id)
-        order = db.query(Orders).filter(Orders.id == order_uuid).first()
+        order_int_id = int(order_id)
+        order = db.query(Order).filter(Order.id == order_int_id).first()
     except ValueError:
-        order = db.query(Orders).filter(Orders.booking_id == order_id).first()
+        pass
 
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if getattr(order, "status", None) not in ("PENDING", "UNASSIGNED", "OPEN"):
-        raise HTTPException(status_code=400, detail=f"Fare can only be adjusted on unassigned/pending orders. Current status: {order.status}")
+    if order.trip_status not in (Trip_status.PENDING,):
+        raise HTTPException(status_code=400, detail=f"Fare can only be adjusted on pending orders. Current status: {order.trip_status}")
 
-    old_fare = float(getattr(order, "driver_fare", 0) or 0)
-    order.driver_fare = new_driver_fare
-
-    # Re-calculate total booking amount if total amount is synchronized
-    extra = float(getattr(order, "extra_amount", 0) or 0)
-    order.total_booking_amount = new_driver_fare + extra
-
+    order.quote_rate_per_km = int(new_driver_fare)
     db.commit()
 
     return {
         "success": True,
         "order_id": order_id,
-        "old_driver_fare": old_fare,
         "new_driver_fare": new_driver_fare,
-        "total_booking_amount": order.total_booking_amount,
         "reason": reason,
-        "message": f"Driver fare updated from ₹{old_fare} to ₹{new_driver_fare} successfully."
+        "message": f"Driver fare updated to ₹{new_driver_fare} successfully."
     }
 

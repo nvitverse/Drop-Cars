@@ -72,6 +72,8 @@ import app.models.customer_wallet_topup
 import app.models.staff_directive
 import app.models.own_fleet
 import app.models.quality_case
+import app.models.sos_alert
+import app.models.fleet_swap_audit
 
 # A startup "ALTER TABLE" needs an exclusive lock. If some other session holds the table (a long transaction), Postgres
 # queues the ALTER - and every later query on that table queues BEHIND it, so the whole live API freezes until the
@@ -180,7 +182,7 @@ from app.api.routes import document_verification
 app.include_router(document_verification.router, prefix="/api", tags=["Document Verification"])
 
 from app.api.routes import sos
-app.include_router(sos.router, prefix="/api/sos", tags=["SOS Alert"])
+app.include_router(sos.router, prefix="/api", tags=["SOS Alert"])
 
 from app.api.routes import ai_automation_log_routes
 app.include_router(ai_automation_log_routes.router, prefix="/api", tags=["AI Automation Logs"])
@@ -224,7 +226,40 @@ app.include_router(driver_ops_router.router, prefix="/api", tags=["Driver Lookup
 
 from app.api.routes import fleet_swap as fleet_swap_router
 app.include_router(fleet_swap_router.router, prefix="/api", tags=["Fleet Driver Swap"])
-import app.models.fleet_swap_audit
+
+
+@app.on_event("startup")
+async def ensure_sos_alerts_and_swap_columns() -> None:
+    """Lightweight migration: add lifecycle and enriched columns to sos_alerts,
+    and ensure fleet_driver_swap_audit table and columns exist."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    statements = [
+        # SOS Alerts new columns
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS driver_id VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS triggered_by_role VARCHAR NOT NULL DEFAULT 'CUSTOMER'",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS customer_phone VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS driver_phone VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS driver_name VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS car_number VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS acknowledged_by VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS resolved_by VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS resolution_notes TEXT",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        # Backfill defaults on existing rows
+        "UPDATE sos_alerts SET updated_at = created_at WHERE updated_at IS NULL AND created_at IS NOT NULL",
+        "UPDATE sos_alerts SET triggered_by_role = 'CUSTOMER' WHERE triggered_by_role IS NULL",
+    ]
+    for stmt in statements:
+        try:
+            db.execute(text(stmt))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"SOS alert migration step failed (continuing): {stmt} -> {e}")
+    db.close()
 
 
 
