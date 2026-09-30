@@ -1,5 +1,6 @@
 import axiosInstance from '@/app/api/axiosInstance';
 import { registerForPushNotificationsAsync } from './notificationService';
+import { syncNotificationSounds } from './soundChannelSync';
 
 export interface NotificationResponse {
   sub: string;
@@ -68,6 +69,8 @@ export async function updateNotificationSettings(payload: {
       token: token
     });
     
+    if (token) syncNotificationSounds(axiosInstance, token).catch(() => {});
+
     console.log('✅ Vehicle owner notification settings updated:', {
       permission1: response.data.permission1,
       permission2: response.data.permission2,

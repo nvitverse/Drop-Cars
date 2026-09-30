@@ -4448,6 +4448,8 @@ async def admin_get_notification_settings(
     return {
         "events": get_all_notification_settings(db),
         "labels": {key: val["label"] for key, val in NOTIFICATION_EVENTS.items()},
+        # Which app receives each type: driver | vendor | customer | admin | all
+        "apps": {key: val.get("app", "driver") for key, val in NOTIFICATION_EVENTS.items()},
         "available_sounds": AVAILABLE_SOUNDS,
     }
 
@@ -4469,18 +4471,30 @@ async def admin_upload_notification_sound(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
-    """Upload a custom MP3 for one event's notification sound. Stored in GCS,
-    no app rebuild needed. Only plays while the app is foreground/open - a
-    background/closed-app notification's sound is frozen to the Android
-    channel's bundled tone at channel-creation time (OS limitation), so this
-    custom sound is delivered to the app via the push payload's `data` field
-    and played client-side with expo-av rather than as the native `sound`."""
+    """Upload a custom MP3 for one notification type. Stored in GCS, no app
+    rebuild needed: each phone downloads it, makes a notification channel
+    with it (see api/routes/notification_sounds.py) and pushes are then sent
+    on that channel, so it plays even when the app is closed. Phones that
+    have not synced yet keep the bundled tone until they open the app."""
     if event_key not in NOTIFICATION_EVENTS:
         raise HTTPException(status_code=404, detail="Unknown notification event")
     if not (file.content_type or "").startswith("audio/"):
         raise HTTPException(status_code=400, detail="File must be an audio file (mp3/wav)")
     url = upload_image_to_gcs(file, folder="notification_sounds")
     updated = update_notification_settings(db, {event_key: {"sound": url}})
+    return {"events": updated}
+
+
+@router.post("/admin/notification-settings/{event_key}/reset-sound")
+async def admin_reset_notification_sound(
+    event_key: str,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Back to the bundled Drop Cars tone for this notification type."""
+    if event_key not in NOTIFICATION_EVENTS:
+        raise HTTPException(status_code=404, detail="Unknown notification event")
+    updated = update_notification_settings(db, {event_key: {"sound": NOTIFICATION_EVENTS[event_key]["sound"]}})
     return {"events": updated}
 
 

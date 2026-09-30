@@ -103,7 +103,7 @@ async def send_low_rating_push(db: Session, info: Optional[dict]) -> None:
         return
     try:
         from app.crud.notification import notify_specific_vehicle_owner
-        await notify_specific_vehicle_owner(db, info["vehicle_owner_id"], info["order_id"], info["title"], info["body"])
+        await notify_specific_vehicle_owner(db, info["vehicle_owner_id"], info["order_id"], info["title"], info["body"], event_key="low_rating_penalty")
     except Exception as e:
         print(f"[quality] low-rating push failed: {e}")
 

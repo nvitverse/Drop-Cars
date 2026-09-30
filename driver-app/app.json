@@ -17,6 +17,7 @@
     },
     "plugins": [
       "./plugins/withBubbleOverlay.js",
+      "./plugins/withSoundChannels.js",
       "expo-router",
       "expo-font",
       "expo-web-browser",

@@ -595,12 +595,15 @@ async def manual_assign_order(
         ).first()
         if user_notif and user_notif.token:
             from app.crud.notification import _post_expo_payloads_sync
-            _post_expo_payloads_sync([{
+            from app.utils.notification_settings import apply_notification_extras
+            _post_expo_payloads_sync([apply_notification_extras({
                 "to": user_notif.token,
                 "title": "Booking Directly Assigned!",
                 "body": f"Booking ID #{order_id} has been manually assigned to you by the vendor.",
-                "sound": "default"
-            }])
+                "sound": "default",
+                "priority": "high",
+                "data": {"order_id": order_id},
+            }, db, "booking_directly_assigned")])
     except Exception as e:
         print(f"Failed to push manual assignment notification: {e}")
 
@@ -757,12 +760,15 @@ async def vendor_assign_order(
         ).first()
         if user_notif and user_notif.token:
             from app.crud.notification import _post_expo_payloads_sync
-            _post_expo_payloads_sync([{
+            from app.utils.notification_settings import apply_notification_extras
+            _post_expo_payloads_sync([apply_notification_extras({
                 "to": user_notif.token,
                 "title": "Booking Directly Assigned!",
                 "body": f"Booking ID #{order_id} has been directly assigned to you by the vendor.",
-                "sound": "default"
-            }])
+                "sound": "default",
+                "priority": "high",
+                "data": {"order_id": order_id},
+            }, db, "booking_directly_assigned")])
     except Exception as e:
         print(f"Failed to push vendor assignment notification: {e}")
 

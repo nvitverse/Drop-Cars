@@ -101,7 +101,8 @@ async def send_trip_alert(
     if push_token:
         try:
             from app.crud.notification import _post_expo_payloads_sync
-            _post_expo_payloads_sync([{"to": push_token, "title": title, "body": body}])
+            from app.utils.notification_settings import apply_notification_extras
+            _post_expo_payloads_sync([apply_notification_extras({"to": push_token, "title": title, "body": body}, db, "customer_notification")])
             sent.append(f"push:{push_token[:12]}...")
         except Exception as e:
             failed.append(f"push ({e})")
@@ -138,7 +139,7 @@ def _tokens_for(db: Session, user_type: str, sub: Optional[str] = None, include_
     ]
 
 
-def _send_expo(tokens: list, title: str, body: str, data: Optional[dict] = None) -> dict:
+def _send_expo(tokens: list, title: str, body: str, data: Optional[dict] = None, db: Optional[Session] = None, event_key: Optional[str] = None) -> dict:
     from app.crud.notification import _post_expo_payloads_sync
 
     tokens = list(dict.fromkeys(tokens))
@@ -156,6 +157,9 @@ def _send_expo(tokens: list, title: str, body: str, data: Optional[dict] = None)
         }
         for t in tokens
     ]
+    if db is not None and event_key:
+        from app.utils.notification_settings import apply_notification_extras
+        payloads = [apply_notification_extras(p, db, event_key) for p in payloads]
     try:
         result = _post_expo_payloads_sync(payloads)
         return {"status": "sent", "count": len(tokens), "expo_response": result}
@@ -168,25 +172,25 @@ def broadcast_admin_emergency_push(db: Session, title: str, body: str, data: Opt
     """Emergency push to every admin/staff device. Ignores per-device mute:
     an SOS must reach staff even if someone muted routine alerts."""
     try:
-        return _send_expo(_tokens_for(db, "admin", include_muted=True), title, body, data)
+        return _send_expo(_tokens_for(db, "admin", include_muted=True), title, body, data, db, "admin_sos_alert")
     except Exception as e:
         logger.warning("broadcast_admin_emergency_push failed: %s", e)
         return {"status": "failed", "count": 0}
 
 
-def send_push_to_driver(db: Session, driver_id: str, title: str, body: str, data: Optional[dict] = None) -> dict:
+def send_push_to_driver(db: Session, driver_id: str, title: str, body: str, data: Optional[dict] = None, event_key: str = "fleet_swap_otp") -> dict:
     """Push to one driver's devices (Notification.user == 'driver')."""
     try:
-        return _send_expo(_tokens_for(db, "driver", driver_id, include_muted=True), title, body, data)
+        return _send_expo(_tokens_for(db, "driver", driver_id, include_muted=True), title, body, data, db, event_key)
     except Exception as e:
         logger.warning("send_push_to_driver failed: %s", e)
         return {"status": "failed", "count": 0}
 
 
-def send_push_to_vehicle_owner(db: Session, vehicle_owner_id: str, title: str, body: str, data: Optional[dict] = None) -> dict:
+def send_push_to_vehicle_owner(db: Session, vehicle_owner_id: str, title: str, body: str, data: Optional[dict] = None, event_key: str = "fleet_swap_otp") -> dict:
     """Push to one fleet driver / vehicle owner's devices."""
     try:
-        return _send_expo(_tokens_for(db, "vehicle_owner", vehicle_owner_id, include_muted=True), title, body, data)
+        return _send_expo(_tokens_for(db, "vehicle_owner", vehicle_owner_id, include_muted=True), title, body, data, db, event_key)
     except Exception as e:
         logger.warning("send_push_to_vehicle_owner failed: %s", e)
         return {"status": "failed", "count": 0}

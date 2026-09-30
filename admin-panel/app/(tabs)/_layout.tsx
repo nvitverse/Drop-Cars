@@ -5,6 +5,7 @@ import { Home, Users, Wallet, Package, Settings, UserCheck, Briefcase, MessageSq
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
+import { syncNotificationSounds } from '@/services/soundChannelSync';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import { useTheme } from '@/context/ThemeContext';
@@ -72,6 +73,7 @@ export default function TabLayout() {
       if (token) {
         try {
           await apiService.registerPushToken(token);
+          syncNotificationSounds(token).catch(() => {});
         } catch (error) {
           console.error('Failed to register admin push token:', error);
         }
