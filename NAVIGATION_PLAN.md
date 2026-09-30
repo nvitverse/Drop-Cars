@@ -163,3 +163,23 @@ Ippo backend-la `/sos/alert` irukku aana **auth illa, customer-ku mattum, admin 
 6. **Admin screen:** map, customer/driver call button, timeline, status (`ACTIVE > ACKNOWLEDGED > RESOLVED / FALSE_ALARM`), notes.
 7. **Mudhal fix:** endpoint-ku auth, `GET /sos/alerts` admin-ku mattum (ARCHITECTURE_REVIEW.md C4).
 8. Later: night ride "neenga OK-aa?" check-in, route deviation alert.
+
+---
+
+## 8. Website-la irukkura advanced features, app-ku konduvara (draft)
+Website scan panni admin-panel-la illaadhavai mattum. (Ivai code-la thedi paatha result, illa-nu solradhu "grep-la kidaikkala", full guarantee illa.)
+
+| # | Website feature | Admin app ippo | Proposal |
+|---|---|---|---|
+| 1 | **Scheduled / dynamic pricing**: from-to dates, pazhaya vilai strike-through, "yen vilai maarichu" note (`tariffs.json`: `is_dynamic`, `strike_on`, `effective_from/until`, `old_per_km_rate`, `reasoning_note`) | Illa | More > Pricing: festival / peak rate schedule. Customer app-la strike-through + reason. Backend rate card-ku date fields thevai |
+| 2 | **Ready-to-send message buttons** per booking: Confirmed, Quote, Advance, Driver details, Group post, Updates (`customize-booking.php`) | WhatsApp link konjam irukku, "Group post" illa | Oru booking-la "Send" menu, editable Tamil/English templates |
+| 3 | **Reports**: revenue by month, top routes, cancel %, coupon usage + discount (`reports.php`) | `analytics` irukku, top routes / coupon ROI / cancel reasons illa | CRM > Growth-la serkkalaam |
+| 4 | **Customer notification matrix**: ovvoru event-kum Email/SMS/WhatsApp toggle (`notification-engine.php`) | Illa (irukkuradhu push sounds) | More > Alerts |
+| 5 | **Upcoming assignments** board + one-tap "post to app" (`upcoming.php`) | Unassigned list irukku | Operations-la "next 24 hrs, driver illaadhavai" |
+| 6 | Airport taxi tariffs (7 airports) | Illa | Pricing-la airport tab |
+| 7 | Live toll fetch (Google Routes) | Static toll field | Route table-la toll cache (API cost kuraikka) |
+| 8 | Google Calendar sync | Illa | Later |
+| 9 | Website Context switch (multi-brand) | `website-integrations` mattum | CRM-la filter |
+
+### Bookings data: CRM-la load
+Confirmed / completed bookings backend-la already irukku. Website DB-la irundhu clear panna munnaadi, count compare pannanum (website-la irundhu backend-ku poga vaendiya ellam poyiducha nu).
