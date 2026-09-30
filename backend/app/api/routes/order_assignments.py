@@ -806,6 +806,8 @@ async def start_trip(
         ).order_by(desc(OrderAssignment.assigned_at)).first()
         if not assignment:
             raise HTTPException(status_code=404, detail="No active assignment found for this order")
+        if assignment.assignment_status == AssignmentStatusEnum.COMPLETED:
+            raise HTTPException(status_code=400, detail="This trip is already completed - its codes are no longer valid")
         if assignment.start_trip_otp and otp and otp.strip() and otp.strip() != assignment.start_trip_otp:
             raise HTTPException(status_code=400, detail="Incorrect trip start code - ask the customer for the code from their confirmation email")
 
@@ -967,6 +969,8 @@ async def end_trip(
         ).order_by(desc(OrderAssignment.assigned_at)).first()
         if not assignment:
             raise HTTPException(status_code=404, detail="No active assignment found for this order")
+        if assignment.assignment_status == AssignmentStatusEnum.COMPLETED:
+            raise HTTPException(status_code=400, detail="This trip is already completed - its codes are no longer valid")
         if assignment.end_trip_otp and otp and otp.strip() and otp.strip() != assignment.end_trip_otp:
             raise HTTPException(status_code=400, detail="Incorrect trip end code - ask the customer for the code from their confirmation email")
 

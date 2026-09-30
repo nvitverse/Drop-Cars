@@ -532,6 +532,8 @@ async def start_trip_via_link(
     assignment = _get_assignment_by_trip_token(db, token)
     if assignment.assignment_status == AssignmentStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="This assignment has been cancelled")
+    if assignment.assignment_status == AssignmentStatusEnum.COMPLETED:
+        raise HTTPException(status_code=400, detail="This trip is already completed - its codes are no longer valid")
     if assignment.start_trip_otp and otp.strip() != assignment.start_trip_otp:
         raise HTTPException(status_code=400, detail="Incorrect trip start code - ask the customer for the code from their confirmation email")
 
