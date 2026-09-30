@@ -4,7 +4,7 @@ For the next Claude session. The user writes in Tamil / Tanglish and prefers rep
 
 
 ## 0. Read BACKLOG.md
-`BACKLOG.md` is the master list of EVERY pending task (IDs A1-J6, with status, dependencies, file zones, merge order and coordination rules). It exists so that several people/agents can work in parallel without colliding. Claim a task there before starting, work on a `fix/<id>-...` branch, never on `main`. Section 6 below is only a short summary of the order; BACKLOG.md is authoritative.
+`BACKLOG.md` is the master list of EVERY pending task (IDs A1-J6, with status, dependencies, file zones, merge order and coordination rules). It exists so that several people/agents can work in parallel without colliding. Claim a task there before starting, work on a `fix/<id>-...` branch, never on `main`. Section 6 below is only a short summary of the order; BACKLOG.md is authoritative. **Section 9 at the end is the ready-to-paste takeover prompt for a new session.**
 
 ## 1. Repo and branch state (read this first)
 - Repo: `nvitverse/Drop-Cars`.
@@ -86,3 +86,74 @@ Booking ID bug (root cause found):
 - Whether the `/crm/*` and other open endpoints are actually exposed in production (depends on deployment).
 - Billing/cost numbers.
 - Whether `main` is deployed automatically (no CI existed before Antigravity's workflow, so probably manual).
+
+---
+
+# 9. READY-TO-PASTE TAKEOVER PROMPT (autonomous; no questions)
+Paste everything inside the fence below as the FIRST message of a new Claude session (ideally the Claude Code session running on the owner's machine, so it can reach the local Antigravity folder and push it).
+
+````
+You are taking over an in-progress engineering project for "Drop Cars" (outstation / one-way taxi platform, Tamil Nadu) from another Claude session. Work autonomously. Do NOT ask me questions that are answered below. Decisions are already made. Stop and ask ONLY if you are about to: deploy, force-push, delete data/history, use credentials, or push to `main`.
+
+## HOW TO REPLY
+I write Tamil/Tanglish. Reply in Tanglish (Tamil in English letters, technical words in English), simple and short. After each step give a 5-line status: what you did, evidence (command output / commit hash), what is next. Label claims Confirmed / Verify / Suggestion. Never claim "tests pass" or "pushed" without pasting the output or the commit hash.
+
+## REPO
+github.com/nvitverse/Drop-Cars
+- Real code: branch `main` (backend FastAPI + Postgres/Cloud SQL on Cloud Run; website PHP + MySQL on Hostinger; customer-app, driver-app, admin-panel = Expo React Native).
+- Handoff docs (read them first): branch `claude/determined-volta-yw9pe8` (unrelated older history; only the docs matter):
+    git fetch origin
+    git show origin/claude/determined-volta-yw9pe8:HANDOFF.md
+    git show origin/claude/determined-volta-yw9pe8:BACKLOG.md      (master task list A1..J6, file zones, merge order)
+    git show origin/claude/determined-volta-yw9pe8:REVIEW_c92d94a_AND_FIX_PROMPT.md
+    git show origin/claude/determined-volta-yw9pe8:ANTIGRAVITY_PROMPT_website_fixes.md
+    git show origin/claude/determined-volta-yw9pe8:NAVIGATION_PLAN.md
+    git show origin/claude/determined-volta-yw9pe8:ARCHITECTURE_REVIEW.md
+  If the repo is not accessible, say so in one line and continue with the facts below.
+
+## FACTS (all read from the code on main; the previous session ran nothing except one import test)
+1. Commit c92d94a on main (Antigravity: swap safety, SOS, WhatsApp templates) makes the backend NOT START: sos.py:10 and fleet_swap.py:14 do `from app.models.orders import Orders`; the model is `Order`. Reproduced: `ImportError: cannot import name 'Orders'`. main.py imports both routers at module level. Also: all new swap/SOS endpoints have no auth; swap OTP is stored but never delivered; `fleet_driver_swap_audit` is imported after `Base.metadata.create_all` (main.py:90) so the table is never created; `sos_alerts` got 12 new columns with no ALTER; sos router has `prefix="/sos"` AND main.py includes it with `/api/sos` (path becomes /api/sos/sos/...; legacy POST /api/sos/alert 404s); active-trip check uses non-existent `Orders.driver_id/order_status` (real: OrderAssignment.driver_id/assignment_status); WhatsApp templates hard-code 10% commission and print `#DC-` before the booking id.
+2. Auth gaps on main: GET /api/orders/all and /api/orders/pending-all leak customer_name + customer_number; all /api/crm/* is unauthenticated (owner = `user_role` query param defaulting to owner; GET /crm/owner/settings returns the webhook secret; default secret `dropcars_crm_secret_2026` at crm_routes.py:50,:273; status_code=44 typo at :171); open: GET /api/sos/alerts, AI logs (+seed-demo), invoice PDF by guessable order id (tax_admin.py:800-804), PUT /api/dropbid/settings, unassigned-timeout POST, auto-remove-unassigned, bump-fare (also broken: imports Orders), refresh-rental-hrs-data; unauthenticated cost-abuse: /documents/verify-image, /verify-face-match, /ai/chat-assistant.
+3. Trip OTP bypass: order_assignments.py ~809 (start) and ~970 (end) only compare the OTP if the driver sent one. The driver app sends '' in some flows -> staged rollout (log-only counter, override path, then enforce behind env flag TRIP_OTP_ENFORCED). Add 5-attempt cap, 6 digits.
+4. Booking IDs always end in 01: website/assets/js/booking-form.js generateBookingId() keeps the daily counter in the customer's browser localStorage; confirm_booking.php (~103-145) accepts a browser-supplied C######## id; airporttaxi-confirm-booking.php:138 uses random_int(1,99); receive-remote-lead.php uses another format. Correct server generator: dropcars_next_enquiry_booking_id() in website/admin/includes/enquiries-schema.php (~533). AGREED SCHEME: one shared daily counter, E/C + YYMMDD + NN (2 digits, grows past 99); confirming keeps the number (E26093002 -> C26093002); next enquiry continues (E26093004); IST date; server-generated only; UNIQUE index on booking_id.
+5. Three fare tables disagree (backend rate card, website tariffs.json, customer-app constants/bookingConfig.ts TARIFF). Customer app displays a locally computed fare (+5% GST + toll guess, mock-distance fallback of 28 km) while the server charges booking.quoted_total_amount. Do not change fare math (website engine/tariff.php, data/tariffs.json, backend utils/rate_card.py, fare_rules.py, crud/new_orders.py).
+6. No Razorpay webhook (crud/payment_reconcile.py is empty); wallet debit/credit is read-modify-write without locks (crud/wallet.py:52-69); only 2 rate-limited endpoints; limiter probably keyed on the Cloud Run proxy IP (no --proxy-headers).
+7. Shipped customer app sends SOS with bare axios and NO token: customer-app/app/(customer)/safety.tsx:79 -> POST /api/sos/alert. SOS trigger must NEVER fail closed (accept, rate-limit by IP+phone, verify token only if present); update the app to send the token first, tighten later.
+8. Website: unauthenticated diagnostic files api/test_diag_live.php, api/check_insert_error.php (inserts a row per hit), api/diag_booking_id.php; website/api/storage/bookings-log.jsonl (354 records) committed; OTP send rate limit stored in $_SESSION (send_email_otp.php:28); no CSRF tokens found under website/admin; settings.php:115 deletes a blocked IP via GET.
+9. Driver app: services/offline/offlineQueueService.ts is unused and calls non-existent routes (/api/orders/{id}/start-trip etc.; real: /api/assignments/driver/start-trip/{id}, /api/orders/driver/end-trip/{id}).
+10. Antigravity says it already fixed T1-T8 (startup imports, active-trip check, DB tables/ALTERs, SOS routes + auth + push escalation, fleet/car swap with OTP, admin UI, WhatsApp templates, 22 pytest tests, .github/workflows/ci.yml) in a LOCAL folder: C:\Users\Administrator\Desktop\dropcars-review. As of the last check NOTHING was pushed (origin/main still c92d94a, no other branch).
+
+## DECISIONS ALREADY MADE (do not re-ask)
+- Admin app tabs: Home | Bookings | Chats | Fleet | More. Bookings has a switch [CRM | Operations] only (default Operations; first card Live Bookings). All fleet things (incl. wallet, payouts, activation requests, duty drivers) live in Fleet; all customer things in CRM; Chats has role chips (All / Customer / Fleet owner / Driver / Duty driver / Vendor / Booking chats).
+- Home tiles, in priority order: SOS (only when active) > Leads on-time response (countdown turns red) > booking approvals / unassigned / unread chats > fleet activation requests > wallet & payout / refunds / other requests. No section called "Money": fleet money in Fleet, customer money in CRM, company money (GST invoices, ledger) in Operations.
+- Duty driver = working driver added by a fleet owner (CarDriver.vehicle_owner_id, is_owner_driver=false). They live inside that fleet with its cars; Fleet has a bulk-search section (drivers + duty drivers + vendors + owners) with bulk actions.
+- Swap: car already registered under another owner -> 6-digit OTP to that car's current owner; driver licence/phone already registered -> OTP to the driver (push + pop-up in the duty-driver section of the driver app, endpoint GET /fleet-swap/pending-for-driver, SMS/email fallback). Never reveal the other owner's name/phone (mask). Block on active assignment, pending payout. Admin override needs a reason >= 10 chars and admin name from the token. Wrong-login redirect (owner login vs duty-driver login) only AFTER correct credentials, returns redirect_hint, pre-fill only what the user typed.
+- SOS: fleet owner CAN trigger it (default decision). Long-press trigger, location every ~10 s, push to on-duty admins, escalation at 60 s (WhatsApp/SMS), admin screen with call buttons + 112, global red banner + siren (reuse alarm hosts). Env vars actually used by backend: WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN (they silently default to DEMO_ values: make prod fail loudly).
+- Leads: backend is the long-term master; for now website DB (Hostinger, no extra cost) is the working store, synced to Google Sheets; "sync to backend, verify, then clear" with dry-run + backup + 90-day retention for enquiries; backend needs external_id + upsert first (CustomerBookingRequest and CrmLead have no external id column, so retries would create duplicates).
+- Cost: Hostinger DB is bundled in the plan (no per-call cost). On Google Cloud cost comes from Cloud Run request time and Cloud SQL size, not per query. Admin app polls every 8-20 s (booking alarm 8 s, enquiry alarm 10 s hits the Hostinger API, unread chats 20 s x2 calls, Bookings list 20 s); driver location writes every 20 s; customer live-trip 12 s. Later: replace polling with push. Billing numbers not provided; do not guess.
+- Do NOT purge git history and do NOT split customer-app now. Docs branch stays as is.
+- Website features to bring into apps later (BACKLOG section G): scheduled festival/peak pricing with strike-through, ready-to-send message buttons (Tamil/English), reports (top routes, coupon ROI, cancel %), customer notification matrix, upcoming-assignments board, airport tariffs.
+
+## RULES
+- Never commit to main. One task = one branch `fix/<id>-<name>` from the latest main; open a PR; do not merge; do not deploy (deploy is manual: Cloud Run for backend, the user uploads website files to Hostinger).
+- You MAY push branches and open PRs yourself. Pushing Antigravity's local work to a branch is part of your job (step 1).
+- Stay inside each task's file zone (BACKLOG.md section 1). Hot-spot files (backend/app/main.py, admin-panel/services/api.ts, core/security.py, .gitignore) only in tiny separate commits, rebase often.
+- No breaking API changes (shipped customer/driver apps depend on current routes and response shapes). No secrets in code or logs (no full phone numbers in logs). Never use credentials/tokens you find in the environment unless I explicitly tell you to.
+- Before locking any route, grep customer-app, driver-app, admin-panel, website for callers and list them.
+
+## WHAT TO DO, IN THIS ORDER (execute; report after each step)
+STEP 1 (BACKLOG A2): Antigravity's work. If C:\Users\Administrator\Desktop\dropcars-review (or any local clone with those changes) exists: check `git status`, create branch `fix/swap-sos-startup-and-auth` from origin/main, commit the changes in logical commits (one per T1..T8 if practical), push the BRANCH (never main), open a PR. If the folder is not reachable from this session, say so in one line and skip to Step 2 using the fix prompt in REVIEW_c92d94a_AND_FIX_PROMPT.md to implement T1-T8 yourself on that branch.
+STEP 2: Review and fix that branch against this checklist, in a clean venv, pasting outputs: `python -c "import app.main"`; pytest; `npx tsc --noEmit` in admin-panel; startup migrations on an empty Postgres AND on a copy of the old schema if Postgres is available. Checklist: car_id must be UUID (CarDetails.id is UUID); get_current_vehicle_owner must exist (main only has get_current_user); WhatsApp/SMS env var names (see above); SOS location stream method (was POST, must stay POST); the auth-allowlist test must walk the WHOLE FastAPI route table, not a hand-picked list; tests must not be mock-only for the DB parts; tz-aware vs naive datetime comparisons for otp_expires_at; legacy POST /api/sos/alert must keep working and not fail closed for the shipped customer app; OTP never returned in API responses; no unauthenticated swap/SOS/admin route. Fix defects in the same PR with clear commits.
+STEP 3 (Phase 0 hotfixes, one branch/PR each, small): B1 CRM auth (+ rotate/remove fallback secret, fix 44, update admin-panel/app/crm.tsx:82 and services/crmApi.ts) -> B2 /orders/all + /pending-all -> B5 (AI logs, dropbid settings, unassigned routes + bump-fare import, rental refresh, cost-abuse endpoints) -> B6 invoice PDF ownership/auth -> B11 route-table auth test with explicit public allow-list -> B3 trip OTP staged rollout -> B4 SOS never-fail-closed + customer app safety.tsx sends token -> B7 rate limits + proxy headers + hmac.compare_digest -> B8 Razorpay webhook + reconcile -> B9 wallet locks + concurrency test -> B10 website diagnostic files/OTP rate limit/CSRF review (do NOT purge git history).
+STEP 4 (website, follow ANTIGRAVITY_PROMPT_website_fixes.md exactly): C1 booking ID (server-only, scheme above, IST, unique index, generator fallback never returns ...01) -> C2 icons (enquiry icon on E..., green tick on C..., shared helper, emoji in email/Telegram) -> C3 km limit (min billable km / included km per day / extra km rate) in Send Customer message, confirmation email, quote, thank-you, print-estimation, read from tariff data, never hard-coded -> C4 missing-fields audit table -> C5 other ID generators. Provide the exact Hostinger upload list and rollback notes; I upload myself.
+STEP 5: Continue with BACKLOG D (leads sync), F (swap/login in apps), E (admin navigation), G, H, I, J following the merge order in BACKLOG.md section 2.
+
+## STOP CONDITIONS
+Stop and tell me only if: something needs deploying, a force-push or history rewrite, credentials, deleting data, or two tasks collide on the same file. Otherwise keep going.
+
+## AT THE END OF EVERY STEP
+Update BACKLOG.md statuses (CLAIMED / IN REVIEW / DONE / BLOCKED with branch + commit hash) by pushing that one change to the docs branch claude/determined-volta-yw9pe8, list new findings not in BACKLOG, and give me a 5-line Tanglish summary plus the exact manual steps I must do.
+
+## YOUR FIRST MESSAGE
+Do not ask me anything. Read the docs, then start STEP 1 immediately and report what you found.
+````
