@@ -582,7 +582,7 @@ export default function BookingDetailModal({
               )}
 
               {/* Manual "Notify drivers" alarm for a booking you posted - the one automatic push at posting
-                  time is easy to miss. Backend enforces a 60s cooldown per booking. */}
+                  time is easy to miss. It can be pressed any time. */}
               {isPosted && !postedCancelled && postedStage < 4 && (
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F59E0B', borderRadius: 12, paddingVertical: 13, marginBottom: 12, opacity: notifyBusy ? 0.7 : 1 }}

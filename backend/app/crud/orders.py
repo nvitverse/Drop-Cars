@@ -561,13 +561,6 @@ def admin_force_complete_order(db: Session, order_id: int, end_km: Optional[int]
 #     return db.query(Order).filter(Order.vendor_id == vendor_id).order_by(Order.created_at.desc()).all()
 
 
-# Per-order cooldown for the manual Notify button, so repeated taps can't
-# spam every driver in the city. In-memory per instance (Cloud Run runs a
-# few), which is enough to stop accidental double-taps and button-mashing.
-_LAST_MANUAL_NOTIFY: dict = {}
-MANUAL_NOTIFY_COOLDOWN_SECS = 60
-
-
 async def notify_order_manually(
     db: Session, order_id: int, vendor_id: str = None, target_vehicle_owner_id: str = None,
     actor: str = "vendor", poster_owner_id: str = None,
@@ -583,7 +576,6 @@ async def notify_order_manually(
 
     target_vehicle_owner_id (optional): alert one specific idle fleet owner
     (Vacant Drivers screen) instead - notification-only, never assigns."""
-    import time
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise ValueError("Order not found")
@@ -594,10 +586,8 @@ async def notify_order_manually(
     status_value = str(getattr(order.trip_status, "value", order.trip_status) or "").upper()
     if status_value == "COMPLETED" or "CANCEL" in status_value:
         raise ValueError(f"Cannot notify - booking is already {status_value.replace('_', ' ').lower()}")
-    now = time.time()
-    last = _LAST_MANUAL_NOTIFY.get(order_id)
-    if last and now - last < MANUAL_NOTIFY_COOLDOWN_SECS:
-        raise ValueError(f"Drivers were just alerted - you can notify again in {int(MANUAL_NOTIFY_COOLDOWN_SECS - (now - last))} seconds")
+    # No cooldown on purpose (owner's call, 2026-09-30): Notify can be
+    # pressed any time, as often as needed.
 
     route = _notification_route_summary(order.pickup_drop_location or {})
     title = f"Reminder: Booking ID {order.id}"
@@ -630,7 +620,6 @@ async def notify_order_manually(
         # missed it the first time" re-alert, it should be hard to miss.
         result = send_new_booking_notification_sync(db, title, body, ordered_city=order.pick_near_city or ["ALL"], is_urgent=True, order_id=order.id)
 
-    _LAST_MANUAL_NOTIFY[order_id] = now
     return {"status": "notified", "detail": result}
 
 
