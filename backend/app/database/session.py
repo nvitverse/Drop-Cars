@@ -7,7 +7,21 @@ load_dotenv()
 DB_HOST = os.getenv("DB_HOST")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-DATABASE_URL = f"postgresql+psycopg2://drop-cars:{DB_PASSWORD}@{DB_HOST}:5432/drop-cars"
+from sqlalchemy.engine import URL
+
+if DB_HOST and DB_HOST.startswith("/"):
+    # Cloud SQL connector socket (/cloudsql/<project>:<region>:<instance>),
+    # set when Cloud Run has the instance attached. Lets the database stay
+    # closed to the internet (no public "authorized networks" needed).
+    DATABASE_URL = URL.create(
+        "postgresql+psycopg2", username="drop-cars", password=DB_PASSWORD,
+        database="drop-cars", query={"host": DB_HOST},
+    )
+else:
+    DATABASE_URL = URL.create(
+        "postgresql+psycopg2", username="drop-cars", password=DB_PASSWORD,
+        host=DB_HOST, port=5432, database="drop-cars",
+    )
 
 # Explicit pool tuning - was previously unset (SQLAlchemy defaults:
 # pool_size=5, max_overflow=10, no pre-ping, no recycle). On Cloud Run,
