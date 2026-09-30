@@ -60,6 +60,12 @@ NOTIFICATION_EVENTS = {
         "speak_text": "Drop Market driver request! Urgent response required.",
         "channel": DRIVER_CHANNEL_URGENT,
     },
+    "assignment_deadline_warning": {
+        "label": "Driver app: Assign driver & car - deadline warning",
+        "sound": "notification_tone.wav",
+        "speak_text": "Assign a driver and car now, or the booking will be removed with a penalty.",
+        "channel": DRIVER_CHANNEL_URGENT,
+    },
     "trip_status": {
         "label": "Driver app: Trip lifecycle status",
         "sound": "notification_tone.wav",

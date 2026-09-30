@@ -499,6 +499,7 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS cash_collection INTEGER',
         'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS urgent_notify_count INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS deadline_warning_stage INTEGER NOT NULL DEFAULT 0',
         # Website "Urgent" advance-paid flag, mirrored from the source
         # CustomerBookingRequest onto the Order once posted (see
         # models/orders.py) - was missing its own migration line.
@@ -914,7 +915,7 @@ async def _run_assignment_sweep() -> dict:
     (Cloud Scheduler) so the container can scale to zero between requests."""
     db = SessionLocal()
     try:
-        from app.crud.order_assignments import cancel_timed_out_pending_assignments, complete_no_start_assignments, cancel_expired_unaccepted_orders, send_urgent_booking_reminders
+        from app.crud.order_assignments import cancel_timed_out_pending_assignments, complete_no_start_assignments, cancel_expired_unaccepted_orders, send_urgent_booking_reminders, send_assignment_deadline_warnings
         from app.crud.customer_booking_request import auto_approve_expired_booking_requests
         # process_drop_bid_timeouts (app/crud/drop_bid_engine.py) intentionally
         # NOT called here - found 2026-09-04 while extending Drop Bid. It was
@@ -931,6 +932,9 @@ async def _run_assignment_sweep() -> dict:
         # pushes for orders that were never Drop Bid at all. Left the function
         # itself in place (unused) rather than delete it, in case its
         # escalation design is revisited properly later.
+        warned = await send_assignment_deadline_warnings(db)
+        if warned:
+            print(f"Sent {warned} assign-before-deadline warning(s) to fleet drivers")
         cancelled = await cancel_timed_out_pending_assignments(db)
         if cancelled:
             print(f"Auto-cancelled {cancelled} timed-out assignment(s)")
@@ -975,7 +979,7 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"chat purge failed (continuing): {_e}")
-        return {"cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
+        return {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
     finally:
         db.close()
 
@@ -997,14 +1001,21 @@ _INTERNAL_SWEEPS_DISABLED = _os.getenv("DISABLE_INTERNAL_SWEEPS", "").lower() ==
 INTERNAL_TASK_SECRET = _os.getenv("INTERNAL_TASK_SECRET", "")
 
 
+def _require_internal_secret(request: Request) -> None:
+    """Cloud Tasks and the Cloud Scheduler sweep job both send this header."""
+    import hmac
+    got = request.headers.get("X-Internal-Secret") or ""
+    if not INTERNAL_TASK_SECRET or not hmac.compare_digest(got, INTERNAL_TASK_SECRET):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 @app.post("/api/internal/dispatch-expo-push")
 async def dispatch_expo_push_endpoint(request: Request):
     """Cloud Tasks target: takes a batch of already-built Expo push payloads
     and actually sends them. Exists so notification-sending call sites (see
     crud/notification.py) can enqueue this work instead of blocking the
     booking-creation request on the Expo HTTP round trip themselves."""
-    if not INTERNAL_TASK_SECRET or request.headers.get("X-Internal-Secret") != INTERNAL_TASK_SECRET:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    _require_internal_secret(request)
     body = await request.json()
     payloads = body.get("payloads") or []
     from app.crud.notification import _post_expo_payloads_sync, _handle_expo_response
@@ -1028,10 +1039,12 @@ async def cancel_expired_assignments_task() -> None:
 
 
 @app.post("/api/internal/sweep")
-async def internal_sweep_endpoint():
+async def internal_sweep_endpoint(request: Request):
     """Endpoint for Cloud Scheduler: runs the same sweep as the internal timer.
     Runs the deadline sweep every call and the daily billing sweep at most
-    once per day. Safe to call repeatedly (all sweeps are idempotent)."""
+    once per day. Safe to call repeatedly (all sweeps are idempotent).
+    Requires X-Internal-Secret (the drop-cars-sweep scheduler job sends it)."""
+    _require_internal_secret(request)
     result = await _run_assignment_sweep()
 
     # Daily billing sweep piggybacks on the scheduler too (replaces the

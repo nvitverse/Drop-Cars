@@ -46,6 +46,9 @@ class OrderAssignment(Base):
     cancel_reason = Column(String, nullable=True)
     # Human-readable reason for this owner's assignment ending (shown in the Driver App)
     cancel_note = Column(String, nullable=True)
+    # How many "assign driver & car before the deadline" warnings the
+    # accepting fleet driver has been sent (0 none, 1 at 10 min, 2 at 3 min).
+    deadline_warning_stage = Column(Integer, nullable=False, default=0, server_default="0")
     completed_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     # Snapshotted at accept time (see crud/billing.py get_partner_tier) - a
