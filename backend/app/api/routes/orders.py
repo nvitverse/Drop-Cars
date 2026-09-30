@@ -13,10 +13,11 @@ from app.crud.orders import get_all_orders, get_vendor_orders, close_order, get_
 from app.crud.order_details import get_admin_order_details, get_vendor_order_details, get_vehicle_owner_pending_orders, get_vehicle_owner_non_pending_orders
 
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter()
 
 
-@router.get("/all", response_model=List[UnifiedOrder])
+@router.get("/all", response_model=List[UnifiedOrder], dependencies=[Depends(get_current_admin)])
 def list_all_orders(db: Session = Depends(get_db)):
     return get_all_orders(db)
 
@@ -421,7 +422,7 @@ async def notify_order_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/max-assignment-times")
+@router.get("/max-assignment-times", dependencies=[Depends(get_current_user_flexible)])
 async def get_max_assignment_times(
     db: Session = Depends(get_db),
 ):

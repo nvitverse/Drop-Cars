@@ -5,7 +5,8 @@ from app.database.session import get_db
 from app.utils.document_verifier import verify_uploaded_document, compare_faces
 from app.models.ai_automation_log import AIAutomationLog
 
-router = APIRouter(tags=["Document Verification"])
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
+router = APIRouter(tags=["Document Verification"], dependencies=[Depends(get_current_user_flexible)])
 
 
 @router.post("/documents/verify-image")

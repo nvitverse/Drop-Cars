@@ -39,7 +39,7 @@ from app.crud.car_details import create_car_admin, get_new_car_min_year, set_new
 from app.schemas.order_details import AdminOrdersListResponse, AdminOrderDetailResponse
 from app.crud.order_details import get_all_admin_orders
 from app.crud.admin_wallet import get_admin_account_ledger_data
-from app.core.security import create_access_token, get_current_admin
+from app.core.security import create_access_token, get_current_admin, get_current_user_flexible
 from app.schemas.payout_request import PayoutRequestOut, ProcessPayoutRequest, AdminInitiatedPayoutRequest
 from app.crud.payout_requests import get_payout_requests, mark_payout_paid, reject_payout_request
 from app.database.session import get_db
@@ -4502,8 +4502,8 @@ class AssignmentPriorityConfigUpdate(BaseModel):
     grace_over_1h_mins: Optional[int] = None
 
 
-@router.get("/admin/assignment-priority-settings")
-@router.get("/api/v1/assignment-priority-settings")
+@router.get("/admin/assignment-priority-settings", dependencies=[Depends(get_current_admin)])
+@router.get("/api/v1/assignment-priority-settings", dependencies=[Depends(get_current_admin)])
 async def get_assignment_priority_settings_route(
     db: Session = Depends(get_db),
 ):
@@ -5763,7 +5763,7 @@ class SubmitProfileEditSchema(BaseModel):
     proof_document_url: Optional[str] = None
 
 
-@router.post("/profile-edit-requests/submit")
+@router.post("/profile-edit-requests/submit", dependencies=[Depends(get_current_user_flexible)])
 def submit_profile_edit_request(
     payload: SubmitProfileEditSchema,
     db: Session = Depends(get_db),
