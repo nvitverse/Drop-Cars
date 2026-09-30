@@ -1,5 +1,5 @@
 # app/models/admin.py
-from sqlalchemy import Column, Integer, String, TIMESTAMP, func
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID, JSON
 import uuid
 from app.database.session import Base
@@ -22,6 +22,12 @@ class Admin(Base):
     phone = Column(String(10), nullable=False)
     # organization_id = Column(String)
     organization_id = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
+
+    # Self-toggled in Admin App > Settings - "I'm on duty right now". Lets
+    # driver-facing screens show a real, currently-reachable phone number
+    # (GET /api/support/on-duty-contact) instead of a hardcoded placeholder.
+    is_on_duty = Column(Boolean, nullable=False, default=False, server_default="false")
+    on_duty_since = Column(TIMESTAMP(timezone=True), nullable=True)
     
     # Admin balance tracking
     balance = Column(Integer, nullable=False, default=0)

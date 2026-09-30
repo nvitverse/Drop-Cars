@@ -41,6 +41,14 @@ class CarDriver(Base):
     # crud/document_expiry.py). Nullable - not every existing driver has
     # this entered yet; the reminder simply skips rows with no date set.
     licence_expiry_date = Column(Date, nullable=True)
+    # Aadhaar (front/back + number) - collected when the owner adds a duty
+    # driver (same fields the fleet-owner signup already has). Nullable so
+    # every existing driver row is unaffected.
+    aadhar_number = Column(String, nullable=True)
+    aadhar_front_img = Column(String, nullable=True)
+    aadhar_front_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
+    aadhar_back_img = Column(String, nullable=True)
+    aadhar_back_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
     # Selfie/profile photo, compared against licence_front_img's printed
     # photo for a face-match check (added 2026-09-04, zero-cost - see
     # utils/document_verifier.py's compare_faces).

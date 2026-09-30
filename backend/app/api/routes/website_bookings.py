@@ -117,6 +117,15 @@ class WebsiteBookingCreate(BaseModel):
     # auto-posts to the driver marketplace on the normal review timer.
     is_enquiry: bool = False
 
+    @field_validator("pickup_drop_location", mode="before")
+    def locations_from_list(cls, v):
+        # The website (PHP) builds ['0' => pickup, '1' => drop]; json_encode() turns a 0..n-1 keyed array into a JSON
+        # LIST, so every website booking arrived as ["pickup", "drop"] and was rejected with 422 (nothing was ever
+        # posted). Accept the list form too.
+        if isinstance(v, list):
+            return {str(i): str(x) for i, x in enumerate(v) if x is not None}
+        return v
+
     @field_validator("pickup_drop_location")
     def validate_locations(cls, v: Dict[str, str]):
         if not isinstance(v, dict) or len(v.keys()) < 2:
@@ -229,15 +238,23 @@ async def create_website_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to create website booking: {str(e)}")
 
     delay_seconds = get_auto_approve_seconds(db, is_urgent=payload.is_urgent)
-    auto_post_at = booking.created_at + timedelta(seconds=delay_seconds)
+    from app.crud.customer_booking_request import get_website_post_mode
+    post_mode = get_website_post_mode(db)
+    auto_post_at = None if (post_mode == "MANUAL" or payload.is_enquiry) else booking.created_at + timedelta(seconds=delay_seconds)
     minutes = max(1, delay_seconds // 60)
+    if auto_post_at is not None:
+        # wake the service at the right moment - an idle instance would never run the in-process timer
+        from app.crud.notification import schedule_internal_sweep
+        schedule_internal_sweep(delay_seconds + 5)
 
     try:
         urgency_prefix = "URGENT: " if payload.is_urgent else ""
         await send_push_notification_to_admin(
             db,
             title=f"{urgency_prefix}New website booking needs approval",
-            message=f"{payload.customer_name} - {payload.pickup_drop_location.get('0', '')} -> {list(payload.pickup_drop_location.values())[-1]}. Auto-posts in {minutes} min if not reviewed.",
+            message=f"{payload.customer_name} - {payload.pickup_drop_location.get('0', '')} -> {list(payload.pickup_drop_location.values())[-1]}. " + (
+                "Waiting for your approval (auto-post is off)." if post_mode == "MANUAL" else
+                (f"Auto-posts in {minutes} min if no staff is on duty." if post_mode == "AUTO_IF_NO_STAFF" else f"Auto-posts in {minutes} min if not reviewed.")),
         )
     except Exception as e:
         print(f"Failed to alert admin of new website booking: {e}")
@@ -280,6 +297,8 @@ async def reject_website_booking(id: UUID, body: WebsiteBookingReject, db: Sessi
 class WebsiteBookingRatesUpdate(BaseModel):
     cost_per_km: Optional[int] = None
     extra_cost_per_km: Optional[int] = None
+    gst_included: Optional[bool] = None
+    gst_amount: Optional[int] = None
 
 
 @router.patch("/website/bookings/{id}/rates", dependencies=[Depends(require_website_key)])
@@ -304,11 +323,17 @@ async def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate
         request.admin_cost_per_km = body.cost_per_km
     if body.extra_cost_per_km is not None:
         request.admin_extra_cost_per_km = body.extra_cost_per_km
+    if body.gst_included is not None:
+        request.gst_included = body.gst_included
+    if body.gst_amount is not None:
+        request.gst_amount = body.gst_amount
     db.commit()
     return {
         "status": "OK",
         "admin_cost_per_km": request.admin_cost_per_km,
         "admin_extra_cost_per_km": request.admin_extra_cost_per_km,
+        "gst_included": request.gst_included,
+        "gst_amount": request.gst_amount,
     }
 
 

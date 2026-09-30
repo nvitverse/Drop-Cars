@@ -145,6 +145,8 @@ class NewOrder(Base):
     # crud/customer_booking_request.py). Drives the short urgent-track
     # assignment window and lets the app show an URGENT badge.
     is_urgent = Column(Boolean, nullable=False, default=False, server_default='false')
+    gst_included = Column(Boolean, nullable=False, default=False, server_default='false')
+    gst_amount = Column(Integer, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     
     

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.crud.vendor_wallet import credit_vendor_wallet
 from app.crud.notification import notify_vendor_auto_cancelled_order
 from app.models.vendor_details import VendorDetails
+import secrets
 import math
 from app.utils.timezone import format_pickup_time_ist
 
@@ -26,7 +27,8 @@ def collect_fields_for_order(db: Session, order: Order) -> dict:
             from app.utils.commission import estimate_split_for_order
             total = int(estimate_split_for_order(db, order)["customer_total"])
         else:
-            total = int(getattr(order, "vendor_price", 0) or getattr(order, "estimated_price", 0) or 0)
+            from app.utils.commission import convenience_fee_amount
+            total = int(getattr(order, "vendor_price", 0) or getattr(order, "estimated_price", 0) or 0) + convenience_fee_amount(db)
     except Exception:
         total = int(getattr(order, "vendor_price", 0) or getattr(order, "estimated_price", 0) or 0)
     advance = int(getattr(order, "advance_received", 0) or 0)
@@ -92,6 +94,31 @@ def get_masked_customer_number(db: Session, order: Order) -> str:
 
 from sqlalchemy.exc import IntegrityError
 
+def compute_assignment_deadline(accepted_at, order):
+    """When the accepting fleet owner must have a driver + car on the booking (UTC, naive).
+
+    Rule (owner-confirmed 2026-09-24): the window the poster set (default 15 min) counted from acceptance, but tied to
+    the pickup time - the driver must be assigned at least 60 minutes BEFORE pickup, and if the pickup is closer than
+    that the owner gets 15 minutes from acceptance. Never later than the pickup itself. (Previously the window ran
+    from acceptance regardless of pickup, so a 9:00 pickup could show a 9:32 deadline.)"""
+    try:
+        window = (order.max_time_to_assign_order - order.created_at) if (order.max_time_to_assign_order and order.created_at) else timedelta(minutes=15)
+    except Exception:
+        window = timedelta(minutes=15)
+    base = accepted_at + window
+    pickup = getattr(order, "start_date_time", None)
+    if pickup is None:
+        return base
+    if getattr(pickup, "tzinfo", None) is not None:
+        pickup = pickup.astimezone(timezone.utc).replace(tzinfo=None)
+    target = pickup - timedelta(minutes=60)
+    if target <= accepted_at + timedelta(minutes=15):
+        deadline = accepted_at + timedelta(minutes=15)
+    else:
+        deadline = min(base, target)
+    return min(deadline, pickup) if pickup > accepted_at else deadline
+
+
 def create_order_assignment(
     db: Session,
     order_id: int,
@@ -120,8 +147,7 @@ def create_order_assignment(
         raise HTTPException(status_code=404, detail="Order not found")
 
     now = datetime.utcnow()
-    time_diff = order.max_time_to_assign_order - order.created_at if (order.max_time_to_assign_order and order.created_at) else timedelta(minutes=15)
-    expires_at = now + time_diff
+    expires_at = compute_assignment_deadline(now, order)
     
     db_assignment = OrderAssignment(
         order_id=order_id,
@@ -131,6 +157,11 @@ def create_order_assignment(
         created_at=datetime.utcnow(),
         accepted_tier=accepted_tier,
         held_amount=held_amount,
+        # Trip OTPs exist from the moment a booking is accepted (not only
+        # after a driver+car is picked) so the poster can already share the
+        # Start-Trip OTP with their customer - the driver asks for it at pickup.
+        start_trip_otp=f"{secrets.randbelow(10000):04d}",
+        end_trip_otp=f"{secrets.randbelow(10000):04d}",
     )
     
     try:
@@ -986,6 +1017,11 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                     "platform_fee": _split["platform_fee"] if _split else None,
                     "poster_cc": _split["poster_cc"] if _split else None,
                     "platform_fee_pct": _split["fee_pct"] if _split else None,
+                    "customer_total": _split["customer_total"] if _split else None,
+                    "poster_share": _split["poster_share"] if _split else None,
+                    "convenience_fee": _split.get("convenience_fee") if _split else None,
+                    # real road distance (trip_distance is bumped up to the minimum coverage on short trips)
+                    "real_distance_km": (getattr(new_order, "calculated_trip_distance", None) or None) if new_order else None,
                     "advance_received": order.advance_received,
                     # Driver-side fare breakdown (shown BEFORE accepting)
                     "cost_per_km": (new_order.cost_per_km or 0) if new_order else 0,
@@ -1000,6 +1036,8 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                     "priority_cutoff_at": order.priority_cutoff_at,
                     "fare_type": order.fare_type.value if order.fare_type else "ITEMIZED",
                     "charge_items": order.charge_items,
+                    "gst_included": bool(getattr(order, "gst_included", False)),
+                    "gst_amount": getattr(order, "gst_amount", None),
                     "is_premium_subscriber_order": _is_premium_subscriber(order.customer_number),
                 })
             elif order.source == OrderSourceEnum.HOURLY_RENTAL:
@@ -1007,7 +1045,9 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                 
                 if not hourly_order:
                     continue  # Skip if hourly_order not found
-                
+
+                from app.utils.commission import convenience_fee_amount
+                _hourly_conv = convenience_fee_amount(db)
                 pending_orders.append({
                     "order_id": order.id,
                     "trip_status": order.trip_status,
@@ -1025,7 +1065,8 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                     "max_time_to_assign_order": order.max_time_to_assign_order,
                     "pickup_notes": hourly_order.pickup_notes,
                     "created_at": order.created_at,
-                    "charges_to_deduct" : max(500, int(order.vendor_price - order.estimated_price)),
+                    "charges_to_deduct" : max(500, int(order.vendor_price - order.estimated_price) + _hourly_conv),
+                    "convenience_fee": _hourly_conv,
                     "package" : hourly_order.package_hours,
                     "cost_for_addon_km":hourly_order.cost_for_addon_km,
                     "location_links": order.location_links or {},
@@ -1035,6 +1076,8 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                     "priority_cutoff_at": order.priority_cutoff_at,
                     "fare_type": order.fare_type.value if order.fare_type else "ITEMIZED",
                     "charge_items": order.charge_items,
+                    "gst_included": bool(getattr(order, "gst_included", False)),
+                    "gst_amount": getattr(order, "gst_amount", None),
                     "is_premium_subscriber_order": _is_premium_subscriber(order.customer_number),
                 })
 
@@ -1207,6 +1250,8 @@ def get_driver_assigned_orders(db: Session, driver_id: str) -> List[dict]:
                 "advance_received": order.advance_received,
                 "fare_type": order.fare_type.value if order.fare_type else "ITEMIZED",
                 "charge_items": order.charge_items,
+                "gst_included": bool(getattr(order, "gst_included", False)),
+                "gst_amount": getattr(order, "gst_amount", None),
                 "otp_required": bool(assignment.start_trip_otp),
                 "commission_waived": bool(getattr(order, "commission_waived", False)),
                 "driver_name": assigned_driver.full_name if assigned_driver else None,
@@ -1792,6 +1837,8 @@ def get_posted_bookings_for_owner(db: Session, poster_owner_id: str, limit: int 
             "poster_share": o.vendor_profit if completed else None,
             "platform_fee": o.admin_profit if completed else None,
             "charge_items": o.charge_items,
+            "gst_included": bool(getattr(o, "gst_included", False)),
+            "gst_amount": getattr(o, "gst_amount", None),
             "total_booking_amount": o.total_booking_amount,
             "extra_amount": o.extra_amount,
             "trip_distance": o.trip_distance,

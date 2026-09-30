@@ -39,7 +39,7 @@ from app.crud.car_details import create_car_admin, get_new_car_min_year, set_new
 from app.schemas.order_details import AdminOrdersListResponse, AdminOrderDetailResponse
 from app.crud.order_details import get_all_admin_orders
 from app.crud.admin_wallet import get_admin_account_ledger_data
-from app.core.security import create_access_token, get_current_admin, get_current_user_flexible
+from app.core.security import create_access_token, ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES, get_current_admin, get_current_user_flexible
 from app.schemas.payout_request import PayoutRequestOut, ProcessPayoutRequest, AdminInitiatedPayoutRequest
 from app.crud.payout_requests import get_payout_requests, mark_payout_paid, reject_payout_request
 from app.database.session import get_db
@@ -227,7 +227,7 @@ async def admin_signup(
             "sub": str(admin.id),
             "user": "admin",
             "token_version": getattr(admin, "token_version", 1) or 1,
-        })
+        }, expires_delta=timedelta(minutes=ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES))
 
         # Prepare response
         admin_response = AdminOut(
@@ -285,7 +285,7 @@ async def admin_signin(
             "sub": str(admin.id),
             "user": "admin",
             "token_version": getattr(admin, "token_version", 1) or 1,
-        })
+        }, expires_delta=timedelta(minutes=ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES))
         
         # Prepare response
         admin_response = AdminOut(
@@ -438,11 +438,58 @@ async def list_admins(
         )
 
 
-from pydantic import BaseModel as _StaffBaseModel
+from pydantic import BaseModel as _StaffBaseModel, Field
 
 
 class StaffPermissionsUpdate(_StaffBaseModel):
     permissions: List[str]
+
+
+class StaffDetailsUpdate(_StaffBaseModel):
+    """Owner-only: fix a staff member's own contact details after creation -
+    there was previously no way to do this at all once a staff account was
+    created (only permissions could be changed), so a wrong or outdated
+    phone number just stayed wrong forever."""
+    username: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = Field(None, min_length=10, max_length=10)
+
+
+@router.patch("/admin/staff/{admin_id}", response_model=AdminOut)
+async def update_staff_details(
+    admin_id: str,
+    body: StaffDetailsUpdate,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Owner-only: edit an existing staff member's username/email/phone."""
+    if current_admin.role != "Owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can manage staff")
+
+    target = get_admin_by_id(db, admin_id)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+    if target.role == "Owner" and str(target.id) != str(current_admin.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot edit another Owner's details this way")
+
+    if body.phone:
+        if not body.phone.isdigit():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone must be a 10-digit number")
+        from app.crud.admin import get_admin_by_phone
+        existing_phone = get_admin_by_phone(db, body.phone)
+        if existing_phone and str(existing_phone.id) != admin_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Another admin already uses this phone number")
+
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    updated = update_admin(db, admin_id, **updates) if updates else target
+
+    from app.crud.admin_activity_log import log_admin_action
+    log_admin_action(
+        db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
+        action="STAFF_DETAILS_UPDATED", target_type="admin", target_id=admin_id, target_name=target.username,
+        details=updates,
+    )
+    return updated
 
 
 @router.patch("/admin/staff/{admin_id}/permissions", response_model=AdminOut)
@@ -1116,7 +1163,7 @@ async def get_my_staff_target(
 # out by /admin/notification-settings/{event_key}/upload-sound.
 
 @router.post("/admin/staff-directives/upload-voice")
-async def upload_staff_directive_voice(
+def upload_staff_directive_voice(
     file: UploadFile = File(...),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -2382,7 +2429,7 @@ async def search_user(
         )
 
 @router.post("/admin/add-money-to-vehicle-owner", response_model=AdminAddMoneyResponse, status_code=status.HTTP_201_CREATED)
-async def add_money_to_vehicle_owner(
+def add_money_to_vehicle_owner(
     vehicle_owner_id: str = Form(..., description="ID of the fleet owner"),
     transaction_value: int = Form(..., description="Transaction amount in paise (mandatory)"),
     notes: Optional[str] = Form(None, description="Transaction notes"),
@@ -2540,6 +2587,9 @@ async def get_vendor_details(
                 "image_url": generate_signed_url_from_gcs(vendor_details.aadhar_front_img) if vendor_details.aadhar_front_img else None
             }
         
+        vendor_phone = vendor_details.primary_number or getattr(vendor_credentials, 'primary_number', '')
+        curr_pass = getattr(vendor_credentials, "plain_password", None) or (vendor_phone[-6:] if vendor_phone and len(vendor_phone) >= 6 else None)
+
         return VendorFullDetailsResponse(
             id=vendor_details.id,
             vendor_id=vendor_details.vendor_id,
@@ -2557,7 +2607,8 @@ async def get_vendor_details(
             pincode=vendor_details.pincode,
             account_status=vendor_credentials.account_status.value,
             documents=documents,
-            created_at=vendor_details.created_at
+            created_at=vendor_details.created_at,
+            current_password=curr_pass,
         )
     except HTTPException:
         raise
@@ -2730,6 +2781,9 @@ async def get_vehicle_owner_details(
         # Get fleet owner details
         from app.crud.billing import get_billing_settings
         billing_settings = get_billing_settings(db)
+        owner_phone = vehicle_owner_details.primary_number or getattr(vehicle_owner_credentials, 'primary_number', '')
+        curr_pass = getattr(vehicle_owner_credentials, "plain_password", None) or (owner_phone[-6:] if owner_phone and len(owner_phone) >= 6 else None)
+
         owner_details = VehicleOwnerFullDetailsResponse(
             id=vehicle_owner_details.id,
             vehicle_owner_id=vehicle_owner_details.vehicle_owner_id,
@@ -2756,6 +2810,7 @@ async def get_vehicle_owner_details(
             trusted_override_by=vehicle_owner_details.trusted_override_by,
             trusted_override_reason=vehicle_owner_details.trusted_override_reason,
             trusted_override_at=vehicle_owner_details.trusted_override_at,
+            current_password=curr_pass,
         )
         
         # Get cars
@@ -3601,25 +3656,58 @@ async def admin_get_vacant_city_updates(
 
         results = []
         for o in owners:
-            if not o.vacant_cities or len(o.vacant_cities) == 0:
-                continue
-            updated_at = o.vacant_cities_updated_at
-            if not updated_at:
-                continue
-            if updated_at.tzinfo is None:
-                updated_at = updated_at.replace(tzinfo=timezone.utc)
-            if updated_at < cutoff_24h:
-                continue
+            fleet_entries = list(getattr(o, "vacant_fleet_entries", None) or [])
+            if fleet_entries:
+                for fe in fleet_entries:
+                    cities = fe.get("cities") or []
+                    if not cities:
+                        continue
+                    up_str = fe.get("updated_at")
+                    up_dt = None
+                    if up_str:
+                        try:
+                            up_dt = datetime.fromisoformat(str(up_str).replace('Z', '+00:00'))
+                            if up_dt.tzinfo is None:
+                                up_dt = up_dt.replace(tzinfo=timezone.utc)
+                            if up_dt < cutoff_24h:
+                                continue
+                        except Exception:
+                            pass
+                    results.append({
+                        "vehicle_owner_id": str(o.vehicle_owner_id),
+                        "full_name": o.full_name,
+                        "primary_number": o.primary_number,
+                        "cities": cities,
+                        "driver_id": fe.get("driver_id"),
+                        "driver_name": fe.get("driver_name") or "Owner / Self",
+                        "car_id": fe.get("car_id"),
+                        "car_number": fe.get("car_number") or getattr(o, "vacant_car_number", None),
+                        "car_type": fe.get("car_type"),
+                        "updated_at": (up_dt or o.vacant_cities_updated_at).isoformat() if (up_dt or o.vacant_cities_updated_at) else None,
+                    })
+            else:
+                if not o.vacant_cities or len(o.vacant_cities) == 0:
+                    continue
+                updated_at = o.vacant_cities_updated_at
+                if not updated_at:
+                    continue
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                if updated_at < cutoff_24h:
+                    continue
 
-            results.append({
-                "vehicle_owner_id": str(o.vehicle_owner_id),
-                "full_name": o.full_name,
-                "primary_number": o.primary_number,
-                "cities": o.vacant_cities,
-                "driver_name": getattr(o, "vacant_driver_name", None),
-                "car_number": getattr(o, "vacant_car_number", None),
-                "updated_at": updated_at.isoformat(),
-            })
+                results.append({
+                    "vehicle_owner_id": str(o.vehicle_owner_id),
+                    "full_name": o.full_name,
+                    "primary_number": o.primary_number,
+                    "cities": o.vacant_cities,
+                    "driver_id": getattr(o, "vacant_driver_id", None),
+                    "driver_name": getattr(o, "vacant_driver_name", None) or "Owner / Self",
+                    "car_id": getattr(o, "vacant_car_id", None),
+                    "car_number": getattr(o, "vacant_car_number", None),
+                    "car_type": None,
+                    "updated_at": updated_at.isoformat(),
+                })
         return results
     except Exception:
         print(f"admin_get_vacant_city_updates failed:\n{traceback.format_exc()}")
@@ -3647,6 +3735,7 @@ async def admin_remove_account(
         "driver": ("app.models.car_driver", "CarDriver"),
         "quickdriver": ("app.models.car_driver", "CarDriver"),
         "car": ("app.models.car_details", "CarDetails"),
+        "customer": ("app.models.customer", "CustomerCredentials"),
     }
     if account_type not in model_map:
         raise HTTPException(status_code=400, detail=f"Unknown account_type: {account_type}")
@@ -3666,13 +3755,265 @@ async def admin_remove_account(
         raise HTTPException(status_code=404, detail=f"{account_type} not found")
 
     try:
-        # Remove dependent detail rows first (they reference the credentials row)
+        primary_num = getattr(record, "primary_number", None)
+
+        # 1. Clean up dependencies based on account type
         if account_type == "vendor":
             from app.models.vendor_details import VendorDetails
-            db.query(VendorDetails).filter(VendorDetails.vendor_id == record_id).delete()
+            from app.models.wallet_ledger import WalletLedger
+            from app.models.vendor_wallet_ledger import VendorWalletLedger
+            from app.models.payout_request import PayoutRequest
+            from app.models.order_assignments import OrderAssignment
+            from app.models.orders import Order
+            from app.models.razorpay_transactions import RazorpayTransaction
+            from app.models.notification_log import NotificationLog
+            from app.models.phone_otp import PhoneOTP
+            from app.models.email_otp import EmailOTP
+
+            db.query(VendorDetails).filter(VendorDetails.vendor_id == record_id).delete(synchronize_session=False)
+            try:
+                db.query(VendorWalletLedger).filter(VendorWalletLedger.vendor_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(WalletLedger).filter(WalletLedger.vendor_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(PayoutRequest).filter(PayoutRequest.vendor_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(OrderAssignment).filter(OrderAssignment.vendor_id == record_id).update({OrderAssignment.vendor_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Order).filter(Order.vendor_id == record_id).update({Order.vendor_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(RazorpayTransaction).filter(RazorpayTransaction.vendor_id == record_id).update({RazorpayTransaction.vendor_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            if primary_num:
+                try:
+                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
+                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
+                except Exception:
+                    pass
+
         elif account_type == "vehicle_owner":
             from app.models.vehicle_owner_details import VehicleOwnerDetails
-            db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == record_id).delete()
+            from app.models.wallet_ledger import WalletLedger
+            from app.models.admin_add_money_to_vehicle_owner import AdminAddMoneyToVehicleOwner
+            from app.models.payout_request import PayoutRequest
+            from app.models.drop_bid import DropBid
+            from app.models.carpool import Carpool
+            from app.models.order_assignments import OrderAssignment
+            from app.models.orders import Order
+            from app.models.razorpay_transactions import RazorpayTransaction
+            from app.models.trip_review import TripReview
+            from app.models.car_driver import CarDriver
+            from app.models.car_details import CarDetails
+            from app.models.vehicle_matching import VehicleMatching
+            from app.models.notification_log import NotificationLog
+            from app.models.phone_otp import PhoneOTP
+            from app.models.email_otp import EmailOTP
+
+            db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            try:
+                db.query(WalletLedger).filter(WalletLedger.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(AdminAddMoneyToVehicleOwner).filter(AdminAddMoneyToVehicleOwner.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(PayoutRequest).filter(PayoutRequest.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(DropBid).filter(DropBid.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Carpool).filter(Carpool.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(OrderAssignment).filter(OrderAssignment.vehicle_owner_id == record_id).update({OrderAssignment.vehicle_owner_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Order).filter(Order.vehicle_owner_id == record_id).update({Order.vehicle_owner_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(RazorpayTransaction).filter(RazorpayTransaction.vehicle_owner_id == record_id).update({RazorpayTransaction.vehicle_owner_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(TripReview).filter(TripReview.vehicle_owner_id == record_id).update({TripReview.vehicle_owner_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+
+            # Clean up cars associated with this vehicle owner
+            try:
+                car_ids = [c.id for c in db.query(CarDetails).filter(CarDetails.vehicle_owner_id == record_id).all()]
+                if car_ids:
+                    try:
+                        db.query(VehicleMatching).filter(VehicleMatching.car_id.in_(car_ids)).delete(synchronize_session=False)
+                    except Exception:
+                        pass
+                    try:
+                        db.query(OrderAssignment).filter(OrderAssignment.car_id.in_(car_ids)).update({OrderAssignment.car_id: None}, synchronize_session=False)
+                    except Exception:
+                        pass
+                    try:
+                        db.query(Order).filter(Order.assigned_car_id.in_(car_ids)).update({Order.assigned_car_id: None}, synchronize_session=False)
+                    except Exception:
+                        pass
+                    db.query(CarDetails).filter(CarDetails.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+
+            # Clean up or unlink drivers under this vehicle owner
+            try:
+                driver_ids = [d.id for d in db.query(CarDriver).filter(CarDriver.vehicle_owner_id == record_id).all()]
+                if driver_ids:
+                    try:
+                        db.query(OrderAssignment).filter(OrderAssignment.driver_id.in_(driver_ids)).update({OrderAssignment.driver_id: None}, synchronize_session=False)
+                    except Exception:
+                        pass
+                    try:
+                        db.query(Order).filter(Order.assigned_driver_id.in_(driver_ids)).update({Order.assigned_driver_id: None}, synchronize_session=False)
+                    except Exception:
+                        pass
+                    try:
+                        db.query(TripReview).filter(TripReview.driver_id.in_(driver_ids)).update({TripReview.driver_id: None}, synchronize_session=False)
+                    except Exception:
+                        pass
+                    db.query(CarDriver).filter(CarDriver.vehicle_owner_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+
+            try:
+                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            if primary_num:
+                try:
+                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
+                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
+                except Exception:
+                    pass
+
+        elif account_type == "customer":
+            from app.models.customer_details import CustomerDetails
+            from app.models.customer_booking_request import CustomerBookingRequest
+            from app.models.customer_wallet_topup import CustomerWalletTopup
+            from app.models.orders import Order
+            from app.models.new_orders import NewOrder
+            from app.models.razorpay_transactions import RazorpayTransaction
+            from app.models.trip_review import TripReview
+            from app.models.notification_log import NotificationLog
+            from app.models.phone_otp import PhoneOTP
+            from app.models.email_otp import EmailOTP
+
+            db.query(CustomerDetails).filter(CustomerDetails.customer_id == record_id).delete(synchronize_session=False)
+            try:
+                db.query(CustomerBookingRequest).filter(CustomerBookingRequest.customer_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(CustomerWalletTopup).filter(CustomerWalletTopup.customer_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Order).filter(Order.customer_id == record_id).update({Order.customer_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(NewOrder).filter(NewOrder.customer_id == record_id).update({NewOrder.customer_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(RazorpayTransaction).filter(RazorpayTransaction.customer_id == record_id).update({RazorpayTransaction.customer_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(TripReview).filter(TripReview.customer_id == record_id).update({TripReview.customer_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            if primary_num:
+                try:
+                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
+                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
+                except Exception:
+                    pass
+
+        elif account_type in ("driver", "quickdriver"):
+            from app.models.order_assignments import OrderAssignment
+            from app.models.orders import Order
+            from app.models.trip_review import TripReview
+            from app.models.driver_route_request import DriverRouteRequest
+            from app.models.notification_log import NotificationLog
+            from app.models.phone_otp import PhoneOTP
+            from app.models.email_otp import EmailOTP
+
+            try:
+                db.query(OrderAssignment).filter(OrderAssignment.driver_id == record_id).update({OrderAssignment.driver_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Order).filter(Order.assigned_driver_id == record_id).update({Order.assigned_driver_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(TripReview).filter(TripReview.driver_id == record_id).update({TripReview.driver_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(DriverRouteRequest).filter(DriverRouteRequest.driver_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            if primary_num:
+                try:
+                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
+                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
+                except Exception:
+                    pass
+
+        elif account_type == "car":
+            from app.models.vehicle_matching import VehicleMatching
+            from app.models.order_assignments import OrderAssignment
+            from app.models.orders import Order
+
+            try:
+                db.query(VehicleMatching).filter(VehicleMatching.car_id == record_id).delete(synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(OrderAssignment).filter(OrderAssignment.car_id == record_id).update({OrderAssignment.car_id: None}, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                db.query(Order).filter(Order.assigned_car_id == record_id).update({Order.assigned_car_id: None}, synchronize_session=False)
+            except Exception:
+                pass
 
         record_name = getattr(record, "full_name", None) or getattr(record, "car_name", None)
         db.delete(record)
@@ -3683,20 +4024,11 @@ async def admin_remove_account(
             db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
             action="ACCOUNT_DELETED", target_type=account_type, target_id=account_id, target_name=record_name,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        # Foreign-key violation = the account has bookings/wallet history that
-        # reference it. Deleting would corrupt those records, so refuse clearly.
         err_text = str(e)
-        if "ForeignKeyViolation" in err_text or "foreign key" in err_text.lower() or "IntegrityError" in type(e).__name__:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"This {account_type.replace('_', ' ')} has booking or wallet history and "
-                    "cannot be permanently deleted. Use the Block/Inactive toggle instead - "
-                    "delete is only for unused duplicate accounts."
-                ),
-            )
         raise HTTPException(status_code=500, detail=f"Could not remove account: {err_text[:200]}")
 
     return {"message": f"{account_type} removed successfully", "id": account_id}
@@ -3834,6 +4166,31 @@ class BillingSettingsUpdate(BaseModel):
     monthly_fee: Optional[int] = None
     suspend_threshold: Optional[int] = None
     monthly_min_wallet_floor: Optional[int] = None
+
+
+class ResetYearlyCycleBody(BaseModel):
+    start_date: Optional[str] = None      # YYYY-MM-DD, default = tomorrow
+    dry_run: bool = True                  # True = only preview
+    include_lapsed: bool = True           # also members whose year already ran out
+
+
+@router.post("/admin/billing/reset-yearly-cycle")
+async def admin_reset_yearly_cycle(
+    body: ResetYearlyCycleBody,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Owner only. Restart the yearly period of every member who has paid (preview first with dry_run=true)."""
+    require_owner(current_admin)
+    from datetime import date as _date
+    from app.crud.billing import reset_yearly_cycle
+    start = None
+    if body.start_date:
+        try:
+            start = _date.fromisoformat(body.start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start_date must be YYYY-MM-DD")
+    return reset_yearly_cycle(db, start_date=start, dry_run=body.dry_run, include_lapsed=body.include_lapsed)
 
 
 @router.get("/admin/billing/settings")
@@ -4465,7 +4822,7 @@ async def admin_update_notification_settings(
 
 
 @router.post("/admin/notification-settings/{event_key}/upload-sound")
-async def admin_upload_notification_sound(
+def admin_upload_notification_sound(
     event_key: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -4755,6 +5112,10 @@ class WebsiteBookingSettingsUpdate(BaseModel):
     # assigned driver (urgent bookings always reveal immediately).
     phone_reveal_hours_before_pickup: Optional[float] = None
     platform_fee_pct: Optional[float] = None
+    platform_share_pct: Optional[float] = None
+    platform_share_min: Optional[int] = None
+    commission_min: Optional[int] = None
+    convenience_fee: Optional[int] = None
     platform_all_inclusive_pct: Optional[float] = None
     min_driver_hold: Optional[int] = None
     drop_bid_fee_pct: Optional[float] = None
@@ -5783,10 +6144,34 @@ def submit_profile_edit_request(
     db: Session = Depends(get_db),
 ):
     """
-    Submits a sensitive profile edit (bank account, IFSC, DL, Aadhaar, PAN) to the Admin Review Queue.
+    Submits a sensitive profile edit (bank account, IFSC, DL, Aadhaar, PAN, Name, Mobile, Email) to the Admin Review Queue.
     Live record is NOT updated until Admin approval.
     """
     from app.models.profile_edit_review import ProfileEditReview
+
+    # Check if a PENDING request for this field already exists for this user
+    existing = db.query(ProfileEditReview).filter(
+        ProfileEditReview.user_id == payload.user_id,
+        ProfileEditReview.field_name == payload.field_name,
+        ProfileEditReview.status == "PENDING"
+    ).first()
+
+    if existing:
+        existing.old_value = payload.old_value
+        existing.proposed_value = payload.proposed_value
+        existing.proof_document_url = payload.proof_document_url
+        if payload.user_name:
+            existing.user_name = payload.user_name
+        if payload.user_phone:
+            existing.user_phone = payload.user_phone
+        db.commit()
+        db.refresh(existing)
+        return {
+            "success": True,
+            "message": f"Updated existing edit request for '{payload.field_name}'.",
+            "request_id": existing.id,
+            "status": existing.status,
+        }
 
     review = ProfileEditReview(
         user_id=payload.user_id,
@@ -5811,6 +6196,37 @@ def submit_profile_edit_request(
     }
 
 
+@router.get("/profile-edit-requests/my-requests/{user_id}")
+def get_user_profile_edit_requests(
+    user_id: str,
+    db: Session = Depends(get_db),
+    who=Depends(get_current_user_flexible),
+):
+    """Fetch all pending profile edit requests for a specific user ID (own only, or admin)."""
+    if who["role"] != "ADMIN" and str(who["user_id"]) != str(user_id):
+        raise HTTPException(status_code=403, detail="You can only view your own requests")
+    from app.models.profile_edit_review import ProfileEditReview
+    reviews = db.query(ProfileEditReview).filter(
+        ProfileEditReview.user_id == user_id,
+        ProfileEditReview.status == "PENDING"
+    ).all()
+    
+    return {
+        "pending_fields": [r.field_name for r in reviews],
+        "requests": [
+            {
+                "id": r.id,
+                "field_name": r.field_name,
+                "old_value": r.old_value,
+                "proposed_value": r.proposed_value,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in reviews
+        ]
+    }
+
+
 class ProcessProfileEditSchema(BaseModel):
     admin_notes: Optional[str] = None
 
@@ -5822,11 +6238,12 @@ async def approve_profile_edit_request(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
-    """Approve a profile edit request and update live database record."""
-    from datetime import timezone
+    """Approve a profile edit request and update live database record across models."""
+    from datetime import timezone, datetime
     from app.models.profile_edit_review import ProfileEditReview
     from app.models.car_driver import CarDriver
     from app.models.vehicle_owner_details import VehicleOwnerDetails
+    from app.models.vehicle_owner import VehicleOwnerCredentials
 
     review = db.query(ProfileEditReview).filter(ProfileEditReview.id == request_id).first()
     if not review:
@@ -5842,27 +6259,64 @@ async def approve_profile_edit_request(
 
     # Apply proposed change to live record
     applied = False
+    field = review.field_name
+    val = review.proposed_value
+
     if review.user_type == "FLEET_OWNER":
         vod = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == review.user_id).first()
-        if vod and hasattr(vod, review.field_name):
-            setattr(vod, review.field_name, review.proposed_value)
-            applied = True
+        voc = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == review.user_id).first()
+
+        if field == "full_name":
+            if vod:
+                vod.full_name = val
+                applied = True
+            if voc and hasattr(voc, "full_name"):
+                voc.full_name = val
+                applied = True
+        elif field == "business_name":
+            if vod and hasattr(vod, "business_name"):
+                vod.business_name = val
+                applied = True
+        elif field in ("primary_number", "mobile_number", "phone_number"):
+            if vod:
+                vod.primary_number = val
+                applied = True
+            if voc:
+                voc.primary_number = val
+                applied = True
+        elif field in ("secondary_number", "alternate_number"):
+            if vod:
+                vod.secondary_number = val
+                applied = True
+        elif field == "email":
+            if voc:
+                voc.email = val
+                voc.email_verified = True
+                applied = True
+        else:
+            if vod and hasattr(vod, field):
+                setattr(vod, field, val)
+                applied = True
+
     elif review.user_type == "DRIVER":
         cd = db.query(CarDriver).filter(CarDriver.id == review.user_id).first()
-        if cd and hasattr(cd, review.field_name):
-            setattr(cd, review.field_name, review.proposed_value)
-            applied = True
+        if cd:
+            if field == "full_name":
+                cd.full_name = val
+                applied = True
+            elif field in ("primary_number", "mobile_number", "phone_number"):
+                cd.phone_number = val
+                applied = True
+            elif hasattr(cd, field):
+                setattr(cd, field, val)
+                applied = True
 
     db.commit()
 
     if not applied:
-        # Don't report success on a change that never actually landed - a
-        # wrong field_name (or a since-deleted user record) would otherwise
-        # mark this APPROVED while silently leaving the live record
-        # untouched, with no way for the admin to notice.
         return {
             "success": False,
-            "message": f"Marked APPROVED, but '{review.field_name}' does not match a real field on this {review.user_type.lower()}'s record (or the record no longer exists) - no live value was changed. Check the field name.",
+            "message": f"Marked APPROVED, but '{review.field_name}' could not be mapped to user record. Check field name.",
         }
 
     return {"success": True, "message": f"Approved profile edit for '{review.field_name}'. Live profile updated."}
@@ -6224,6 +6678,24 @@ class SystemSettingsUpdateSchema(BaseModel):
     suspend_threshold: Optional[int] = None
     driver_auto_acceptance_timeout_minutes: Optional[int] = None
     phone_reveal_hours_before_pickup: Optional[float] = None
+    gst_number: Optional[str] = None
+    gst_business_name: Optional[str] = None
+    gst_business_address: Optional[str] = None
+    platform_fee_pct: Optional[float] = None
+    platform_share_pct: Optional[float] = None
+    platform_share_min: Optional[int] = None
+    commission_min: Optional[int] = None
+    convenience_fee: Optional[int] = None
+    platform_all_inclusive_pct: Optional[float] = None
+    min_driver_hold: Optional[int] = None
+    drop_bid_fee_pct: Optional[float] = None
+    # How confirmed website bookings reach the driver apps: MANUAL | AUTO | AUTO_IF_NO_STAFF
+    website_booking_post_mode: Optional[str] = None
+    ai_bot_enabled: Optional[int] = None            # 1 = Help Bot answers with the AI model (needs GEMINI_API_KEY / ANTHROPIC_API_KEY on the server)
+    ai_bot_daily_limit: Optional[int] = None         # AI answers per user per day (cost guard)
+    ai_bot_global_daily_limit: Optional[int] = None  # AI answers for everyone per day (cost guard)
+    doc_ai_enabled: Optional[int] = None             # 1 = AI (Gemini vision) reads uploaded document photos; sends the photo to Google - paid tier only
+    doc_ai_daily_limit: Optional[int] = None
 
 
 @router.get("/admin/settings/system")
@@ -6233,7 +6705,10 @@ async def get_system_settings_endpoint(
     current_admin = Depends(get_current_admin)
 ):
     """Retrieve dynamic platform configuration settings."""
-    return get_all_system_settings(db)
+    from app.models.admin import Admin as _Admin
+    result = get_all_system_settings(db)
+    result["staff_on_duty_count"] = db.query(_Admin).filter(_Admin.is_on_duty.is_(True)).count()
+    return result
 
 
 @router.post("/admin/settings/system")
@@ -6247,20 +6722,56 @@ async def update_system_settings_endpoint(
 ):
     """Update dynamic platform configuration settings."""
     updates = body.dict(exclude_unset=True)
-    # The money settings (commission / fees / hold) can only be changed by the Owner account
-    _owner_only = {"platform_fee_pct", "platform_all_inclusive_pct", "min_driver_hold", "platform_commission_pct", "drop_bid_fee_pct"}
+    # The money settings (commission / fees / hold), plus the GST/business
+    # identity printed on every tax invoice, can only be changed by the
+    # Owner account - same "Owner Change" pattern as the fee settings.
+    _owner_only = {
+        "platform_fee_pct", "platform_all_inclusive_pct", "min_driver_hold", "platform_commission_pct", "drop_bid_fee_pct",
+        "platform_share_pct", "platform_share_min", "commission_min", "convenience_fee", "website_booking_post_mode",
+        "ai_bot_enabled", "ai_bot_daily_limit", "ai_bot_global_daily_limit", "doc_ai_enabled", "doc_ai_daily_limit",
+        "gst_number", "gst_business_name", "gst_business_address",
+    }
     if any(k in updates for k in _owner_only):
         require_owner(current_admin)
-        for k in ("platform_fee_pct", "platform_all_inclusive_pct", "drop_bid_fee_pct"):
+        for k in ("platform_fee_pct", "platform_share_pct", "platform_all_inclusive_pct", "drop_bid_fee_pct"):
             if k in updates and updates[k] is not None and not (0 <= float(updates[k]) <= 50):
                 raise HTTPException(status_code=400, detail=f"{k} must be between 0 and 50")
         if updates.get("min_driver_hold") is not None and updates["min_driver_hold"] < 0:
             raise HTTPException(status_code=400, detail="min_driver_hold can't be negative")
+        for k in ("platform_share_min", "commission_min", "convenience_fee"):
+            if updates.get(k) is not None and not (0 <= int(updates[k]) <= 5000):
+                raise HTTPException(status_code=400, detail=f"{k} must be between 0 and 5000")
+        if updates.get("website_booking_post_mode") is not None:
+            mode = str(updates["website_booking_post_mode"]).strip().upper()
+            if mode not in ("MANUAL", "AUTO", "AUTO_IF_NO_STAFF"):
+                raise HTTPException(status_code=400, detail="website_booking_post_mode must be MANUAL, AUTO or AUTO_IF_NO_STAFF")
+            updates["website_booking_post_mode"] = mode
+        if updates.get("gst_number"):
+            gstin = str(updates["gst_number"]).strip().upper()
+            import re as _re
+            if not _re.match(r"^\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]$", gstin):
+                raise HTTPException(status_code=400, detail="That doesn't look like a valid 15-character GSTIN")
+            updates["gst_number"] = gstin
     updated = update_system_settings(db, updates)
     return {
         "status": "SUCCESS",
         "message": "Platform settings updated successfully",
         "settings": updated
+    }
+
+
+@router.get("/public/gst-business-info")
+async def get_public_gst_business_info(db: Session = Depends(get_db)):
+    """No auth - the Website's invoice-gst.php (a separate PHP app with no
+    admin login) calls this to print the real, Owner-set GSTIN/business
+    name/address on every tax invoice instead of a hardcoded placeholder.
+    Only ever returns these 3 already-public-on-every-invoice fields -
+    nothing sensitive."""
+    settings = get_all_system_settings(db)
+    return {
+        "gst_number": settings.get("gst_number", ""),
+        "business_name": settings.get("gst_business_name", "Drop Cars"),
+        "business_address": settings.get("gst_business_address", ""),
     }
 
 
@@ -6462,3 +6973,75 @@ async def admin_notify_order(
     except Exception:
         pass
     return result
+from pydantic import BaseModel as _MapsKeyBaseModel
+
+
+class SaveMapsKeyPayload(_MapsKeyBaseModel):
+    id: Optional[str] = None
+    key: str
+    label: Optional[str] = "Google Maps API Key"
+    monthly_limit: Optional[int] = 5000
+
+
+@router.get("/admin/maps-keys")
+def get_maps_api_keys(
+    current_admin=Depends(get_current_admin),
+):
+    """Returns the pool of Google Maps API keys with usage statistics and monthly limits."""
+    from app.utils.maps_pool import get_all_keys_info
+    keys = get_all_keys_info()
+    total_active = sum(1 for k in keys if k.get("status") == "ACTIVE")
+    total_used = sum(k.get("used_this_month", 0) for k in keys)
+    return {
+        "status": "SUCCESS",
+        "total_active": total_active,
+        "total_used_this_month": total_used,
+        "keys": keys,
+        "cascade_strategy": [
+            "1. Database & Cache ($0/month)",
+            "2. OpenStreetMap Free Proxy ($0/month)",
+            "3. Google Maps Key Rotation Pool (Free $200/month tier per key)"
+        ]
+    }
+
+
+@router.post("/admin/maps-keys")
+def save_maps_api_key(
+    payload: SaveMapsKeyPayload,
+    current_admin=Depends(get_current_admin),
+):
+    """Allows Owner/Admin to register or update Google Maps API keys with monthly usage limits."""
+    from app.utils.maps_pool import upsert_api_key
+    key_clean = payload.key.strip()
+    if not key_clean:
+        raise HTTPException(status_code=400, detail="Google Maps API Key cannot be empty.")
+
+    result = upsert_api_key(
+        key=key_clean,
+        label=payload.label or "Google Maps API Key",
+        monthly_limit=payload.monthly_limit if payload.monthly_limit is not None else 5000,
+        key_id=payload.id
+    )
+    return {
+        "status": "SUCCESS",
+        "message": "Google Maps API key saved successfully.",
+        "key": result
+    }
+
+
+@router.delete("/admin/maps-keys/{key_id}")
+def delete_maps_api_key(
+    key_id: str,
+    current_admin=Depends(get_current_admin),
+):
+    """Removes a Google Maps API key from the rotation pool."""
+    from app.utils.maps_pool import delete_api_key
+    success = delete_api_key(key_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="API key ID not found.")
+    return {"status": "SUCCESS", "message": f"API key {key_id} removed."}
+
+
+
+
+

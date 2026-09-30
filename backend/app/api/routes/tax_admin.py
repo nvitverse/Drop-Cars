@@ -20,8 +20,9 @@ Route-level RBAC summary (matches the prompt's 3-tier spec):
 """
 from datetime import datetime, date
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.responses import PlainTextResponse, HTMLResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Response
+from fastapi.responses import PlainTextResponse, HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import csv
 import io
@@ -149,6 +150,10 @@ async def list_invoices(
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     require_tax_accounts_permission(current_admin)
+    try:
+        tax_invoices_crud.sync_unlinked_gst_orders(db)
+    except Exception as sync_err:
+        print(f"[TaxInvoice] Sync warning on list_invoices: {sync_err}")
     query = db.query(TaxInvoice)
     if invoice_type:
         query = query.filter(TaxInvoice.invoice_type == invoice_type)
@@ -160,6 +165,25 @@ async def list_invoices(
     for row in rows:
         _redact_pii_for_staff(current_admin, row)
     return rows
+
+
+class ManualTaxInvoiceRequest(BaseModel):
+    customer_name: str
+    customer_number: str
+    customer_email: Optional[str] = None
+    customer_gstin: Optional[str] = None
+    customer_company: Optional[str] = None
+    pickup: str
+    drop: str
+    trip_type: str = "One Way"
+    vehicle_type: str = "Sedan"
+    distance_km: float = 0.0
+    rate_per_km: float = 0.0
+    driver_bata: int = 0
+    toll_charges: int = 0
+    permit_charges: int = 0
+    advance_paid: int = 0
+    booking_id: Optional[str] = None
 
 
 @router.post("/admin/tax/invoices/credit-note", response_model=TaxInvoiceOut)

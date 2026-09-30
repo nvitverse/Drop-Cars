@@ -4,7 +4,7 @@ the side is worked out from the booking itself, never trusted from the client.""
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, UploadFile, File
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import func, or_
@@ -16,6 +16,7 @@ from app.models.orders import Order
 from app.models.booking_chat import BookingChatMessage
 from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 from app.crud import booking_chat as chat
+from app.utils.gcs import upload_image_to_gcs
 
 router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"], dependencies=[Depends(get_current_user_flexible)])
 
@@ -45,7 +46,15 @@ def _resolve_caller(request: Request, db: Session):
 
 def _actor_for_order(role: str, caller, order: Order, db: Session) -> Actor:
     if role == "ADMIN":
-        return Actor("ADMIN", str(caller.id), "Drop Cars admin", read_only=True)
+        # Admin can read AND reply here - e.g. when a driver's "which trip?"
+        # question routes to a booking that has no vendor/owner poster
+        # (order.vendor_id and posted_by_vehicle_owner_id both null - a pure
+        # Website/Admin booking), Admin support is the only real human on
+        # the other side of this chat. Sent as POSTER so it slots into the
+        # same read/unread bucket the driver already sees the poster in;
+        # sender_name still shows "Drop Cars admin" so it's never confused
+        # with the vendor/owner.
+        return Actor("POSTER", str(caller.id), "Drop Cars admin")
     if role == "VENDOR":
         if order.vendor_id and str(order.vendor_id) == str(caller.id):
             return Actor("POSTER", str(caller.id), getattr(caller, "business_name", None) or getattr(caller, "full_name", None) or "Vendor")
@@ -71,7 +80,7 @@ def _load(request: Request, db: Session, order_id: int):
 def _msg_out(m: BookingChatMessage, me: str) -> dict:
     return {
         "id": m.id, "side": m.sender_side, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "kind": m.kind, "quick_key": m.quick_key, "text": m.text,
+        "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": m.voice_url,
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
     }
@@ -83,8 +92,18 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
     role, caller = _resolve_caller(request, db)
     cutoff = datetime.now(timezone.utc) - timedelta(days=chat.CHAT_RETENTION_DAYS)
     if role == "ADMIN":
-        return []
-    if role == "VENDOR":
+        # Bookings with no vendor/owner poster (posted via Website/Admin
+        # directly) - Admin is the only real POSTER-side party for these,
+        # so Admin App's Chats needs to see and reply to them too. Anything
+        # posted by a vendor/owner stays out of Admin's inbox; that's a
+        # private thread between the driver and that vendor/owner.
+        me = "POSTER"
+        orders = (
+            db.query(Order)
+            .filter(Order.vendor_id.is_(None), Order.posted_by_vehicle_owner_id.is_(None))
+            .order_by(Order.created_at.desc()).limit(200).all()
+        )
+    elif role == "VENDOR":
         me = "POSTER"
         orders = db.query(Order).filter(Order.vendor_id == str(caller.id)).order_by(Order.created_at.desc()).limit(200).all()
     else:
@@ -107,7 +126,7 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
         if a is None:
             continue  # nothing to chat about until a driver accepts
         st = str(getattr(a.assignment_status, "value", a.assignment_status))
-        if role == "VENDOR":
+        if role in ("VENDOR", "ADMIN"):
             side = "POSTER"
         else:
             side = "POSTER" if (o.posted_by_vehicle_owner_id is not None and str(o.posted_by_vehicle_owner_id) == owner_id) else "DRIVER"
@@ -121,17 +140,32 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
         unread = db.query(func.count(BookingChatMessage.id)).filter(
             BookingChatMessage.order_id == o.id, BookingChatMessage.sender_side != side, BookingChatMessage.read_at.is_(None)
         ).scalar() or 0
-        other = None
+        other, other_role, other_phone = None, None, None
         if side == "POSTER":
             from app.models.car_driver import CarDriver
             d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
             other = d.full_name if d else "Driver"
+            other_role = "DRIVER"
+            other_phone = d.primary_number if d else None
+        elif o.vendor_id:
+            from app.models.vendor import VendorCredentials
+            v = db.query(VendorCredentials).filter(VendorCredentials.id == o.vendor_id).first()
+            other = f"Vendor #{v.reg_id}" if v and v.reg_id else "Vendor"
+            other_role = "VENDOR"
+            other_phone = v.primary_number if v else None
+        elif o.posted_by_vehicle_owner_id:
+            from app.models.vehicle_owner import VehicleOwnerCredentials
+            ow = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == o.posted_by_vehicle_owner_id).first()
+            other = f"Fleet Owner #{ow.reg_id}" if ow and ow.reg_id else "Fleet Owner"
+            other_role = "OWNER"
+            other_phone = ow.primary_number if ow else None
         else:
-            other = "Booking owner"
+            other = "Drop Cars Admin"
+            other_role = "ADMIN"
         out.append({
             "order_id": o.id, "title": chat.booking_title(o), "trip_type": chat._v(o.trip_type), "car_type": chat._v(o.car_type),
             "start_date_time": o.start_date_time.isoformat() if o.start_date_time else None,
-            "assignment_status": st, "my_side": side, "other_party": other,
+            "assignment_status": st, "my_side": side, "other_party": other, "other_role": other_role, "other_phone": other_phone,
             "last_text": last.text if last else None,
             "last_at": last.created_at.isoformat() if last and last.created_at else None,
             "unread": int(unread),
@@ -173,6 +207,20 @@ def get_chat(order_id: int, request: Request, after_id: int = Query(0, ge=0), db
 class SendPayload(BaseModel):
     text: Optional[str] = None
     quick_key: Optional[str] = None
+    voice_url: Optional[str] = None
+
+
+@router.post("/upload-voice")
+def upload_chat_voice_note(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Any of the 4 app tokens (vendor/owner/driver/admin) can upload a
+    voice note - the same recording ends up attached to whichever chat
+    message the client posts right after (booking chat or Support chat),
+    so this endpoint doesn't need to know which one in advance."""
+    _resolve_caller(request, db)  # just needs to be someone real
+    if not (file.content_type or "").startswith("audio/"):
+        raise HTTPException(status_code=400, detail="File must be an audio recording")
+    url = upload_image_to_gcs(file, folder="chat_voice_notes")
+    return {"voice_url": url}
 
 
 @router.post("/orders/{order_id}", status_code=status.HTTP_201_CREATED)
@@ -189,8 +237,12 @@ def send_message(order_id: int, payload: SendPayload, request: Request, db: Sess
 
     key = (payload.quick_key or "").strip() or None
     text = (payload.text or "").strip()
+    voice_url = (payload.voice_url or "").strip() or None
     kind = "TEXT"
-    if actor.side == "DRIVER" and key in chat.DRIVER_QUESTIONS and not text:
+    if voice_url:
+        kind = "VOICE"
+        text = text or "\U0001F3A4 Voice message"
+    elif actor.side == "DRIVER" and key in chat.DRIVER_QUESTIONS and not text:
         text = chat.DRIVER_QUESTIONS[key]
         kind = "QUICK"
     elif key:
@@ -201,7 +253,7 @@ def send_message(order_id: int, payload: SendPayload, request: Request, db: Sess
         raise HTTPException(status_code=400, detail="Message is too long.")
 
     m = BookingChatMessage(order_id=order.id, sender_side=actor.side, sender_id=actor.ident, sender_name=actor.name,
-                           kind=kind, quick_key=key, text=text)
+                           kind=kind, quick_key=key, text=text, voice_url=voice_url)
     db.add(m)
     # Poster deliberately sharing the customer number in chat = the same "show customer number" decision as the switch
     if actor.side == "POSTER" and key == "CUSTOMER_NUMBER":

@@ -199,6 +199,9 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         is_urgent=request.is_urgent,
         advance_received=request.advance_amount,
         fare_type=fare_type_str,
+        charge_items=([{"label": "GST Included", "included": True}] if getattr(request, 'gst_included', False) else None),
+        gst_included=getattr(request, 'gst_included', False),
+        gst_amount=getattr(request, 'gst_amount', None),
         # All-inclusive: the customer's single amount is what the 85/15 platform split is taken from
         total_booking_amount=(orig_total_amount if fare_type_str == "ALL_INCLUSIVE" else None),
     )
@@ -222,6 +225,18 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     db.commit()
     db.refresh(request)
 
+    # Auto-generate & email GST Tax Invoice PDF if GST was included
+    if getattr(request, 'gst_included', False):
+        try:
+            from app.crud.tax_invoices import issue_and_email_order_tax_invoice
+            issue_and_email_order_tax_invoice(
+                db,
+                order=master_order,
+                customer_email=request.customer_email,
+            )
+        except Exception as tax_ex:
+            print(f"Failed to auto-issue/email GST invoice for approved request {request.id}: {tax_ex}")
+
     return master_order
 
 
@@ -239,6 +254,19 @@ def get_auto_approve_seconds(db: Session, is_urgent: bool = False) -> int:
         return default
 
 
+WEBSITE_POST_MODE_KEY = "website_booking_post_mode"   # MANUAL | AUTO | AUTO_IF_NO_STAFF
+
+
+def get_website_post_mode(db: Session) -> str:
+    mode = str(get_platform_setting_value(db, WEBSITE_POST_MODE_KEY, "AUTO") or "AUTO").strip().upper()
+    return mode if mode in ("MANUAL", "AUTO", "AUTO_IF_NO_STAFF") else "AUTO"
+
+
+def any_staff_on_duty(db: Session) -> bool:
+    from app.models.admin import Admin
+    return db.query(Admin.id).filter(Admin.is_on_duty.is_(True)).first() is not None
+
+
 async def auto_approve_expired_booking_requests(db: Session) -> int:
     """Sweep: auto-approve any PENDING request whose approval window has
     elapsed, so a website booking is never stuck waiting on a slow/missed
@@ -247,6 +275,22 @@ async def auto_approve_expired_booking_requests(db: Session) -> int:
     Normal and urgent requests have DIFFERENT review windows, so each row's
     own cutoff is computed from its own is_urgent flag rather than one
     blanket filter."""
+    # Admin choice (Admin App > System Config): MANUAL never auto-posts; AUTO_IF_NO_STAFF only auto-posts while nobody
+    # on the staff is on duty (whoever is on duty handles the bookings by hand).
+    mode = get_website_post_mode(db)
+    if mode == "MANUAL":
+        return 0
+    if mode == "AUTO_IF_NO_STAFF" and any_staff_on_duty(db):
+        # staff is handling bookings by hand right now - look again in 5 minutes in case they go off duty
+        try:
+            if db.query(CustomerBookingRequest.id).filter(CustomerBookingRequest.status == "PENDING",
+                                                          CustomerBookingRequest.requires_manual_confirm == False).first():  # noqa: E712
+                from app.crud.notification import schedule_internal_sweep
+                schedule_internal_sweep(300)
+        except Exception:
+            pass
+        return 0
+
     now = datetime.now(timezone.utc)
     normal_delay = get_auto_approve_seconds(db, is_urgent=False)
     urgent_delay = get_auto_approve_seconds(db, is_urgent=True)

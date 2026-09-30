@@ -126,7 +126,40 @@ _DISPATCH_URL = os.getenv(
 )
 _INTERNAL_TASK_SECRET = os.getenv("INTERNAL_TASK_SECRET", "")
 
+_SWEEP_URL = os.getenv(
+    "INTERNAL_SWEEP_URL",
+    "https://drop-cars-api-207918408785.asia-south2.run.app/api/internal/run-sweep",
+)
+
 _tasks_client = None
+
+
+def schedule_internal_sweep(delay_seconds: int) -> bool:
+    """Ask Cloud Tasks to call the deadline sweep after `delay_seconds`. The in-process timer only runs while an instance
+    is alive, and Cloud Run stops idle instances - so a website booking's "auto-post after 15 minutes" could simply never
+    fire. A scheduled task wakes the service at the right moment. Best effort, never raises."""
+    if not _INTERNAL_TASK_SECRET:
+        return False
+    try:
+        from datetime import datetime, timedelta
+        from google.protobuf import timestamp_pb2
+        client = _get_tasks_client()
+        parent = client.queue_path(_GCP_PROJECT, _TASKS_LOCATION, _TASKS_QUEUE)
+        ts = timestamp_pb2.Timestamp()
+        ts.FromDatetime(datetime.utcnow() + timedelta(seconds=max(1, int(delay_seconds))))
+        client.create_task(request={"parent": parent, "task": {
+            "http_request": {
+                "http_method": 1,
+                "url": _SWEEP_URL,
+                "headers": {"Content-Type": "application/json", "X-Internal-Secret": _INTERNAL_TASK_SECRET},
+                "body": b"{}",
+            },
+            "schedule_time": ts,
+        }})
+        return True
+    except Exception as e:
+        print(f"schedule_internal_sweep failed (in-process timer still runs): {e}")
+        return False
 
 
 def _get_tasks_client():
@@ -252,7 +285,15 @@ def update_notification(db: Session, sub: str, data: NotificationUpdate):
     if notification:
         notification.permission1 = data.permission1
         notification.permission2 = data.permission2
-        notification.token = data.token
+        # Never let a failed client-side token fetch (empty string / 'EMPTY')
+        # wipe a working push token - that silently stopped every booking
+        # notification and sound for the user until they logged in again.
+        # An empty token is only honoured as an explicit "notifications OFF".
+        new_token = (data.token or "").strip()
+        if new_token.startswith(("ExponentPushToken[", "ExpoPushToken[")):
+            notification.token = new_token
+        elif not data.permission1 and not data.permission2:
+            notification.token = new_token
         db.commit()
         db.refresh(notification)
     return notification
@@ -338,11 +379,29 @@ def get_users_with_permission1(db: Session, city_list: List[str]):
         print(f"Error querying vacant cities for notifications: {e}")
     
     # Filter by city overlap (notification selected_city OR active vacant_cities)
+    #
+    # "All cities" owners: someone who ticked All Cities earlier is missing
+    # every city added to the master list AFTER they did (and any place that
+    # was never in the list at all), so an exact-name match silently dropped
+    # those bookings for them. Anyone with the large majority of the master
+    # list selected is treated as All Cities and gets every booking.
+    try:
+        from app.utils.cities import get_cities as _get_master_cities
+        _master = set(_get_master_cities())
+    except Exception:
+        _master = set()
+    _all_threshold = int(len(_master) * 0.6) if _master else None
+
     filtered_users = []
     for user in vehicle_owners:
         is_vacant_match = str(user.sub) in vacant_owner_ids
         is_notif_city_match = bool(user.selected_city and set(user.selected_city) & set(city_list))
-        if is_vacant_match or is_notif_city_match:
+        is_all_cities = bool(
+            _all_threshold
+            and user.selected_city
+            and len(set(user.selected_city) & _master) >= _all_threshold
+        )
+        if is_vacant_match or is_notif_city_match or is_all_cities:
             filtered_users.append(user)
 
     return filtered_users
@@ -517,10 +576,33 @@ def _send_bubble_wakeup_push(db: Session, tokens: list, order_id: Optional[int])
         print(f"_send_bubble_wakeup_push failed (main notification unaffected): {e}")
 
 
+def _sync_booking_cities_to_master(db: Session, cities: list) -> None:
+    """Any pickup city on a real booking that is not yet in the shared city
+    list is added to it automatically, so every app's city picker (and the
+    owners' All-Cities selection) picks it up without manual admin work."""
+    try:
+        from app.utils.cities import get_cities as _gc, save_cities as _sc
+        master = list(_gc())
+        known = {c.lower() for c in master}
+        new = []
+        for c in cities or []:
+            name = str(c).strip()
+            if name and name.upper() != "ALL" and name.lower() not in known:
+                new.append(name)
+                known.add(name.lower())
+        if new:
+            _sc(db, master + new)
+            print(f"city sync: added {new} to master city list")
+    except Exception as e:
+        print(f"city sync failed (non-fatal): {e}")
+
+
 def send_new_booking_notification_sync(db: Session, title: str, message: str, ordered_city: list, is_urgent: bool = False, channel_id: Optional[str] = None, order_id: Optional[int] = None):
     try:
         if ordered_city == ["ALL"]:
             ordered_city = get_cities()
+        else:
+            _sync_booking_cities_to_master(db, ordered_city)
 
         users = get_users_with_permission1(db, ordered_city)
         tokens = [user.token for user in users if user.token and not _is_muted(user)]
@@ -1636,4 +1718,4 @@ def notify_priority_lock_changed(
             ]
             _post_expo_payloads_sync(payloads)
     except Exception as e:
-        print(f"notify_priority_lock_changed failed (non-fatal): {e}")
+        print(f"notify_priority_lock_changed failed (non-fatal): {e}")

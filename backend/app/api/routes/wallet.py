@@ -229,23 +229,13 @@ def verify_registration_fee_payment(
         # it while approving the account. No wallet credit - this is a fee.
         # Marks the account Preferred immediately (see crud/billing.py
         # get_partner_tier) - no lag between payment and tier upgrade.
-        from datetime import datetime, timezone, date
         from app.models.vehicle_owner_details import VehicleOwnerDetails
-        from app.crud.billing import BILLING_CYCLE_DAYS
+        from app.crud.billing import activate_membership
         details = db.query(VehicleOwnerDetails).filter(
             VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id
         ).first()
         if details is not None:
-            details.registration_fee_paid_at = datetime.now(timezone.utc)
-            # Renewal (not first-time) payment: a due/lapsed date needs to
-            # move forward and any suspension needs to lift, or the account
-            # would stay Standard-tier despite having just paid.
-            today = date.today()
-            if details.billing_next_date is not None and details.billing_next_date < today:
-                from datetime import timedelta
-                details.billing_next_date = details.billing_next_date + timedelta(days=BILLING_CYCLE_DAYS)
-            details.billing_suspended = False
-            db.add(details)
+            activate_membership(db, details)
 
         db.commit()
     except HTTPException:
@@ -276,12 +266,86 @@ def get_ledger(
     return entries
 
 
+# Plain-language titles/explanations for every kind of wallet entry (no technical words for the driver).
+_LEDGER_INFO = {
+    "TRIP_HOLD": ("Security amount held for a trip",
+                  "This amount was set aside from your wallet when you accepted the booking. It is a safety deposit - after the trip is completed the part that is not needed is returned to your wallet."),
+    "TRIP_COMPLETION": ("Trip settlement",
+                        "The final settlement after the trip was completed: what the customer paid, what you keep, and what was passed on to the booking owner and Drop Cars. The held amount is adjusted here."),
+    "AUTO_CANCELLATION_PENALTY": ("Booking cancelled - not assigned in time",
+                                  "A driver and car were not added to this booking before its deadline, so the booking was cancelled and this amount was kept as a penalty."),
+    "POSTER_SHARE": ("Your share of a booking you posted",
+                     "You posted this booking. This is your share of it after the trip was completed."),
+    "RAZORPAY_PAYMENT": ("Money added to wallet", "You added money to your wallet by online payment."),
+    "ADMIN_ADD_MONEY": ("Money added by Drop Cars", "Drop Cars added this amount to your wallet."),
+    "ADMIN_MANUAL_ADJUST": ("Adjustment by Drop Cars", "Drop Cars adjusted your wallet balance. See the note for the reason."),
+}
+
+
+@router.get("/wallet/ledger/{entry_id}/detail")
+def get_ledger_entry_detail(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
+):
+    """Everything the Wallet screen shows when a debit/credit row is tapped: a plain-language explanation and, for
+    trip entries, the trip and the money split behind it."""
+    import uuid as _uuid
+    try:
+        eid = _uuid.UUID(entry_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid entry")
+    e = db.query(WalletLedger).filter(WalletLedger.id == eid, WalletLedger.vehicle_owner_id == vehicle_owner_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    rtype = e.reference_type or ""
+    title, why = _LEDGER_INFO.get(rtype, ("Wallet entry", e.notes or ""))
+    out = {
+        "id": str(e.id), "entry_type": getattr(e.entry_type, "value", e.entry_type), "amount": e.amount,
+        "balance_before": e.balance_before, "balance_after": e.balance_after,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "reference_type": rtype, "reference_id": e.reference_id,
+        "title": title, "explanation": why, "note": e.notes, "trip": None,
+    }
+    order = None
+    if e.reference_id and str(e.reference_id).isdigit():
+        from app.models.orders import Order
+        order = db.query(Order).filter(Order.id == int(e.reference_id)).first()
+    if order:
+        from app.models.end_records import EndRecord
+        from app.models.order_assignments import OrderAssignment
+        er = db.query(EndRecord).filter(EndRecord.order_id == order.id).first()
+        asg = db.query(OrderAssignment).filter(OrderAssignment.order_id == order.id).order_by(OrderAssignment.created_at.desc()).first()
+        loc = order.pickup_drop_location or {}
+        keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0) if isinstance(loc, dict) else []
+        done = str(getattr(order.trip_status, "value", order.trip_status)).upper() == "COMPLETED"
+        out["trip"] = {
+            "order_id": order.id,
+            "trip_type": getattr(order.trip_type, "value", order.trip_type),
+            "from": loc.get(keys[0]) if keys else None, "to": loc.get(keys[-1]) if len(keys) > 1 else None,
+            "pickup_time": order.start_date_time.isoformat() if order.start_date_time else None,
+            "status": str(getattr(order.trip_status, "value", order.trip_status)),
+            "held_amount": getattr(asg, "held_amount", None),
+            "km_driven": (er.end_km - er.start_km) if er else None,
+            "cash_collected": er.cash_collection if er else None,
+            "customer_total": order.closed_vendor_price if done else None,
+            "you_keep": order.driver_profit if done else None,
+            "booking_owner_share": order.vendor_profit if done else None,
+            "platform_fee": order.admin_profit if done else None,
+        }
+    return out
+
+
 @router.get("/wallet/balance", response_model=WalletBalanceOut)
 def get_balance_endpoint(
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
 ):
-    balance = get_owner_balance(db, vehicle_owner_id)
+    from sqlalchemy.exc import NoResultFound
+    try:
+        balance = get_owner_balance(db, vehicle_owner_id)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="No wallet found for this account")
     return {"vehicle_owner_id": vehicle_owner_id, "current_balance": balance}
 
 

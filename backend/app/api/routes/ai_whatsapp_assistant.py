@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from sqlalchemy.orm import Session
@@ -7,12 +8,90 @@ from typing import Dict, Any, List, Optional
 
 from app.database.session import get_db
 from app.models.ai_automation_log import AIAutomationLog
+from app.core.security import get_current_driver
 
 logger = logging.getLogger(__name__)
 from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter(tags=["AI WhatsApp & Voice Assistant"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# Fuzzy matching helpers - the bot used to require an exact keyword substring,
+# so a driver typing "otp" as "otpp", "wallet" as "walet", or "cancel" as
+# "cancle" fell straight through to the generic fallback. These helpers let a
+# 1-2 letter typo still match the right topic, while staying a plain
+# rule-based matcher (no external AI service / API key needed).
+# ---------------------------------------------------------------------------
+
+def _edit_distance(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+        prev = cur
+    return prev[-1]
+
+
+def _typo_tolerance(word_len: int) -> int:
+    if word_len <= 5:
+        return 1
+    if word_len <= 8:
+        return 2
+    return 3
+
+
+def _keyword_hit(tokens: List[str], raw_message: str, keyword: str) -> bool:
+    """True if `keyword` (a word or short phrase) is present in the message,
+    exactly or with a small typo. Multi-word phrases (e.g. "rate card") are
+    checked as a substring only - fuzzy-matching a whole phrase is overkill.
+    The fuzzy pass requires the same first letter (real typos almost never
+    change the first letter) so unrelated same-length words - "weather" vs
+    "return", "mudiyala" vs "balance" - don't coincidentally match just
+    because their edit distance happens to be small."""
+    if " " in keyword:
+        return keyword in raw_message
+    for tok in tokens:
+        if len(tok) < 3:
+            continue
+        if keyword in tok or tok in keyword:
+            return True
+        if tok[0] == keyword[0] and abs(len(tok) - len(keyword)) <= 2 and _edit_distance(tok, keyword) <= _typo_tolerance(len(keyword)):
+            return True
+    return False
+
+
+def any_kw(tokens: List[str], raw_message: str, keywords: List[str]) -> bool:
+    return any(_keyword_hit(tokens, raw_message, k) for k in keywords)
+
+
+_TAMIL_ROMAN_WORDS = {
+    "vanakkam", "evlo", "enna", "panrathu", "kaasu", "kattanam", "pannunga", "irukku",
+    "venum", "vendam", "illa", "aagum", "epadi", "yenga", "nalla", "seekiram", "romba",
+    "nanba", "sir", "anna", "akka", "amma", "appa", "theriyala", "mudiyala", "panna",
+    "vandhu", "poyiduchu", "aaguthu", "nu",
+}
+
+
+def _detect_tamil(text: str) -> bool:
+    """True if the message is actually written in Tamil - either the Tamil
+    Unicode script itself, or common romanized ('Tanglish') Tamil words. This
+    looks at what the driver actually typed, instead of trusting a client-
+    sent language flag that may not match (the Driver App used to always
+    send language='ta' no matter what the driver typed)."""
+    if re.search(r'[஀-௿]', text):
+        return True
+    words = set(re.findall(r"[a-zA-Z]+", text.lower()))
+    return bool(words & _TAMIL_ROMAN_WORDS)
+
 
 # Comprehensive Distance Matrix (in KM) for major Tamil Nadu & South India routes
 DISTANCE_DB = {
@@ -99,6 +178,8 @@ DISTANCE_DB = {
     ("bangalore", "pondicherry"): 310,
 }
 
+KNOWN_CITIES = sorted({c for pair in DISTANCE_DB for c in pair})
+
 PER_KM_RATES = {
     "hatchback": 13,
     "sedan": 14,
@@ -117,6 +198,26 @@ DRIVER_BETA_MAP = {
     "tempo": 800,
 }
 
+
+def _helpline_number(db: Session) -> str:
+    """The real, currently-reachable support number - whichever staff/owner
+    admin has toggled "on duty" (Admin App > Settings), falling back to any
+    Owner-role admin. Never a hardcoded placeholder."""
+    try:
+        from app.models.admin import Admin
+        admin = (
+            db.query(Admin).filter(Admin.is_on_duty.is_(True))
+            .order_by(Admin.on_duty_since.desc()).first()
+        )
+        if not admin:
+            admin = db.query(Admin).filter(Admin.role == "Owner").order_by(Admin.created_at.asc()).first()
+        if admin and admin.phone:
+            return f"+91 {admin.phone}"
+    except Exception:
+        logger.exception("Could not look up on-duty helpline number")
+    return "your fleet owner"
+
+
 def get_distance(city1: str, city2: str) -> int:
     c1, c2 = city1.lower().strip(), city2.lower().strip()
     if (c1, c2) in DISTANCE_DB:
@@ -125,32 +226,150 @@ def get_distance(city1: str, city2: str) -> int:
         return DISTANCE_DB[(c2, c1)]
     return 320  # Average outstation default fallback
 
+
+def _find_cities(tokens: List[str], raw_message: str) -> List[str]:
+    """Exact word match first, then a typo-tolerant pass (e.g. "banglore",
+    "chenai", "madurei") against the known city list, in the order they
+    appear in the message."""
+    exact = re.findall(
+        r'\b(' + '|'.join(KNOWN_CITIES) + r')\b',
+        raw_message,
+    )
+    if exact:
+        # de-duplicate while keeping order
+        seen, out = set(), []
+        for c in exact:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+    found, seen = [], set()
+    for tok in tokens:
+        if len(tok) < 4:
+            continue
+        for city in KNOWN_CITIES:
+            if city in seen or city[0] != tok[0]:
+                continue
+            if abs(len(tok) - len(city)) <= 2 and _edit_distance(tok, city) <= _typo_tolerance(len(city)):
+                found.append(city)
+                seen.add(city)
+                break
+    return found
+
+
 @router.post("/ai/chat-assistant", dependencies=[Depends(get_current_user_flexible)])
-async def chat_assistant_query(
+async def chat_assistant_route(
+    request: Request,
     payload: Dict[str, Any] = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Help Bot / Support chat. Asks the LLM first (it knows the caller's own wallet and trips, remembers the last few
+    turns and answers in the caller's language); when no LLM key is configured, the daily cap is reached or the call
+    fails, the rule-based assistant below answers exactly as before. A reply the LLM marks `needs_human` comes back with
+    category UNRECOGNIZED, which the apps already turn into "connect to Drop Cars support"."""
+    message = str(payload.get("message", "")).strip()
+    if message:
+        from app.utils import ai_llm
+        # bare menu shortcuts ("1".."9") are the rule bot's - answer those there
+        if not re.fullmatch(r"[0-9.# ]{1,3}|(option|opt)\s*[0-9]", message.lower()):
+            llm = await asyncio.to_thread(ai_llm.answer, db, request, message, payload.get("history"))
+            if llm:
+                try:
+                    db.add(AIAutomationLog(
+                        category="SMART_LLM_ASSISTANT", action_type="LLM_REPLY", entity_type="partner",
+                        entity_id="PARTNER-CHAT-USER", entity_name="Driver / Partner",
+                        summary=f"AI Chat (LLM): {message[:60]}", confidence_score=0.9,
+                        details_json={"user_query": message, "ai_response_text": llm["reply"], "needs_human": llm["needs_human"]},
+                    ))
+                    db.commit()
+                except Exception:  # noqa: BLE001
+                    db.rollback()
+                return {
+                    "success": True, "query": message, "reply": llm["reply"],
+                    "category": "UNRECOGNIZED" if llm["needs_human"] else "AI_ASSISTANT",
+                    "suggestions": llm["suggestions"],
+                }
+    return await _rule_based_assistant(payload, db)
+
+
+async def _rule_based_assistant(
+    payload: Dict[str, Any],
+    db: Session
 ) -> Dict[str, Any]:
     """
-    State-of-the-Art Drop Cars AI Assistant (Tamil & English) with Deep Knowledge:
+    Drop Cars driver-support chat assistant (Tamil & English), rule-based
+    with typo-tolerant keyword matching. Covers:
     - Route Tariff & Distance Calculations
     - Start Trip OTP / End OTP Rules
     - Toll, Fastag & Parking Policies
     - Delay & Waiting Time Calculation
-    - Cancellation & ₹500 Penalty Guidelines
+    - Cancellation & Rs.500 Penalty Guidelines
     - Wallet Security Hold & Instant Release Rules
-    - Direct Smart Suggestions
+    - Round Trip / Bata, Luggage, Pet, Hill Station rules
+    - Documents & licence renewal, App login trouble, Advance & GST, Fuel/AC,
+      Insurance during duty
+    - Emergency SOS / Lost & Found / Human dispatch escalation
+    Any message that matches nothing sensible gets a professional "here is
+    what I can help with" reply instead of a guessed answer - it never
+    silently assumes a route or a topic the driver didn't ask about.
     """
     user_message = payload.get("message", "").strip()
-    language = payload.get("language", "ta").lower()
-    is_tamil = "ta" in language or any(w in user_message.lower() for w in ["vanakkam", "evlo", "enna", "rate", "panrathu", "kaasu", "chennai", "madurai", "kattanam"])
+    language = payload.get("language", "").lower()
 
     if not user_message:
         raise HTTPException(status_code=400, detail="Message string is required")
 
-    lower_msg = user_message.lower()
+    # Reply in whatever language the driver actually typed in, not a fixed
+    # client flag - detect straight from the message text (Tamil script or
+    # common Tanglish words). A short/ambiguous message (e.g. just "2") falls
+    # back to the client's language hint, and finally to Tamil, since most
+    # drivers on this platform read Tamil.
+    is_tamil = _detect_tamil(user_message) or (not user_message.strip("0123456789. #") and "en" not in language) or (not language and not re.search(r'[a-zA-Z]', user_message))
 
-    # Category 1: START / END OTP
-    if any(k in lower_msg for k in ["otp", "start code", "end code", "start trip", "end trip", "start otp"]):
+    lower_msg = user_message.lower()
+    trimmed = lower_msg.strip().replace(".", "").replace("#", "")
+    tokens = re.findall(r"[a-z]+", lower_msg)
+
+    is_opt_1 = trimmed in ["1", "option 1", "opt 1", "one"]
+    is_opt_2 = trimmed in ["2", "option 2", "opt 2", "two"]
+    is_opt_3 = trimmed in ["3", "option 3", "opt 3", "three"]
+    is_opt_4 = trimmed in ["4", "option 4", "opt 4", "four"]
+    is_opt_5 = trimmed in ["5", "option 5", "opt 5", "five"]
+    is_opt_6 = trimmed in ["6", "option 6", "opt 6", "six"]
+    is_opt_7 = trimmed in ["7", "option 7", "opt 7", "seven"]
+    is_opt_8 = trimmed in ["8", "option 8", "opt 8", "eight"]
+    is_opt_9 = trimmed in ["9", "option 9", "opt 9", "nine"]
+
+    # Category 1: TARIFF & DISTANCE ESTIMATION (Direct 1 shortcut or keywords)
+    if is_opt_1 or (any_kw(tokens, lower_msg, ["tariff", "fare", "rate", "rates", "charges", "pricing", "kattanam"]) and not any_kw(tokens, lower_msg, ["cancel", "penalty", "wait", "otp"])):
+        if is_tamil:
+            reply = (
+                "💰 **Drop Cars நிலையான கட்டண விகிதங்கள் (Standard Tariffs)**:\n\n"
+                "• **Sedan (Dzire / Etios)**: ₹14/km (குறைந்தபட்சம் 250 கி.மீ/நாள்)\n"
+                "• **SUV (Ertiga / Marazzo)**: ₹19/km\n"
+                "• **Prime SUV (Innova / Crysta)**: ₹21/km\n"
+                "• **Hatchback (Swift / WagonR)**: ₹13/km\n\n"
+                "• **Driver Beta**: பகல் ₹300 (06:00 AM - 10:00 PM) | இரவு ₹400 (10:00 PM - 06:00 AM)\n"
+                "• **Tolls & Parking**: அசல் ரசீதுப்படி வாடிக்கையாளர் செலுத்துவார்.\n\n"
+                "💡 *குறிப்பிட்ட ஊர்களுக்கு இடையே தூரம் அறிய (எ.கா: 'Chennai to Madurai') என டைப் செய்யவும்.*"
+            )
+        else:
+            reply = (
+                "💰 **Drop Cars Standard Partner Tariffs**:\n\n"
+                "• **Sedan (Dzire / Etios)**: ₹14/km (Outstation min 250 km/day)\n"
+                "• **SUV (Ertiga / Marazzo)**: ₹19/km\n"
+                "• **Prime SUV (Innova Crysta)**: ₹21/km\n"
+                "• **Hatchback (Swift / WagonR)**: ₹13/km\n\n"
+                "• **Driver Allowance**: Day ₹300 (6 AM–10 PM) | Night ₹400 (10 PM–6 AM)\n"
+                "• **Tolls & Fastag**: Reimbursed on actual receipts by customer.\n\n"
+                "💡 *Type any two cities (e.g. 'Chennai to Madurai') for instant distance and fare calculation.*"
+            )
+        category = "TARIFF"
+        suggestions = ["🚗 Chennai ➔ Madurai", "🚗 Chennai ➔ Bangalore", "🔑 Start Trip OTP", "🅿️ Toll Rules"]
+
+    # Category 2: START / END OTP
+    elif is_opt_2 or any_kw(tokens, lower_msg, ["otp", "code", "verification", "start"]) and any_kw(tokens, lower_msg, ["otp", "code", "trip", "ride"]):
         if is_tamil:
             reply = (
                 "🔑 **Start Trip OTP & End Trip OTP வழிகாட்டுதல்**:\n\n"
@@ -171,8 +390,8 @@ async def chat_assistant_query(
         category = "OTP"
         suggestions = ["📍 Reached pickup point", "💰 View Tariff breakdown", "🎧 Connect to Dispatch"]
 
-    # Category 2: TOLL, FASTAG & PARKING
-    elif any(k in lower_msg for k in ["toll", "fastag", "parking", "permit", "sunga", "sungam"]):
+    # Category 3: TOLL, FASTAG & PARKING
+    elif is_opt_3 or any_kw(tokens, lower_msg, ["toll", "fastag", "parking", "permit", "sunga", "sungam"]):
         if is_tamil:
             reply = (
                 "🅿️ **Fastag சுங்கக் கட்டணம் & பார்க்கிங் விதிமுறைகள்**:\n\n"
@@ -192,8 +411,8 @@ async def chat_assistant_query(
         category = "TOLL_PARKING"
         suggestions = ["💰 View Tariff Rates", "🔑 How to get Start OTP?", "🎧 Contact Dispatch Desk"]
 
-    # Category 3: WAITING TIME & PASSENGER DELAY
-    elif any(k in lower_msg for k in ["wait", "waiting", "delay", "not picking", "late", "reach", "unreachable", "thamadham"]):
+    # Category 4: WAITING TIME & PASSENGER DELAY
+    elif is_opt_4 or any_kw(tokens, lower_msg, ["wait", "waiting", "delay", "late", "reach", "unreachable", "thamadham"]):
         if is_tamil:
             reply = (
                 "⏳ **வாடிக்கையாளர் தாமதம் & காத்திருப்பு கட்டணக் கொள்கை**:\n\n"
@@ -217,8 +436,8 @@ async def chat_assistant_query(
         category = "WAITING_TIME"
         suggestions = ["📍 Reached pickup point", "⚠️ Report Delay to Dispatch", "📞 Call Masked Proxy"]
 
-    # Category 4: CANCELLATION & ₹500 PENALTY
-    elif any(k in lower_msg for k in ["cancel", "penalty", "500", "fine", "charge", "decline", "abaraatham"]):
+    # Category 5: CANCELLATION & ₹500 PENALTY
+    elif is_opt_6 or any_kw(tokens, lower_msg, ["cancel", "penalty", "fine", "decline", "abaraatham"]) or "500" in lower_msg:
         if is_tamil:
             reply = (
                 "⚠️ **ரத்து விதிமுறைகள் & ₹500 அபராதம் பற்றிய விளக்கம்**:\n\n"
@@ -239,8 +458,8 @@ async def chat_assistant_query(
         category = "CANCELLATION_PENALTY"
         suggestions = ["💳 Check Wallet Balance", "⚡ Route Request Rules", "🎧 Contact Dispatch Desk"]
 
-    # Category 5: WALLET, SECURITY HOLD & PAYOUT
-    elif any(k in lower_msg for k in ["wallet", "hold", "security", "balance", "payout", "vaalat", "panam"]):
+    # Category 6: WALLET, SECURITY HOLD & PAYOUT
+    elif is_opt_5 or any_kw(tokens, lower_msg, ["wallet", "hold", "security", "balance", "payout", "vaalat", "panam", "settlement"]):
         if is_tamil:
             reply = (
                 "💳 **வாலட் செக்யூரிட்டி ஹோல்டு & கட்டணப் பட்டுவாடா**:\n\n"
@@ -261,8 +480,8 @@ async def chat_assistant_query(
         category = "WALLET_HOLD"
         suggestions = ["➕ Recharge Wallet Now", "🔒 View Active Holds", "🎧 Dispatch Support"]
 
-    # Category 6: ROUND TRIP & OUTSTATION RULES
-    elif any(k in lower_msg for k in ["round trip", "roundtrip", "twoway", "two way", "return", "night halt", "thirumba"]):
+    # Category 7: ROUND TRIP, BATA & OUTSTATION RULES
+    elif is_opt_7 or any_kw(tokens, lower_msg, ["round", "roundtrip", "bata", "return", "halt", "thirumba"]) or "two way" in lower_msg:
         if is_tamil:
             reply = (
                 "🔄 **ரவுண்ட் ட்ரிப் & இரவு நேர தங்குதல் விதிமுறைகள்**:\n\n"
@@ -282,8 +501,8 @@ async def chat_assistant_query(
         category = "ROUND_TRIP"
         suggestions = ["💰 Estimate Round Trip Fare", "🅿️ Toll Collection Rules", "🎧 Contact Dispatch Desk"]
 
-    # Category 7: LUGGAGE & BOOT SPACE POLICY
-    elif any(k in lower_msg for k in ["luggage", "baggage", "boot", "bags", "suitcases", "load", "samangal"]):
+    # Category 8: LUGGAGE & BOOT SPACE POLICY
+    elif is_opt_8 or any_kw(tokens, lower_msg, ["luggage", "baggage", "boot", "bags", "suitcase", "samangal"]):
         if is_tamil:
             reply = (
                 "🧳 **லக்கேஜ் & பூட் ஸ்பேஸ் வழிகாட்டுதல்**:\n\n"
@@ -305,8 +524,8 @@ async def chat_assistant_query(
         category = "LUGGAGE"
         suggestions = ["🚗 Check Sedan Rates", "🚙 Check SUV Rates", "🎧 Talk to Dispatch Desk"]
 
-    # Category 8: PET TRAVEL POLICY
-    elif any(k in lower_msg for k in ["pet", "dog", "cat", "animal", "naai", "poonai"]):
+    # Category 9: PET TRAVEL POLICY
+    elif any_kw(tokens, lower_msg, ["pet", "dog", "cat", "animal", "naai", "poonai"]):
         if is_tamil:
             reply = (
                 "🐾 **செல்லப்பிராணிகள் பயண வழிகாட்டுதல் (Pet Policy)**:\n\n"
@@ -326,8 +545,8 @@ async def chat_assistant_query(
         category = "PET_POLICY"
         suggestions = ["🚗 Outstation Guidelines", "💬 Message in App", "🎧 Help Desk"]
 
-    # Category 9: HILL STATION & GHAT ROAD AC RULES
-    elif any(k in lower_msg for k in ["hill", "ghat", "ooty", "kodaikanal", "munnar", "yercaud", "hairpin", "malai"]):
+    # Category 10: HILL STATION & GHAT ROAD AC RULES
+    elif any_kw(tokens, lower_msg, ["hill", "ghat", "ooty", "kodaikanal", "munnar", "yercaud", "hairpin", "malai"]):
         if is_tamil:
             reply = (
                 "⛰️ **மலைப்பாதை & ஹில் ஸ்டேஷன் AC விதிமுறைகள்**:\n\n"
@@ -347,15 +566,99 @@ async def chat_assistant_query(
         category = "HILL_STATION"
         suggestions = ["💰 Ooty / Kodaikanal Tariff", "🅿️ Hill Permit Rules", "🎧 Contact Dispatch Desk"]
 
-    # Category 10: EMERGENCY, ACCIDENT & SOS
-    elif any(k in lower_msg for k in ["sos", "emergency", "accident", "breakdown", "police", "ambulance", "puncture"]):
+    # Category 11: DOCUMENTS & LICENCE RENEWAL
+    elif any_kw(tokens, lower_msg, ["licence", "license", "document", "expiry", "renew", "rc", "insurance", "permit", "pollution", "aadhar", "aadhaar"]):
+        if is_tamil:
+            reply = (
+                "📄 **டாக்குமெண்ட் & லைசென்ஸ் புதுப்பித்தல்**:\n\n"
+                "• **லைசென்ஸ் / RC / இன்சூரன்ஸ் / பொலூஷன் காலாவதி**: Profile ➔ Documents பக்கத்தில் காலாவதி தேதி தெரியும். "
+                "காலாவதிக்கு 15 நாட்கள் முன்பே 'Renew' பட்டன் காண்பிக்கும் - புதிய டாக்குமெண்ட் போட்டோ அப்லோட் செய்யவும்.\n"
+                "• **சரிபார்ப்பு**: புதிய டாக்குமெண்ட் அப்லோட் செய்த பிறகு Admin சரிபார்க்கும் வரை (சாதாரணமாக சில மணி நேரம்) பழைய டாக்குமெண்ட் வேலை செய்யும்.\n"
+                "• **இன்சூரன்ஸ் (Insurance) கவரேஜ்**: வாகன இன்சூரன்ஸ் உரிமையாளர் பொறுப்பு; சவாரியின் போது விபத்து ஏற்பட்டால் உடனே Dispatch Desk-ஐ தொடர்பு கொள்ளவும்."
+            )
+        else:
+            reply = (
+                "📄 **Document & Licence Renewal**:\n\n"
+                "• **Licence / RC / Insurance / Pollution expiry**: Check the expiry date under Profile ➔ Documents. "
+                "A 'Renew' option appears 15 days before expiry - upload the new document photo there.\n"
+                "• **Verification**: Your old document keeps working until Admin verifies the new upload (usually a few hours).\n"
+                "• **Insurance Coverage**: Vehicle insurance is the owner's responsibility; if there's an accident during a trip, contact Dispatch Desk immediately."
+            )
+        category = "DOCUMENTS"
+        suggestions = ["📤 Upload Renewed Document", "🎧 Ask Dispatch About Verification", "🚨 Report an Accident"]
+
+    # Category 12: APP / LOGIN TROUBLE
+    elif any_kw(tokens, lower_msg, ["login", "logout", "password", "app not working", "crash", "hang", "notification", "signin", "session"]):
+        if is_tamil:
+            reply = (
+                "📱 **ஆப் / லாகின் பிரச்சனை**:\n\n"
+                "• **Password மறந்துவிட்டீர்களா?**: Sign-in பக்கத்தில் 'Forgot Password' ➔ உங்கள் மொபைல் நம்பர் கொடுத்து புதிய Password அமைக்கலாம். "
+                "Email இணைக்கப்படாத கணக்குகளுக்கு உங்கள் Fleet Owner அல்லது Admin-ஐ தொடர்பு கொள்ளவும்.\n"
+                "• **ஆப் Hang / Crash ஆகுதா?**: ஆப்-ஐ முழுவதுமாக மூடிவிட்டு மீண்டும் திறக்கவும்; இன்டர்நெட் connection சரிபார்க்கவும்.\n"
+                "• **Notification வரவில்லையா?**: Phone Settings ➔ Apps ➔ Drop Cars ➔ Notifications 'Allow' ஆக இருக்கிறதா பார்க்கவும்."
+            )
+        else:
+            reply = (
+                "📱 **App / Login Trouble**:\n\n"
+                "• **Forgot Password?**: Tap 'Forgot Password' on the sign-in screen and reset it with your mobile number. "
+                "If your account has no email on file, ask your Fleet Owner or Admin to help.\n"
+                "• **App hanging or crashing?**: Fully close and reopen the app; check your internet connection.\n"
+                "• **Not getting notifications?**: Check Phone Settings ➔ Apps ➔ Drop Cars ➔ Notifications is set to Allow."
+            )
+        category = "APP_LOGIN"
+        suggestions = ["🔑 Reset Password", "🎧 Contact Dispatch Desk", "💰 View Tariff Rates"]
+
+    # Category 13: ADVANCE PAYMENT, GST & INVOICE
+    elif any_kw(tokens, lower_msg, ["advance", "gst", "invoice", "bill", "commission", "deduction", "muthal"]):
+        if is_tamil:
+            reply = (
+                "🧾 **அட்வான்ஸ் பேமெண்ட், GST & இன்வாய்ஸ்**:\n\n"
+                "• **அட்வான்ஸ்**: வாடிக்கையாளர் முன்கூட்டியே செலுத்தும் அட்வான்ஸ் தொகை, சவாரி Accept ஆன பிறகு App-ல் காண்பிக்கும்.\n"
+                "• **கமிஷன் / பிளாட்ஃபார்ம் கட்டணம்**: நிலையான Standard கமிஷன் (10%) மற்றும் சிறிய பிளாட்ஃபார்ம் கட்டணம் (2%) சவாரி "
+                "தொகையிலிருந்து கழிக்கப்படும் - சவாரி முடிந்ததும் Wallet-ல் விவரம் தெளிவாக இருக்கும்.\n"
+                "• **GST இன்வாய்ஸ்**: நிறுவன வாடிக்கையாளர்களுக்கு GST இன்வாய்ஸ் தேவைப்பட்டால் அது வாடிக்கையாளர் தரப்பில் Website/Admin மூலம் வழங்கப்படும்."
+            )
+        else:
+            reply = (
+                "🧾 **Advance Payment, GST & Invoice**:\n\n"
+                "• **Advance**: Any advance the passenger paid up front is shown in the app once you accept the ride.\n"
+                "• **Commission / Platform Fee**: The standard commission (10%) and a small platform fee (2%) are deducted from the trip amount - "
+                "the exact split is shown in your Wallet once the trip is completed.\n"
+                "• **GST Invoice**: For business customers who need a GST invoice, that is issued on the customer side via the Website/Admin, not from the Driver App."
+            )
+        category = "ADVANCE_GST"
+        suggestions = ["💳 View Wallet Breakdown", "💰 View Tariff Rates", "🎧 Contact Dispatch Desk"]
+
+    # Category 14: FUEL / AC POLICY
+    elif any_kw(tokens, lower_msg, ["fuel", "petrol", "diesel", "mileage", "ac ", "aircondition"]):
+        if is_tamil:
+            reply = (
+                "⛽ **எரிபொருள் & AC கொள்கை**:\n\n"
+                "• எரிபொருள் (Fuel) செலவு எப்போதும் ஓட்டுநர் / வாகன உரிமையாளர் பொறுப்பு - இது கிலோமீட்டர் கட்டணத்தில் "
+                "ஏற்கனவே சேர்க்கப்பட்டுள்ளது.\n"
+                "• AC சாதாரண பாதைகளில் எப்போதும் இயங்கும்; மலைப்பாதைகளில் மட்டும் பாதுகாப்பிற்காக தற்காலிகமாக அணைக்கப்படலாம் "
+                "(Hill Station விதிமுறையை பார்க்கவும்)."
+            )
+        else:
+            reply = (
+                "⛽ **Fuel & AC Policy**:\n\n"
+                "• Fuel cost is always the driver's / vehicle owner's responsibility - it is already built into the per-km tariff.\n"
+                "• AC runs normally on regular roads; it may be temporarily switched off only on hill/ghat roads for safety "
+                "(see Hill Station rules)."
+            )
+        category = "FUEL_AC"
+        suggestions = ["💰 View Tariff Rates", "⛰️ Hill Station AC Rules", "🎧 Contact Dispatch Desk"]
+
+    # Category 15: EMERGENCY, ACCIDENT & SOS
+    elif is_opt_9 or any_kw(tokens, lower_msg, ["sos", "emergency", "accident", "breakdown", "police", "ambulance", "puncture"]):
+        helpline = _helpline_number(db)
         if is_tamil:
             reply = (
                 "🚨 **அவசர உதவி & பிரேக்டவுன் (SOS Support)**:\n\n"
                 "1. **வாகன பிரேக்டவுன்**: கார் பழுதானால் உடனடியாக ஆப்பில் உள்ள 'SOS / Emergency' பட்டனை அழுத்தவும். "
                 "எங்கள் கண்ட்ரோல் ரூம் அடுத்த 30-45 நிமிடங்களில் மாற்று வண்டியை (Replacement Cab) ஏற்பாடு செய்யும்.\n"
                 "2. **விபத்து / மருத்துவ உதவி**: காவல்துறை (100 / 112) மற்றும் ஆம்புலன்ஸ் (108) உதவிக்கு உடனடியாக அழைக்கவும்.\n"
-                "3. எங்கள் 24x7 அவசர உதவி எண்: **+91 98765 43210**."
+                f"3. எங்கள் அவசர உதவி எண் (இப்போது duty-ல் உள்ளவர்): **{helpline}**."
             )
         else:
             reply = (
@@ -363,13 +666,13 @@ async def chat_assistant_query(
                 "1. **Vehicle Breakdown**: Tap the SOS / Emergency button on your screen immediately. "
                 "Drop Cars Dispatch will arrange a replacement cab within 30-45 minutes.\n"
                 "2. **Accident / Medical Help**: Call 112 (Emergency Police) or 108 (Ambulance) if anyone requires medical care.\n"
-                "3. Our 24/7 Priority Helpline: **+91 98765 43210**."
+                f"3. Priority Helpline (whoever's on duty right now): **{helpline}**."
             )
         category = "EMERGENCY_SOS"
         suggestions = ["🚨 Trigger Emergency Dispatch Alert", "📞 Call Operations Desk", "📍 Share GPS Coordinates"]
 
-    # Category 11: LOST & FOUND
-    elif any(k in lower_msg for k in ["lost", "found", "forgot", "left item", "phone left", "bag left", "thavara"]):
+    # Category 16: LOST & FOUND
+    elif any_kw(tokens, lower_msg, ["lost", "found", "forgot", "thavara"]) and any_kw(tokens, lower_msg, ["item", "bag", "phone", "left", "thavara"]):
         if is_tamil:
             reply = (
                 "🎒 **காரில் தவறவிட்ட பொருட்கள் (Lost & Found)**:\n\n"
@@ -387,86 +690,115 @@ async def chat_assistant_query(
         category = "LOST_FOUND"
         suggestions = ["🎧 Report Lost Item to Dispatch", "📞 Contact Passenger via Masked Line", "💬 Send Message"]
 
-    # Category 12: HUMAN AGENT & DISPATCH ESCALATION
-    elif any(k in lower_msg for k in ["agent", "human", "support", "dispatch", "call me", "helpline", "pesanum"]):
+    # Category 17: HUMAN AGENT & DISPATCH ESCALATION
+    elif any_kw(tokens, lower_msg, ["agent", "human", "support", "dispatch", "helpline", "pesanum", "operator", "manager"]):
+        helpline = _helpline_number(db)
         if is_tamil:
             reply = (
                 "🎧 **நேரடி கட்டுப்பாட்டு அறை (Operations Dispatch Desk)**:\n\n"
-                "உங்களை எங்கள் மூத்த கட்டுப்பாட்டு அறை அதிகாரியுடன் இணைக்கிறோம். "
+                "உங்களை இப்போது duty-ல் உள்ள எங்கள் அதிகாரியுடன் இணைக்கிறோம். "
                 "சவாரி மேலாண்மை, கட்டண முரண்பாடுகள், அல்லது உடனடி உதவிக்கு நீங்கள் நேரடியாக பேசலாம்.\n\n"
-                "• **ஹெல்ப்லைன்**: +91 98765 43210\n"
-                "• **செயல்பாடு நேரம்**: 24 மணி நேரமும், வாரத்தின் 7 நாட்களும் இயங்கும்."
+                f"• **ஹெல்ப்லைன்**: {helpline}\n"
+                "• இது தவிர இந்த Chat-லேயே 'Talk to a person now' மூலமும் Support-ஐ தொடர்பு கொள்ளலாம்."
             )
         else:
             reply = (
                 "🎧 **Central Operations & Dispatch Desk**:\n\n"
-                "Connecting you directly with a senior dispatch officer. "
+                "Connecting you with whoever's on duty right now. "
                 "For booking reassignment, fare dispute, or urgent intervention:\n\n"
-                "• **Helpline**: +91 98765 43210\n"
-                "• **Availability**: 24 Hours / 7 Days a week"
+                f"• **Helpline**: {helpline}\n"
+                "• You can also use 'Talk to a person now' right in this chat to reach Support."
             )
         category = "DISPATCH_SUPPORT"
         suggestions = ["📞 Call 24/7 Helpline", "📝 Leave a Callback Request", "🔄 Recheck Tariff"]
 
-    # Category 13: TARIFF & DISTANCE ESTIMATION
+    # Category 18: TARIFF & DISTANCE ESTIMATION FOR A NAMED ROUTE
     else:
-        cities_found = re.findall(
-            r'\b(chennai|madurai|coimbatore|trichy|salem|tirunelveli|vellore|erode|thanjavur|pondicherry|bangalore|bengaluru|kanyakumari|dindigul|hosur|ooty|kodaikanal|tiruppur|kumbakonam|tirupati|rameswaram|cuddalore|villupuram|nagercoil|tuticorin|karur|mysore|munnar|pollachi|palani|kochi|theni|dharmapuri|krishnagiri|namakkal)\b',
-            lower_msg
-        )
+        cities_found = _find_cities(tokens, lower_msg)
 
-        pickup_city = cities_found[0].capitalize() if len(cities_found) > 0 else "Chennai"
-        drop_city = cities_found[1].capitalize() if len(cities_found) > 1 else ("Madurai" if pickup_city != "Madurai" else "Trichy")
-
-        car_type_key = "sedan"
-        car_type_display = "Sedan (Etios / Dzire)"
-        if any(w in lower_msg for w in ["suv", "ertiga", "xylo"]):
-            car_type_key = "suv"
-            car_type_display = "SUV (Ertiga / Lodgy)"
-        elif any(w in lower_msg for w in ["innova", "crysta"]):
-            car_type_key = "innova"
-            car_type_display = "Innova / Crysta"
-        elif any(w in lower_msg for w in ["hatchback", "swift", "mini", "wagonr"]):
-            car_type_key = "hatchback"
-            car_type_display = "Hatchback (Swift / WagonR)"
-
-        estimated_km = get_distance(pickup_city, drop_city)
-        rate_per_km = PER_KM_RATES.get(car_type_key, 14)
-        estimated_fare = estimated_km * rate_per_km
-        driver_beta = DRIVER_BETA_MAP.get(car_type_key, 400)
-        total_quote = estimated_fare + driver_beta
-
-        if is_tamil:
-            reply = (
-                f"🚗 **கட்டணக் கணக்கீடு: {pickup_city} ➔ {drop_city}**\n\n"
-                f"• வாகனம்: **{car_type_display}**\n"
-                f"• உத்தேச தூரம்: **{estimated_km} km**\n"
-                f"• கிலோமீட்டர் கட்டணம்: **₹{rate_per_km}/km**\n"
-                f"• சவாரி கட்டணம்: **₹{estimated_fare:,}**\n"
-                f"• ஓட்டுநர் படி (Driver Beta): **₹{driver_beta}**\n"
-                f"💰 **மொத்த உத்தேச கட்டணம்: சுமார் ₹{total_quote:,}**\n"
-                f"✨ (சுங்கக் கட்டணம் அசல் ரசீதுப்படி வாடிக்கையாளரால் செலுத்தப்படும்)\n\n"
-                f"மேலும் விவரங்கள் அறிய கீழே உள்ள ஆப்ஷன்களை தட்டவும்."
-            )
+        if not cities_found:
+            # Nothing matched, and no city was named either - be a
+            # professional human-support fallback instead of guessing a
+            # route the driver never asked about. Restate what the bot can
+            # help with and offer a live-agent escalation.
+            if is_tamil:
+                reply = (
+                    "🙏 மன்னிக்கவும், உங்கள் கேள்வியை சரியாக புரிந்துகொள்ள முடியவில்லை.\n\n"
+                    "நான் இவற்றில் உதவ முடியும்: கட்டண விகிதங்கள், Start/End OTP, Toll & Fastag, காத்திருப்பு கட்டணம், "
+                    "ரத்து விதிமுறை, Wallet Hold, Round Trip/Bata, லக்கேஜ், டாக்குமெண்ட் புதுப்பித்தல், ஆப் லாகின் பிரச்சனை, "
+                    "அட்வான்ஸ்/GST, அவசர உதவி.\n\n"
+                    "கீழே உள்ள ஆப்ஷன் ஒன்றை தட்டவும், அல்லது இன்னும் தெளிவாக கேளுங்கள் (எ.கா: 'Chennai to Madurai fare', "
+                    "'OTP வரலை'). நேரடியாக பேச Dispatch Desk-ஐ தொடர்பு கொள்ளலாம்."
+                )
+            else:
+                reply = (
+                    "🙏 Sorry, I couldn't match that to something I know.\n\n"
+                    "I can help with: Tariff rates, Start/End OTP, Toll & Fastag, waiting charges, cancellation rules, "
+                    "Wallet Hold, Round Trip/Bata, luggage, document renewal, app/login trouble, advance & GST, "
+                    "and emergencies.\n\n"
+                    "Tap an option below, or ask more specifically (e.g. 'Chennai to Madurai fare', 'OTP not received'). "
+                    "For anything else, please reach the Dispatch Desk directly."
+                )
+            category = "UNRECOGNIZED"
+            suggestions = [
+                "💰 Tariff & Rates",
+                "🔑 Start Trip OTP",
+                "🅿️ Toll & Fastag rules",
+                "🎧 Contact Dispatch Desk",
+            ]
         else:
-            reply = (
-                f"🚗 **Tariff Estimate: {pickup_city} to {drop_city}**\n\n"
-                f"• Vehicle: **{car_type_display}**\n"
-                f"• Estimated Distance: **{estimated_km} km**\n"
-                f"• Per KM Tariff: **₹{rate_per_km}/km**\n"
-                f"• Base Fare: **₹{estimated_fare:,}**\n"
-                f"• Driver Beta: **₹{driver_beta}**\n"
-                f"💰 **Total Estimated Fare: ~₹{total_quote:,}**\n"
-                f"✨ (Fastag tolls payable as per actual receipts)\n\n"
-                f"Tap below for quick options or to chat with Dispatch."
-            )
-        category = "TARIFF"
-        suggestions = [
-            f"💰 Check SUV Fare ({pickup_city} ➔ {drop_city})",
-            "🅿️ Toll & Fastag collection rule",
-            "🔑 How to get Start OTP?",
-            "⏳ Waiting charges policy"
-        ]
+            pickup_city = cities_found[0].capitalize()
+            drop_city = cities_found[1].capitalize() if len(cities_found) > 1 else ("Madurai" if pickup_city != "Madurai" else "Trichy")
+
+            car_type_key = "sedan"
+            car_type_display = "Sedan (Etios / Dzire)"
+            if any_kw(tokens, lower_msg, ["suv", "ertiga", "xylo"]):
+                car_type_key = "suv"
+                car_type_display = "SUV (Ertiga / Lodgy)"
+            elif any_kw(tokens, lower_msg, ["innova", "crysta"]):
+                car_type_key = "innova"
+                car_type_display = "Innova / Crysta"
+            elif any_kw(tokens, lower_msg, ["hatchback", "swift", "mini", "wagonr"]):
+                car_type_key = "hatchback"
+                car_type_display = "Hatchback (Swift / WagonR)"
+
+            estimated_km = get_distance(pickup_city, drop_city)
+            rate_per_km = PER_KM_RATES.get(car_type_key, 14)
+            estimated_fare = estimated_km * rate_per_km
+            driver_beta = DRIVER_BETA_MAP.get(car_type_key, 400)
+            total_quote = estimated_fare + driver_beta
+
+            if is_tamil:
+                reply = (
+                    f"🚗 **கட்டணக் கணக்கீடு: {pickup_city} ➔ {drop_city}**\n\n"
+                    f"• வாகனம்: **{car_type_display}**\n"
+                    f"• உத்தேச தூரம்: **{estimated_km} km**\n"
+                    f"• கிலோமீட்டர் கட்டணம்: **₹{rate_per_km}/km**\n"
+                    f"• சவாரி கட்டணம்: **₹{estimated_fare:,}**\n"
+                    f"• ஓட்டுநர் படி (Driver Beta): **₹{driver_beta}**\n"
+                    f"💰 **மொத்த உத்தேச கட்டணம்: சுமார் ₹{total_quote:,}**\n"
+                    f"✨ (சுங்கக் கட்டணம் அசல் ரசீதுப்படி வாடிக்கையாளரால் செலுத்தப்படும்)\n\n"
+                    f"மேலும் விவரங்கள் அறிய கீழே உள்ள ஆப்ஷன்களை தட்டவும்."
+                )
+            else:
+                reply = (
+                    f"🚗 **Tariff Estimate: {pickup_city} to {drop_city}**\n\n"
+                    f"• Vehicle: **{car_type_display}**\n"
+                    f"• Estimated Distance: **{estimated_km} km**\n"
+                    f"• Per KM Tariff: **₹{rate_per_km}/km**\n"
+                    f"• Base Fare: **₹{estimated_fare:,}**\n"
+                    f"• Driver Beta: **₹{driver_beta}**\n"
+                    f"💰 **Total Estimated Fare: ~₹{total_quote:,}**\n"
+                    f"✨ (Fastag tolls payable as per actual receipts)\n\n"
+                    f"Tap below for quick options or to chat with Dispatch."
+                )
+            category = "TARIFF"
+            suggestions = [
+                f"💰 Check SUV Fare ({pickup_city} ➔ {drop_city})",
+                "🅿️ Toll & Fastag collection rule",
+                "🔑 How to get Start OTP?",
+                "⏳ Waiting charges policy"
+            ]
 
     # Audit logging
     try:
@@ -506,3 +838,107 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
     logger.info(f"Incoming WhatsApp webhook ({len(body)} bytes) - not processed")
     return {"status": "received"}
+
+
+@router.get("/ai/trip-detail/{order_id}")
+async def trip_detail_for_chat(
+    order_id: int,
+    language: str = "",
+    db: Session = Depends(get_db),
+    current_driver=Depends(get_current_driver),
+):
+    """The Help Bot's answer when a driver asks about the tariff/fare/details
+    of a SPECIFIC trip they picked from the "which trip?" chips - the real
+    accepted numbers for that booking (not the generic rate card)."""
+    from app.models.orders import Order
+    from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
+    from app.crud.booking_chat import _cities, _v
+    from app.utils.commission import estimate_split_for_order, enum_value
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    assignment = (
+        db.query(OrderAssignment)
+        .filter(
+            OrderAssignment.order_id == order_id,
+            OrderAssignment.driver_id == current_driver.id,
+            OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
+        )
+        .order_by(OrderAssignment.created_at.desc())
+        .first()
+    )
+    if not assignment:
+        raise HTTPException(status_code=403, detail="This trip isn't assigned to you.")
+
+    is_tamil = _detect_tamil(language) or language.lower().startswith("ta") or (not language)
+    pickup, drop = _cities(order)
+    route = f"{pickup} → {drop}" if drop else pickup
+    status_label = str(enum_value(assignment.assignment_status))
+    car_type = _v(order.car_type)
+    trip_type = _v(order.trip_type)
+    fare_type = _v(getattr(order, "fare_type", None)) or "ITEMIZED"
+    distance = getattr(order, "trip_distance", None)
+    advance = int(getattr(order, "advance_received", 0) or 0)
+
+    try:
+        split = estimate_split_for_order(db, order)
+    except Exception:
+        logger.exception(f"trip_detail_for_chat: split calc failed for order {order_id}")
+        split = None
+
+    status_ta = {"ASSIGNED": "ஒதுக்கப்பட்டது", "DRIVING": "சவாரி நடக்கிறது", "PENDING": "நிலுவையில்", "COMPLETED": "முடிந்தது"}.get(status_label, status_label)
+    status_en = {"ASSIGNED": "Assigned - not started", "DRIVING": "Trip in progress", "PENDING": "Pending", "COMPLETED": "Completed"}.get(status_label, status_label)
+
+    if is_tamil:
+        lines = [
+            f"\U0001F4CB **Trip #{order_id} விவரம்**",
+            f"• **பாதை**: {route}",
+            f"• **வாகனம்**: {car_type} ({trip_type})",
+            f"• **நிலை**: {status_ta}",
+        ]
+        if distance:
+            lines.append(f"• **திட்டமிட்ட தூரம்**: {distance} km")
+        lines.append(f"• **கட்டண வகை**: {'All-Inclusive' if fare_type == 'ALL_INCLUSIVE' else 'Itemized (பிரேக்டவுன் வாரியாக)'}")
+        if advance:
+            lines.append(f"• **அட்வான்ஸ் (வாடிக்கையாளர் ஏற்கனவே செலுத்தியது)**: ₹{advance:,}")
+        if split:
+            lines.append(f"• **உங்கள் நிகர வருமானம் (Driver Net)**: ₹{split['driver_net']:,}")
+            lines.append(f"• **பிளாட்ஃபார்ம் கட்டணம்**: ₹{split['platform_fee']:,} ({split['fee_pct']}%)")
+            if split['poster_share']:
+                lines.append(f"• **போஸ்டர் பங்கு**: ₹{split['poster_share']:,}")
+        lines.append("\n✨ இது இந்த குறிப்பிட்ட சவாரியின் நிஜமான கணக்கு - மேலே உள்ள 1-9 ஆப்ஷன் பொதுவான விதிமுறைகளுக்கு மட்டும்.")
+        reply = "\n".join(lines)
+    else:
+        lines = [
+            f"\U0001F4CB **Trip #{order_id} Details**",
+            f"• **Route**: {route}",
+            f"• **Vehicle**: {car_type} ({trip_type})",
+            f"• **Status**: {status_en}",
+        ]
+        if distance:
+            lines.append(f"• **Planned Distance**: {distance} km")
+        lines.append(f"• **Fare Type**: {'All-Inclusive' if fare_type == 'ALL_INCLUSIVE' else 'Itemized (with breakdown)'}")
+        if advance:
+            lines.append(f"• **Advance already paid by customer**: ₹{advance:,}")
+        if split:
+            lines.append(f"• **Your net earnings**: ₹{split['driver_net']:,}")
+            lines.append(f"• **Platform fee**: ₹{split['platform_fee']:,} ({split['fee_pct']}%)")
+            if split['poster_share']:
+                lines.append(f"• **Poster's share**: ₹{split['poster_share']:,}")
+        lines.append("\n✨ This is the real breakdown for this specific trip - the 1-9 menu above is only the general rate card.")
+        reply = "\n".join(lines)
+
+    return {
+        "success": True,
+        "order_id": order_id,
+        "reply": reply,
+        "category": "TRIP_DETAIL",
+        "suggestions": ["\U0001F4CC Open This Booking", "\U0001F4AC Message About This Trip", "\U0001F3A7 Contact Dispatch Desk"],
+    }
+
+
+    # The "/support/dispatch-message" endpoint that used to live here has
+    # moved to app/api/routes/support.py, which turns it into a real
+    # two-way thread Admin App can see and reply to (see support.py).

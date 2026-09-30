@@ -59,12 +59,17 @@ class CarDetails(Base):
     car_img_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
     permit_img_url = Column(String, nullable=True, unique=True)  # GCS public URL
     permit_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
+    pollution_img_url = Column(String, nullable=True, unique=True)  # GCS public URL (Pollution / PUC certificate)
+    pollution_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
 
     # Expiry dates for the daily document-expiry reminder sweep (see
     # crud/document_expiry.py). Nullable/optional - not every existing car
     # has these entered yet; the reminder simply skips rows with no date set.
     rc_expiry_date = Column(Date, nullable=True)
     insurance_expiry_date = Column(Date, nullable=True)
+    fc_expiry_date = Column(Date, nullable=True)
+    permit_expiry_date = Column(Date, nullable=True)
+    pollution_expiry_date = Column(Date, nullable=True)
 
     car_status = Column(
         SqlEnum(CarStatusEnum, name="car_status_enum"),

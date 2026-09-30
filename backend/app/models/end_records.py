@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, TIMESTAMP, Integer, Boolean, JSON, func, ForeignKey
+from sqlalchemy import Column, String, TIMESTAMP, Integer, Boolean, JSON, func, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.session import Base
 
@@ -35,6 +35,18 @@ class EndRecord(Base):
     # [{"label": "State Tax", "amount": 150}]. Never netted against
     # cash_collection/driver_profit above.
     extra_charges_collected = Column(JSON, nullable=True)
+
+    # Distance check at trip close: the driven km was outside +/-20% of the real road distance. Not blocked - the
+    # driver gives a reason, it is stored here and vendor + admin are told.
+    distance_flagged = Column(Boolean, nullable=False, default=False, server_default="false")
+    distance_reason = Column(Text, nullable=True)
+
+    # Completion page (after the trip report): what the driver rated the customer and what actually changed hands.
+    customer_rating = Column(Integer, nullable=True)
+    customer_feedback = Column(Text, nullable=True)
+    amount_paid_total = Column(Integer, nullable=True)       # total the customer paid (cash + extras) as reported by the driver
+    other_extras_collected = Column(Integer, nullable=True)  # anything else collected outside the bill
+    completion_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

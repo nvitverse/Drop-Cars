@@ -9,9 +9,10 @@ class MapsApiError(Exception):
 
 
 def get_google_maps_api_key() -> str:
-    api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+    from app.utils.maps_pool import get_active_google_api_key
+    api_key = get_active_google_api_key()
     if not api_key:
-        raise MapsApiError("GOOGLE_MAPS_API_KEY environment variable is not set")
+        raise MapsApiError("GOOGLE_MAPS_API_KEY is not configured")
     return api_key
 
 

@@ -105,4 +105,3 @@ def bump_order_driver_fare(
         status_code=410,
         detail="Fare bump is not supported here. Use PATCH /api/admin/orders/{order_id}/edit-fare to change the booking's rate fields.",
     )
-

@@ -129,6 +129,9 @@ class CustomerBookingOut(BaseModel):
     trip_status: Optional[str] = None  # Order.trip_status: PENDING | COMPLETED | CANCELLED
     assignment_status: Optional[str] = None  # OrderAssignment.assignment_status: PENDING | ASSIGNED | DRIVING | COMPLETED | CANCELLED
 
+    gst_included: Optional[bool] = False
+    gst_amount: Optional[float] = 0.0
+
     class Config:
         from_attributes = True
 

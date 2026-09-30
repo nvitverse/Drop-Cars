@@ -66,6 +66,15 @@ def create_car_details(db: Session, car_data: CarDetailsForm) -> CarDetails:
                 detail=f"NEW SEDAN requires a car model year of {min_year} or later. Register under the regular SEDAN type instead, or enter a valid year."
             )
 
+    def _parse_date(value: Optional[str]):
+        if not value:
+            return None
+        from datetime import datetime
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
     car_details = CarDetails(
         vehicle_owner_id=car_data.vehicle_owner_id,
         car_name=car_data.car_name,
@@ -76,7 +85,14 @@ def create_car_details(db: Session, car_data: CarDetailsForm) -> CarDetails:
         rc_back_img_url=None,   # Will be updated after GCS upload
         insurance_img_url=None, # Will be updated after GCS upload
         fc_img_url=None,        # Will be updated after GCS upload
-        car_img_url=None        # Will be updated after GCS upload
+        car_img_url=None,       # Will be updated after GCS upload
+        permit_img_url=None,    # Will be updated after GCS upload
+        pollution_img_url=None, # Will be updated after GCS upload
+        rc_expiry_date=_parse_date(car_data.rc_expiry_date),
+        insurance_expiry_date=_parse_date(car_data.insurance_expiry_date),
+        fc_expiry_date=_parse_date(car_data.fc_expiry_date),
+        permit_expiry_date=_parse_date(car_data.permit_expiry_date),
+        pollution_expiry_date=_parse_date(car_data.pollution_expiry_date),
     )
 
     db.add(car_details)
@@ -157,6 +173,9 @@ def update_car_images(db: Session, car_id: UUID, image_urls: dict, statuses: Opt
     if 'permit_img_url' in image_urls:
         car_details.permit_img_url = image_urls['permit_img_url']
         car_details.permit_status = statuses.get('permit_img_url', DocumentStatusEnum.PENDING)
+    if 'pollution_img_url' in image_urls:
+        car_details.pollution_img_url = image_urls['pollution_img_url']
+        car_details.pollution_status = statuses.get('pollution_img_url', DocumentStatusEnum.PENDING)
 
     db.commit()
     db.refresh(car_details)

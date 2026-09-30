@@ -10,7 +10,7 @@ router = APIRouter(tags=["Document Verification"], dependencies=[Depends(get_cur
 
 
 @router.post("/documents/verify-image")
-async def verify_document_image(
+def verify_document_image(
     file: UploadFile = File(..., description="Uploaded document photo (DL, RC, Insurance, Aadhaar)"),
     doc_type: str = Form("generic", description="Document type e.g., licence, rc_front, insurance, aadhar"),
     expected_expiry_date: Optional[str] = Form(None, description="Optional expected expiry date YYYY-MM-DD"),
@@ -34,7 +34,7 @@ async def verify_document_image(
         )
 
     try:
-        image_bytes = await file.read()
+        image_bytes = file.file.read()
         if not image_bytes:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 

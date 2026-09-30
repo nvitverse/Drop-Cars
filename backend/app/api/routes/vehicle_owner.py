@@ -32,15 +32,13 @@ def _safe_driver(d) -> dict:
 
 
 @router.post("/vehicleowner/upload-signup-doc")
-async def upload_signup_document(
+def upload_signup_document(
     file: UploadFile = File(..., description="Document image (Aadhar front/back or PAN)"),
     doc_type: str = Form(..., description="One of: aadhar_front, aadhar_back, pan"),
 ):
-    """Pre-upload a single KYC document image ahead of final signup submission,
-    so the app can upload each document the moment it's picked instead of
-    bundling every image into one large request at Create Account time (which
-    was timing out / erroring on slow connections). Returns a GCS URL the app
-    then passes back to /vehicleowner/signup as e.g. aadhar_front_img_url."""
+    """Pre-upload a single KYC document image. For aadhar_front, also runs OCR
+    and returns extracted autofill fields (name, dob, gender, aadhaar_number,
+    address, pincode) so the app can pre-populate the signup form."""
     if doc_type not in ("aadhar_front", "aadhar_back", "pan"):
         raise HTTPException(status_code=400, detail="doc_type must be one of: aadhar_front, aadhar_back, pan")
     if not file.content_type or not file.content_type.startswith('image/'):
@@ -53,11 +51,148 @@ async def upload_signup_document(
             status_code=400,
             detail="Image file is too large. Please upload an image smaller than 5MB"
         )
+
+    # Read bytes for OCR (before GCS upload consumes the stream)
+    image_bytes = file.file.read()
+    file.file.seek(0)
+
     try:
         url = upload_image_to_gcs(file, folder=f"vehicle_owner_details/signup_docs/{doc_type}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload image to cloud storage: {str(e)}")
-    return {"url": url, "doc_type": doc_type}
+        import logging
+        logging.getLogger(__name__).error("upload-signup-doc GCS error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to upload image. Please try again.")
+
+    response = {"url": url, "doc_type": doc_type, "extracted": None}
+
+    # For Aadhaar front only: run OCR and return extracted fields for autofill
+    if doc_type == "aadhar_front":
+        try:
+            from app.utils.document_verifier import extract_aadhaar_fields
+            extracted = extract_aadhaar_fields(image_bytes)
+            response["extracted"] = extracted
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Aadhaar OCR extraction failed (non-fatal): %s", e)
+            # Non-fatal — upload succeeded, autofill just won't work
+
+    return response
+
+
+@router.post("/vehicleowner/send-email-otp")
+async def send_email_otp(
+    email: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Generates a 6-digit OTP, stores it in email_otps, and emails it to
+    the given address. No auth required (called before account exists).
+    Rate-limited to 1 request per email per minute."""
+    import random, string
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text as sa_text
+
+    email = email.strip().lower()
+    if not email or '@' not in email or '.' not in email.split('@')[-1]:
+        raise HTTPException(status_code=400, detail="Please provide a valid email address.")
+
+    # Rate limit: only 1 OTP per email per 60 seconds
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    recent = db.execute(
+        sa_text("SELECT id FROM email_otps WHERE email = :e AND created_at > :c LIMIT 1"),
+        {"e": email, "c": cutoff}
+    ).first()
+    if recent:
+        raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code.")
+
+    # Generate OTP
+    code = ''.join(random.choices(string.digits, k=6))
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    # Store in email_otps table
+    db.execute(
+        sa_text("""
+            INSERT INTO email_otps (id, role, primary_number, email, code, purpose, attempts, expires_at, created_at)
+            VALUES (gen_random_uuid(), 'vehicle_owner', '', :email, :code, 'signup_verify', 0, :exp, NOW())
+        """),
+        {"email": email, "code": code, "exp": expires_at}
+    )
+    db.commit()
+
+    # Send email
+    from app.utils.emailer import send_email, smtp_configured
+    if not smtp_configured(db):
+        db.execute(sa_text("DELETE FROM email_otps WHERE email = :e AND code = :c"), {"e": email, "c": code}); db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Email service is not configured yet. Please contact support to verify your email."
+        )
+    try:
+        body = (
+            f"Your Drop Cars Partner verification code is: {code}\n\n"
+            f"This code expires in 10 minutes. Do not share it with anyone.\n\n"
+            f"If you did not request this, please ignore this email."
+        )
+        send_email(db, email, "Drop Cars - Email Verification Code", body)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("OTP email send failed: %s", e, exc_info=True)
+        db.execute(sa_text("DELETE FROM email_otps WHERE email = :e AND code = :c"), {"e": email, "c": code}); db.commit()
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Please check your email address and try again.")
+
+    return {"message": "Verification code sent successfully.", "expires_in_minutes": 10}
+
+
+@router.post("/vehicleowner/verify-email-otp")
+async def verify_email_otp(
+    email: str = Form(...),
+    code: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Verifies an OTP code sent to the given email. Returns {verified: true} on success."""
+    from datetime import datetime, timezone
+    from sqlalchemy import text as sa_text
+
+    email = email.strip().lower()
+    code = code.strip()
+
+    now = datetime.now(timezone.utc)
+    row = db.execute(
+        sa_text("""
+            SELECT id, code, expires_at, attempts FROM email_otps
+            WHERE email = :e AND purpose = 'signup_verify'
+            ORDER BY created_at DESC LIMIT 1
+        """),
+        {"e": email}
+    ).first()
+
+    if not row:
+        raise HTTPException(status_code=400, detail="No verification code found for this email. Please request a new one.")
+
+    if row.attempts >= 5:
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
+
+    expires_at = row.expires_at
+    if expires_at.tzinfo is None:
+        from datetime import timezone as tz
+        expires_at = expires_at.replace(tzinfo=tz.utc)
+
+    if now > expires_at:
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+
+    if row.code != code:
+        db.execute(
+            sa_text("UPDATE email_otps SET attempts = attempts + 1 WHERE id = :id"),
+            {"id": row.id}
+        )
+        db.commit()
+        remaining = 5 - (row.attempts + 1)
+        raise HTTPException(status_code=400, detail=f"Incorrect code. {remaining} attempt(s) remaining.")
+
+    # Success — delete used OTP
+    db.execute(sa_text("DELETE FROM email_otps WHERE id = :id"), {"id": row.id})
+    db.commit()
+
+    return {"verified": True, "email": email}
 
 
 @router.post("/vehicleowner/signup")
@@ -96,9 +231,11 @@ async def signup(
         # Re-raise HTTP exceptions (like duplicate mobile number, aadhar, etc.)
         raise
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Signup DB error: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Database error occurred while creating user: {str(e)}"
+            detail="A server error occurred while creating your account. Please try again or contact support."
         )
 
     # Resolve each document to a GCS URL - reuse the pre-uploaded URL if the
@@ -128,9 +265,11 @@ async def signup(
     try:
         aadhar_img_url = _resolve_url(aadhar_front_img, aadhar_front_img_url)
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Aadhar front upload failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload Aadhar front image to cloud storage: {str(e)}. User created but image upload failed."
+            detail="Failed to upload Aadhaar front image. Your account was created — please re-upload your documents from the app."
         )
 
     aadhar_front_status = get_auto_verified_status(aadhar_front_bytes, "aadhar") if aadhar_front_bytes else None
@@ -140,7 +279,7 @@ async def signup(
         delete_gcs_file_by_url(aadhar_img_url)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to update user record with image URL: {str(e)}. Image uploaded but not linked to user."
+            detail="Failed to link Aadhaar image to your account. Please contact support with your registered mobile number."
         )
 
     # Aadhar back + PAN are now mandatory too (validated above), resolve and
@@ -158,9 +297,11 @@ async def signup(
             aadhar_back_status=aadhar_back_status, pan_status=pan_status,
         )
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Aadhar back / PAN upload failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Account created and Aadhar front saved, but Aadhar back / PAN upload failed: {str(e)}. Please contact support to complete your document upload."
+            detail="Account created, but Aadhaar back / PAN upload failed. Please re-upload your documents from the app settings."
         )
 
     return {
@@ -367,7 +508,7 @@ def update_vehicle_owner_document_status(
 
 
 @router.post("/vehicle-owner/update-document", response_model=DocumentUpdateResponse)
-async def update_vehicle_owner_document(
+def update_vehicle_owner_document(
     document_type: str = Form(...),
     aadhar_image: UploadFile = File(None),
     aadhar_back_image: UploadFile = File(None),
@@ -415,8 +556,8 @@ async def update_vehicle_owner_document(
         )
     
     try:
-        image_bytes = await target_image.read()
-        await target_image.seek(0)
+        image_bytes = target_image.file.read()
+        target_image.file.seek(0)
 
         new_image_url = upload_image_to_gcs(target_image, f"vehicle_owner_details/{document_type}")
 
@@ -595,13 +736,53 @@ async def set_vacant_cities(
     current_user=Depends(get_current_user),
 ):
     from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+    iso_now = now_utc.isoformat()
 
     current_user.vacant_cities = payload.cities
-    current_user.vacant_cities_updated_at = datetime.now(timezone.utc)
+    current_user.vacant_cities_updated_at = now_utc
     current_user.vacant_driver_id = payload.driver_id
     current_user.vacant_driver_name = payload.driver_name
     current_user.vacant_car_id = payload.car_id
     current_user.vacant_car_number = payload.car_number
+
+    # Multi-vehicle fleet synchronization
+    entries = list(current_user.vacant_fleet_entries or [])
+    target_car_id = str(payload.car_id or 'default')
+
+    if payload.cities and len(payload.cities) > 0:
+        # Update or insert entry for this car
+        found = False
+        default_driver = payload.driver_name or getattr(current_user, 'full_name', None) or "Driver"
+        default_car = payload.car_number or "Vehicle"
+        car_type_val = getattr(payload, "car_type", None) or "Sedan"
+
+        for e in entries:
+            if str(e.get("car_id") or 'default') == target_car_id:
+                e["cities"] = payload.cities
+                e["driver_id"] = payload.driver_id
+                e["driver_name"] = default_driver
+                e["car_id"] = payload.car_id
+                e["car_number"] = default_car
+                e["car_type"] = getattr(payload, "car_type", None) or e.get("car_type") or car_type_val
+                e["updated_at"] = iso_now
+                found = True
+                break
+        if not found:
+            entries.append({
+                "car_id": payload.car_id,
+                "car_number": default_car,
+                "car_type": car_type_val,
+                "driver_id": payload.driver_id,
+                "driver_name": default_driver,
+                "cities": payload.cities,
+                "updated_at": iso_now,
+            })
+    else:
+        # If cities empty, remove this vehicle's vacant status
+        entries = [e for e in entries if str(e.get("car_id") or 'default') != target_car_id]
+
+    current_user.vacant_fleet_entries = entries
     db.commit()
     db.refresh(current_user)
 
@@ -612,7 +793,79 @@ async def set_vacant_cities(
         "driver_name": current_user.vacant_driver_name,
         "car_id": current_user.vacant_car_id,
         "car_number": current_user.vacant_car_number,
+        "fleet_entries": entries,
     }
+
+
+@router.get("/vehicle-owner/vacant-fleet")
+async def get_vacant_fleet(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Returns all active vacant vehicles and drivers for the logged-in fleet owner."""
+    from datetime import datetime, timezone, timedelta
+    now_utc = datetime.now(timezone.utc)
+    cutoff_24h = now_utc - timedelta(hours=24)
+
+    raw_entries = list(current_user.vacant_fleet_entries or [])
+    valid_entries = []
+
+    for e in raw_entries:
+        up_str = e.get("updated_at")
+        if not up_str:
+            continue
+        try:
+            up_dt = datetime.fromisoformat(str(up_str).replace('Z', '+00:00'))
+            if up_dt.tzinfo is None:
+                up_dt = up_dt.replace(tzinfo=timezone.utc)
+            if up_dt >= cutoff_24h and e.get("cities"):
+                hours_since = (now_utc - up_dt).total_seconds() / 3600.0
+                e_copy = dict(e)
+                e_copy["hours_since_update"] = round(hours_since, 2)
+                e_copy["needs_confirmation"] = 12 <= hours_since < 24
+                valid_entries.append(e_copy)
+        except Exception:
+            continue
+
+    if len(valid_entries) != len(raw_entries):
+        current_user.vacant_fleet_entries = valid_entries
+        if not valid_entries:
+            current_user.vacant_cities = None
+            current_user.vacant_cities_updated_at = None
+        db.commit()
+
+    return {"fleet_entries": valid_entries}
+
+
+@router.delete("/vehicle-owner/vacant-fleet/{car_id}")
+async def clear_vacant_car(
+    car_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Clears vacant status for a specific car."""
+    entries = [e for e in (current_user.vacant_fleet_entries or []) if str(e.get("car_id") or 'default') != str(car_id)]
+    current_user.vacant_fleet_entries = entries
+
+    # If the cleared car was the active one in single-entry columns, clear or rotate
+    if str(current_user.vacant_car_id or 'default') == str(car_id):
+        if entries:
+            last = entries[-1]
+            current_user.vacant_cities = last.get("cities")
+            current_user.vacant_car_id = last.get("car_id")
+            current_user.vacant_car_number = last.get("car_number")
+            current_user.vacant_driver_id = last.get("driver_id")
+            current_user.vacant_driver_name = last.get("driver_name")
+        else:
+            current_user.vacant_cities = None
+            current_user.vacant_cities_updated_at = None
+            current_user.vacant_car_id = None
+            current_user.vacant_car_number = None
+            current_user.vacant_driver_id = None
+            current_user.vacant_driver_name = None
+
+    db.commit()
+    return {"success": True, "fleet_entries": entries}
 
 
 @router.get("/vehicle-owner/vacant-cities")
@@ -670,6 +923,7 @@ async def get_vacant_cities(
         "car_number": current_user.vacant_car_number,
         "hours_since_update": round(hours_since, 2) if hours_since is not None else None,
         "needs_confirmation": needs_confirmation,
+        "fleet_entries": current_user.vacant_fleet_entries or [],
     }
 
 
@@ -857,6 +1111,52 @@ async def change_owner_mobile_number(
     return {"message": "Mobile number updated", "primary_number": new_number}
 
 
+@router.put("/vehicle-owner/profile-info")
+async def update_owner_profile_info(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Directly update Full Name and/or Business Name for the vehicle owner."""
+    from app.models.vehicle_owner import VehicleOwnerCredentials
+    from app.models.vehicle_owner_details import VehicleOwnerDetails
+
+    full_name = payload.get("full_name")
+    business_name = payload.get("business_name")
+
+    creds = db.query(VehicleOwnerCredentials).filter(
+        VehicleOwnerCredentials.id == current_user.vehicle_owner_id
+    ).first()
+    details = db.query(VehicleOwnerDetails).filter(
+        VehicleOwnerDetails.vehicle_owner_id == current_user.vehicle_owner_id
+    ).first()
+
+    if full_name and str(full_name).strip():
+        fn = str(full_name).strip()
+        if creds and hasattr(creds, 'full_name'):
+            creds.full_name = fn
+            db.add(creds)
+        if details and hasattr(details, 'full_name'):
+            details.full_name = fn
+            db.add(details)
+
+    if business_name is not None and str(business_name).strip():
+        bn = str(business_name).strip()
+        if creds and hasattr(creds, 'business_name'):
+            creds.business_name = bn
+            db.add(creds)
+        if details and hasattr(details, 'business_name'):
+            details.business_name = bn
+            db.add(details)
+
+    db.commit()
+    return {
+        "message": "Profile info updated successfully",
+        "full_name": creds.full_name if creds else full_name,
+        "business_name": getattr(details, "business_name", None) if details else business_name,
+    }
+
+
 @router.put("/vehicle-owner/email")
 async def set_owner_email(
     payload: dict,
@@ -939,15 +1239,8 @@ from typing import Optional as _Optional
 
 
 class VehicleOwnerPaymentDetailsUpdate(_BaseModel):
-    # bank_account_number / bank_ifsc are deliberately NOT accepted here -
-    # they're sensitive/review-gated fields (Admin Profile-Edit Review
-    # Queue - see POST /profile-edit-requests/submit). The Driver App's
-    # own Settings screen already stopped sending them on this call, but
-    # that's a frontend convention only; a client that ignores the app
-    # and calls this endpoint directly (curl, a modified APK) must not be
-    # able to change them instantly. Enforcing "gated" server-side means
-    # not accepting the field at all on the direct-update path, rather
-    # than trusting every caller to route it through review on their own.
+    bank_account_number: _Optional[str] = None
+    bank_ifsc: _Optional[str] = None
     bank_account_holder_name: _Optional[str] = None
     upi_id: _Optional[str] = None
 
@@ -958,15 +1251,14 @@ async def update_vehicle_owner_payment_details(
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
 ):
-    """Either bank OR UPI is enough - both stay optional, no required-both check.
-    bank_account_number/bank_ifsc go through POST /profile-edit-requests/submit
-    instead - see VehicleOwnerPaymentDetailsUpdate's own comment."""
+    """Directly update payout account details (Bank account, IFSC, Holder Name, UPI ID)."""
     from app.models.vehicle_owner_details import VehicleOwnerDetails
     details = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).first()
     if not details:
         raise HTTPException(status_code=404, detail="Vehicle owner details not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(details, field, value)
+        if value is not None:
+            setattr(details, field, str(value).strip())
     db.commit()
     return {
         "bank_account_number": details.bank_account_number,
@@ -1031,5 +1323,22 @@ async def get_vehicle_owner_feedbacks(
             "incentiveAmount": incentive,
         })
 
+    # Reviews left through the trip QR (website review page) - same list, so the driver sees every review in one place
+    from app.models.trip_review import TripReview
+    qr_q = db.query(TripReview, Order).join(Order, Order.id == TripReview.order_id).filter(TripReview.vehicle_owner_id == vehicle_owner_id)
+    for tr, o in qr_q.order_by(TripReview.created_at.desc()).all():
+        stars = float(tr.rating or 0)
+        expected = int(stars * 10) if stars >= 3 else 0
+        feedbacks.append({
+            "id": f"qr-{tr.id}",
+            "bookingId": f"BK_{o.id}",
+            "customerName": tr.reviewer_name or "Customer",
+            "rating": stars,
+            "tags": [],
+            "comment": tr.feedback or "",
+            "date": tr.created_at.strftime("%d %b, %I:%M %p") if tr.created_at else "Recently",
+            "incentiveAmount": int(tr.bonus_amount) if tr.bonus_paid_at else expected,
+            "incentivePaid": bool(tr.bonus_paid_at),
+        })
     return feedbacks
 

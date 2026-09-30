@@ -1704,7 +1704,7 @@ def get_all_customers(
     from app.models.customer import CustomerCredentials
     from app.models.customer_details import CustomerDetails, CustomerSegmentEnum
 
-    query = db.query(CustomerDetails, CustomerCredentials.email).join(
+    query = db.query(CustomerDetails, CustomerCredentials).join(
         CustomerCredentials, CustomerDetails.customer_id == CustomerCredentials.id
     )
 
@@ -1728,18 +1728,21 @@ def get_all_customers(
     rows = query.order_by(CustomerDetails.created_at.desc()).offset(skip).limit(limit).all()
 
     customers = []
-    for details, email in rows:
+    for details, creds in rows:
+        phone_num = details.primary_number or getattr(creds, 'primary_number', '')
+        curr_pass = getattr(creds, "plain_password", None) or (phone_num[-6:] if phone_num and len(phone_num) >= 6 else None)
         customers.append({
             "id": details.id,
             "customer_id": details.customer_id,
             "full_name": details.full_name,
             "primary_number": details.primary_number,
-            "email": email,
+            "email": getattr(creds, 'email', None),
             "saved_addresses": details.saved_addresses,
             "segment": details.segment.value if details.segment else "INDIVIDUAL",
             "company_name": details.company_name,
             "gst_number": details.gst_number,
             "created_at": details.created_at,
+            "current_password": curr_pass,
         })
 
     return customers, total_count

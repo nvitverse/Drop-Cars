@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -326,7 +327,7 @@ def update_vendor_document_status(
 
 
 @router.post("/vendor/update-document", response_model=DocumentUpdateResponse)
-async def update_vendor_document(
+def update_vendor_document(
     document_type: str = Form(...),
     aadhar_image: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -368,8 +369,8 @@ async def update_vendor_document(
         if vendor_details.aadhar_front_img:
             delete_gcs_file_by_url(vendor_details.aadhar_front_img)
 
-        image_bytes = await aadhar_image.read()
-        await aadhar_image.seek(0)
+        image_bytes = aadhar_image.file.read()
+        aadhar_image.file.seek(0)
 
         # Upload new image
         new_image_url = upload_image_to_gcs(aadhar_image, "vendor_details/aadhar")
@@ -471,29 +472,7 @@ async def get_vacant_city_updates(
 
     results = []
     for o in owners:
-        if not o.vacant_cities or len(o.vacant_cities) == 0:
-            continue
-
-        updated_at = o.vacant_cities_updated_at
-        if not updated_at:
-            continue
-
-        if isinstance(updated_at, str):
-            try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
-            except Exception:
-                continue
-
-        if isinstance(updated_at, datetime):
-            if updated_at.tzinfo is None and updated_at < cutoff_24h_naive:
-                continue
-            elif updated_at.tzinfo is not None and updated_at < cutoff_24h:
-                continue
-
-        # No rating of their own - fleet owners aren't rated, their
-        # drivers are (see models/rating.py). Show the average across
-        # their drivers who've actually been rated at least once, so
-        # brand-new/unrated drivers don't drag a real average to 0.
+        # Average driver rating for this fleet owner
         rated_drivers = db.query(CarDriver.rating_avg, CarDriver.rating_count).filter(
             CarDriver.vehicle_owner_id == o.vehicle_owner_id,
             CarDriver.rating_count > 0,
@@ -506,17 +485,72 @@ async def get_vacant_city_updates(
                     sum(ra * rc for ra, rc in rated_drivers) / total_weight, 1
                 )
 
-        iso_time = updated_at.isoformat() if isinstance(updated_at, datetime) else str(updated_at)
+        fleet_entries = list(getattr(o, "vacant_fleet_entries", None) or [])
+        if fleet_entries:
+            for fe in fleet_entries:
+                cities = fe.get("cities") or []
+                if not cities:
+                    continue
+                up_str = fe.get("updated_at")
+                if not up_str:
+                    continue
+                try:
+                    up_dt = datetime.fromisoformat(str(up_str).replace('Z', '+00:00'))
+                    if up_dt.tzinfo is None and up_dt < cutoff_24h_naive:
+                        continue
+                    elif up_dt.tzinfo is not None and up_dt < cutoff_24h:
+                        continue
+                except Exception:
+                    continue
 
-        results.append({
-            "vehicle_owner_id": str(o.vehicle_owner_id),
-            "masked_phone": _mask_phone_last4(o.primary_number),
-            "cities": o.vacant_cities,
-            "updated_at": iso_time,
-            "driver_name": getattr(o, "vacant_driver_name", None),
-            "car_number": getattr(o, "vacant_car_number", None),
-            "avg_driver_rating": avg_driver_rating,
-        })
+                car_no = fe.get("car_number") or ""
+                # Mask car number for vendor view (e.g. TN25****7986)
+                masked_car = car_no[:4] + "****" + car_no[-4:] if len(car_no) >= 8 else (car_no or "Available Vehicle")
+
+                results.append({
+                    "vehicle_owner_id": str(o.vehicle_owner_id),
+                    "masked_phone": _mask_phone_last4(o.primary_number),
+                    "cities": cities,
+                    "updated_at": str(up_str),
+                    "driver_name": fe.get("driver_name") or "Verified Driver",
+                    "car_number": masked_car,
+                    "car_type": fe.get("car_type") or "Sedan",
+                    "avg_driver_rating": avg_driver_rating,
+                })
+        else:
+            if not o.vacant_cities or len(o.vacant_cities) == 0:
+                continue
+
+            updated_at = o.vacant_cities_updated_at
+            if not updated_at:
+                continue
+
+            if isinstance(updated_at, str):
+                try:
+                    updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                except Exception:
+                    continue
+
+            if isinstance(updated_at, datetime):
+                if updated_at.tzinfo is None and updated_at < cutoff_24h_naive:
+                    continue
+                elif updated_at.tzinfo is not None and updated_at < cutoff_24h:
+                    continue
+
+            iso_time = updated_at.isoformat() if isinstance(updated_at, datetime) else str(updated_at)
+            car_no = getattr(o, "vacant_car_number", "") or ""
+            masked_car = car_no[:4] + "****" + car_no[-4:] if len(car_no) >= 8 else (car_no or "Available Vehicle")
+
+            results.append({
+                "vehicle_owner_id": str(o.vehicle_owner_id),
+                "masked_phone": _mask_phone_last4(o.primary_number),
+                "cities": o.vacant_cities,
+                "updated_at": iso_time,
+                "driver_name": getattr(o, "vacant_driver_name", None) or "Verified Driver",
+                "car_number": masked_car,
+                "car_type": "Sedan",
+                "avg_driver_rating": avg_driver_rating,
+            })
     return results
 
 

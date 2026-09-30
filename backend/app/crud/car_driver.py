@@ -40,6 +40,9 @@ def create_car_driver(db: Session, driver_data: CarDriverForm) -> CarDriver:
     # Hash password
     hashed_password = get_password_hash(driver_data.password)
 
+    from app.crud.document_expiry import parse_expiry
+    licence_expiry = parse_expiry(getattr(driver_data, "licence_expiry_date", None))
+
     # Create car driver object
     car_driver = CarDriver(
         vehicle_owner_id=driver_data.vehicle_owner_id,
@@ -48,6 +51,7 @@ def create_car_driver(db: Session, driver_data: CarDriverForm) -> CarDriver:
         secondary_number=driver_data.secondary_number,
         hashed_password=hashed_password,
         licence_number=driver_data.licence_number,
+        licence_expiry_date=licence_expiry,
         licence_front_img=None,  # Will be updated after GCS upload
         address=driver_data.address,
         city=driver_data.city,
@@ -241,10 +245,17 @@ def get_available_drivers(db: Session, vehicle_owner_id: str) -> List[CarDriver]
     owner is assigning themselves to a booking, their own name is the
     first option rather than buried among their duty drivers."""
     from app.models.car_driver import AccountStatusEnum
-    return db.query(CarDriver).filter(
+    # Every driver the owner can actually assign - NOT just the ones currently ONLINE. A driver is normally off duty
+    # until the trip day, so requiring ONLINE left the "Select Driver" list empty until someone switched Duty on.
+    # Blocked drivers stay out (the assign endpoint still enforces document verification).
+    rows = db.query(CarDriver).filter(
         CarDriver.vehicle_owner_id == vehicle_owner_id,
-        CarDriver.driver_status.in_([AccountStatusEnum.ONLINE, AccountStatusEnum.DRIVING])
-    ).order_by(CarDriver.is_owner_driver.desc()).all()
+        CarDriver.driver_status != AccountStatusEnum.BLOCKED,
+        CarDriver.permanently_blocked.isnot(True),
+    ).all()
+    _rank = {AccountStatusEnum.ONLINE: 0, AccountStatusEnum.DRIVING: 1}
+    rows.sort(key=lambda d: (0 if d.is_owner_driver else 1, _rank.get(d.driver_status, 2)))
+    return rows
 
 def authenticate_driver(db: Session, primary_number: str, password: str) -> Optional[CarDriver]:
     """Authenticate driver by primary number and password"""

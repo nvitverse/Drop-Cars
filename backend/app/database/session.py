@@ -22,8 +22,11 @@ DATABASE_URL = f"postgresql+psycopg2://drop-cars:{DB_PASSWORD}@{DB_HOST}:5432/dr
 engine = create_engine(
     DATABASE_URL,
     connect_args={"options": "-c search_path=drop-cars"},
-    pool_size=20,
-    max_overflow=10,
+    # Cloud SQL (db-g1-small) allows 50 connections in total. maxScale=3 instances x (5 + 5) = 30 max, leaving room for the
+    # scheduler sweep, admin scripts and migrations. (It used to be 20 + 10 per instance = 90, which could exceed the limit.)
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=20,
     pool_pre_ping=True,
     pool_recycle=300,
 )

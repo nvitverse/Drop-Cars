@@ -4,7 +4,7 @@ from typing import List, Dict
 
 from app.database.session import get_db
 from app.core.security import get_current_vendor, get_current_vehicleOwner_id, get_current_driver, get_current_admin
-from app.utils.cities import get_cities, lookup_and_add_city
+from app.utils.cities import get_cities, get_places, lookup_and_add_city
 from app.models.notification import Notification
 
 router = APIRouter(prefix="/cities")
@@ -14,14 +14,14 @@ router = APIRouter(prefix="/cities")
 def list_cities_for_vendor(
     _: str = Depends(get_current_vendor),
 ):
-    return get_cities()
+    return get_places()
 
 
 @router.get("/public", response_model=List[str])
 def list_cities_public():
     """Public city list for the customer website's location suggestions.
     Read-only and not sensitive - it's the same list shown in every app."""
-    return get_cities()
+    return get_places()
 
 
 @router.get("/local-serviceable", response_model=List[str])

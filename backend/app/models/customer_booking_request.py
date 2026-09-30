@@ -124,5 +124,9 @@ class CustomerBookingRequest(Base):
     # even when a customer had genuinely paid one.
     advance_amount = Column(Integer, nullable=True)
 
+    # GST configuration
+    gst_included = Column(Boolean, nullable=False, default=False, server_default="false")
+    gst_amount = Column(Integer, nullable=True)
+
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     decided_at = Column(TIMESTAMP(timezone=True), nullable=True)

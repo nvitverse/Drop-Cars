@@ -379,6 +379,10 @@ def create_oneway_order(
         estimated_cal_price = int(total_booking_amount)
         vendor_cal_price = int(total_booking_amount) + int(extra_amount)
 
+    is_gst_included = False
+    if charge_items and any(c.get('included') and 'gst' in str(c.get('label', '')).lower() for c in charge_items if isinstance(c, dict)):
+        is_gst_included = True
+
     new_order = NewOrder(
         vendor_id=vendor_id,
         trip_type=trip_type,
@@ -416,6 +420,7 @@ def create_oneway_order(
         priority_cutoff_at = priority_cutoff_at,
         fare_type = fare_type,
         charge_items = charge_items,
+        gst_included = is_gst_included,
         advance_received = advance_received,
         total_booking_amount = total_booking_amount,
         extra_amount = extra_amount,
@@ -428,6 +433,14 @@ def create_oneway_order(
     db.refresh(new_order)
     # Also create/refresh master order row
     master_order = create_master_from_new_order(db, new_order, max_time_to_assign_order, toll_charge_update, night_charges=night_charges, acceptance_deadline=acceptance_deadline)
+
+    if is_gst_included:
+        try:
+            from app.crud.tax_invoices import issue_and_email_order_tax_invoice
+            issue_and_email_order_tax_invoice(db, order=master_order)
+        except Exception as tax_err:
+            print(f"Failed to auto-issue tax invoice on new order {master_order.id}: {tax_err}")
+
     return new_order, master_order.id
 
 

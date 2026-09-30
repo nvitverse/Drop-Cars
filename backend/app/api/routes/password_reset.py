@@ -291,3 +291,141 @@ async def reset_password_with_otp(body: EmailOtpReset, db: Session = Depends(get
     db.commit()
 
     return {"message": "Password changed successfully. You can now log in with your new password."}
+
+
+# --- Link New Email + Reset Password Flow ---
+# When an account has no email linked, the user can provide their DL/Aadhaar proof
+# + their email address. We verify the email via a 6-digit OTP, link it to the
+# account in DB, and update their password in one seamless flow.
+
+class LinkEmailOtpRequest(BaseModel):
+    role: str
+    primary_number: str = Field(..., min_length=10, max_length=10)
+    email: str = Field(..., min_length=5, max_length=120)
+    proof: str = Field(..., min_length=4, max_length=30, description="Licence Number (driver) or Aadhaar (owner)")
+
+
+class LinkEmailOtpReset(BaseModel):
+    role: str
+    primary_number: str = Field(..., min_length=10, max_length=10)
+    email: str = Field(..., min_length=5, max_length=120)
+    code: str = Field(..., min_length=4, max_length=8)
+    new_password: str = Field(..., min_length=6, max_length=64)
+
+
+@router.post("/email/link-email-and-request-otp")
+async def link_email_and_request_otp(body: LinkEmailOtpRequest, db: Session = Depends(get_db)):
+    role = body.role.strip().lower()
+    number = body.primary_number.strip()
+    email = body.email.strip().lower()
+    proof = _normalize(body.proof)
+
+    _check_rate_limit(db, number)
+    db.commit()
+
+    account = _get_account(db, role, number)
+    if not account:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No {role.replace('_', ' ')} account found registered with mobile number +91 {number}.",
+        )
+
+    # Verify proof against driver licence number or owner Aadhaar
+    if role == "vehicle_owner":
+        from app.models.vehicle_owner_details import VehicleOwnerDetails
+        details = db.query(VehicleOwnerDetails).filter(
+            VehicleOwnerDetails.primary_number == number
+        ).first()
+        if not details or _normalize(details.aadhar_number) != proof:
+            raise HTTPException(status_code=400, detail="Aadhaar Number does not match our records for this account.")
+    elif role == "driver":
+        if not getattr(account, "licence_number", None) or _normalize(account.licence_number) != proof:
+            raise HTTPException(status_code=400, detail="Licence Number does not match our records for this account.")
+    elif role == "vendor":
+        from app.models.vendor_details import VendorDetails
+        details = db.query(VendorDetails).filter(
+            VendorDetails.primary_number == number
+        ).first()
+        if not details or _normalize(details.aadhar_number) != proof:
+            raise HTTPException(status_code=400, detail="Aadhaar Number does not match our records for this account.")
+
+    from app.utils.emailer import send_email, smtp_configured
+    if not smtp_configured(db):
+        raise HTTPException(
+            status_code=503,
+            detail="Email service is currently being updated. Please contact Drop Cars Support.",
+        )
+
+    code = f"{random.randint(0, 999999):06d}"
+    db.query(EmailOtp).filter(
+        EmailOtp.role == role,
+        EmailOtp.primary_number == number,
+        EmailOtp.purpose == "link_and_reset_password",
+    ).delete()
+    db.add(EmailOtp(
+        role=role,
+        primary_number=number,
+        email=email,
+        code=code,
+        purpose="link_and_reset_password",
+        expires_at=datetime.now(timezone.utc) + OTP_TTL,
+    ))
+    db.commit()
+
+    try:
+        send_email(
+            db,
+            email,
+            "Drop Cars - Link Email & Password Reset Code",
+            f"Your Drop Cars verification code is: {code}\n\n"
+            f"Entering this code will link {email} to your Drop Cars account (+91 {number}) and set your new password.\n"
+            "It is valid for 10 minutes.",
+        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not send verification email. Please check your email address and try again.")
+
+    return {"message": f"A 6-digit code was sent to {email}. Please enter it below to complete linking your email and resetting your password."}
+
+
+@router.post("/email/verify-link-and-reset")
+async def verify_link_and_reset(body: LinkEmailOtpReset, db: Session = Depends(get_db)):
+    role = body.role.strip().lower()
+    number = body.primary_number.strip()
+    email = body.email.strip().lower()
+
+    otp = db.query(EmailOtp).filter(
+        EmailOtp.role == role,
+        EmailOtp.primary_number == number,
+        EmailOtp.purpose == "link_and_reset_password",
+    ).with_for_update().first()
+
+    now = datetime.now(timezone.utc)
+    if otp is not None and otp.expires_at is not None and otp.expires_at.tzinfo is None:
+        otp.expires_at = otp.expires_at.replace(tzinfo=timezone.utc)
+
+    if not otp or otp.expires_at < now or otp.attempts >= OTP_MAX_ATTEMPTS:
+        if otp:
+            db.delete(otp)
+            db.commit()
+        raise HTTPException(status_code=400, detail="Code expired or invalid. Please request a new code.")
+
+    if otp.code != body.code.strip():
+        otp.attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Wrong code. Please check your email inbox and try again.")
+
+    account = _get_account(db, role, number)
+    if not account:
+        raise HTTPException(status_code=400, detail="Account not found.")
+
+    # Permanently link email to account & update password
+    account.email = email
+    account.email_verified = True
+    account.hashed_password = get_password_hash(body.new_password)
+    db.add(account)
+    db.delete(otp)
+    db.query(PasswordResetAttempt).filter(
+        PasswordResetAttempt.primary_number == number).delete()
+    db.commit()
+
+    return {"message": "Email address linked and password updated successfully."}

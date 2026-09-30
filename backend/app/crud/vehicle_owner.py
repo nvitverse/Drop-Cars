@@ -42,6 +42,31 @@ def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentia
             detail=f"Aadhar number {user_in.aadhar_number} is already registered. Please use a different number."
         )
 
+    # Check for duplicate email (if provided)
+    if user_in.email:
+        clean_email = user_in.email.strip().lower()
+        from sqlalchemy import func
+        existing_email = db.query(VehicleOwnerCredentials).filter(
+            func.lower(VehicleOwnerCredentials.email) == clean_email
+        ).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email address {clean_email} is already registered. Please use a different email or log in."
+            )
+
+    # Check for duplicate PAN number (if provided)
+    if getattr(user_in, 'pan_number', None):
+        clean_pan = user_in.pan_number.strip().upper()
+        existing_pan = db.query(VehicleOwnerDetails).filter(
+            VehicleOwnerDetails.pan_number == clean_pan
+        ).first()
+        if existing_pan:
+            raise HTTPException(
+                status_code=400,
+                detail=f"PAN number {clean_pan} is already registered. Please use a different PAN number or log in."
+            )
+
     # Step 1: Hash password
     hashed_password = get_password_hash(user_in.password)
 
@@ -75,9 +100,24 @@ def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentia
         pincode=user_in.pincode
     )
 
-    db.add(details)
-    db.commit()
-    db.refresh(credentials)
+    try:
+        db.add(details)
+        db.commit()
+        db.refresh(credentials)
+    except Exception as commit_err:
+        db.rollback()
+        # This used to swallow the real DB error and always show a generic
+        # "already exists" message, even when the actual cause was unrelated
+        # (a schema mismatch, a poisoned transaction from an earlier failed
+        # statement, etc). Found 2026-09-23: every fresh signup - including
+        # ones with guaranteed-unique phone/email/aadhar/pan - was failing
+        # with this same misleading message, hiding the real root cause.
+        import logging
+        logging.getLogger(__name__).error("Signup commit failed: %s", commit_err, exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Registration failed: An account with this mobile number, email, Aadhaar, or PAN already exists."
+        )
 
     return credentials
 
