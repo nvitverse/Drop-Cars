@@ -410,38 +410,64 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
 
 def get_current_user_flexible(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> dict:
     """
-    Flexible token authentication:
-    Validates any valid JWT issued by Drop Cars (Customer, Driver, Vehicle Owner, or Admin).
-    Returns dict with user_id, role, and payload.
-    """
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        role = payload.get("user") or payload.get("role") or "CUSTOMER"
-        if "driver" in str(role).lower():
-            role = "DRIVER"
-        elif "vehicle_owner" in str(role).lower() or "owner" in str(role).lower():
-            role = "VEHICLE_OWNER"
-        elif "admin" in str(role).lower():
-            role = "ADMIN"
-        else:
-            role = "CUSTOMER"
+    Accepts a session token from any Drop Cars app (customer, driver, fleet
+    driver / vehicle owner, vendor, admin).
 
-        return {
-            "user_id": user_id,
-            "role": role,
-            "payload": payload
-        }
+    Returns {"user_id", "role", "payload"} where role is one of CUSTOMER,
+    DRIVER, VEHICLE_OWNER, VENDOR, ADMIN. The role comes from the token's
+    "user" claim and the account must still exist with a matching
+    token_version, so force-logout is honoured here too. Unknown or missing
+    roles are rejected instead of silently becoming CUSTOMER.
+    """
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
+        raise unauthorized
+
+    user_id = payload.get("sub")
+    claim = str(payload.get("user") or payload.get("role") or "").strip().lower()
+    if not user_id or not claim:
+        raise unauthorized
+
+    from app.models.admin import Admin
+    from app.models.car_driver import CarDriver
+    from app.models.customer import CustomerCredentials
+    from app.models.vehicle_owner import VehicleOwnerCredentials
+    from app.models.vendor import VendorCredentials
+
+    # claim -> (role, model, default token_version when the column is null)
+    role_map = {
+        "customer": ("CUSTOMER", CustomerCredentials, 1),
+        "driver": ("DRIVER", CarDriver, 0),
+        "vehicle_owner": ("VEHICLE_OWNER", VehicleOwnerCredentials, 0),
+        "vendor": ("VENDOR", VendorCredentials, 0),
+        "admin": ("ADMIN", Admin, 1),
+    }
+    if claim not in role_map:
+        raise unauthorized
+    role, model, default_version = role_map[claim]
+
+    try:
+        account = db.query(model).filter(model.id == user_id).first()
+    except Exception:
+        db.rollback()
+        account = None
+    if account is None:
+        raise unauthorized
+
+    token_version = payload.get("token_version")
+    if token_version is None:
+        token_version = default_version
+    if token_version != (getattr(account, "token_version", None) or default_version):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="Force Logout Action Raised",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        )
+
+    return {"user_id": str(user_id), "role": role, "payload": payload}

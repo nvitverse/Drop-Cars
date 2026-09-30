@@ -174,14 +174,12 @@ class CarDriverSigninRequest(BaseModel):
     password: str = Field(..., description="Password")
 
 class CarDriverSigninResponse(BaseModel):
-    access_token: Optional[str] = None
-    token_type: Optional[str] = "bearer"
-    driver_id: Optional[str] = None
-    full_name: Optional[str] = None
-    primary_number: Optional[str] = None
-    driver_status: Optional[AccountStatusEnum] = None
-    status: Optional[str] = None
-    redirect_hint: Optional[dict] = None
+    access_token: str
+    token_type: str = "bearer"
+    driver_id: str
+    full_name: str
+    primary_number: str
+    driver_status: AccountStatusEnum
 
 class DriverStatusUpdateResponse(BaseModel):
     message: str
