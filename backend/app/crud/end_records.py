@@ -102,6 +102,106 @@ async def create_start_trip_record(
     await send_trip_status_notification_to_vendor_and_vehicle_owner(db, order_id=order_id, status="started")
     return trip_record
 
+class DistanceReasonRequired(ValueError):
+    """Raised at trip close when the driven km is far from the real road distance and no reason was given yet."""
+
+    def __init__(self, km_driven, route_km, allowed_min, allowed_max):
+        self.km_driven, self.route_km, self.allowed_min, self.allowed_max = km_driven, route_km, allowed_min, allowed_max
+        super().__init__(
+            f"You drove {km_driven} km but this route is about {route_km} km. Please tell us why the distance is different."
+        )
+
+
+def build_customer_bill(db, order) -> dict:
+    """The customer-facing bill for a finished trip: what the customer paid for and what is still to collect. Never
+    contains the driver's fare, commission or any payout figure - the customer may be looking at the driver's phone."""
+    from app.utils.commission import get_fee_settings
+    from app.utils.fare_rules import get_fare_rules
+
+    new_order = None
+    if order.source and order.source.name == "NEW_ORDERS":
+        new_order = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
+    er = db.query(EndRecord).filter(EndRecord.order_id == order.id).first()
+    km_driven = (er.end_km - er.start_km) if (er and er.end_km and er.end_km > 0) else None
+
+    billed_km = int(order.trip_distance or 0)
+    if km_driven is not None:
+        billed_km = km_driven
+        if order.trip_type == OrderTypeEnum.ONEWAY:
+            billed_km = max(km_driven, int(get_fare_rules()["oneway_min_km"]))
+        elif order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
+            key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
+            billed_km = max(km_driven, int(get_fare_rules()[key]))
+
+    conv = int(get_fee_settings(db).get("convenience_fee", 30))
+    total = int(order.closed_vendor_price or order.vendor_price or 0)
+    if not order.closed_vendor_price and order.source and order.source.name == "HOURLY_RENTAL":
+        total += conv   # not closed yet: the quoted hourly price does not carry the convenience fee, the closed one does
+    lines = []
+    if new_order:
+        rate = int(new_order.cost_per_km or 0) + int(new_order.extra_cost_per_km or 0)
+        if rate and billed_km:
+            lines.append({"label": f"Distance ({billed_km} km x Rs {rate})", "amount": rate * billed_km, "included": True})
+        for label, amt in (
+            ("Driver allowance", int(new_order.driver_allowance or 0) + int(new_order.extra_driver_allowance or 0)),
+            ("Permit", int(new_order.permit_charges or 0) + int(new_order.extra_permit_charges or 0)),
+            ("Hills charges", int(new_order.hill_charges or 0)),
+            ("Toll", int(order.updated_toll_charges or 0) or int(new_order.toll_charges or 0)),
+            ("Night charges", int(order.night_charges or 0)),
+        ):
+            if amt > 0:
+                lines.append({"label": label, "amount": amt, "included": True})
+    elif order.source and order.source.name == "HOURLY_RENTAL":
+        hourly = db.query(HourlyRental).filter(HourlyRental.id == order.source_order_id).first()
+        if hourly and hourly.package_hours:
+            hours = int(hourly.package_hours.get("hours", 0))
+            km_range = int(hourly.package_hours.get("km_range", 0))
+            package_amt = (int(hourly.cost_per_hour or 0) + int(hourly.extra_cost_per_hour or 0)) * hours
+            addon_rate = int(hourly.cost_for_addon_km or 0) + int(hourly.extra_cost_for_addon_km or 0)
+            extra_km = max(0, (km_driven or 0) - km_range)
+            if package_amt > 0:
+                lines.append({"label": f"Package ({hours} hrs / {km_range} km)", "amount": package_amt, "included": True})
+            if extra_km > 0 and addon_rate > 0:
+                lines.append({"label": f"Extra distance ({extra_km} km x Rs {addon_rate})", "amount": extra_km * addon_rate, "included": True})
+            if int(order.updated_toll_charges or 0) > 0:
+                lines.append({"label": "Toll", "amount": int(order.updated_toll_charges), "included": True})
+    lines_total = sum(l["amount"] for l in lines)
+    residual = total - conv - lines_total
+    if abs(residual) >= 1 and lines:
+        lines.append({"label": "Other charges" if residual > 0 else "Adjustment", "amount": residual, "included": True})
+    elif not lines:
+        lines.append({"label": "Trip fare", "amount": max(0, total - conv), "included": True})
+    lines.append({"label": "Convenience fee", "amount": conv, "included": True})
+
+    excluded = [
+        {"label": (i or {}).get("label"), "amount": None}
+        for i in (getattr(order, "charge_items", None) or [])
+        if isinstance(i, dict) and i.get("included") is False
+    ]
+    collected = {str((c or {}).get("label")): int((c or {}).get("amount") or 0) for c in (er.extra_charges_collected or [])} if er and er.extra_charges_collected else {}
+    for e in excluded:
+        if e["label"] in collected:
+            e["amount"] = collected[e["label"]]
+    advance = int(order.advance_received or 0)
+    loc = order.pickup_drop_location or {}
+    keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0) if isinstance(loc, dict) else []
+    return {
+        "order_id": order.id,
+        "trip_type": getattr(order.trip_type, "value", order.trip_type),
+        "from": loc.get(keys[0]) if keys else None,
+        "to": loc.get(keys[-1]) if len(keys) > 1 else None,
+        "pickup_time": order.start_date_time.isoformat() if order.start_date_time else None,
+        "km_driven": km_driven,
+        "km_billed": billed_km,
+        "lines": lines,
+        "total": total,
+        "advance_received": advance,
+        "cash_to_collect": max(0, total - advance),
+        "extra_charges_paid_directly": [e for e in excluded if e["amount"]],
+        "extra_total": sum(e["amount"] or 0 for e in excluded),
+    }
+
+
 def _settle_trip(db, order, assignment, split, cash_collection, admin_id, total_km, trip_record) -> None:
     """Trip-close money movement for every non-hourly booking (vendor, driver-posted, website, admin).
 
@@ -181,7 +281,7 @@ def _settle_trip(db, order, assignment, split, cash_collection, admin_id, total_
                 print(f"vendor {vendor_id} short by ₹{-vendor_delta - take} settling order {order_id}")
         if platform_fee > 0 and admin_id:
             credit_admin_wallet(db, admin_id=admin_id, amount=platform_fee, order_id=order_id,
-                                notes=f"Platform fee (2%) on Booking {order_id}")
+                                notes=f"Platform fee on Booking {order_id}")
     # ---- poster: entitled to poster_share, already holds the advance in cash
     elif poster_id:
         # the advance hold was only an earmark on their wallet - give it back first, then settle the difference
@@ -199,7 +299,7 @@ def _settle_trip(db, order, assignment, split, cash_collection, admin_id, total_
             )
         if platform_fee > 0 and admin_id:
             credit_admin_wallet(db, admin_id=admin_id, amount=platform_fee, order_id=order_id,
-                                notes=f"Platform fee (2%) on Booking {order_id}")
+                                notes=f"Platform fee on Booking {order_id}")
     else:
         # website / admin booking: the platform is the poster, so it gets both shares
         platform_total = platform_fee + poster_share
@@ -226,6 +326,7 @@ async def update_end_trip_record(
     waiting_time: int | None = None,
     cash_collection: int | None = None,
     extra_charges_collected: list | None = None,
+    distance_reason: str | None = None,
 ) -> dict:
     """Update end trip record and calculate fare"""
     # Get the trip record, locked for the rest of this transaction - two
@@ -254,16 +355,30 @@ async def update_end_trip_record(
     total_km = end_km - trip_record.start_km
     if total_km < 0:
         raise ValueError("End KM cannot be less than start KM")
-    # Ensure the driven km is within a sane window of the originally planned distance
+    # Distance check against the REAL road distance (not the billed minimum coverage): +/-20% (at least 10 km) is
+    # fine. Outside that the trip is NOT blocked any more - the driver must give a reason, which is stored and sent to
+    # the vendor + admin. (Old rule blocked anything outside planned +/-50 km, where "planned" was the 130 km minimum
+    # coverage, so a genuine 60 km trip could never be closed.)
+    _distance_flag = False
     if order := db.query(Order).filter(Order.id == order_id).first():
-        if order.trip_distance is not None:
-            planned = int(order.trip_distance)
-            if total_km < planned - 50 or total_km > planned + 50:
-                raise ValueError(
-                    f"Total KM ({total_km}) is too far from the planned trip distance "
-                    f"({planned} km). Allowed range is {planned - 50}-{planned + 50} km. "
-                    "Please check your odometer reading."
-                )
+        _real_km = None
+        try:
+            if order.source and order.source.name == "NEW_ORDERS":
+                _no = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
+                _real_km = int(getattr(_no, "calculated_trip_distance", 0) or 0) or None
+        except Exception:
+            _real_km = None
+        if _real_km is None and order.trip_distance is not None:
+            _real_km = int(order.trip_distance)
+        if _real_km:
+            _tol = max(10, int(round(_real_km * 0.2)))
+            _lo, _hi = _real_km - _tol, _real_km + _tol
+            if total_km < _lo or total_km > _hi:
+                if not (distance_reason or "").strip():
+                    raise DistanceReasonRequired(total_km, _real_km, _lo, _hi)
+                _distance_flag = True
+                trip_record.distance_flagged = True
+                trip_record.distance_reason = distance_reason.strip()[:500]
     
     if order.trip_status == "CANCELLED":
         raise ValueError("The Trip is Already Cancelled and Cannot stop the Trip")
@@ -345,6 +460,9 @@ async def update_end_trip_record(
     # utils/commission.py and _settle_trip below. Vendor bookings and Hourly Rental keep their own path.
     use_new_settlement = False
     _split = None
+    # Hourly Rental convenience fee (same Rs 30 setting as every other booking): added to the customer's bill, collected
+    # in cash by the driver, settled to the platform out of the driver's wallet. Vendor/admin commission is untouched.
+    hourly_conv = 0
 
     # Update order with final amounts, profits, and status
 
@@ -388,7 +506,9 @@ async def update_end_trip_record(
         # over-debited the vehicle owner's wallet for the driver's entire
         # cash collection. Parenthesized correctly below.
         toll_addon = int(updated_toll_charges) if updated_toll_charges and int(updated_toll_charges) > 0 else 0
-        order.closed_vendor_price = cal_vendor_price + toll_addon
+        from app.utils.commission import convenience_fee_amount
+        hourly_conv = convenience_fee_amount(db)
+        order.closed_vendor_price = cal_vendor_price + toll_addon + hourly_conv
         order.closed_driver_price = cal_driver_price + toll_addon
         vendor_profit = cal_vendor_profit - cal_admin_profit
         admin_profit = cal_admin_profit
@@ -413,20 +533,27 @@ async def update_end_trip_record(
         updated_km = total_km
         night_charges = order.night_charges if order.night_charges > 0 else 0
 
+        # MINIMUM COVERAGE: the booking was quoted on a minimum billable distance (Oneway: oneway_min_km, e.g. 130;
+        # Round Trip / Multi City: min km per day, e.g. 250). The quote already assumes it, but the trip-close bill
+        # used the raw odometer km - a short trip (80 km on a 130 km-minimum booking) was billed for 80 km and the
+        # customer/driver/vendor all lost the difference. The bill is never below the minimum coverage.
+        from app.utils.fare_rules import get_fare_rules as _get_fare_rules
+        _min_rules = _get_fare_rules()
+        if order.trip_type == OrderTypeEnum.ONEWAY:
+            updated_km = max(updated_km, int(_min_rules["oneway_min_km"]))
+
         # Round Trip / Multi City that actually ran into a second day (past
         # the 6 AM cutoff) - the driver allowance and minimum-km floor were
         # only ever priced for the originally quoted single day at booking
         # time. Scale both to the ACTUAL day count so an overrun trip bills
         # correctly instead of quietly absorbing the extra day for free.
         if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
-            actual_days = _actual_trip_days(order.start_date_time, datetime.utcnow())
+            actual_days = max(1, _actual_trip_days(order.start_date_time, datetime.utcnow()))
+            min_km_key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
+            min_km_total = _min_rules[min_km_key] * actual_days   # floor applies from day 1, not only on overrun days
+            if updated_km < min_km_total:
+                updated_km = min_km_total
             if actual_days > 1:
-                from app.utils.fare_rules import get_fare_rules
-                fare_rules = get_fare_rules()
-                min_km_key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
-                min_km_total = fare_rules[min_km_key] * actual_days
-                if updated_km < min_km_total:
-                    updated_km = min_km_total
                 driver_allowance = driver_allowance * actual_days
                 extra_driver_allowance = extra_driver_allowance * actual_days
 
@@ -464,12 +591,15 @@ async def update_end_trip_record(
                     .filter(OrderAssignment.order_id == order_id, OrderAssignment.driver_id == driver_id)
                     .scalar()
                 )
-                _rates = get_commission_rates(db, get_trip_category(order), _tier)
+                _cat = get_trip_category(order)
+                _rates = get_commission_rates(db, _cat, _tier)
                 _driver_fare = closed_driver_price
+                _fees = get_fee_settings(db)
                 _split = compute_split(
                     _cls, driver_fare=_driver_fare, base_fare=cost_per_km * updated_km,
                     extras=max(0, closed_vendor_price - closed_driver_price),
-                    cc_total_pct=_rates["vendor"] + _rates["admin"], cc_on=not commission_waived, fees=get_fee_settings(db),
+                    cc_total_pct=_rates["vendor"] + _rates["admin"], cc_on=not commission_waived, fees=_fees,
+                    cc_min=(0 if _cat == "LOCAL" else int(_fees.get("commission_min", 200))),
                 )
                 commision_amount = 0 if commission_waived else (_rates["vendor"] + _rates["admin"])
                 closed_driver_price = _driver_fare
@@ -480,7 +610,7 @@ async def update_end_trip_record(
                     or 0
                 )
                 _markup = (getattr(order, "extra_amount", None) or getattr(new_order, "extra_amount", None) or 0) if _cls == CLASS_POSTER_ALL_INCLUSIVE else 0
-                _split = compute_split(_cls, total_booking=_total_booking, markup=_markup, fees=fees_for_order(db, order_id, _cls, get_fee_settings(db)))
+                _split = compute_split(_cls, total_booking=_total_booking, markup=_markup, cc_on=not commission_waived, fees=fees_for_order(db, order_id, _cls, get_fee_settings(db)))
                 commision_amount = _split["fee_pct"]
                 closed_driver_price = _split["driver_net"]
             closed_vendor_price = _split["customer_total"]
@@ -575,7 +705,7 @@ async def update_end_trip_record(
                 # accepted before the hold system existed have hold=0 and are
                 # debited in full as before.
                 from app.crud.wallet import get_trip_hold, credit_wallet, debit_wallet_allow_negative
-                final_amount = vendor_profit + admin_profit
+                final_amount = vendor_profit + admin_profit + hourly_conv   # hourly_conv is 0 except Hourly Rental
                 hold = get_trip_hold(db, order_id, str(assignment.vehicle_owner_id))
                 delta = final_amount - hold
 
@@ -621,7 +751,12 @@ async def update_end_trip_record(
 
         if use_new_settlement:
             _settle_trip(db, order, assignment, _split, cash_collection, admin_id, total_km, trip_record)
-        
+        elif hourly_conv > 0 and admin_id:
+            # the driver's wallet was debited for it above (final_amount); the platform receives it here
+            from app.crud.admin_wallet import credit_admin_wallet
+            credit_admin_wallet(db, admin_id=admin_id, amount=hourly_conv, order_id=order_id,
+                                notes=f"Convenience fee on Hourly Rental Booking {order_id}")
+
         # Credit vendor wallet with vendor_profit, OR credit Fleet Owner wallet if driver-created/self-sourced.
         # This used to be a broad `except Exception: print(...)` that
         # swallowed any failure here - the vehicle owner's debit above had
@@ -808,6 +943,18 @@ async def update_end_trip_record(
     db.commit()
     db.refresh(trip_record)
     await send_trip_status_notification_to_vendor_and_vehicle_owner(db, order_id=order_id, status="ended")
+    if _distance_flag:
+        # distance was outside +/-20% of the real route: tell the poster and the admin (the driver's reason is stored)
+        try:
+            from app.crud.notification import send_push_notification_to_admin, notify_booking_poster
+            _msg = f"Booking {order_id}: driver drove {total_km} km on a route of about {getattr(trip_record, 'distance_reason', '') and ''}"
+            _msg = f"Booking {order_id}: driver reported {total_km} km, different from the route distance. Reason: {trip_record.distance_reason}"
+            await send_push_notification_to_admin(db, "Distance check", _msg)
+            _o = db.query(Order).filter(Order.id == order_id).first()
+            if _o:
+                notify_booking_poster(db, _o, "Distance check", _msg)
+        except Exception as _e:
+            print(f"distance notification failed (trip already closed): {_e}")
     return {
         "trip_record": trip_record,
         "total_km": total_km,

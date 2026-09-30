@@ -76,6 +76,9 @@ def smtp_configured(db: Session) -> bool:
     return bool(s["smtp_user"] and s["smtp_app_password"])
 
 
+from email.mime.application import MIMEApplication
+
+
 def send_email(db: Session, to_email: str, subject: str, body: str) -> None:
     """Send a plain-text email. Raises on failure so callers can report it."""
     s = get_smtp_settings(db)
@@ -92,3 +95,55 @@ def send_email(db: Session, to_email: str, subject: str, body: str) -> None:
         server.starttls()
         server.login(s["smtp_user"], s["smtp_app_password"])
         server.sendmail(s["smtp_from"], to_email, msg.as_string())
+
+
+def send_email_with_pdf(
+    db: Session,
+    to_emails: list[str] | str,
+    subject: str,
+    body_text: str,
+    body_html: str | None,
+    pdf_bytes: bytes,
+    filename: str = "DropCars_GST_Invoice.pdf"
+) -> bool:
+    """Send an email with an attached PDF document to one or more recipients."""
+    s = get_smtp_settings(db)
+    if not s["smtp_user"] or not s["smtp_app_password"]:
+        print("Cannot send email: SMTP not configured in Admin Settings.")
+        return False
+
+    if isinstance(to_emails, str):
+        recipients = [r.strip() for r in to_emails.split(",") if r.strip()]
+    else:
+        recipients = [r.strip() for r in to_emails if r and r.strip()]
+
+    if not recipients:
+        return False
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["From"] = s["smtp_from"]
+        msg["To"] = ", ".join(recipients)
+        msg["Subject"] = subject
+
+        # Alternative body (plain + html)
+        alt_part = MIMEMultipart("alternative")
+        alt_part.attach(MIMEText(body_text, "plain"))
+        if body_html:
+            alt_part.attach(MIMEText(body_html, "html"))
+        msg.attach(alt_part)
+
+        # PDF attachment
+        part = MIMEApplication(pdf_bytes, Name=filename)
+        part["Content-Disposition"] = f'attachment; filename="{filename}"'
+        msg.attach(part)
+
+        with smtplib.SMTP(s["smtp_host"], int(s["smtp_port"]), timeout=25) as server:
+            server.starttls()
+            server.login(s["smtp_user"], s["smtp_app_password"])
+            server.sendmail(s["smtp_from"], recipients, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"Failed to send email with PDF invoice: {e}")
+        return False
+

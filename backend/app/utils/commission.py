@@ -87,16 +87,23 @@ def save_commission_rates(db: Session, rates: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Booking commission classes (owner-confirmed 2026-09-19)
 #
-#   STANDARD (itemized)      poster gets 10% of the base km fare (unless the "10% CC" toggle is off) + ALL extras
-#                            (extra per-km price, extra driver allowance...); platform gets 2% of the driver fare.
-#   POSTER_ALL_INCLUSIVE     vendor / driver / B2B posts "driver fare + markup": poster gets the markup, platform
-#                            gets 2% of the driver fare.
+#   STANDARD (itemized)      the driver pays 10% of the base km fare (unless the "10% CC" toggle is off) and NOTHING
+#                            else. Out of that 10% the platform keeps 1% of the km fare (at least Rs 30, never more
+#                            than the whole commission) and the poster (vendor / driver) gets the rest + ALL extras
+#                            (extra per-km price, extra driver allowance...). Updated 2026-09-24 (owner): the old
+#                            extra 2% taken from the driver's fare is gone.
+#   POSTER_ALL_INCLUSIVE     vendor / driver / B2B posts "driver fare + markup": the driver keeps the whole driver
+#                            fare; the platform's 1% (at least Rs 30, capped at the markup) comes out of the poster's
+#                            markup.
 #   PLATFORM_ALL_INCLUSIVE   website / admin all-inclusive: one amount, platform keeps 15% (85/15 split).
 #
 # "Poster" is the vendor / driver who posted the booking; for website and admin bookings the poster IS the platform.
 # The platform fee is the app owner's income and always comes out of the driver's earnings.
 # ---------------------------------------------------------------------------
-PLATFORM_FEE_PERCENT = 2
+PLATFORM_FEE_PERCENT = 1          # platform's share of the km fare, taken out of the 10% commission
+CONVENIENCE_FEE = 30               # EVERY booking: flat fee added to the customer's bill, collected in cash by the driver, settled to the platform
+COMMISSION_MIN = 200               # Standard (Outstation) bookings: the driver pays at least this much commission
+PLATFORM_FEE_MIN = 30              # ... but at least this many rupees (never above the commission itself)
 PLATFORM_ALL_INCLUSIVE_PERCENT = 15
 
 CLASS_STANDARD = "STANDARD"
@@ -106,7 +113,10 @@ CLASS_PLATFORM_ALL_INCLUSIVE = "PLATFORM_ALL_INCLUSIVE"
 
 def get_fee_settings(db: Session) -> dict:
     """Owner-editable fee numbers from platform_settings (Admin App > System Config); defaults are the confirmed values."""
-    defaults = {"platform_fee_pct": PLATFORM_FEE_PERCENT, "platform_all_inclusive_pct": PLATFORM_ALL_INCLUSIVE_PERCENT,
+    # NB: platform_share_pct / platform_share_min are new keys on purpose - the old `platform_fee_pct` may still hold
+    # the retired 2% in platform_settings and must not leak into the new model.
+    defaults = {"platform_share_pct": PLATFORM_FEE_PERCENT, "platform_share_min": PLATFORM_FEE_MIN, "commission_min": COMMISSION_MIN, "convenience_fee": CONVENIENCE_FEE,
+                "platform_all_inclusive_pct": PLATFORM_ALL_INCLUSIVE_PERCENT,
                 "min_driver_hold": MIN_DRIVER_HOLD, "drop_bid_fee_pct": 5}
     try:
         rows = db.query(PlatformSetting).filter(PlatformSetting.key.in_(list(defaults))).all()
@@ -119,6 +129,12 @@ def get_fee_settings(db: Session) -> dict:
     except Exception:
         pass
     return defaults
+
+
+def convenience_fee_amount(db: Session) -> int:
+    """Flat convenience fee (Admin > System Config `convenience_fee`, default Rs 30) added to every customer bill.
+    Hourly Rental has no compute_split path, so it reads the same setting through this."""
+    return max(0, int(get_fee_settings(db).get("convenience_fee", CONVENIENCE_FEE)))
 
 
 def is_drop_bid_order(db: Session, order_id) -> bool:
@@ -164,30 +180,47 @@ def resolve_commission_class(*, fare_type, vendor_id=None, posted_by_vehicle_own
 
 def compute_split(commission_class: str, *, driver_fare: int = 0, base_fare: int = 0, extras: int = 0,
                   total_booking: int = 0, markup: int = 0, cc_total_pct: int = 10, cc_on: bool = True,
-                  fees: dict | None = None, gst_amount: int = 0) -> dict:
+                  fees: dict | None = None, gst_amount: int = 0, cc_min: int = 0) -> dict:
     """Who gets what for one booking. Returns customer_total, driver_net, poster_share (poster_cc + extras / markup),
     platform_fee. driver_net + poster_share + platform_fee == customer_total, always."""
     fees = fees or {}
-    fee_pct = fees.get("platform_fee_pct", PLATFORM_FEE_PERCENT)
+    fee_pct = fees.get("platform_share_pct", PLATFORM_FEE_PERCENT)
+    fee_min = int(fees.get("platform_share_min", PLATFORM_FEE_MIN))
     ai_pct = fees.get("platform_all_inclusive_pct", PLATFORM_ALL_INCLUSIVE_PERCENT)
     if commission_class == CLASS_STANDARD:
         poster_cc = _pct_ceil(base_fare, cc_total_pct) if cc_on else 0
-        fee = _pct_ceil(driver_fare, fee_pct)
-        poster = poster_cc + int(extras or 0)
-        driver_net = int(driver_fare) - poster_cc - fee
+        # minimum commission (Outstation): the driver pays at least cc_min however short the fare (never more than
+        # the driver fare itself)
+        if cc_on and base_fare and cc_min:
+            poster_cc = min(max(poster_cc, int(cc_min)), int(driver_fare))
+        # platform's cut is carved out of the 10% commission itself: 1% of the km fare, at least Rs 30, but never
+        # more than the commission. The driver pays the commission and nothing else.
+        fee = min(poster_cc, max(_pct_ceil(base_fare, fee_pct), fee_min)) if poster_cc > 0 else 0
+        poster = (poster_cc - fee) + int(extras or 0)
+        driver_net = int(driver_fare) - poster_cc
         customer_total = int(driver_fare) + int(extras or 0)
+
     elif commission_class == CLASS_POSTER_ALL_INCLUSIVE:
         poster_cc = 0
-        fee = _pct_ceil(total_booking, fee_pct)
-        poster = int(markup or 0)
-        driver_net = int(total_booking) - fee
-        customer_total = int(total_booking) + poster
+        markup = int(markup or 0)
+        # the driver keeps the whole driver fare; the platform's share comes out of the poster's markup
+        fee = min(markup, max(_pct_ceil(total_booking, fee_pct), fee_min)) if (markup > 0 and cc_on) else 0
+        poster = markup - fee
+        driver_net = int(total_booking)
+        customer_total = int(total_booking) + markup
+
     else:  # PLATFORM_ALL_INCLUSIVE
         poster_cc = 0
         fee = _pct_ceil(total_booking, ai_pct)
         poster = 0
         driver_net = int(total_booking) - fee
         customer_total = int(total_booking)
+    # Convenience fee: on top of everything, for every booking. The customer pays it inside the trip total, the driver
+    # collects it with the rest of the cash and it is settled to the platform out of his wallet (it is part of what he
+    # owes at close, so the accept-time hold covers it). Added on top of the platform's own share of the commission.
+    conv = max(0, int(fees.get("convenience_fee", CONVENIENCE_FEE)))
+    customer_total += conv
+    fee += conv
     gst_amount = max(0, int(gst_amount or 0))
     customer_total += gst_amount
     poster += gst_amount
@@ -199,6 +232,7 @@ def compute_split(commission_class: str, *, driver_fare: int = 0, base_fare: int
         "gst_amount": gst_amount,
         "poster_cc": poster_cc,
         "platform_fee": fee,
+        "convenience_fee": conv,
         "fee_pct": fee_pct if commission_class != CLASS_PLATFORM_ALL_INCLUSIVE else ai_pct,
         "min_hold": int(fees.get("min_driver_hold", MIN_DRIVER_HOLD)),
     }
@@ -246,10 +280,39 @@ def estimate_split_for_order(db: Session, order) -> dict:
                 base_fare = int(n.cost_per_km) * int(order.trip_distance)
         driver_fare = est
         extras = max(0, cust - est)
-        rates = get_commission_rates(db, get_trip_category(order), "STANDARD")
+        _cat = get_trip_category(order)
+        rates = get_commission_rates(db, _cat, "STANDARD")
         return compute_split(cls, driver_fare=driver_fare, base_fare=min(base_fare, driver_fare) if base_fare else driver_fare,
-                             extras=extras, cc_total_pct=rates["vendor"] + rates["admin"], cc_on=cc_on, fees=fees)
+                             extras=extras, cc_total_pct=rates["vendor"] + rates["admin"], cc_on=cc_on, fees=fees,
+                             cc_min=(0 if _cat == "LOCAL" else int(fees.get("commission_min", COMMISSION_MIN))))
 
     total_booking = int(getattr(order, "total_booking_amount", 0) or 0) or est or cust
     markup = int(getattr(order, "extra_amount", 0) or 0)
-    return compute_split(cls, total_booking=total_booking, markup=markup, fees=fees_for_order(db, order.id, cls, fees))
+    return compute_split(cls, total_booking=total_booking, markup=markup, cc_on=cc_on, fees=fees_for_order(db, order.id, cls, fees))
+
+
+def vendor_earns_estimate(order, new_order) -> int:
+    """What the poster (vendor / driver) is expected to earn on a booking, from the same maths trip close uses (no DB
+    needed - default fee settings). Shown in the Vendor App booking screens."""
+    try:
+        cls = resolve_commission_class(
+            fare_type=getattr(new_order, "fare_type", None) or getattr(order, "fare_type", None),
+            vendor_id=getattr(order, "vendor_id", None),
+            posted_by_vehicle_owner_id=getattr(order, "posted_by_vehicle_owner_id", None),
+            stored=getattr(order, "commission_class", None),
+        )
+        cc_on = not bool(getattr(order, "commission_waived", False))
+        est = int(getattr(order, "estimated_price", 0) or 0)
+        cust = int(getattr(order, "vendor_price", 0) or 0)
+        if cls == CLASS_STANDARD:
+            cat = get_trip_category(order) if "get_trip_category" in globals() else "OUTSTATION"
+            base = int(getattr(new_order, "cost_per_km", 0) or 0) * int(getattr(order, "trip_distance", 0) or 0)
+            s = compute_split(cls, driver_fare=est, base_fare=min(base, est) if base else est, extras=max(0, cust - est),
+                              cc_total_pct=(15 if cat == "LOCAL" else 10), cc_on=cc_on, fees={},
+                              cc_min=(0 if cat == "LOCAL" else COMMISSION_MIN))
+        else:
+            total = int(getattr(order, "total_booking_amount", 0) or 0) or est or cust
+            s = compute_split(cls, total_booking=total, markup=int(getattr(order, "extra_amount", 0) or 0), cc_on=cc_on, fees={})
+        return int(s["poster_share"])
+    except Exception:
+        return 0

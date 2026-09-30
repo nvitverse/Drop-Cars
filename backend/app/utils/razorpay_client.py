@@ -13,8 +13,6 @@ class RazorpayClient:
         self.key_id = key_id or os.getenv("RAZORPAY_KEY_ID", "")
         self.key_secret = key_secret or os.getenv("RAZORPAY_KEY_SECRET", "")
         self.base_url = "https://api.razorpay.com/v1"
-        print("RazorpayClient initialized with:")
-        print(self.key_id, self.key_secret)
 
     def _auth(self):
         return (self.key_id, self.key_secret)
@@ -37,6 +35,12 @@ class RazorpayClient:
         payment belongs to this order/payment id pair, it does not bind
         any particular amount)."""
         resp = requests.get(f"{self.base_url}/orders/{order_id}", auth=self._auth(), timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_order_payments(self, order_id: str) -> Dict[str, Any]:
+        """All payments made against an order (used to recover payments the app never confirmed)."""
+        resp = requests.get(f"{self.base_url}/orders/{order_id}/payments", auth=self._auth(), timeout=20)
         resp.raise_for_status()
         return resp.json()
 

@@ -50,6 +50,16 @@ class CarDetailsForm(BaseModel):
         description="Year of the car"
     )
 
+    # Expiry dates (YYYY-MM-DD strings) for the documents that have one -
+    # all optional so an existing caller that doesn't send them still works.
+    # OCR can suggest these (see /cardetails/extract-expiry) but the driver
+    # can always type/change them before submitting.
+    rc_expiry_date: Optional[str] = Field(None, description="RC expiry date (YYYY-MM-DD)")
+    insurance_expiry_date: Optional[str] = Field(None, description="Insurance expiry date (YYYY-MM-DD)")
+    fc_expiry_date: Optional[str] = Field(None, description="FC expiry date (YYYY-MM-DD)")
+    permit_expiry_date: Optional[str] = Field(None, description="Permit expiry date (YYYY-MM-DD)")
+    pollution_expiry_date: Optional[str] = Field(None, description="Pollution (PUC) certificate expiry date (YYYY-MM-DD)")
+
     @validator('car_number')
     def validate_car_number(cls, v):
         # Basic validation for car number format
@@ -65,6 +75,11 @@ class CarDetailsForm(BaseModel):
         car_type: CarTypeEnum = Form(..., description="Car type: SEDAN, SUV, or INNOVA"),
         car_number: str = Form(..., description="Car registration number"),
         year_of_the_car: Optional[str] = Form(None, description="Year of the car"),
+        rc_expiry_date: Optional[str] = Form(None, description="RC expiry date (YYYY-MM-DD)"),
+        insurance_expiry_date: Optional[str] = Form(None, description="Insurance expiry date (YYYY-MM-DD)"),
+        fc_expiry_date: Optional[str] = Form(None, description="FC expiry date (YYYY-MM-DD)"),
+        permit_expiry_date: Optional[str] = Form(None, description="Permit expiry date (YYYY-MM-DD)"),
+        pollution_expiry_date: Optional[str] = Form(None, description="Pollution (PUC) certificate expiry date (YYYY-MM-DD)"),
     ):
         return cls(
             vehicle_owner_id=UUID(vehicle_owner_id) if vehicle_owner_id else None,
@@ -72,6 +87,11 @@ class CarDetailsForm(BaseModel):
             car_type=car_type,
             car_number=car_number,
             year_of_the_car=year_of_the_car,
+            rc_expiry_date=rc_expiry_date or None,
+            insurance_expiry_date=insurance_expiry_date or None,
+            fc_expiry_date=fc_expiry_date or None,
+            permit_expiry_date=permit_expiry_date or None,
+            pollution_expiry_date=pollution_expiry_date or None,
         )
 
 class CarDetailsOut(BaseModel):
@@ -87,6 +107,12 @@ class CarDetailsOut(BaseModel):
     fc_img_url: Optional[str]
     car_img_url: Optional[str]
     permit_img_url: Optional[str]
+    pollution_img_url: Optional[str] = None
+    rc_expiry_date: Optional[str] = None
+    insurance_expiry_date: Optional[str] = None
+    fc_expiry_date: Optional[str] = None
+    permit_expiry_date: Optional[str] = None
+    pollution_expiry_date: Optional[str] = None
     created_at: datetime
 
     class Config:

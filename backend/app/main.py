@@ -15,10 +15,12 @@ from app.api.routes import hybrid_auth as hybrid_auth_router
 from app.utils.cities import load_cities_once
 from app.utils.car_models import load_car_models_once
 import app.models.admin
+import app.models.worker_management
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
 import app.models.booking_chat
+import app.models.support_message
 import app.models.trip_review
 import app.models.stale_document_file
 import app.models.car_details
@@ -102,6 +104,14 @@ app = FastAPI(title="Drop Cars API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Centralized error handling, one place instead of the ~32 repeated
 # `except Exception as e: raise HTTPException(500, f"Internal server
@@ -137,6 +147,22 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         },
     )
 
+@app.middleware("http")
+async def _record_request_health(request: Request, call_next):
+    """Feeds the Admin App's System Health page (request count / errors / speed) - in-memory, costs nothing."""
+    import time as _t
+    from app.utils import system_health as _sh
+    t0 = _t.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        _sh.record_request(_t.perf_counter() - t0, 500)
+        raise
+    if not request.url.path.endswith("/admin/system-health"):
+        _sh.record_request(_t.perf_counter() - t0, response.status_code)
+    return response
+
+
 # CORS: required for the web versions of the apps (expo web / browser testing).
 # Native phone apps don't enforce CORS, which is why they worked without this.
 # Auth uses Bearer tokens (no cookies), so wildcard origins are safe here.
@@ -160,8 +186,18 @@ app.include_router(transfer_transactions.router, prefix="/api", tags=["TransferT
 # Registered BEFORE admin.router - admin.py ends with a catch-all
 # GET /admin/{admin_id} that would otherwise shadow /admin/announcements
 # (same route-ordering hazard as payout-requests earlier).
+from app.api.routes import workers as workers_router
+app.include_router(workers_router.router, prefix="/api", tags=["Workers & Operations Hub"])
+from app.api.routes import driver_tours as driver_tours_router
+app.include_router(driver_tours_router.router, tags=["Driver Tours & Running Ledger"])
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
+from app.api.routes import system_health as _system_health_routes
+app.include_router(_system_health_routes.router, prefix="/api", tags=["SystemHealth"])
+from app.api.routes import app_content as _app_content_routes
+app.include_router(_app_content_routes.router, prefix="/api", tags=["AppContent"])
+from app.api.routes import app_updates as _app_updates_routes
+app.include_router(_app_updates_routes.router, prefix="/api", tags=["AppUpdates"])
 app.include_router(wallet.router, prefix="/api", tags=["Wallet"]) 
 app.include_router(notification.router, prefix="/api", tags=["notifications"]) 
 app.include_router(cities_router.router, prefix="/api", tags=["Cities"])
@@ -195,6 +231,9 @@ app.include_router(drop_bid_routes.router, prefix="/api", tags=["Drop Bid"])
 
 from app.api.routes import ai_whatsapp_assistant
 app.include_router(ai_whatsapp_assistant.router, prefix="/api", tags=["AI WhatsApp Assistant"])
+
+from app.api.routes import support as support_router
+app.include_router(support_router.router, prefix="/api", tags=["Support"])
 
 from app.api.routes import crm_routes
 app.include_router(crm_routes.router, prefix="/api", tags=["CRM & Marketing"])
@@ -352,6 +391,21 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS licence_back_img VARCHAR',
         'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS licence_back_status document_status_enum DEFAULT \'PENDING\'',
         'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS is_owner_driver BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_number VARCHAR',
+        'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_amount INTEGER',
+        'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_paid_at TIMESTAMPTZ',
+        'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS flagged BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS distance_flagged BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS distance_reason TEXT',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS customer_rating INTEGER',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS customer_feedback TEXT',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS amount_paid_total INTEGER',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS other_extras_collected INTEGER',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS completion_at TIMESTAMPTZ',
+        'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_front_img VARCHAR',
+        'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_front_status document_status_enum DEFAULT \'PENDING\'',
+        'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_back_img VARCHAR',
+        'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_back_status document_status_enum DEFAULT \'PENDING\'',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_cities VARCHAR[]',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_cities_updated_at TIMESTAMPTZ',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_driver_id VARCHAR',
@@ -913,6 +967,11 @@ async def load_car_models_startup() -> None:
 _LAST_HOUSEKEEPING = 0.0
 
 
+import time as _time_mod
+_LAST_PAYMENT_RECONCILE = 0.0
+_LAST_MEMBER_RENEWAL = 0.0
+
+
 async def _run_assignment_sweep() -> dict:
     """Cancel/complete assignments and bookings that passed their deadlines.
     Called by the internal timer AND by the /api/internal/sweep endpoint
@@ -954,6 +1013,52 @@ async def _run_assignment_sweep() -> dict:
         auto_approved = await auto_approve_expired_booking_requests(db)
         if auto_approved:
             print(f"Auto-approved {auto_approved} booking request(s) past their approval window")
+        try:
+            from app.api.routes.trip_reviews import pay_review_bonuses
+            _bonus = pay_review_bonuses(db)
+            if _bonus:
+                print(f"Paid {_bonus} customer-rating bonus(es)")
+        except Exception as _e:
+            db.rollback()
+            print(f"review bonus sweep failed (continuing): {_e}")
+        # Yearly members whose year ran out are renewed from their wallet automatically (checked about every 3 hours)
+        global _LAST_MEMBER_RENEWAL
+        if _time_mod.time() - _LAST_MEMBER_RENEWAL > 10800:
+            _LAST_MEMBER_RENEWAL = _time_mod.time()
+            try:
+                from app.crud.billing import run_member_auto_renewals
+                _ren = run_member_auto_renewals(db)
+                if _ren.get("renewed"):
+                    print(f"Auto-renewed {_ren['renewed']} yearly member(s) from wallet ({_ren.get('wallet_too_low', 0)} had too little wallet)")
+            except Exception as _e:
+                db.rollback()
+                print(f"member auto-renewal failed (continuing): {_e}")
+        # Payments Razorpay took but the app never confirmed (yearly fee / wallet top-up) - finish them (every ~5 minutes)
+        global _LAST_PAYMENT_RECONCILE
+        if _time_mod.time() - _LAST_PAYMENT_RECONCILE > 300:
+            _LAST_PAYMENT_RECONCILE = _time_mod.time()
+            try:
+                from app.crud.payment_reconcile import reconcile_razorpay_payments
+                _rec = reconcile_razorpay_payments(db)
+                if _rec.get("membership_activated") or _rec.get("wallet_credited"):
+                    print(f"Recovered unconfirmed Razorpay payments: {_rec}")
+                    try:
+                        from app.crud.notification import send_push_notification_to_admin
+                        await send_push_notification_to_admin(db, "Payments recovered", f"{_rec['membership_activated']} membership(s) activated and {_rec['wallet_credited']} wallet top-up(s) credited automatically.")
+                    except Exception:
+                        pass
+            except Exception as _e:
+                db.rollback()
+                print(f"payment reconcile failed (continuing): {_e}")
+        # Driver asked the booking's poster something and got no answer for 10 minutes -> Drop Cars support joins the chat
+        try:
+            from app.crud.booking_chat import escalate_unanswered_chats
+            _esc = escalate_unanswered_chats(db)
+            if _esc:
+                print(f"Added Drop Cars support to {_esc} unanswered booking chat(s)")
+        except Exception as _e:
+            db.rollback()
+            print(f"chat escalation failed (continuing): {_e}")
         # Housekeeping (chat 10 days, old odometer photos 3 months, replaced documents): hourly is plenty
         import time as _time
         global _LAST_HOUSEKEEPING
@@ -983,7 +1088,24 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"chat purge failed (continuing): {_e}")
-        return {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
+            try:
+                from app.api.routes.support import purge_old_support_messages
+                _support_purged = purge_old_support_messages(db)
+                if _support_purged:
+                    print(f"Purged {_support_purged} Support chat message(s) older than 10 days")
+            except Exception as _e:
+                db.rollback()
+                print(f"support chat purge failed (continuing): {_e}")
+        result = {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
+        try:
+            from app.utils import system_health as _sh
+            _sh.record_sweep(True, result)
+            # Health alerts to the admin phones (each alert at most once per hour by default)
+            await _sh.check_and_alert(db)
+        except Exception as _e:
+            db.rollback()
+            print(f"health check failed (continuing): {_e}")
+        return result
     finally:
         db.close()
 
@@ -1011,6 +1133,12 @@ def _require_internal_secret(request: Request) -> None:
     got = request.headers.get("X-Internal-Secret") or ""
     if not INTERNAL_TASK_SECRET or not hmac.compare_digest(got, INTERNAL_TASK_SECRET):
         raise HTTPException(status_code=403, detail="Forbidden")
+@app.post("/api/internal/run-sweep")
+async def run_sweep_task_endpoint(request: Request):
+    """Cloud Tasks target (see crud/notification.schedule_internal_sweep): runs the deadline sweep at a scheduled moment
+    even when no instance was alive."""
+    _require_internal_secret(request)
+    return await _run_assignment_sweep()
 
 
 @app.post("/api/internal/dispatch-expo-push")
@@ -1162,6 +1290,60 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_note VARCHAR'))
         db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS commission_class VARCHAR'))
         db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS gst_percent INTEGER'))
+        # These two were added to the Order model alongside gst_percent above
+        # but never got their own ALTER here - every query against Order
+        # (SQLAlchemy selects all mapped columns) was crashing live with
+        # psycopg2.errors.UndefinedColumn: column orders.gst_included does
+        # not exist, breaking pending-orders, booking-chat threads, and
+        # anything else that touches the orders table. Found 2026-09-22.
+        db.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS gst_included BOOLEAN NOT NULL DEFAULT false"))
+        db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS gst_amount INTEGER'))
+        # A staff/owner admin toggles this themselves (Admin App > Settings)
+        # to say "I'm on duty right now" - GET /api/support/on-duty-contact
+        # uses it to give drivers a real phone number to call instead of a
+        # hardcoded placeholder.
+        db.execute(text("ALTER TABLE admin ADD COLUMN IF NOT EXISTS is_on_duty BOOLEAN NOT NULL DEFAULT false"))
+        db.execute(text('ALTER TABLE admin ADD COLUMN IF NOT EXISTS on_duty_since TIMESTAMPTZ'))
+        # Voice notes in both chat systems (booking_chat + support_messages).
+        db.execute(text('ALTER TABLE booking_chat_messages ADD COLUMN IF NOT EXISTS voice_url VARCHAR'))
+        db.execute(text('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS voice_url VARCHAR'))
+        # Same gst_included/gst_amount pair as orders above, but on the two
+        # other tables that also declared them on their models without ever
+        # getting an ALTER: customer_booking_requests (breaking
+        # /admin/website-bookings/pending and every other query touching
+        # this table) and new_orders. Found live 2026-09-23 via Cloud Run
+        # logs: psycopg2.errors.UndefinedColumn: column
+        # customer_booking_requests.gst_included does not exist.
+        db.execute(text("ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS gst_included BOOLEAN NOT NULL DEFAULT false"))
+        db.execute(text('ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS gst_amount INTEGER'))
+        db.execute(text("ALTER TABLE new_orders ADD COLUMN IF NOT EXISTS gst_included BOOLEAN NOT NULL DEFAULT false"))
+        db.execute(text('ALTER TABLE new_orders ADD COLUMN IF NOT EXISTS gst_amount INTEGER'))
+        # vehicle_owner_details.vacant_fleet_entries (multi-vehicle fleet
+        # vacant-entries JSON list) was added to the model but never
+        # migrated - broke EVERY query touching vehicle_owner_details
+        # (owner login, profile, admin owner listing, etc). Found live
+        # 2026-09-23: psycopg2.errors.UndefinedColumn: column
+        # vehicle_owner_details.vacant_fleet_entries does not exist.
+        db.execute(text('ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_fleet_entries JSON'))
+        # pincode is Optional on both the VehicleOwnerDetails model and the
+        # signup form ("Area Pincode (Optional)" in the Driver App) but the
+        # live table still had a legacy NOT NULL constraint from before it
+        # became optional - every fresh fleet-owner signup that left pincode
+        # blank was failing with psycopg2.errors.NotNullViolation, then
+        # getting swallowed into a misleading "already exists" error by the
+        # broad except in create_user(). Found live 2026-09-23 by actually
+        # testing the signup flow end-to-end.
+        db.execute(text('ALTER TABLE vehicle_owner_details ALTER COLUMN pincode DROP NOT NULL'))
+        # New car document: Pollution / PUC certificate, plus expiry dates
+        # for FC/Permit/Pollution (RC and Insurance expiry already existed).
+        # Added 2026-09-23 alongside the Add Car document-expiry feature.
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_img_url VARCHAR'))
+        db.execute(text("ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_status document_status_enum DEFAULT 'PENDING'"))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS rc_expiry_date DATE'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS insurance_expiry_date DATE'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS fc_expiry_date DATE'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_expiry_date DATE'))
         db.commit()
     except Exception as e:
         db.rollback()

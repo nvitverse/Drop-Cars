@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, extract
+from app.utils.commission import vendor_earns_estimate
 import os
 from app.models.orders import Order, OrderSourceEnum
 from app.models.end_records import EndRecord
@@ -105,6 +106,8 @@ def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_a
         target_driver_id=getattr(new_order, 'target_driver_id', None),
         posted_by_vehicle_owner_id=getattr(new_order, 'posted_by_vehicle_owner_id', None),
         is_urgent=getattr(new_order, 'is_urgent', False),
+        gst_included=getattr(new_order, 'gst_included', False),
+        gst_amount=getattr(new_order, 'gst_amount', None),
         commission_class=_stamp_commission_class(new_order),
     )
     print(new_order.pickup_drop_location)
@@ -667,7 +670,7 @@ def map_to_combined_schema(order, new_order=None, hourly_rental=None):
         "commision_amount": order.commision_amount,
         "created_at": order.created_at,
         "max_time": max_time,
-        "vendor_earns_estimation" : math.ceil(((new_order.extra_cost_per_km*order.trip_distance) + new_order.extra_driver_allowance + new_order.extra_permit_charges)+((new_order.cost_per_km*new_order.trip_distance)*order.vendor_fees_percent/100)) - math.ceil(math.ceil(((new_order.extra_cost_per_km*order.trip_distance) + new_order.extra_driver_allowance + new_order.extra_permit_charges)+((new_order.cost_per_km*new_order.trip_distance)*order.vendor_fees_percent/100))*order.platform_fees_percent/100) if order.source == "NEW_ORDERS" else 0,
+        "vendor_earns_estimation" : vendor_earns_estimate(order, new_order) if order.source == "NEW_ORDERS" else 0,
         "cancelled_by" : order.cancelled_by,
         "h_cost_for_addon_km": hourly_rental.cost_for_addon_km if hourly_rental else None,
         "h_extra_cost_for_addon_km": hourly_rental.extra_cost_for_addon_km if hourly_rental else None,

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List,Union,Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.crud.notification import send_booking_accepted_to_telegram, send_booking_cancelled_to_telegram, send_push_notification_to_vendor, send_push_notification_to_vendor_driver
 from app.database.session import get_db
 from app.core.security import get_current_user, get_current_vehicleOwner_id, get_current_driver, get_current_vendor, get_current_user_flexible
@@ -302,6 +302,11 @@ async def accept_order(
             # no separate vendor payout hold any more: the vendor's advance already sits in their wallet and the
             # trip-close settlement moves the exact difference (see end_records._settle_trip)
             vendor_hold_amount = 0
+        else:
+            # Hourly Rental keeps the formula above, plus the convenience fee: the driver collects it from the
+            # customer in cash and it is settled to the platform out of his wallet at trip close (end_records.py)
+            from app.utils.commission import convenience_fee_amount
+            hold_amount += convenience_fee_amount(db)
 
         # Check if fleet owner has sufficient balance for the hold
         if hold_amount > 0 and not check_vehicle_owner_balance(db, vehicle_owner_id, hold_amount):
@@ -945,6 +950,7 @@ async def end_trip(
     # cash_collection/driver_profit. See models/end_records.py.
     extra_charges_collected: str | None = Form(None),
     otp: Optional[str] = Form(default=""),
+    distance_reason: Optional[str] = Form(default=None),
     close_speedometer_img: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
@@ -999,6 +1005,7 @@ async def end_trip(
             waiting_time=waiting_time,
             cash_collection=cash_collection,
             extra_charges_collected=parsed_extra_charges,
+            distance_reason=distance_reason,
         )
 
         return {
@@ -1012,10 +1019,140 @@ async def end_trip(
             # "vehicle_owner_amount": result["vehicle_owner_amount"]
         }
         
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        from app.crud.end_records import DistanceReasonRequired
+        if isinstance(e, DistanceReasonRequired):
+            raise HTTPException(status_code=400, detail={
+                "code": "DISTANCE_REASON_REQUIRED", "message": str(e),
+                "km_driven": e.km_driven, "route_km": e.route_km, "allowed_min": e.allowed_min, "allowed_max": e.allowed_max,
+            })
+        if isinstance(e, ValueError):
+            raise HTTPException(status_code=400, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to end trip: {str(e)}")
+
+
+def _driver_trip_or_404(db, order_id: int, current_driver):
+    from app.models.orders import Order as _Order
+    a = db.query(OrderAssignment).filter(
+        OrderAssignment.order_id == order_id,
+        OrderAssignment.driver_id == current_driver.id,
+        OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
+    ).order_by(desc(OrderAssignment.assigned_at)).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="No trip found for this booking")
+    o = db.query(_Order).filter(_Order.id == order_id).first()
+    return a, o
+
+
+@router.get("/driver/trip-bill/{order_id}")
+async def get_driver_trip_bill(order_id: int, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
+    """Customer-safe bill + what is still to collect, for the trip report / completion pages."""
+    from app.crud.end_records import build_customer_bill
+    from app.models.end_records import EndRecord
+    a, order = _driver_trip_or_404(db, order_id, current_driver)
+    bill = build_customer_bill(db, order)
+    er = db.query(EndRecord).filter(EndRecord.order_id == order_id).first()
+    bill["completion_done"] = bool(er and er.completion_at)
+    bill["review_link"] = None
+    try:
+        from app.api.routes.trip_reviews import review_base_url
+        if a.trip_link_token:
+            bill["review_link"] = f"{review_base_url(db)}/{a.trip_link_token}"
+    except Exception:
+        pass
+    return bill
+
+
+class TripCompletionIn(BaseModel):
+    customer_rating: int = Field(..., ge=1, le=5)
+    customer_feedback: Optional[str] = Field(None, max_length=500)
+    cash_collected: int = Field(..., ge=0)
+    other_extras: int = Field(0, ge=0)
+    total_paid: int = Field(..., ge=0)
+
+
+@router.post("/driver/trip-completion/{order_id}")
+async def submit_driver_trip_completion(
+    order_id: int, body: TripCompletionIn, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)
+):
+    """Last step of a trip: the driver rates the customer and confirms what was actually collected. Recorded for audit
+    (a difference from the expected cash is flagged for the admin); the wallet was already settled at trip end."""
+    from app.crud.end_records import build_customer_bill
+    from app.models.end_records import EndRecord
+    from app.crud.cash_audit import flag_if_mismatch
+    a, order = _driver_trip_or_404(db, order_id, current_driver)
+    er = db.query(EndRecord).filter(EndRecord.order_id == order_id).first()
+    if not er or not er.end_km or er.end_km <= 0:
+        raise HTTPException(status_code=400, detail="This trip is not finished yet.")
+    er.customer_rating = body.customer_rating
+    er.customer_feedback = (body.customer_feedback or "").strip() or None
+    er.cash_collection = body.cash_collected
+    er.other_extras_collected = body.other_extras
+    er.amount_paid_total = body.total_paid
+    er.completion_at = datetime.utcnow()
+    db.add(er)
+    db.commit()
+    try:
+        expected = build_customer_bill(db, order)["cash_to_collect"]
+        flag_if_mismatch(db, er, expected, body.cash_collected)
+    except Exception as e:
+        print(f"completion cash audit failed (non-fatal): {e}")
+
+    # Auto-credit active driver tour ledger (virtual cash bag)
+    try:
+        from app.models.driver_tour_ledger import DriverTour
+        active_tour = db.query(DriverTour).filter(
+            DriverTour.driver_id == current_driver.id,
+            DriverTour.status == "ACTIVE"
+        ).first()
+        if active_tour:
+            active_tour.total_trips_completed = (active_tour.total_trips_completed or 0) + 1
+            active_tour.total_customer_cash_collected = round((active_tour.total_customer_cash_collected or 0.0) + float(body.cash_collected), 2)
+            if er.end_km and er.end_km > (active_tour.current_odometer or 0):
+                active_tour.current_odometer = er.end_km
+            active_tour.net_cash_in_hand = round(
+                (active_tour.total_customer_cash_collected or 0.0)
+                - (active_tour.total_diesel_spent or 0.0)
+                - (active_tour.total_toll_spent or 0.0)
+                - (active_tour.total_other_expenses or 0.0)
+                - (active_tour.total_driver_bata or 0.0)
+                - (active_tour.total_bank_deposits or 0.0),
+                2
+            )
+            db.commit()
+    except Exception as tour_err:
+        print(f"Tour ledger auto-credit failed (non-fatal): {tour_err}")
+
+    # Auto-enqueue into CustomerReviewQueue for mandatory staff follow-up
+    try:
+        from app.models.customer_review_queue import CustomerReviewQueue
+        existing_rq = db.query(CustomerReviewQueue).filter(CustomerReviewQueue.order_id == order_id).first()
+        if not existing_rq:
+            c_name = getattr(order, 'customer_name', None) or "Customer"
+            c_phone = getattr(order, 'customer_number', None) or getattr(order, 'customer_phone', None) or "N/A"
+            pickup = getattr(order, 'pickup_city', '') or ''
+            drop = getattr(order, 'drop_city', '') or ''
+            route_str = f"{pickup} to {drop}".strip() if (pickup or drop) else "Outstation Trip"
+            d_name = getattr(current_driver, 'name', '') or "Driver"
+            v_num = getattr(order, 'car_number', None) or getattr(a, 'car_number', None) or "Drop Cars Fleet"
+            new_rq = CustomerReviewQueue(
+                order_id=order_id,
+                customer_name=c_name,
+                customer_phone=c_phone,
+                driver_name=d_name,
+                vehicle_number=v_num,
+                route=route_str,
+                fare_collected=body.total_paid,
+                status="PENDING",
+            )
+            db.add(new_rq)
+            db.commit()
+    except Exception as rq_err:
+        print(f"Customer review queue enqueue failed (non-fatal): {rq_err}")
+
+    return {"status": "saved"}
 
 
 @router.get("/driver/trip-history", response_model=List[dict])

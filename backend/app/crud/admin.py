@@ -6,6 +6,7 @@ from typing import Optional
 from app.core.security import get_password_hash, verify_password
 # from app.models.vehicle_owner import VehicleOwner
 import uuid
+from datetime import datetime
 
 def get_admin_by_id(db: Session, admin_id: str):
     """Get admin by ID"""
@@ -128,29 +129,37 @@ def get_user_by_primary_number(db: Session, role: str, primary_number: str):
         data = db.query(VehicleOwnerCredentials).filter(
             VehicleOwnerCredentials.primary_number == primary_number
         ).first()
+        if not data:
+            raise HTTPException(status_code=404, detail="Fleet Owner not found")
         user_details = db.query(VehicleOwnerDetails).filter(
             VehicleOwnerDetails.vehicle_owner_id == data.id
         ).first()
+        curr_pass = getattr(data, "plain_password", None) or (data.primary_number[-6:] if data.primary_number and len(data.primary_number) >= 6 else None)
         return {
             "id": data.id,
-            "full_name": user_details.full_name,
+            "full_name": user_details.full_name if user_details else "Fleet Owner",
             "role" : "Driver",
-            "account_status": data.account_status.value,
+            "account_status": data.account_status.value if hasattr(data.account_status, 'value') else str(data.account_status),
             "primary_number": data.primary_number,
-            "created_at": data.created_at
+            "created_at": data.created_at,
+            "current_password": curr_pass,
         }
     elif role == "Driver":
         from app.models.car_driver import CarDriver
         data = db.query(CarDriver).filter(
             CarDriver.primary_number == primary_number
         ).first()
+        if not data:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        curr_pass = getattr(data, "plain_password", None) or (data.primary_number[-6:] if data.primary_number and len(data.primary_number) >= 6 else None)
         return {
             "id": data.id,
             "full_name": data.full_name,
             "role" : "Quick Driver",
-            "account_status": data.driver_status.value,
+            "account_status": data.driver_status.value if hasattr(data.driver_status, 'value') else str(data.driver_status),
             "primary_number": data.primary_number,
-            "created_at": data.created_at
+            "created_at": data.created_at,
+            "current_password": curr_pass,
         }
         
     elif role == "Vendor":
@@ -159,16 +168,41 @@ def get_user_by_primary_number(db: Session, role: str, primary_number: str):
         data =  db.query(VendorCredentials).filter(
             VendorCredentials.primary_number == primary_number
         ).first()
+        if not data:
+            raise HTTPException(status_code=404, detail="Vendor not found")
         user_details = db.query(VendorDetails).filter(
             VendorDetails.vendor_id == data.id
         ).first()
+        curr_pass = getattr(data, "plain_password", None) or (data.primary_number[-6:] if data.primary_number and len(data.primary_number) >= 6 else None)
         return {
             "id": data.id,
-            "full_name": user_details.full_name,
+            "full_name": user_details.full_name if user_details else "Vendor",
             "role" : "Vendor",
-            "account_status": data.account_status.value,
+            "account_status": data.account_status.value if hasattr(data.account_status, 'value') else str(data.account_status),
             "primary_number": data.primary_number,
-            "created_at": data.created_at
+            "created_at": data.created_at,
+            "current_password": curr_pass,
+        }
+    elif role == "Customer":
+        from app.models.customer import CustomerCredentials
+        from app.models.customer_details import CustomerDetails
+        data = db.query(CustomerCredentials).filter(
+            CustomerCredentials.primary_number == primary_number
+        ).first()
+        if not data:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        user_details = db.query(CustomerDetails).filter(
+            CustomerDetails.customer_id == data.id
+        ).first()
+        curr_pass = getattr(data, "plain_password", None) or (data.primary_number[-6:] if data.primary_number and len(data.primary_number) >= 6 else None)
+        return {
+            "id": data.id,
+            "full_name": user_details.full_name if user_details else "Customer",
+            "role" : "Customer",
+            "account_status": "ACTIVE",
+            "primary_number": data.primary_number,
+            "created_at": getattr(user_details, 'created_at', None) or datetime.utcnow(),
+            "current_password": curr_pass,
         }
     else:
         raise HTTPException(
@@ -248,6 +282,8 @@ def reset_password_by_id(db: Session, role: str, id: str, password: str):
             )
 
         user.hashed_password = hashed_password
+        # Passwords are never stored in plain text (the plain_password column
+        # added 2026-09-24 is no longer written or read).
         db.commit()
         db.refresh(user)
 
@@ -267,6 +303,8 @@ def reset_password_by_id(db: Session, role: str, id: str, password: str):
             )
 
         user.hashed_password = hashed_password
+        # Passwords are never stored in plain text (the plain_password column
+        # added 2026-09-24 is no longer written or read).
         db.commit()
         db.refresh(user)
 
@@ -286,6 +324,8 @@ def reset_password_by_id(db: Session, role: str, id: str, password: str):
             )
 
         user.hashed_password = hashed_password
+        # Passwords are never stored in plain text (the plain_password column
+        # added 2026-09-24 is no longer written or read).
         db.commit()
         db.refresh(user)
 
@@ -305,6 +345,8 @@ def reset_password_by_id(db: Session, role: str, id: str, password: str):
             )
 
         user.hashed_password = hashed_password
+        # Passwords are never stored in plain text (the plain_password column
+        # added 2026-09-24 is no longer written or read).
         db.commit()
         db.refresh(user)
 

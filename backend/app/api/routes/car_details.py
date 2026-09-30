@@ -32,14 +32,15 @@ async def list_car_models_public():
 
 
 @router.post("/cardetails/signup", response_model=CarDetailsSignupResponse)
-async def signup_car_details(
+def signup_car_details(
     car_form: CarDetailsForm = Depends(CarDetailsForm.as_form),
     rc_front_img: UploadFile = File(..., description="RC Front image file"),
     rc_back_img: UploadFile = File(..., description="RC Back image file"),
     insurance_img: UploadFile = File(..., description="Insurance image file"),
     fc_img: UploadFile = File(..., description="FC image file"),
-    car_img: UploadFile = File(..., description="Car image file"),
+    car_img: UploadFile = File(..., description="Car front photo"),
     permit_img: UploadFile = File(..., description="Permit image file"),
+    pollution_img: UploadFile = File(..., description="Pollution (PUC) certificate image file"),
     current_user: VehicleOwnerCredentials = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -47,7 +48,7 @@ async def signup_car_details(
     Register a new car with details and upload all required images to GCS.
     Images are only uploaded after successful database insertion.
     """
-    
+
     # Step 1: Validate all image files
     image_files = {
         'rc_front_img': rc_front_img,
@@ -55,7 +56,8 @@ async def signup_car_details(
         'insurance_img': insurance_img,
         'fc_img': fc_img,
         'car_img': car_img,
-        'permit_img': permit_img
+        'permit_img': permit_img,
+        'pollution_img': pollution_img,
     }
     print("Car is going to checck")
     
@@ -115,6 +117,7 @@ async def signup_car_details(
     DOC_TYPE_FOR_FIELD = {
         'rc_front_img': 'rc', 'rc_back_img': 'rc',
         'insurance_img': 'insurance', 'fc_img': 'fc', 'permit_img': 'permit',
+        'pollution_img': 'pollution',
     }
     uploaded_urls = {}
     uploaded_statuses = {}
@@ -125,8 +128,8 @@ async def signup_car_details(
         for field_name, image_file in image_files.items():
             doc_type = DOC_TYPE_FOR_FIELD.get(field_name)
             if doc_type:
-                image_bytes = await image_file.read()
-                await image_file.seek(0)
+                image_bytes = image_file.file.read()
+                image_file.file.seek(0)
                 uploaded_statuses[f"{field_name}_url"] = get_auto_verified_status(image_bytes, doc_type)
             # Create folder structure: car_details/{car_id}/{image_type}
             folder_path = f"car_details/{db_car.id}/{field_name}"
@@ -164,11 +167,39 @@ async def signup_car_details(
         )
 
     return {
-        "message": "Car details registered successfully", 
-        "car_id": str(db_car.id), 
+        "message": "Car details registered successfully",
+        "car_id": str(db_car.id),
         "image_urls": uploaded_urls,
         "status": "success"
     }
+
+
+@router.post("/cardetails/extract-expiry")
+def extract_document_expiry(
+    file: UploadFile = File(..., description="Document image (rc, insurance, fc, permit, pollution, licence)"),
+    doc_type: str = Form(..., description="One of: rc, insurance, fc, permit, pollution, licence"),
+    current_user: VehicleOwnerCredentials = Depends(get_current_user),
+):
+    """Read-only OCR helper for Add Car / Add Driver flow: given one document photo,
+    best-effort read its printed expiry date so the app can pre-fill the
+    date field right after the user picks/crops the photo - always
+    editable afterwards, never blocks submission if OCR finds nothing.
+    Does not upload or save anything; the actual image is uploaded again
+    at final submit, same as today."""
+    if doc_type not in ("rc", "insurance", "fc", "permit", "pollution", "licence", "license", "dl"):
+        raise HTTPException(status_code=400, detail="doc_type must be one of: rc, insurance, fc, permit, pollution, licence")
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Please upload an image file (JPEG, PNG, etc.)")
+
+    image_bytes = file.file.read()
+    try:
+        from app.utils.document_verifier import verify_uploaded_document
+        result = verify_uploaded_document(image_bytes=image_bytes, document_type=doc_type)
+        return {"expiry_date": result.get("extracted_expiry_date")}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("extract-expiry OCR failed for doc_type=%s: %s", doc_type, e, exc_info=True)
+        return {"expiry_date": None}
 
 @router.get("/cardetails/all", response_model=List[CarDetailsOut])
 def get_all_cars(
@@ -441,7 +472,7 @@ def update_car_document_status(
 
 
 @router.post("/cardetails/{car_id}/update-document", response_model=DocumentUpdateResponse)
-async def update_car_document(
+def update_car_document(
     car_id: str,
     document_type: str = Form(...),
     image: UploadFile = File(...),
@@ -499,8 +530,8 @@ async def update_car_document(
         OCR_DOC_TYPE = {"rc_front": "rc", "rc_back": "rc", "insurance": "insurance", "fc": "fc", "permit": "permit"}
         new_status = DocumentStatusEnum.PENDING
         if document_type in OCR_DOC_TYPE:
-            image_bytes = await image.read()
-            await image.seek(0)
+            image_bytes = image.file.read()
+            image.file.seek(0)
             prev_status = getattr(car, f"{document_type}_status", None)
             new_status = get_auto_verified_status(image_bytes, OCR_DOC_TYPE[document_type], previous_status=prev_status)
 

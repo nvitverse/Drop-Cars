@@ -24,10 +24,28 @@ SYSTEM_SETTING_DEFAULTS = {
     # in the Admin App ever called.
     "phone_reveal_hours_before_pickup": "6",
     # Booking commission model (utils/commission.py) - Owner-editable, no hard-coded numbers
-    "platform_fee_pct": "2",             # app owner fee, % of the driver fare, on every non-website booking
+    "platform_fee_pct": "2",             # RETIRED 2026-09-24 (old 2% taken from the driver) - unused, kept so old rows don't error
+    "ai_bot_enabled": "1",  # Help Bot uses the AI model when a key is configured on the server
+    "ai_bot_daily_limit": "30",
+    "ai_bot_global_daily_limit": "3000",
+    "doc_ai_enabled": "0",  # OFF until the owner switches it on (sends document photos to Google Gemini)
+    "doc_ai_daily_limit": "2000",
+    "website_booking_post_mode": "AUTO",  # MANUAL = staff approve every booking; AUTO = auto-post after the review window; AUTO_IF_NO_STAFF = auto-post only while no staff is on duty
+    "platform_share_pct": "1",           # platform's share, % of the km fare, carved out of the commission (poster/vendor gets the rest)
+    "platform_share_min": "30",          # ... but at least this many rupees (never above the commission itself)
+    "commission_min": "200",             # Standard Outstation bookings: minimum commission the driver pays
+    "convenience_fee": "30",             # flat fee added to EVERY booking's customer bill, settled to the platform
     "platform_all_inclusive_pct": "15",  # website / admin all-inclusive split kept by the platform
     "min_driver_hold": "500",            # minimum wallet hold on the accepting driver (no-show guarantee)
     "drop_bid_fee_pct": "5",             # platform cut on confirmed Drop Bid trips (customer-direct negotiated fare)
+    # Printed on every GST tax invoice (Website's invoice-gst.php, and the
+    # backend's own PDF invoice) - Owner-editable so a wrong/placeholder
+    # GSTIN never stays baked into code. Owner-confirmed 2026-09-23: one
+    # GSTIN currently covers both the "Drop Cars" and "Arunachala Travels"
+    # brands.
+    "gst_number": "33BBVPN8562P1ZJ",
+    "gst_business_name": "Drop Cars",
+    "gst_business_address": "",
 }
 
 

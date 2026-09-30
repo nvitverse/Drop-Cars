@@ -434,3 +434,134 @@ def run_billing(db: Session, dry_run: bool = True) -> dict:
         db.commit()
 
     return summary
+
+
+
+def reset_yearly_cycle(db: Session, start_date: Optional[date] = None, dry_run: bool = True, include_lapsed: bool = True) -> dict:
+    """Restart the yearly period of EVERY member who has paid (goodwill after a period the app did not work properly).
+
+    A member counts as "has paid" when registration_fee_paid_at is set OR they have a billing_next_date (the same evidence the
+    Preferred tier uses). Their new expiry is start_date + one year - 1 day (same convention as _next_anniversary: paid year
+    runs to the DAY BEFORE the anniversary). Monthly subscribers are left alone (they renew monthly). Members who never paid
+    are untouched. No money moves and no suspension is changed - only billing_next_date. dry_run=True (default) changes
+    nothing and returns the preview."""
+    today = date.today()
+    start = start_date or (today + timedelta(days=1))
+    new_next = start + timedelta(days=BILLING_CYCLE_DAYS) - timedelta(days=1)
+
+    rows = (
+        db.query(VehicleOwnerDetails, VehicleOwnerCredentials)
+        .join(VehicleOwnerCredentials, VehicleOwnerCredentials.id == VehicleOwnerDetails.vehicle_owner_id)
+        .all()
+    )
+    summary = {
+        "dry_run": dry_run, "start_date": str(start), "new_expiry_date": str(new_next),
+        "total_members": len(rows), "will_update": 0, "still_active": 0, "lapsed": 0, "suspended_flag": 0,
+        "skipped_monthly": 0, "skipped_never_paid": 0, "skipped_lapsed_by_choice": 0, "sample": [],
+    }
+    for details, creds in rows:
+        if details.subscription_type == "MONTHLY":
+            summary["skipped_monthly"] += 1
+            continue
+        paid_evidence = details.registration_fee_paid_at is not None or details.billing_next_date is not None
+        if not paid_evidence:
+            summary["skipped_never_paid"] += 1
+            continue
+        lapsed = details.billing_next_date is not None and details.billing_next_date < today
+        if lapsed and not include_lapsed:
+            summary["skipped_lapsed_by_choice"] += 1
+            continue
+        summary["will_update"] += 1
+        summary["lapsed" if lapsed else "still_active"] += 1
+        if details.billing_suspended:
+            summary["suspended_flag"] += 1
+        if len(summary["sample"]) < 8:
+            summary["sample"].append({
+                "name": details.full_name, "old_expiry": str(details.billing_next_date) if details.billing_next_date else None,
+                "new_expiry": str(new_next),
+            })
+        if not dry_run:
+            details.billing_next_date = new_next
+            db.add(details)
+    if not dry_run:
+        import json as _json
+        from app.models.platform_setting import PlatformSetting
+        row = db.query(PlatformSetting).filter(PlatformSetting.key == "billing_yearly_reset_log").first()
+        payload = _json.dumps({"at": datetime.now(timezone.utc).isoformat(), **{k: v for k, v in summary.items() if k != "sample"}})
+        if row:
+            row.value = payload
+        else:
+            db.add(PlatformSetting(key="billing_yearly_reset_log", value=payload))
+        db.commit()
+    return summary
+
+
+def activate_membership(db: Session, details: VehicleOwnerDetails, start: Optional[date] = None) -> date:
+    """Make an owner a paid (Trusted / Preferred) member for a year. The ONE place every yearly-fee payment path calls, so a
+    payment can never leave someone half-activated again.
+
+    - registration_fee_paid_at is stamped (first payment evidence)
+    - billing_next_date = expiry: paying early EXTENDS from the current expiry, otherwise the year starts `start` (default today);
+      the paid year ends the DAY BEFORE the anniversary (same rule as _next_anniversary)
+    - a billing suspension is lifted
+    Does not commit (the caller does)."""
+    today = date.today()
+    first_day = start or today
+    if details.billing_next_date is not None and details.billing_next_date >= today:
+        new_next = details.billing_next_date + timedelta(days=BILLING_CYCLE_DAYS)
+    else:
+        new_next = first_day + timedelta(days=BILLING_CYCLE_DAYS) - timedelta(days=1)
+    details.registration_fee_paid_at = datetime.now(timezone.utc)
+    details.billing_next_date = new_next
+    details.billing_last_charged_at = datetime.now(timezone.utc)
+    details.billing_suspended = False
+    db.add(details)
+    return new_next
+
+
+
+def run_member_auto_renewals(db: Session) -> dict:
+    """Yearly members whose year has run out are renewed AUTOMATICALLY from their wallet (no reminders, no opt-in).
+
+    Deliberately separate from run_billing(): that one is switched off (billing_enabled=false) and, when on, first "seeds" a
+    billing date for EVERY active account - which would turn never-paid accounts into Trusted members. This touches ONLY
+    accounts that already paid (registration_fee_paid_at set or a billing_next_date) and whose date has arrived:
+      * wallet >= yearly fee -> the fee is debited (ledger entry BILLING_YEARLY_FEE) and the year is extended
+      * wallet too low       -> nothing is taken; the member becomes Standard when the date passes and can pay again any time
+    Monthly subscribers are skipped (their own cycle). Safe to run repeatedly - a renewed member's date moves a year ahead."""
+    settings = get_billing_settings(db)
+    fee = int(settings.get("yearly_fee") or 0)
+    out = {"renewed": 0, "wallet_too_low": 0, "checked": 0}
+    if fee <= 0:
+        return out
+    today = date.today()
+    rows = (
+        db.query(VehicleOwnerDetails)
+        .filter(VehicleOwnerDetails.billing_next_date.isnot(None))
+        .filter(VehicleOwnerDetails.billing_next_date <= today)
+        .filter(VehicleOwnerDetails.billing_suspended.is_(False))
+        .filter((VehicleOwnerDetails.subscription_type.is_(None)) | (VehicleOwnerDetails.subscription_type != "MONTHLY"))
+        .all()
+    )
+    for d in rows:
+        out["checked"] += 1
+        before = d.wallet_balance or 0
+        if before < fee:
+            out["wallet_too_low"] += 1
+            continue
+        new_next = d.billing_next_date + timedelta(days=BILLING_CYCLE_DAYS)
+        if new_next <= today:
+            new_next = today + timedelta(days=BILLING_CYCLE_DAYS) - timedelta(days=1)
+        d.wallet_balance = before - fee
+        d.billing_next_date = new_next
+        d.billing_last_charged_at = datetime.now(timezone.utc)
+        db.add(d)
+        db.add(WalletLedger(
+            vehicle_owner_id=d.vehicle_owner_id, reference_id=str(uuid.uuid4()), reference_type="BILLING_YEARLY_FEE",
+            entry_type=WalletEntryTypeEnum.DEBIT, amount=fee, balance_before=before, balance_after=before - fee,
+            notes=f"Yearly membership renewed automatically from your wallet (valid until {new_next})",
+        ))
+        out["renewed"] += 1
+    if out["renewed"]:
+        db.commit()
+    return out

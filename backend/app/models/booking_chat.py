@@ -13,8 +13,12 @@ class BookingChatMessage(Base):
     sender_side = Column(String, nullable=False)          # POSTER | DRIVER
     sender_id = Column(String, nullable=True)
     sender_name = Column(String, nullable=True)
-    kind = Column(String, nullable=False, default="TEXT")  # TEXT | QUICK
+    kind = Column(String, nullable=False, default="TEXT")  # TEXT | QUICK | VOICE
     quick_key = Column(String, nullable=True)              # which default question / suggested reply it came from
     text = Column(Text, nullable=False)
+    # Set only when kind == "VOICE" - the GCS URL of the recording. `text`
+    # still holds a plain-text fallback ("🎤 Voice message") for any client
+    # that doesn't render audio yet, so nothing renders blank.
+    voice_url = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False, index=True)
     read_at = Column(TIMESTAMP(timezone=True), nullable=True)   # when the OTHER side opened it

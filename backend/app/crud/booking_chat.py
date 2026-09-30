@@ -172,9 +172,10 @@ def notify_other_side(db: Session, order: Order, sender_side: str, text: str, as
     """Best-effort push to whoever should read the new message."""
     try:
         from app.models.notification import Notification
-        from app.crud.notification import _enqueue_expo_push, _is_muted
+        from app.crud.notification import _enqueue_expo_push, _is_muted, _post_expo_payloads_sync
 
         subs: List[str] = []
+        notify_admin = False
         if sender_side == "POSTER":
             if assignment is not None:
                 subs.append(str(assignment.vehicle_owner_id))
@@ -185,13 +186,30 @@ def notify_other_side(db: Session, order: Order, sender_side: str, text: str, as
                 subs.append(str(order.vendor_id))
             elif order.posted_by_vehicle_owner_id:
                 subs.append(str(order.posted_by_vehicle_owner_id))
+            else:
+                # No vendor/owner poster - a driver's message on an admin
+                # (Website)-posted booking used to go completely unnoticed;
+                # Admin is the only real party on the other side here.
+                notify_admin = True
+
+        title = f"💬 Booking #{order.id} • {booking_title(order)}"
+
+        if notify_admin:
+            admin_rows = db.query(Notification).filter(Notification.user == "admin").all()
+            admin_tokens = [r.token for r in admin_rows if r.token and not _is_muted(r)]
+            if admin_tokens:
+                _post_expo_payloads_sync([
+                    {"to": t, "title": title, "body": text[:140], "priority": "high",
+                     "data": {"type": "chat", "chat_order_id": order.id}}
+                    for t in admin_tokens
+                ])
+
         if not subs:
             return
         rows = db.query(Notification).filter(Notification.sub.in_(subs)).all()
         tokens = [r.token for r in rows if r.token and not _is_muted(r)]
         if not tokens:
             return
-        title = f"💬 Booking #{order.id} • {booking_title(order)}"
         from app.utils.notification_settings import apply_notification_extras
         payloads = [apply_notification_extras({
             "to": t, "title": title, "body": text[:140], "priority": "high",
@@ -200,3 +218,63 @@ def notify_other_side(db: Session, order: Order, sender_side: str, text: str, as
         _enqueue_expo_push(db, payloads)
     except Exception as e:
         print(f"chat notify failed (message still saved): {e}")
+
+
+ESCALATION_MINUTES = 10
+
+
+def escalate_unanswered_chats(db: Session, minutes: int = ESCALATION_MINUTES) -> int:
+    """A driver/owner asked the booking's poster something and nobody answered for `minutes`: add Drop Cars support to
+    that chat (a visible note the driver can read, plus a push to the admins) so the driver is never left hanging.
+    Idempotent - one escalation per unanswered question. Called from the Cloud Scheduler sweep."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import func as _f
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    # orders whose LATEST message is from the driver side and older than the cutoff
+    latest = (
+        db.query(BookingChatMessage.order_id, _f.max(BookingChatMessage.id).label("mid"))
+        .group_by(BookingChatMessage.order_id).subquery()
+    )
+    rows = (
+        db.query(BookingChatMessage)
+        .join(latest, BookingChatMessage.id == latest.c.mid)
+        .filter(BookingChatMessage.sender_side == "DRIVER", BookingChatMessage.created_at <= cutoff)
+        .all()
+    )
+    done = 0
+    for last in rows:
+        if last.quick_key == "ESCALATION":
+            continue
+        already = (
+            db.query(BookingChatMessage.id)
+            .filter(BookingChatMessage.order_id == last.order_id, BookingChatMessage.quick_key == "ESCALATION",
+                    BookingChatMessage.id > last.id)
+            .first()
+        )
+        if already:
+            continue
+        order = db.query(Order).filter(Order.id == last.order_id).first()
+        if not order:
+            continue
+        a = active_assignment(db, order.id)
+        if a is not None and str(getattr(a.assignment_status, "value", a.assignment_status)) == "COMPLETED":
+            continue
+        db.add(BookingChatMessage(
+            order_id=order.id, sender_side="POSTER", sender_id="support", sender_name="Drop Cars Support",
+            kind="TEXT", quick_key="ESCALATION",
+            text="There has been no reply for 10 minutes, so Drop Cars support has joined this chat. We will help you shortly.",
+        ))
+        db.commit()
+        try:
+            from app.models.notification import Notification
+            from app.crud.notification import _is_muted, _post_expo_payloads_sync
+            admin_tokens = [r.token for r in db.query(Notification).filter(Notification.user == "admin").all() if r.token and not _is_muted(r)]
+            if admin_tokens:
+                _post_expo_payloads_sync([
+                    {"to": t, "title": f"Chat needs support - Booking #{order.id}", "body": (last.text or "")[:140], "priority": "high",
+                     "data": {"type": "chat", "chat_order_id": order.id}} for t in admin_tokens
+                ])
+        except Exception as e:
+            print(f"chat escalation push failed (note already added): {e}")
+        done += 1
+    return done

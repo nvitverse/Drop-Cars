@@ -157,6 +157,8 @@ class Order(Base):
 
     # Website "Urgent" flag (see NewOrder for the source-of-truth comment).
     is_urgent = Column(Boolean, nullable=False, default=False, server_default='false')
+    gst_included = Column(Boolean, nullable=False, default=False, server_default='false')
+    gst_amount = Column(Integer, nullable=True)
 
     # Which platform/app the booking was actually executed on. Every order
     # created through this codebase's own flows (app/website) is

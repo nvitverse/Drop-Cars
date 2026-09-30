@@ -11,13 +11,49 @@ gets slow enough to matter, add an index-backed summary table THEN, backed
 by these same queries, not before.
 """
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any, Dict, List
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.tax_settings import InvoiceSequence
 from app.models.tax_invoice import TaxInvoice, InvoiceTypeEnum, InvoiceStatusEnum
 from app.utils import tax_engine
+
+
+def build_pdf_bytes_for_invoice(invoice: TaxInvoice) -> bytes:
+    """Render a stored TaxInvoice row with utils/pdf_invoice. Referenced by the
+    invoice-email code since 2026-09-24 but never written, so every email
+    attempt failed inside its try/except."""
+    from app.utils.pdf_invoice import generate_tax_invoice_pdf
+    items = {}
+    for li in (invoice.line_items or []):
+        if isinstance(li, dict):
+            key = str(li.get("key") or li.get("name") or li.get("description") or "").lower()
+            items[key] = li.get("amount") or li.get("value") or 0
+    def pick(*names):
+        for n in names:
+            for k, v in items.items():
+                if n in k:
+                    return v
+        return 0
+    created = getattr(invoice, "created_at", None)
+    return generate_tax_invoice_pdf({
+        "invoice_number": invoice.invoice_number,
+        "date": created.strftime("%d-%b-%Y") if created else None,
+        "booking_id": invoice.source_id or "N/A",
+        "customer_name": invoice.customer_name_snapshot or "Valued Customer",
+        "customer_phone": invoice.customer_number_snapshot or "",
+        "customer_gstin": invoice.billed_party_gstin_snapshot or "",
+        "customer_company": invoice.billed_party_name_snapshot or "",
+        "sac_code": invoice.hsn_sac_code or "9964",
+        "pure_km_fare": invoice.base_fare or invoice.taxable_value or 0,
+        "cgst_amount": invoice.cgst_amount or 0,
+        "sgst_amount": invoice.sgst_amount or 0,
+        "driver_bata": pick("bata", "allowance"),
+        "toll_charges": pick("toll"),
+        "permit_charges": pick("permit"),
+        "extra_charges": pick("extra", "waiting"),
+    })
 
 _SERIES_BY_TYPE = {
     InvoiceTypeEnum.RIDE_GST_9_5: "RIDE",
@@ -41,7 +77,8 @@ def next_invoice_number(db: Session, invoice_type: InvoiceTypeEnum, financial_ye
         .first()
     )
     if row is None:
-        row = InvoiceSequence(series=series, financial_year=financial_year, last_number=0)
+        initial_count = 30 if (series == "RIDE" and financial_year == "26-27") else 0
+        row = InvoiceSequence(series=series, financial_year=financial_year, last_number=initial_count)
         db.add(row)
         db.flush()
         row = (
@@ -53,7 +90,10 @@ def next_invoice_number(db: Session, invoice_type: InvoiceTypeEnum, financial_ye
     row.last_number += 1
     number = row.last_number
     db.flush()
-    return f"DC/{financial_year}/{series}-{number:06d}"
+    if series == "RIDE":
+        return f"DC/{financial_year}/INV-{number:03d}"
+    return f"DC/{financial_year}/{series}-{number:03d}"
+
 
 
 def _company_profile_ready(db: Session) -> bool:
@@ -436,3 +476,319 @@ def get_pl_statement(db: Session, *, year: int, month: int, gross_bookings: int,
         "marketing_promo_wallet_discounts": marketing_promo_discounts,
         "net_profit": net_profit,
     }
+
+
+def issue_and_email_order_tax_invoice(
+    db: Session,
+    *,
+    order: Any,
+    customer_email: Optional[str] = None,
+    customer_gstin: Optional[str] = None,
+    customer_company: Optional[str] = None,
+    created_by_admin_id: Optional[str] = None,
+) -> TaxInvoice:
+    """
+    Issues an official GST Tax Invoice row for an order (if not already issued),
+    generates the professional branded PDF with pure KM fare GST math,
+    and automatically emails it to dropcarsbookings@gmail.com and the customer.
+    """
+    from datetime import datetime, timezone
+    from app.utils.pdf_invoice import generate_tax_invoice_pdf
+    from app.utils.emailer import send_email_with_pdf, get_smtp_settings
+
+    order_pk = str(getattr(order, "id", getattr(order, "order_id", None)))
+    if not order_pk or order_pk == "None":
+        order_pk = str(getattr(order, "booking_id", "UNKNOWN"))
+
+    # Check if invoice already issued for this order
+    existing = db.query(TaxInvoice).filter(
+        TaxInvoice.source_type == "order",
+        TaxInvoice.source_id == order_pk,
+        TaxInvoice.status == InvoiceStatusEnum.ISSUED
+    ).first()
+
+    now = datetime.now(timezone.utc)
+    fy = tax_engine.financial_year_label(now.year, now.month)
+
+    # Pure KM Fare Rule: Distance * CostPerKm
+    dist = getattr(order, "trip_distance", 0) or 0
+    rate = getattr(order, "cost_per_km", 0) or 0
+    pure_km_fare = int(round(dist * rate))
+    if pure_km_fare <= 0:
+        total = getattr(order, "total_booking_amount", 0) or getattr(order, "vendor_price", 0) or getattr(order, "estimated_price", 0) or 0
+        pure_km_fare = int(round(total / 1.05)) if total > 0 else 0
+
+    gst_amt = int(round(pure_km_fare * 0.05))
+    cgst = round(gst_amt / 2, 2)
+    sgst = round(gst_amt / 2, 2)
+    bata = getattr(order, "driver_allowance", 0) or 0
+    tolls = getattr(order, "toll_charges", 0) or 0
+    permits = getattr(order, "permit_charges", 0) or 0
+    advance = getattr(order, "advance_received", 0) or 0
+    grand_total = pure_km_fare + gst_amt + bata + tolls + permits
+    balance = max(0, grand_total - advance)
+
+    # Route locations
+    loc = getattr(order, "pickup_drop_location", {}) or {}
+    pickup = "Pickup Point"
+    drop = "Drop Point"
+    if isinstance(loc, dict):
+        keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0)
+        if keys:
+            pickup = str(loc.get(keys[0], pickup))
+            drop = str(loc.get(keys[-1], drop))
+
+    cust_name = getattr(order, "customer_name", None) or "Valued Customer"
+    cust_phone = getattr(order, "customer_number", None) or ""
+
+    if existing:
+        invoice = existing
+    else:
+        profile_ready = _company_profile_ready(db)
+        inv_num = next_invoice_number(db, InvoiceTypeEnum.RIDE_GST_9_5, fy)
+        invoice = TaxInvoice(
+            invoice_number=inv_num,
+            financial_year=fy,
+            invoice_type=InvoiceTypeEnum.RIDE_GST_9_5,
+            status=InvoiceStatusEnum.ISSUED,
+            source_type="order",
+            source_id=order_pk,
+            customer_name_snapshot=cust_name,
+            customer_number_snapshot=cust_phone,
+            base_fare=pure_km_fare,
+            taxable_value=pure_km_fare,
+            gst_rate_percent=5,
+            cgst_amount=int(cgst),
+            sgst_amount=int(sgst),
+            igst_amount=0,
+            total_gst_amount=gst_amt,
+            total_amount=grand_total,
+            hsn_sac_code="9964",
+            created_by_admin_id=created_by_admin_id,
+            needs_company_profile_review=not profile_ready,
+            line_items={
+                "pickup": pickup,
+                "drop": drop,
+                "trip_type": str(getattr(order, "trip_type", "One Way")),
+                "vehicle_type": str(getattr(order, "car_type", "Sedan")),
+                "distance_km": dist,
+                "rate_per_km": rate,
+                "driver_bata": bata,
+                "toll_charges": tolls,
+                "permit_charges": permits,
+                "advance_paid": advance,
+                "balance_due": balance,
+                "customer_email": customer_email or "",
+                "customer_gstin": customer_gstin or "",
+                "customer_company": customer_company or "",
+            }
+        )
+        db.add(invoice)
+        db.commit()
+        db.refresh(invoice)
+
+
+def sync_unlinked_gst_orders(db: Session) -> int:
+    """
+    Finds all bookings (NewOrder, Order, CustomerBookingRequest) marked with gst_included=True
+    or gst_amount > 0 that do NOT yet have an issued TaxInvoice, and issues tax invoices for them.
+    """
+    from app.models.new_orders import NewOrder
+    from app.models.orders import Order
+    from app.models.customer_booking_request import CustomerBookingRequest
+
+    synced_count = 0
+
+    # 1. Check NewOrders
+    try:
+        new_orders = db.query(NewOrder).filter(
+            (NewOrder.gst_included == True) | (NewOrder.gst_amount > 0)
+        ).all()
+        for o in new_orders:
+            pk = str(getattr(o, "order_id", getattr(o, "id", None)))
+            if not pk:
+                continue
+            existing = db.query(TaxInvoice).filter(
+                TaxInvoice.source_type == "order",
+                TaxInvoice.source_id == pk,
+                TaxInvoice.status == InvoiceStatusEnum.ISSUED
+            ).first()
+            if not existing:
+                try:
+                    issue_and_email_order_tax_invoice(db, order=o)
+                    synced_count += 1
+                except Exception as e:
+                    print(f"[TaxInvoice Sync] Failed for NewOrder {pk}: {e}")
+    except Exception as err:
+        print(f"[TaxInvoice Sync] NewOrder query error: {err}")
+
+    # 2. Check Master Orders
+    try:
+        master_orders = db.query(Order).filter(
+            (Order.gst_included == True) | (Order.gst_amount > 0)
+        ).all()
+        for o in master_orders:
+            pk = str(getattr(o, "id", None))
+            if not pk:
+                continue
+            existing = db.query(TaxInvoice).filter(
+                TaxInvoice.source_type == "order",
+                TaxInvoice.source_id == pk,
+                TaxInvoice.status == InvoiceStatusEnum.ISSUED
+            ).first()
+            if not existing:
+                try:
+                    issue_and_email_order_tax_invoice(db, order=o)
+                    synced_count += 1
+                except Exception as e:
+                    print(f"[TaxInvoice Sync] Failed for Order {pk}: {e}")
+    except Exception as err:
+        print(f"[TaxInvoice Sync] Order query error: {err}")
+
+    # 3. Check CustomerBookingRequests
+    try:
+        reqs = db.query(CustomerBookingRequest).filter(
+            (CustomerBookingRequest.gst_included == True) | (CustomerBookingRequest.gst_amount > 0)
+        ).all()
+        for r in reqs:
+            pk = str(getattr(r, "id", None))
+            if not pk:
+                continue
+            existing = db.query(TaxInvoice).filter(
+                TaxInvoice.source_type == "order",
+                TaxInvoice.source_id == pk,
+                TaxInvoice.status == InvoiceStatusEnum.ISSUED
+            ).first()
+            if not existing:
+                try:
+                    issue_and_email_order_tax_invoice(db, order=r)
+                    synced_count += 1
+                except Exception as e:
+                    print(f"[TaxInvoice Sync] Failed for CustomerBookingRequest {pk}: {e}")
+    except Exception as err:
+        print(f"[TaxInvoice Sync] CustomerBookingRequest query error: {err}")
+
+    return synced_count
+
+
+def create_manual_tax_invoice(
+    db: Session,
+    *,
+    customer_name: str,
+    customer_number: str,
+    customer_email: Optional[str] = None,
+    customer_gstin: Optional[str] = None,
+    customer_company: Optional[str] = None,
+    pickup: str,
+    drop: str,
+    trip_type: str = "One Way",
+    vehicle_type: str = "Sedan",
+    distance_km: float = 0.0,
+    rate_per_km: float = 0.0,
+    driver_bata: int = 0,
+    toll_charges: int = 0,
+    permit_charges: int = 0,
+    advance_paid: int = 0,
+    booking_id: Optional[str] = None,
+    created_by_admin_id: Optional[str] = None,
+) -> TaxInvoice:
+    """Issues a sequential TaxInvoice manually created by Admin, generates PDF,
+    and emails it. Follows the pure KM fare rule (5% GST only on distance*rate,
+    driver bata and statutory charges non-taxable)."""
+    now = datetime.now(timezone.utc)
+    fy = tax_engine.financial_year_label(now.year, now.month)
+    profile_ready = _company_profile_ready(db)
+
+    pure_km_fare = round(distance_km * rate_per_km, 2)
+    if pure_km_fare <= 0 and advance_paid > 0:
+        pure_km_fare = float(advance_paid)
+
+    cgst = round(pure_km_fare * 0.025, 2)
+    sgst = round(pure_km_fare * 0.025, 2)
+    gst_amt = round(cgst + sgst, 2)
+    grand_total = round(pure_km_fare + gst_amt + driver_bata + toll_charges + permit_charges, 2)
+    balance = max(0.0, round(grand_total - advance_paid, 2))
+
+    inv_num = next_invoice_number(db, InvoiceTypeEnum.RIDE_GST_9_5, fy)
+
+    line_items_data = {
+        "booking_id": booking_id or "MANUAL",
+        "pickup": pickup,
+        "drop": drop,
+        "trip_type": trip_type,
+        "vehicle_type": vehicle_type,
+        "distance_km": distance_km,
+        "rate_per_km": rate_per_km,
+        "pure_km_fare": pure_km_fare,
+        "driver_bata": driver_bata,
+        "toll_charges": toll_charges,
+        "permit_charges": permit_charges,
+        "advance_paid": advance_paid,
+        "balance_due": balance,
+        "customer_email": customer_email or "",
+        "customer_gstin": customer_gstin or "",
+        "customer_company": customer_company or "",
+    }
+
+    invoice = TaxInvoice(
+        invoice_number=inv_num,
+        financial_year=fy,
+        invoice_type=InvoiceTypeEnum.RIDE_GST_9_5,
+        status=InvoiceStatusEnum.ISSUED,
+        source_type="manual",
+        source_id=booking_id or "MANUAL",
+        customer_id=None,
+        customer_name_snapshot=customer_name,
+        customer_number_snapshot=customer_number,
+        base_fare=int(pure_km_fare),
+        taxable_value=pure_km_fare,
+        gst_rate_percent=5.0,
+        cgst_amount=cgst,
+        sgst_amount=sgst,
+        igst_amount=0,
+        total_gst_amount=gst_amt,
+        total_amount=grand_total,
+        hsn_sac_code="9964",
+        created_by_admin_id=created_by_admin_id,
+        needs_company_profile_review=not profile_ready,
+        line_items=line_items_data,
+    )
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    # Generate and email PDF
+    try:
+        from app.utils.emailer import send_email_with_pdf, get_smtp_settings
+        pdf_bytes = build_pdf_bytes_for_invoice(invoice)
+        smtp = get_smtp_settings(db)
+        recipients = ["dropcarsbookings@gmail.com"]
+        if smtp.get("smtp_to") and smtp["smtp_to"] not in recipients:
+            recipients.append(smtp["smtp_to"])
+        if customer_email and customer_email not in recipients:
+            recipients.append(customer_email)
+
+        subject = f"Drop Cars GST Tax Invoice - {invoice.invoice_number}"
+        body_text = (
+            f"Dear {invoice.customer_name_snapshot},\n\n"
+            f"Please find attached the official GST Tax Invoice {invoice.invoice_number} from Drop Cars.\n\n"
+            f"Route: {pickup} -> {drop}\n"
+            f"Pure KM Fare (Taxable 5%): Rs. {pure_km_fare}\n"
+            f"GST (5%): Rs. {gst_amt}\n"
+            f"Driver Bata: Rs. {driver_bata}\n"
+            f"Grand Total: Rs. {grand_total}\n\n"
+            f"- Drop Cars Mobility"
+        )
+        send_email_with_pdf(
+            db=db,
+            to_emails=recipients,
+            subject=subject,
+            body_text=body_text,
+            pdf_bytes=pdf_bytes,
+            filename=f"DropCars_Invoice_{invoice.invoice_number.replace('/', '_')}.pdf"
+        )
+    except Exception as e:
+        print(f"Error emailing manual invoice {invoice.invoice_number}: {e}")
+
+    return invoice
+

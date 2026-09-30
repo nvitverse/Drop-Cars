@@ -1,19 +1,21 @@
-# api/routes/customer_bookings.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 
 from app.database.session import get_db
 from app.core.security import get_current_customer
 from app.models.customer_booking_request import CustomerBookingRequest
 from app.models.customer_details import CustomerDetails
-from app.models.new_orders import OrderTypeEnum, CarTypeEnum
+from app.models.new_orders import OrderTypeEnum, CarTypeEnum, NewOrder
 from app.models.orders import Order, Trip_status
 from app.models.order_assignments import OrderAssignment
 from app.models.car_driver import CarDriver
 from app.models.car_details import CarDetails
+from app.models.tax_invoice import TaxInvoice
+from app.crud import tax_invoices as tax_invoices_crud
 from app.crud.new_orders import calculate_oneway_fare, calculate_multisegment_fare
 from app.utils.rate_card import get_rate_card_for_car_type
 from app.utils.razorpay_client import RazorpayClient
@@ -250,7 +252,9 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
         driver_details=driver_out,
         car_details=car_out,
         trip_status=trip_status_out,
-        assignment_status=assignment_status_out
+        assignment_status=assignment_status_out,
+        gst_included=bool(getattr(request, "gst_included", False)),
+        gst_amount=float(getattr(request, "gst_amount", 0.0) or 0.0),
     )
 
 
@@ -400,9 +404,176 @@ def customer_verify_payment(
     return _enrich_booking_out(db, request)
 
 
-# ============ TRIP RATINGS ============
-# Scoped ONLY to trips the customer booked themselves through this app (see
-# crud/ratings.py docstring) - vendor-created trips aren't rateable here.
+# ============ CUSTOMER GST TAX INVOICES ============
+
+class GstUpgradeVerifyRequest(BaseModel):
+    rp_order_id: str
+    rp_payment_id: str
+    rp_signature: str
+    customer_gstin: Optional[str] = None
+    customer_company: Optional[str] = None
+    customer_email: Optional[str] = None
+
+
+@router.get("/customer/bookings/{id}/gst-status")
+def get_customer_booking_gst_status(
+    id: UUID,
+    db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer),
+):
+    """Checks if GST is already included for this booking, or calculates the upgrade cost
+    (pure KM fare * 5% GST + Razorpay fee)."""
+    request = db.query(CustomerBookingRequest).filter(
+        CustomerBookingRequest.id == id,
+        CustomerBookingRequest.customer_id == current_customer.id,
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+
+    order_id_str = str(request.linked_order_id) if request.linked_order_id else str(request.id)
+    invoice = db.query(TaxInvoice).filter(
+        (TaxInvoice.source_id == str(request.id)) | 
+        (TaxInvoice.source_id == order_id_str)
+    ).first()
+
+    already_included = bool(request.gst_included or (invoice is not None))
+    invoice_number = invoice.invoice_number if invoice else None
+
+    # Calculate Pure KM Fare (Taxable 5%)
+    dist = float(request.quoted_trip_distance or 130.0)
+    rate = float(request.admin_cost_per_km or request.quoted_cost_per_km or 14.0)
+    pure_km_fare = round(dist * rate, 2)
+    if pure_km_fare <= 0:
+        total = float(request.admin_total_amount or request.quoted_total_amount or 0)
+        pure_km_fare = max(100.0, round(total * 0.75, 2))
+
+    gst_amt = round(pure_km_fare * 0.05, 2)
+    pg_charges = round(gst_amt * 0.024, 2)
+    total_upgrade = round(gst_amt + pg_charges, 2)
+
+    return {
+        "booking_id": str(request.id),
+        "gst_included": already_included,
+        "has_invoice": invoice is not None,
+        "invoice_number": invoice_number,
+        "pure_km_fare": pure_km_fare,
+        "gst_amount": gst_amt,
+        "pg_charges": pg_charges,
+        "total_upgrade_amount": total_upgrade,
+    }
+
+
+@router.post("/customer/bookings/{id}/create-gst-order")
+def create_customer_gst_order(
+    id: UUID,
+    db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer),
+):
+    """Creates a Razorpay order to pay GST + PG charge for a booking."""
+    request = db.query(CustomerBookingRequest).filter(
+        CustomerBookingRequest.id == id,
+        CustomerBookingRequest.customer_id == current_customer.id,
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+
+    if request.gst_included:
+        raise HTTPException(status_code=400, detail="GST is already included for this booking")
+
+    dist = float(request.quoted_trip_distance or 130.0)
+    rate = float(request.admin_cost_per_km or request.quoted_cost_per_km or 14.0)
+    pure_km_fare = round(dist * rate, 2)
+    if pure_km_fare <= 0:
+        total = float(request.admin_total_amount or request.quoted_total_amount or 0)
+        pure_km_fare = max(100.0, round(total * 0.75, 2))
+
+    gst_amt = round(pure_km_fare * 0.05, 2)
+    pg_charges = round(gst_amt * 0.024, 2)
+    total_upgrade = round(gst_amt + pg_charges, 2)
+
+    client = RazorpayClient()
+    try:
+        rp_order = client.create_order(
+            amount_paise=int(round(total_upgrade * 100)),
+            currency="INR",
+            notes={
+                "upgrade_gst_booking_id": str(request.id),
+                "customer_id": str(current_customer.id),
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Razorpay order creation failed: {str(e)}")
+
+    return {
+        "rp_order_id": rp_order.get("id"),
+        "amount": rp_order.get("amount"),
+        "key_id": getattr(client, "key_id", "rzp_live_RuMG3DMZFdeT3Y"),
+        "total_upgrade_amount": total_upgrade,
+        "gst_amount": gst_amt,
+        "pg_charges": pg_charges,
+    }
+
+
+@router.post("/customer/bookings/{id}/verify-gst-payment")
+def verify_customer_gst_payment(
+    id: UUID,
+    payload: GstUpgradeVerifyRequest,
+    db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer),
+):
+    """Verifies Razorpay payment for GST, marks booking as gst_included,
+    and automatically issues the sequential TaxInvoice."""
+    request = db.query(CustomerBookingRequest).filter(
+        CustomerBookingRequest.id == id,
+        CustomerBookingRequest.customer_id == current_customer.id,
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+
+    if not RazorpayClient.verify_signature(payload.rp_order_id, payload.rp_payment_id, payload.rp_signature):
+        raise HTTPException(status_code=400, detail="Invalid Razorpay signature")
+
+    dist = float(request.quoted_trip_distance or 130.0)
+    rate = float(request.admin_cost_per_km or request.quoted_cost_per_km or 14.0)
+    pure_km_fare = round(dist * rate, 2)
+    if pure_km_fare <= 0:
+        total = float(request.admin_total_amount or request.quoted_total_amount or 0)
+        pure_km_fare = max(100.0, round(total * 0.75, 2))
+
+    gst_amt = round(pure_km_fare * 0.05, 2)
+
+    request.gst_included = True
+    request.gst_amount = gst_amt
+    db.commit()
+
+    linked_order = None
+    if request.linked_order_id:
+        linked_order = db.query(Order).filter(Order.id == request.linked_order_id).first()
+        if linked_order:
+            linked_order.gst_included = True
+            linked_order.gst_amount = gst_amt
+        new_order = db.query(NewOrder).filter(NewOrder.id == request.linked_order_id).first()
+        if new_order:
+            new_order.gst_included = True
+            new_order.gst_amount = gst_amt
+        db.commit()
+
+    order_ref = linked_order if linked_order else request
+    invoice = tax_invoices_crud.issue_and_email_order_tax_invoice(
+        db,
+        order=order_ref,
+        customer_email=payload.customer_email or current_customer.email,
+        customer_gstin=payload.customer_gstin,
+        customer_company=payload.customer_company,
+    )
+
+    return {
+        "success": True,
+        "message": f"GST invoice {invoice.invoice_number} successfully issued and sent to your email!",
+        "invoice_number": invoice.invoice_number,
+        "invoice_id": str(invoice.id),
+    }
+
 
 @router.get("/customer/ratings/rateable", response_model=List[RateableTripOut])
 async def list_rateable_trips(

@@ -130,3 +130,45 @@ def driver_rating_summary(db: Session, driver_id) -> dict:
     except Exception:
         pass
     return {"avg_rating": round(total / count, 1) if count else None, "rating_count": count}
+
+
+REVIEW_BONUS_PER_STAR = 10       # Rs per star, for 3 stars and above
+REVIEW_BONUS_DELAY_HOURS = 24    # paid after this delay so an admin can flag a self-review first
+
+
+def pay_review_bonuses(db: Session) -> int:
+    """Credit the rating bonus (Rs 10 x stars, 3 stars and above) to the trip owner's wallet, funded from the platform
+    wallet, once the review is 24h old and not flagged. Idempotent (bonus_paid_at)."""
+    from datetime import datetime, timedelta, timezone
+    from app.crud.wallet import credit_wallet
+    from app.crud.admin_wallet import debit_admin_wallet_allow_negative
+    from app.models.admin import Admin
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=REVIEW_BONUS_DELAY_HOURS)
+    rows = (
+        db.query(TripReview)
+        .filter(TripReview.bonus_paid_at.is_(None), TripReview.flagged.is_(False), TripReview.rating >= 3,
+                TripReview.created_at <= cutoff, TripReview.vehicle_owner_id.isnot(None))
+        .all()
+    )
+    if not rows:
+        return 0
+    admin = db.query(Admin).first()
+    paid = 0
+    for r in rows:
+        amount = int(r.rating) * REVIEW_BONUS_PER_STAR
+        try:
+            credit_wallet(db, vehicle_owner_id=str(r.vehicle_owner_id), amount=amount, reference_id=str(r.order_id),
+                          reference_type="REVIEW_BONUS",
+                          notes=f"Customer rating bonus - booking {r.order_id}, {r.rating} star{'s' if r.rating != 1 else ''}")
+            if admin:
+                debit_admin_wallet_allow_negative(db, admin_id=str(admin.id), amount=amount, order_id=r.order_id,
+                                                  notes=f"Customer rating bonus paid - booking {r.order_id}")
+            r.bonus_amount = amount
+            r.bonus_paid_at = datetime.now(timezone.utc)
+            db.commit()
+            paid += 1
+        except Exception as e:
+            db.rollback()
+            print(f"review bonus failed for booking {r.order_id}: {e}")
+    return paid

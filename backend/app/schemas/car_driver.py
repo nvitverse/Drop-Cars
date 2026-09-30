@@ -71,6 +71,9 @@ class CarDriverForm(BaseModel):
     # True when this driver record is the fleet owner driving their own car
     is_owner_driver: bool = False
 
+    # Optional licence expiry date (YYYY-MM-DD)
+    licence_expiry_date: Optional[str] = None
+
     @validator('primary_number', 'secondary_number')
     def validate_phone_numbers(cls, v):
         if v is None:  # Allow None for secondary_number
@@ -100,6 +103,8 @@ class CarDriverForm(BaseModel):
         pincode: str = Form(..., description="Pincode (6 digits)"),
         organization_id: Optional[str] = Form(None, description="Organization ID (optional)"),
         is_owner_driver: bool = Form(False, description="True if the fleet owner is registering themself as the driver"),
+        licence_expiry_date: Optional[str] = Form(None, description="Driving licence expiry date (YYYY-MM-DD)"),
+        expiry_date: Optional[str] = Form(None, description="Alternative field for driving licence expiry date"),
     ):
         return cls(
             vehicle_owner_id=UUID(vehicle_owner_id) if vehicle_owner_id else None,
@@ -113,6 +118,7 @@ class CarDriverForm(BaseModel):
             pincode=pincode,
             organization_id=organization_id,
             is_owner_driver=is_owner_driver,
+            licence_expiry_date=licence_expiry_date or expiry_date,
         )
 
 class CarDriverOut(BaseModel):
@@ -133,6 +139,7 @@ class CarDriverOut(BaseModel):
     # detect an existing driver who signed up before this field existed
     # and prompt them to add one (see the reminder popup).
     profile_img: Optional[str] = None
+    aadhar_number: Optional[str] = None
     address: str
     city: str
     pincode: str

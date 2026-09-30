@@ -18,11 +18,14 @@ from app.models.common_enums import DocumentStatusEnum
 router = APIRouter()
 
 @router.post("/cardriver/signup", response_model=CarDriverSignupResponse)
-async def signup_car_driver(
+def signup_car_driver(
     driver_form: CarDriverForm = Depends(CarDriverForm.as_form),
     licence_front_img: UploadFile = File(..., description="License front image file"),
     licence_back_img: UploadFile = File(None, description="License back image file (optional)"),
     profile_img: UploadFile = File(..., description="Live profile photo (selfie, camera capture only) - required, compared against the licence photo (see face-match)"),
+    aadhar_front_img: UploadFile = File(None, description="Aadhaar front image (collected for duty drivers)"),
+    aadhar_back_img: UploadFile = File(None, description="Aadhaar back image (collected for duty drivers)"),
+    aadhar_number: Optional[str] = Form(None),
     current_user: VehicleOwnerCredentials = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -78,10 +81,10 @@ async def signup_car_driver(
     # face-match check below has real bytes to compare - upload_image_to_gcs
     # reads from the UploadFile's underlying file object directly, so
     # .seek(0) after each .read() keeps that working unchanged.
-    licence_bytes = await licence_front_img.read()
-    await licence_front_img.seek(0)
-    profile_bytes = await profile_img.read()
-    await profile_img.seek(0)
+    licence_bytes = licence_front_img.file.read()
+    licence_front_img.file.seek(0)
+    profile_bytes = profile_img.file.read()
+    profile_img.file.seek(0)
 
     # Step 2: Create car driver in database first (without image)
     # Set vehicle_owner_id from authenticated user - same no-op bug as
@@ -137,8 +140,8 @@ async def signup_car_driver(
     # since the account already exists and the mandatory front image already succeeded.
     if licence_back_img and licence_back_img.filename:
         try:
-            licence_back_bytes = await licence_back_img.read()
-            await licence_back_img.seek(0)
+            licence_back_bytes = licence_back_img.file.read()
+            licence_back_img.file.seek(0)
             back_folder_path = f"car_driver/{db_driver.id}/license"
             license_back_url = upload_image_to_gcs(licence_back_img, back_folder_path)
             back_status = get_auto_verified_status(licence_back_bytes, "licence")
@@ -160,6 +163,27 @@ async def signup_car_driver(
         update_driver_profile_image(db, db_driver.id, profile_img_url)
     except Exception as e:
         print(f"Profile photo upload failed (signup still succeeds): {e}")
+
+    # Step 6b: Aadhaar number + front/back (best-effort like the licence back:
+    # the account already exists, a GCS hiccup must not fail the signup).
+    try:
+        digits = "".join(ch for ch in (aadhar_number or "") if ch.isdigit())
+        if len(digits) == 12:
+            db_driver.aadhar_number = digits
+            db.commit()
+        for up, side in ((aadhar_front_img, "front"), (aadhar_back_img, "back")):
+            if up is None or not getattr(up, "filename", None):
+                continue
+            up_bytes = up.file.read()
+            up.file.seek(0)
+            url = upload_image_to_gcs(up, f"car_driver/{db_driver.id}/aadhar_{side}")
+            st = get_auto_verified_status(up_bytes, "aadhar")
+            setattr(db_driver, f"aadhar_{side}_img", url)
+            setattr(db_driver, f"aadhar_{side}_status", st)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Aadhaar upload failed (signup still succeeds): {e}")
 
     # Zero-cost face-match against the licence photo - informational only,
     # never blocks signup (see compare_faces' own docstring for why).
@@ -624,7 +648,7 @@ def my_driver_summary(current_driver: CarDriver = Depends(get_current_driver), d
 
 
 @router.post("/cardriver/update-profile-photo")
-async def update_my_profile_photo(
+def update_my_profile_photo(
     profile_img: UploadFile = File(..., description="Live profile photo (selfie, camera capture only)"),
     current_driver: CarDriver = Depends(get_current_driver),
     db: Session = Depends(get_db),
@@ -639,8 +663,8 @@ async def update_my_profile_photo(
     if profile_img.size and profile_img.size > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Profile photo file is too large. Please upload an image smaller than 5MB")
 
-    profile_bytes = await profile_img.read()
-    await profile_img.seek(0)
+    profile_bytes = profile_img.file.read()
+    profile_img.file.seek(0)
 
     try:
         folder_path = f"car_driver/{current_driver.id}/profile"
@@ -751,6 +775,24 @@ def get_driver_by_mobile(
     return driver
 
 
+def _add_aadhar_docs(driver, documents: dict) -> None:
+    """Aadhaar front/back entries for the driver document-status responses."""
+    if driver.aadhar_front_img:
+        documents["aadhar"] = {
+            "document_type": "aadhar",
+            "status": driver.aadhar_front_status.value if driver.aadhar_front_status else "Pending",
+            "image_url": driver.aadhar_front_img,
+            "updated_at": None,
+        }
+    if driver.aadhar_back_img:
+        documents["aadhar_back"] = {
+            "document_type": "aadhar_back",
+            "status": driver.aadhar_back_status.value if driver.aadhar_back_status else "Pending",
+            "image_url": driver.aadhar_back_img,
+            "updated_at": None,
+        }
+
+
 @router.get("/cardriver/{driver_id}/document-status", response_model=DocumentStatusListResponse)
 def get_driver_document_status(
     driver_id: str,
@@ -790,6 +832,8 @@ def get_driver_document_status(
             "updated_at": None
         }
     
+    _add_aadhar_docs(driver, documents)
+
     return DocumentStatusListResponse(
         entity_id=driver.id,
         entity_type="driver",
@@ -835,11 +879,14 @@ def update_driver_document_status(
 
 
 @router.post("/cardriver/{driver_id}/update-document", response_model=DocumentUpdateResponse)
-async def update_driver_document(
+def update_driver_document(
     driver_id: str,
     document_type: str = Form(...),
     licence_image: Optional[UploadFile] = File(None),
     licence_back_image: Optional[UploadFile] = File(None),
+    aadhar_image: Optional[UploadFile] = File(None),
+    aadhar_back_image: Optional[UploadFile] = File(None),
+    aadhar_number: Optional[str] = Form(None),
     side: Optional[str] = Form(None),
     document_number: Optional[str] = Form(None),
     driver_name: Optional[str] = Form(None),
@@ -864,13 +911,13 @@ async def update_driver_document(
     if driver.vehicle_owner_id != current_user.vehicle_owner_id:
         raise HTTPException(status_code=403, detail="Access denied. You can only update your own drivers.")
     
-    if document_type not in ["licence", "licence_back"]:
+    if document_type not in ["licence", "licence_back", "aadhar", "aadhar_back"]:
         raise HTTPException(
             status_code=400,
             detail="Invalid document type for driver"
         )
     
-    if licence_image is None and licence_back_image is None:
+    if all(f is None for f in (licence_image, licence_back_image, aadhar_image, aadhar_back_image)):
         raise HTTPException(
             status_code=400,
             detail="Please upload at least one document image file"
@@ -909,8 +956,8 @@ async def update_driver_document(
                 raise HTTPException(status_code=400, detail="Front image is too large (max 5MB).")
 
             register_stale_file(db, 'driver', driver.id, 'licence_front_status', driver.licence_front_img)
-            licence_bytes = await licence_image.read()
-            await licence_image.seek(0)
+            licence_bytes = licence_image.file.read()
+            licence_image.file.seek(0)
 
             folder_path = f"car_driver/{driver.id}/license"
             front_url = upload_image_to_gcs(licence_image, folder_path)
@@ -935,8 +982,8 @@ async def update_driver_document(
                 raise HTTPException(status_code=400, detail="Back image is too large (max 5MB).")
 
             register_stale_file(db, 'driver', driver.id, 'licence_back_status', driver.licence_back_img)
-            back_bytes = await licence_back_image.read()
-            await licence_back_image.seek(0)
+            back_bytes = licence_back_image.file.read()
+            licence_back_image.file.seek(0)
 
             back_folder_path = f"car_driver/{driver.id}/license_back"
             back_url = upload_image_to_gcs(licence_back_image, back_folder_path)
@@ -953,6 +1000,31 @@ async def update_driver_document(
             if not new_image_url:
                 new_image_url = back_url
                 new_status = back_status
+
+        # Aadhaar front / back (auto-verified the same way as the licence)
+        for up, side_name in ((aadhar_image, "front"), (aadhar_back_image, "back")):
+            if up is None:
+                continue
+            if not up.content_type or not up.content_type.startswith('image/'):
+                raise HTTPException(status_code=400, detail="Invalid file type for Aadhaar image. Please upload an image.")
+            if up.size and up.size > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Aadhaar image is too large (max 5MB).")
+            up_bytes = up.file.read()
+            up.file.seek(0)
+            url = upload_image_to_gcs(up, f"car_driver/{driver.id}/aadhar_{side_name}")
+            st = get_auto_verified_status(
+                up_bytes, "aadhar",
+                previous_status=getattr(driver, f"aadhar_{side_name}_status"),
+            )
+            setattr(driver, f"aadhar_{side_name}_img", url)
+            setattr(driver, f"aadhar_{side_name}_status", st)
+            if not new_image_url:
+                new_image_url = url
+                new_status = st
+        if aadhar_number:
+            digits = "".join(ch for ch in aadhar_number if ch.isdigit())
+            if len(digits) == 12:
+                driver.aadhar_number = digits
 
         db.commit()
         db.refresh(driver)
@@ -1000,6 +1072,7 @@ def get_all_drivers_document_status(
                 "updated_at": None,
             }
         
+        _add_aadhar_docs(driver, documents)
         driver_statuses.append(DocumentStatusListResponse(
             entity_id=driver.id,
             entity_type="driver",

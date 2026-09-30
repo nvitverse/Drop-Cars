@@ -53,6 +53,7 @@ class AdminOut(BaseModel):
     permissions: list[str] = Field(default_factory=list)
     organization_id: UUID
     balance: Optional[int] = 0
+    is_on_duty: Optional[bool] = False
     created_at: datetime
 
     class Config:
@@ -147,6 +148,7 @@ class UserInfoResponse(BaseModel):
     account_status: str
     primary_number: str
     created_at: datetime
+    current_password: Optional[str] = None
     
     class Config:
         orm_mode = True   # Pydantic v1

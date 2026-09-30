@@ -38,6 +38,7 @@ from app.schemas.order_details import (
     OrderAssignmentDetail,
     EndRecordDetail
 )
+from app.utils.commission import vendor_earns_estimate
 import math
 from app.utils.gcs import generate_signed_url_from_gcs
 
@@ -219,8 +220,18 @@ def get_vehicle_owner_basic_info(db: Session, vehicle_owner_id: str) -> Optional
 def get_order_assignments(db: Session, order_id: int) -> list[OrderAssignmentDetail]:
     """Get all order assignments for an order"""
     assignments = db.query(OrderAssignment).filter(OrderAssignment.order_id == order_id).all()
-    from app.crud.trip_otp import otps_visible
+    from app.crud.trip_otp import otps_visible, apply_order_otps_to_assignment
     _order = db.query(Order).filter(Order.id == order_id).first()
+
+    # Backfill: bookings accepted before OTPs were minted at accept time have
+    # none yet - give them the booking's codes so the poster can share them.
+    _dirty = False
+    for _a in assignments:
+        if str(_a.assignment_status.value if hasattr(_a.assignment_status, "value") else _a.assignment_status).upper() in ("PENDING", "ASSIGNED", "DRIVING") and not _a.start_trip_otp:
+            apply_order_otps_to_assignment(db, _a)
+            _dirty = True
+    if _dirty:
+        db.commit()
 
     return [
         OrderAssignmentDetail(
@@ -816,7 +827,7 @@ def get_vendor_order_details(db: Session, order_id: int, vendor_id: str) -> Opti
         updated_toll_charges = int(order.updated_toll_charges) if order.updated_toll_charges and int( order.updated_toll_charges) > 0 else 0,
         night_charges=int(order.night_charges) if order.night_charges and int(order.night_charges) > 0 else 0,
         waiting_time = order.waiting_time if order.waiting_time else 0,
-        vendor_earns_estimation =  math.ceil(((new_order.extra_cost_per_km*order.trip_distance) + new_order.extra_driver_allowance + new_order.extra_permit_charges)+((new_order.cost_per_km*new_order.trip_distance)*order.vendor_fees_percent/100)) - math.ceil(math.ceil(((new_order.extra_cost_per_km*order.trip_distance) + new_order.extra_driver_allowance + new_order.extra_permit_charges)+((new_order.cost_per_km*new_order.trip_distance)*order.vendor_fees_percent/100))*order.platform_fees_percent/100) if order.source == "NEW_ORDERS" else 0,
+        vendor_earns_estimation = vendor_earns_estimate(order, new_order) if order.source == "NEW_ORDERS" else 0,
         pickup_notes=pickup_notes,
         package_hours=package_hours,
         cost_per_hour=cost_per_hour,
@@ -903,7 +914,7 @@ def get_vehicle_owner_orders_by_assignment_status(
     }
 
     vendor_by_id = {
-        v.vendor_id: v for v in (db.query(VendorDetails).filter(VendorDetails.vendor_id.in_(list(vendor_ids))).all() if vendor_ids else [])
+        str(v.vendor_id): v for v in (db.query(VendorDetails).filter(VendorDetails.vendor_id.in_(list(vendor_ids))).all() if vendor_ids else [])
     }
     
     driver_uuids = []
@@ -1197,7 +1208,7 @@ def get_vehicle_owner_non_pending_orders(
     hourly_rental_ids = {o.source_order_id for o, _ in order_assignment_pairs if o.source.value == "HOURLY_RENTAL"}
 
     vendor_by_id = {
-        v.vendor_id: v for v in (db.query(VendorDetails).filter(VendorDetails.vendor_id.in_(vendor_ids)).all() if vendor_ids else [])
+        str(v.vendor_id): v for v in (db.query(VendorDetails).filter(VendorDetails.vendor_id.in_(vendor_ids)).all() if vendor_ids else [])
     }
     driver_by_id = {
         str(d.id): d for d in (db.query(CarDriver).filter(CarDriver.id.in_(driver_ids)).all() if driver_ids else [])

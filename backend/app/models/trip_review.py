@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, ForeignKey, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.session import Base
 
@@ -16,3 +16,8 @@ class TripReview(Base):
     feedback = Column(Text, nullable=True)
     reviewer_name = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    # Rating bonus (Rs 10 per star for 3 stars and above) paid to the owner's wallet 24h after the review unless an admin
+    # flagged it (a driver rating their own trip, etc.)
+    bonus_amount = Column(Integer, nullable=True)
+    bonus_paid_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    flagged = Column(Boolean, nullable=False, default=False, server_default="false")

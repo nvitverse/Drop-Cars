@@ -30,6 +30,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 # independent of this expiry: `token_version` (already embedded in every
 # driver token + checked on every request via verify_toke_driver) lets an
 # Owner/admin force-logout a specific driver instantly at any time.
+ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 30 * 6)))  # 6 months
 DRIVER_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("DRIVER_ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 30 * 6)))  # 6 months
 
 # Same fix, same root cause, for the OTHER two mobile-app sessions that were
@@ -397,8 +398,9 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
         )
 
     # Force-logout support: token must carry the admin's current token_version
-    token_version = payload.get("token_version", 1)
-    if token_version != (getattr(admin, "token_version", 1) or 1):
+    token_version = payload.get("token_version") or 1
+    admin_token_version = getattr(admin, "token_version", 1) or 1
+    if token_version != admin_token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Force Logout Action Raised",

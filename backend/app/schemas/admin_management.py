@@ -59,6 +59,7 @@ class VendorFullDetailsResponse(BaseModel):
     account_status: str
     documents: Dict[str, VendorDocumentInfo]
     created_at: datetime
+    current_password: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -147,6 +148,7 @@ class VehicleOwnerFullDetailsResponse(BaseModel):
     trusted_override_by: Optional[str] = None
     trusted_override_reason: Optional[str] = None
     trusted_override_at: Optional[datetime] = None
+    current_password: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -396,6 +398,7 @@ class CustomerListItem(BaseModel):
     company_name: Optional[str] = None
     gst_number: Optional[str] = None
     created_at: datetime
+    current_password: Optional[str] = None
 
     class Config:
         from_attributes = True

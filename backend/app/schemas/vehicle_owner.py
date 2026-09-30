@@ -69,11 +69,10 @@ class VehicleOwnerForm(BaseModel):
         max_length=100,
         description="City must be between 2 and 100 characters"
     )]
-    pincode: Annotated[str, Field(
-        min_length=6,
-        max_length=6,
-        description="Pincode must be exactly 6 digits"
-    )]
+    pincode: Optional[str] = Field(
+        default=None,
+        description="Pincode (optional)"
+    )
     aadhar_number: Annotated[str, Field(
         min_length=12,
         max_length=12,
@@ -85,6 +84,15 @@ class VehicleOwnerForm(BaseModel):
     email: Annotated[str, Field(
         description="Email address (required)"
     )]
+
+    @validator('pincode')
+    def validate_pincode(cls, v):
+        if not v or not v.strip():
+            return None
+        v = v.strip()
+        if len(v) != 6 or not v.isdigit():
+            raise ValueError('Pincode must be exactly 6 digits')
+        return v
 
     @validator('email')
     def validate_email(cls, v):
@@ -116,12 +124,12 @@ class VehicleOwnerForm(BaseModel):
 
     @validator('primary_number', 'secondary_number')
     def validate_phone_numbers(cls, v):
-        if v is None:  # Allow None for secondary_number
-            return v
+        if not v or not v.strip():  # Allow None or empty string for secondary_number
+            return None
         import re
-        if not re.match(indian_phone_pattern, v):
+        if not re.match(indian_phone_pattern, v.strip()):
             raise ValueError('Invalid Indian mobile number format. Use 10-digit number starting with 6-9 (e.g., 9876543210)')
-        return v
+        return v.strip()
 
     @classmethod
     def as_form(
@@ -132,7 +140,7 @@ class VehicleOwnerForm(BaseModel):
         password: str = Form(..., description="Password (min 6 characters)"),
         address: Optional[str] = Form(None, description="Address (optional - falls back to city if not provided)"),
         city: str = Form(..., description="City"),
-        pincode: str = Form(..., description="Pincode (6 digits)"),
+        pincode: Optional[str] = Form(None, description="Pincode (optional)"),
         aadhar_number: str = Form(..., description="Aadhar number (12 digits)"),
         pan_number: str = Form(..., description="PAN number (format ABCDE1234F)"),
         email: str = Form(..., description="Email address (required)"),
@@ -230,6 +238,7 @@ class VacantCitiesUpdate(BaseModel):
     driver_name: Optional[str] = None
     car_id: Optional[str] = None
     car_number: Optional[str] = None
+    car_type: Optional[str] = None
 
     @validator('cities', pre=True, always=True)
     def validate_cities(cls, v, values):
@@ -240,3 +249,15 @@ class VacantCitiesUpdate(BaseModel):
         if len(cleaned) > 5:
             raise ValueError('You can select up to 5 vacant cities')
         return cleaned
+
+
+class VacantFleetItem(BaseModel):
+    entry_id: Optional[str] = None
+    car_id: Optional[str] = None
+    car_number: Optional[str] = None
+    car_type: Optional[str] = None
+    driver_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    cities: list[str] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
+
