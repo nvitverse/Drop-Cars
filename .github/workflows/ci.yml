@@ -46,6 +46,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest httpx pytest-asyncio
+      - name: Throwaway GCP credentials (app creates a Storage client at import)
+        run: |
+          openssl genrsa -out /tmp/ci_key.pem 2048
+          python - <<'EOF'
+          import json
+          key = open("/tmp/ci_key.pem").read()
+          json.dump({
+              "type": "service_account", "project_id": "ci-only", "private_key_id": "ci",
+              "private_key": key, "client_email": "ci@ci-only.iam.gserviceaccount.com",
+              "client_id": "0", "token_uri": "https://oauth2.googleapis.com/token",
+          }, open("/tmp/ci_gcp_creds.json", "w"))
+          EOF
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/ci_gcp_creds.json" >> "$GITHUB_ENV"
       - name: Smoke import
         run: python -c "import app.main; print('app.main imported OK')"
       - name: Pytest
