@@ -541,6 +541,21 @@ def send_new_booking_notification_sync(db: Session, title: str, message: str, or
             for token in tokens
         ]
 
+        # Apply the admin's Notification Settings for this event (uploaded
+        # custom MP3 via data.custom_sound_url + the spoken sentence). This
+        # broadcast - the most common push of all - never called it before,
+        # so an uploaded sound was silently ignored for new-booking alerts.
+        try:
+            from app.utils.notification_settings import apply_notification_extras
+            event_key = "urgent_booking" if is_urgent else "new_booking"
+            template = apply_notification_extras({"data": {}}, db, event_key)  # one settings lookup, not one per token
+            for p in payloads:
+                p["sound"] = template.get("sound", p.get("sound"))
+                p["channelId"] = channel_id or template.get("channelId") or p.get("channelId")
+                p["data"] = {**(p.get("data") or {}), **template.get("data", {})}
+        except Exception as extras_err:
+            print(f"notification extras not applied (push still sent): {extras_err}")
+
         # Queued (Cloud Tasks) rather than sent inline - see _enqueue_expo_push.
         # Falls back to the old synchronous send automatically if Cloud
         # Tasks isn't configured/reachable, so this is never a regression,

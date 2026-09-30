@@ -1668,3 +1668,16 @@ def driver_create_booking_confirm(
         raise HTTPException(status_code=400, detail=f"Failed to confirm booking: {str(e)}")
 
 
+@router.post("/driver/posted-bookings/{order_id}/notify")
+async def notify_driver_posted_booking_endpoint(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_driver=Depends(get_current_driver),
+):
+    """Manual "Notify drivers" alarm for a booking this owner posted from the
+    Driver App - same re-alert the vendor and admin Notify buttons send."""
+    from app.crud.orders import notify_order_manually
+    try:
+        return await notify_order_manually(db, order_id, actor="poster", poster_owner_id=str(current_driver.vehicle_owner_id))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
