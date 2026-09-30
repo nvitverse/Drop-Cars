@@ -84,7 +84,8 @@ if (opt('rollback')) {
 
 console.log(`\n[1/4] Exporting the ${app} app JavaScript bundle...`);
 fs.rmSync(outDir, { recursive: true, force: true });
-run('npx', ['expo', 'export', '--platform', 'android', '--output-dir', 'dist-ota', '--clear']);
+// OTA_MAX_WORKERS=1 keeps Metro inside the RAM of a small machine (bundling ran out of memory at 7.8 GB).
+run('npx', ['expo', 'export', '--platform', 'android', '--output-dir', 'dist-ota', '--clear', ...(env.OTA_MAX_WORKERS ? ['--max-workers', String(env.OTA_MAX_WORKERS)] : [])]);
 
 const meta = JSON.parse(fs.readFileSync(path.join(outDir, 'metadata.json'), 'utf8'));
 // the export does not always write expoConfig.json - ask expo for the public config (what Constants.expoConfig reads)
