@@ -140,6 +140,9 @@ def notify_all_admins_savaari_booking(db: Session, booking: SavaariBooking, filt
             }
             for token in tokens
         ]
+        from app.utils.notification_settings import apply_notification_extras
+        for p in payloads:
+            apply_notification_extras(p, db, "savaari_booking_alert")
 
         res = _post_expo_payloads_sync(payloads)
         logger.info(f"Savaari alert push sent to {len(tokens)} admin(s): {res}")

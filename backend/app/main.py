@@ -227,6 +227,9 @@ app.include_router(driver_ops_router.router, prefix="/api", tags=["Driver Lookup
 from app.api.routes import fleet_swap as fleet_swap_router
 app.include_router(fleet_swap_router.router, prefix="/api", tags=["Fleet Driver Swap"])
 
+from app.api.routes import notification_sounds as notification_sounds_router
+app.include_router(notification_sounds_router.router, prefix="/api", tags=["Notification Sounds"])
+
 
 @app.on_event("startup")
 async def ensure_sos_alerts_and_swap_columns() -> None:
@@ -498,6 +501,7 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS advance_received INTEGER',
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS cash_collection INTEGER',
         'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ',
+        'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS sound_channels JSON',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS urgent_notify_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS deadline_warning_stage INTEGER NOT NULL DEFAULT 0',
         # Website "Urgent" advance-paid flag, mirrored from the source

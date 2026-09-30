@@ -61,6 +61,8 @@ async def _post_expo_payloads(payloads: list) -> dict:
     batch needed. Results are merged back into a single 'data' list in
     original order, so existing callers that zip(tokens, expo_result['data'])
     keep working unchanged."""
+    from app.utils.notification_settings import apply_device_sound_channels
+    payloads = apply_device_sound_channels(payloads)
     if not payloads:
         return {"data": []}
     chunks = list(_chunk_list(payloads))
@@ -87,6 +89,8 @@ def _post_expo_payloads_sync(payloads: list) -> dict:
     paths that run synchronously right after booking creation. Chunks are
     fired concurrently via a thread pool for the same "everyone at once"
     reason as the async version above."""
+    from app.utils.notification_settings import apply_device_sound_channels
+    payloads = apply_device_sound_channels(payloads)
     if not payloads:
         return {"data": []}
     chunks = list(_chunk_list(payloads))
@@ -382,7 +386,10 @@ async def send_push_notification_to_admin(db: Session, title: str, message: str)
     if not tokens:
         return {"status": "No tokens found for admin"}
 
-    payloads = [{"to": token, "title": title, "body": message} for token in tokens]
+    payloads = [
+        apply_notification_extras({"to": token, "title": title, "body": message, "priority": "high"}, db, "admin_booking_approval")
+        for token in tokens
+    ]
 
     expo_result = await _post_expo_payloads(payloads)
 
@@ -421,6 +428,10 @@ async def send_custom_sound_notification_vehicle_owner(db: Session, title: str, 
         }
         for token in tokens
     ]
+    for p in payloads:
+        apply_notification_extras(p, db, "drop_bid_driver_request" if is_urgent else "new_booking")
+        if channel_id:
+            p["channelId"] = channel_id
 
     expo_result = await _post_expo_payloads(payloads)
 
@@ -464,6 +475,8 @@ def notify_booking_poster(db: Session, order, title: str, message: str) -> None:
             }
             for token in tokens
         ]
+        for p in payloads:
+            apply_notification_extras(p, db, "booking_poster_update")
         _enqueue_expo_push(db, payloads)
     except Exception as e:
         print(f"notify_booking_poster failed (non-fatal): {e}")
@@ -796,12 +809,12 @@ async def send_push_notification_to_vendor_driver(
     # Notify driver about update
     if driver and driver_tokens:
         for token in driver_tokens:
-            payloads.append({
+            payloads.append(apply_notification_extras({
                 "to": token,
                 "sound": "default",
                 "title": "Your Profile Updated",
                 "body": "Your driver profile or assignment details have been updated."
-            })
+            }, db, "profile_updated"))
         try:
             log_notification(db, "driver", str(driver_id), "Your Profile Updated", "Your driver profile or assignment details have been updated.", "driver_assigned")
         except Exception as e:
@@ -895,7 +908,9 @@ async def send_trip_status_notification_to_vendor_and_vehicle_owner(
     owner_tokens = [n.token for n in owner_notifications if n.token and not _is_muted(n)]
 
     # Prepare payloads
-    event_key = "trip_completed" if status == "ended" else "new_booking"
+    # Was "new_booking" for a started trip, so a sound uploaded for new
+    # bookings also played on every trip start.
+    event_key = "trip_completed" if status == "ended" else "trip_status"
     for token in vendor_tokens:
         payloads.append(apply_notification_extras(
             {"to": token, "title": title, "body": body}, db, event_key,
@@ -1077,7 +1092,7 @@ async def notify_order_reminder(db: Session, order_id: int, title: str, body: st
     return {"status": "Notification(s) sent", "expo_response": expo_result}
 
 
-async def notify_specific_vehicle_owner(db: Session, vehicle_owner_id: str, order_id: int, title: str, body: str):
+async def notify_specific_vehicle_owner(db: Session, vehicle_owner_id: str, order_id: int, title: str, body: str, event_key: str = "booking_reminder"):
     """Vendor-triggered targeted ping to ONE specific idle fleet owner (found
     via the Vacant Drivers screen) about a pending booking they haven't
     accepted yet - as opposed to notify_order_reminder above, which only
@@ -1090,7 +1105,7 @@ async def notify_specific_vehicle_owner(db: Session, vehicle_owner_id: str, orde
     ).all()
     for n in owner_notifications:
         if n.token:
-            payloads.append(apply_notification_extras({"to": n.token, "title": title, "body": body}, db, "booking_reminder"))
+            payloads.append(apply_notification_extras({"to": n.token, "title": title, "body": body}, db, event_key))
 
     # Push-only, not written to the persistent in-app inbox (see notify_order_reminder).
 
@@ -1205,6 +1220,8 @@ async def notify_unaccepted_expired_booking(db: Session, order):
                 }
                 for token in tokens
             ]
+            for p in payloads:
+                apply_notification_extras(p, db, "unaccepted_trip_alarm")
             await _post_expo_payloads(payloads)
 
     elif getattr(order, "posted_by_vehicle_owner_id", None):
@@ -1230,6 +1247,8 @@ async def notify_unaccepted_expired_booking(db: Session, order):
                 }
                 for token in tokens
             ]
+            for p in payloads:
+                apply_notification_extras(p, db, "poster_unaccepted_trip_alarm")
             await _post_expo_payloads(payloads)
 
     else:

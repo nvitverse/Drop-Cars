@@ -192,10 +192,11 @@ def notify_other_side(db: Session, order: Order, sender_side: str, text: str, as
         if not tokens:
             return
         title = f"💬 Booking #{order.id} • {booking_title(order)}"
-        payloads = [{
+        from app.utils.notification_settings import apply_notification_extras
+        payloads = [apply_notification_extras({
             "to": t, "title": title, "body": text[:140], "priority": "high",
             "data": {"type": "chat", "chat_order_id": order.id},
-        } for t in tokens]
+        }, db, "chat_message") for t in tokens]
         _enqueue_expo_push(db, payloads)
     except Exception as e:
         print(f"chat notify failed (message still saved): {e}")

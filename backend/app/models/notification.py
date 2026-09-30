@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, TIMESTAMP
+from sqlalchemy import Column, String, Boolean, TIMESTAMP, JSON
 from sqlalchemy.dialects.postgresql import ARRAY
 from app.database.session import Base
 
@@ -14,3 +14,6 @@ class Notification(Base):
     # Checked server-side before every push send - not just client-side -
     # so muting still works even if the app is fully closed. Null = not muted.
     muted_until = Column(TIMESTAMP(timezone=True), nullable=True)
+    # {event_key: channel_id} of the custom-sound channels this device has
+    # created (see utils/notification_settings.apply_device_sound_channels).
+    sound_channels = Column(JSON, nullable=True)
