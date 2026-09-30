@@ -117,3 +117,76 @@ async def send_trip_alert(
                 failed.append(f"email ({e})")
 
     return {"channels": channels, "sent": sent, "failed": failed}
+
+
+# ---------------------------------------------------------------------------
+# Staff-app pushes used by SOS (routes/sos.py) and fleet swap
+# (routes/fleet_swap.py). Both routes imported these names before they
+# existed, so every SOS staff alert and every swap OTP push failed silently
+# inside a try/except. Sync, Expo only, never raises.
+# ---------------------------------------------------------------------------
+def _tokens_for(db: Session, user_type: str, sub: Optional[str] = None, include_muted: bool = False) -> list:
+    from app.models.notification import Notification
+    from app.crud.notification import _is_muted
+
+    q = db.query(Notification).filter(Notification.user == user_type)
+    if sub is not None:
+        q = q.filter(Notification.sub == str(sub))
+    return [
+        row.token for row in q.all()
+        if row.token and (include_muted or not _is_muted(row))
+    ]
+
+
+def _send_expo(tokens: list, title: str, body: str, data: Optional[dict] = None) -> dict:
+    from app.crud.notification import _post_expo_payloads_sync
+
+    tokens = list(dict.fromkeys(tokens))
+    if not tokens:
+        return {"status": "no_tokens", "count": 0}
+    payloads = [
+        {
+            "to": t,
+            "title": title,
+            "body": body,
+            "sound": "default",
+            "priority": "high",
+            "android": {"priority": "max"},
+            "data": data or {},
+        }
+        for t in tokens
+    ]
+    try:
+        result = _post_expo_payloads_sync(payloads)
+        return {"status": "sent", "count": len(tokens), "expo_response": result}
+    except Exception as e:
+        logger.warning("Expo push failed: %s", e)
+        return {"status": "failed", "count": len(tokens)}
+
+
+def broadcast_admin_emergency_push(db: Session, title: str, body: str, data: Optional[dict] = None) -> dict:
+    """Emergency push to every admin/staff device. Ignores per-device mute:
+    an SOS must reach staff even if someone muted routine alerts."""
+    try:
+        return _send_expo(_tokens_for(db, "admin", include_muted=True), title, body, data)
+    except Exception as e:
+        logger.warning("broadcast_admin_emergency_push failed: %s", e)
+        return {"status": "failed", "count": 0}
+
+
+def send_push_to_driver(db: Session, driver_id: str, title: str, body: str, data: Optional[dict] = None) -> dict:
+    """Push to one driver's devices (Notification.user == 'driver')."""
+    try:
+        return _send_expo(_tokens_for(db, "driver", driver_id, include_muted=True), title, body, data)
+    except Exception as e:
+        logger.warning("send_push_to_driver failed: %s", e)
+        return {"status": "failed", "count": 0}
+
+
+def send_push_to_vehicle_owner(db: Session, vehicle_owner_id: str, title: str, body: str, data: Optional[dict] = None) -> dict:
+    """Push to one fleet driver / vehicle owner's devices."""
+    try:
+        return _send_expo(_tokens_for(db, "vehicle_owner", vehicle_owner_id, include_muted=True), title, body, data)
+    except Exception as e:
+        logger.warning("send_push_to_vehicle_owner failed: %s", e)
+        return {"status": "failed", "count": 0}
