@@ -260,7 +260,7 @@ def get_my_status_counts(
     instead of leaving it stale until the next full login (which was
     sending the driver back to add-car/add-driver on every app open even
     after they'd already completed it)."""
-    from app.models.vehicle_owner import VehicleOwnerCredentials
+    from app.models.vehicle_owner import VehicleOwnerCredentials, AccountStatusEnum
     owner = get_vehicle_owner_by_id(db, vehicle_owner_id)
     if not owner:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fleet owner not found")

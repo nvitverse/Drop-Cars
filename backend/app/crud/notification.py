@@ -12,7 +12,7 @@ from app.models.order_assignments import OrderAssignment
 from typing import List, Optional
 from sqlalchemy import text
 from app.utils.cities import get_cities
-from app.utils.notification_settings import apply_notification_extras, DRIVER_CHANNEL_URGENT
+from app.utils.notification_settings import apply_notification_extras, DRIVER_CHANNEL_URGENT, VENDOR_CHANNEL_ORDERS
 from app.crud.notification_log import log_notification
 from app.utils.timezone import format_pickup_time_ist
 import os

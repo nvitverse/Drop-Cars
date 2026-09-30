@@ -1322,7 +1322,12 @@ def get_driver_assigned_orders_report(db: Session, driver_id: str, order_id : in
                     "car_type": order.car_type if order.car_type else "Unknown",
                     "trip_time": order.trip_time,
                     "total_km": total_km if total_km > 0 else 0,
-                    "toll_charges": order.updated_toll_charges if order.updated_toll_charges else new_order.toll_charges,
+                    # new_order was never loaded in this function (NameError whenever a
+                    # trip had no updated toll): read the booking's quoted toll instead.
+                    "toll_charges": order.updated_toll_charges if order.updated_toll_charges else (
+                        getattr(db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first(), "toll_charges", None)
+                        if str(getattr(order.source, "value", order.source)) == "NEW_ORDERS" else None
+                    ),
 
                     "updated_toll_charge": order.updated_toll_charges,
                     "customer_price": order.closed_vendor_price,
