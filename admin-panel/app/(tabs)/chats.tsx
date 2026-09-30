@@ -34,6 +34,8 @@ import {
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
+import VoiceNote from '@/components/chat/VoiceNote';
+import ChatComposer from '@/components/chat/ChatComposer';
 import { Card, StatusPill, EmptyState, SkeletonRow } from '@/components/ui';
 import {
   useAudioRecorder,
@@ -54,52 +56,6 @@ interface Msg {
   created_at: string;
 }
 
-function VoiceMessageBubble({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
-  const player = useAudioPlayer(uri);
-  const status = useAudioPlayerStatus(player);
-
-  const toggle = () => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      if (status.didJustFinish || status.currentTime >= (status.duration || 0)) {
-        player.seekTo(0);
-      }
-      player.play();
-    }
-  };
-
-  const total = status.duration || 0;
-  const pos = Math.min(status.currentTime || 0, total);
-  const pct = total > 0 ? pos / total : 0;
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-
-  return (
-    <TouchableOpacity onPress={toggle} activeOpacity={0.75} style={voiceStyles.row}>
-      <View style={[voiceStyles.playBtn, { backgroundColor: mine ? 'rgba(255,255,255,0.25)' : tint + '22' }]}>
-        {status.playing ? (
-          <Pause size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
-        ) : (
-          <Play size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
-        )}
-      </View>
-      <View style={[voiceStyles.track, { backgroundColor: mine ? 'rgba(255,255,255,0.3)' : '#E2E8F0' }]}>
-        <View style={[voiceStyles.trackFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: mine ? '#FFFFFF' : tint }]} />
-      </View>
-      <Text style={[voiceStyles.time, { color: mine ? 'rgba(255,255,255,0.85)' : '#64748B' }]}>
-        {fmt(status.playing || pos > 0 ? pos : total)}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-const voiceStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 160, paddingVertical: 2 },
-  playBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  track: { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
-  trackFill: { height: '100%', borderRadius: 2 },
-  time: { fontSize: 10.5, fontWeight: '500', minWidth: 32 },
-});
 
 interface Row {
   key: string;
@@ -225,8 +181,8 @@ export default function AdminChatsScreen() {
     } catch {}
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (override?: string) => {
+    const text = (override ?? input).trim();
     if (!text || !openRow || sending) return;
     setSending(true);
     setInput('');
@@ -263,7 +219,13 @@ export default function AdminChatsScreen() {
     try {
       await voiceRecorder.stop();
       const uri = voiceRecorder.uri;
-      if (!uri) return;
+      if (uri) await sendVoiceUri(uri);
+    } catch {}
+  };
+
+  const sendVoiceUri = async (uri: string) => {
+    if (!openRow) return;
+    try {
       setUploadingVoice(true);
       const upload = await apiService.uploadChatVoiceNote(uri, 'audio/m4a');
       const voiceUrl = upload.voice_url;
@@ -422,7 +384,7 @@ export default function AdminChatsScreen() {
                       <Text style={[styles.senderLabel, { color: themeColors.primary }]}>{item.sender_name}</Text>
                     ) : null}
                     {item.voice_url ? (
-                      <VoiceMessageBubble uri={item.voice_url} mine={item.mine} tint={item.mine ? '#FFFFFF' : themeColors.primary} />
+                      <VoiceNote uri={item.voice_url} mine={item.mine} tint={themeColors.primary} />
                     ) : (
                       <Text style={{ color: item.mine ? '#FFFFFF' : themeColors.text, fontSize: 13.5 }}>{item.text}</Text>
                     )}
@@ -434,33 +396,12 @@ export default function AdminChatsScreen() {
               )}
             />
 
-            <View style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
-              <TextInput
-                style={[styles.input, { color: themeColors.text, backgroundColor: themeColors.background, borderColor: themeColors.border }]}
-                placeholder="Type a reply..."
-                placeholderTextColor={themeColors.textMuted}
-                value={input}
-                onChangeText={setInput}
-                onSubmitEditing={send}
-              />
-              <TouchableOpacity
-                onPress={voiceRecorderState.isRecording ? stopAndSendVoiceRecording : startVoiceRecording}
-                style={[styles.actionBtn, { backgroundColor: voiceRecorderState.isRecording ? themeColors.error : themeColors.surfaceAlt }]}
-              >
-                {voiceRecorderState.isRecording ? (
-                  <Square size={16} color="#FFFFFF" />
-                ) : (
-                  <Mic size={16} color={uploadingVoice ? themeColors.textMuted : themeColors.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={send}
-                disabled={sending || !input.trim()}
-                style={[styles.sendBtn, { backgroundColor: themeColors.primary, opacity: sending || !input.trim() ? 0.5 : 1 }]}
-              >
-                <Send size={15} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+            <ChatComposer
+              colors={themeColors}
+              placeholder="Type a reply..."
+              onSendText={(t) => send(t)}
+              onSendVoice={(uri) => sendVoiceUri(uri)}
+            />
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>

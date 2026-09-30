@@ -20,5 +20,6 @@ class BookingChatMessage(Base):
     # still holds a plain-text fallback ("🎤 Voice message") for any client
     # that doesn't render audio yet, so nothing renders blank.
     voice_url = Column(String, nullable=True)
+    reply_to_id = Column(Integer, nullable=True)            # WhatsApp-style reply: the message this one answers
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False, index=True)
     read_at = Column(TIMESTAMP(timezone=True), nullable=True)   # when the OTHER side opened it

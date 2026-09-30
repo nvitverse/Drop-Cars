@@ -149,6 +149,54 @@ def poster_suggestions(db: Session, order: Order, unanswered_keys: List[str]) ->
     return uniq
 
 
+# Replies the DRIVER can send from the menu on the poster's message, by trip stage.
+_DRIVER_REPLIES_BEFORE_TRIP = [
+    ("OK_RECEIVED", "👍 Received, thank you"),
+    ("ON_TIME", "✅ Confirmed - I will be there on time"),
+    ("NEED_DETAILS", "❓ Please share a few more details"),
+    ("RUNNING_LATE", "🕐 Running a little late - will update you"),
+    ("CALL_ME", "📞 Please call me"),
+]
+_DRIVER_REPLIES_ON_TRIP = [
+    ("REACHED_PICKUP", DRIVER_QUESTIONS["REACHED_PICKUP"]),
+    ("ON_THE_WAY", "🚗 Customer picked up - on the way"),
+    ("OK_RECEIVED", "👍 Received, thank you"),
+    ("CUSTOMER_UNREACHABLE", DRIVER_QUESTIONS["CUSTOMER_UNREACHABLE"]),
+    ("CALL_ME", "📞 Please call me"),
+]
+
+
+def reply_options(db: Session, order: Order, msg: BookingChatMessage, viewer_side: str,
+                  assignment_status: Optional[str], cache: dict) -> List[dict]:
+    """The menu on ONE incoming message: replies that answer that message.
+
+    Poster looking at a driver's question -> the exact answer, filled from
+    this booking's data (pickup link, customer number, tariff, cash to
+    collect...), then the other booking answers and generic replies.
+    Driver looking at the poster's message -> replies for the trip stage.
+    Own messages have no menu. `cache` is per request (the poster answers
+    read the booking once, not once per message)."""
+    if msg.sender_side == viewer_side:
+        return []
+    st = str(assignment_status or "").upper()
+    if st == "COMPLETED":
+        return []
+    if viewer_side == "POSTER":
+        if "all" not in cache:
+            cache["all"] = poster_suggestions(db, order, list(DRIVER_QUESTIONS.keys()))
+        answers = cache["all"]
+        key = msg.quick_key if msg.quick_key in DRIVER_QUESTIONS else None
+        if key:
+            first = [a for a in answers if a["key"] == key]
+            rest = [a for a in answers if a["key"] != key]
+            return first + rest
+        return answers
+    if viewer_side == "DRIVER":
+        pairs = _DRIVER_REPLIES_ON_TRIP if st == "DRIVING" else _DRIVER_REPLIES_BEFORE_TRIP
+        return [{"key": k, "label": t, "text": t} for k, t in pairs]
+    return []
+
+
 def unanswered_driver_questions(messages: List[BookingChatMessage]) -> List[str]:
     """Driver quick-questions with no POSTER message after them yet."""
     keys: List[str] = []
