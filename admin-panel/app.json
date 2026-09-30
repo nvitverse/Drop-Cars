@@ -17,6 +17,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withSoundChannels.js",
       "expo-router",
       "expo-font",
       "expo-web-browser",

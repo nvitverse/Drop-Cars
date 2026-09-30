@@ -1492,9 +1492,16 @@ class ApiService {
   async getNotificationSettings(): Promise<{
     events: Record<string, { sound: string; speak_text: string }>;
     labels: Record<string, string>;
+    apps?: Record<string, 'driver' | 'vendor' | 'customer' | 'admin' | 'all'>;
     available_sounds: string[];
   }> {
     return this.makeRequest('/admin/notification-settings');
+  }
+
+  async resetNotificationSound(
+    eventKey: string
+  ): Promise<{ events: Record<string, { sound: string; speak_text: string }> }> {
+    return this.makeRequest(`/admin/notification-settings/${eventKey}/reset-sound`, { method: 'POST' });
   }
 
   async updateNotificationSettings(
