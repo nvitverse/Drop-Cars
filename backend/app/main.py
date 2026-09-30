@@ -222,6 +222,10 @@ app.include_router(quality_router.router, prefix="/api", tags=["Ratings & Qualit
 from app.api.routes import driver_ops as driver_ops_router
 app.include_router(driver_ops_router.router, prefix="/api", tags=["Driver Lookup"])
 
+from app.api.routes import fleet_swap as fleet_swap_router
+app.include_router(fleet_swap_router.router, prefix="/api", tags=["Fleet Driver Swap"])
+import app.models.fleet_swap_audit
+
 
 
 @app.on_event("startup")
@@ -307,6 +311,9 @@ async def ensure_extra_kyc_document_columns() -> None:
         # Trusted Partner (tier=PREFERRED) - two extra grant paths alongside
         # the yearly-billing evidence above (2026-09-30)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS admin_trusted_override BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS trusted_override_by VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS trusted_override_reason VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS trusted_override_at TIMESTAMPTZ',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS driver_pro_trusted_until TIMESTAMPTZ',
         # Key/value platform settings (yearly fee, suspend threshold, billing master switch)
         'CREATE TABLE IF NOT EXISTS platform_settings (key VARCHAR PRIMARY KEY, value VARCHAR NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())',

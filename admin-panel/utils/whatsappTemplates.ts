@@ -1,4 +1,4 @@
-﻿import { Linking, Platform, Alert } from 'react-native';
+import { Linking, Platform, Alert } from 'react-native';
 
 export interface WhatsAppTemplateData {
   bookingId?: string | number;
@@ -41,6 +41,8 @@ export type TemplateType =
   | 'booking_confirmed'
   | 'driver_assigned'
   | 'fare_estimation'
+  | 'group_broadcast'
+  | 'advance_request'
   | 'trip_completed'
   | 'feedback_request';
 
@@ -60,17 +62,29 @@ export const TEMPLATE_METADATA: Record<
     icon: 'Car',
     defaultColor: '#3B82F6',
   },
-  fare_estimation: {
-    title: 'Fare Quotation',
-    subtitle: 'Itemized base fare, tolls, driver bata & 20% advance link',
+  group_broadcast: {
+    title: 'Group Post (Driver Broadcast)',
+    subtitle: 'Driver WhatsApp groups post with route, fare & net payout',
+    icon: 'Send',
+    defaultColor: '#8B5CF6',
+  },
+  advance_request: {
+    title: 'Advance Payment Request',
+    subtitle: '20% booking advance payment link & UPI confirmation',
     icon: 'Calculator',
     defaultColor: '#F59E0B',
+  },
+  fare_estimation: {
+    title: 'Fare Quotation',
+    subtitle: 'Itemized base fare, tolls, driver bata & estimate',
+    icon: 'Calculator',
+    defaultColor: '#0EA5E9',
   },
   trip_completed: {
     title: 'Trip Completed & Invoice',
     subtitle: 'Final settled fare, actual KM & official GST PDF link',
     icon: 'Receipt',
-    defaultColor: '#8B5CF6',
+    defaultColor: '#10B981',
   },
   feedback_request: {
     title: 'Feedback & Review',
@@ -144,6 +158,49 @@ Your cab has been assigned for your journey on ${date} at ${time}.
 ${trackingUrl}
 
 Driver will report 15 minutes before pickup time. For immediate assistance, call ${brandPhone}.`;
+    }
+
+    case 'group_broadcast': {
+      const grossFare = data.totalFare || data.baseFare || 0;
+      const commission = Math.round(grossFare * 0.1);
+      const netPayout = Math.max(0, grossFare - commission);
+      return `🚖 *${brand.toUpperCase()} - NEW TRIP AVAILABLE* 🚖
+Booking: *#DC-${bid}*
+
+📍 *Route:* ${pickup} ➔ ${drop}
+📅 *Date & Time:* ${date} at ${time}
+🚗 *Vehicle Required:* ${vehicle} (${tripType})
+${data.distanceKm ? `📏 *Distance:* ~${data.distanceKm} KM\n` : ''}
+💰 *Fare Breakdown:*
+• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)
+• App Commission: ₹${commission.toLocaleString('en-IN')}
+• *Net Driver Payout: ₹${netPayout.toLocaleString('en-IN')}*
+
+⚡ *Interested Drivers/Vendors:*
+Reply / Call immediately to claim: tel:${brandPhone}
+Claim via Driver App or Helpline. First come, first served!`;
+    }
+
+    case 'advance_request': {
+      const total = data.totalFare || data.baseFare || 0;
+      const advance = data.advanceAmount || Math.round(total * 0.2);
+      const balance = Math.max(0, total - advance);
+      return `💳 *${brand.toUpperCase()} - ADVANCE PAYMENT REQUEST*
+Booking ID: *#DC-${bid}*
+
+Dear ${custName},
+To confirm your booking for *${pickup} ➔ ${drop}* on *${date} at ${time}*, please pay the 20% confirmation advance.
+
+💰 *Payment Details:*
+• Total Trip Fare: ₹${total.toLocaleString('en-IN')}
+• *Advance Required (20%): ₹${advance.toLocaleString('en-IN')}*
+• Balance on Trip Completion: ₹${balance.toLocaleString('en-IN')}
+
+🔗 *Pay Advance Online (UPI / Card / NetBanking):*
+${advancePayUrl}
+
+After payment, driver and vehicle details will be assigned immediately.
+📞 Helpline: ${brandPhone}`;
     }
 
     case 'fare_estimation': {

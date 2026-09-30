@@ -143,6 +143,10 @@ class VehicleOwnerFullDetailsResponse(BaseModel):
     # booking-priority-window tier, not a subscription. Both happen to use
     # similar-sounding words; don't conflate them in any UI reading this.
     subscription_type: Optional[str] = None
+    admin_trusted_override: Optional[bool] = False
+    trusted_override_by: Optional[str] = None
+    trusted_override_reason: Optional[str] = None
+    trusted_override_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

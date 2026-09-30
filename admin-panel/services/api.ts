@@ -466,10 +466,21 @@ class ApiService {
     return this.makeRequest(`/admin/accounts/${accountId}?account_type=${accountType}`);
   }
 
-  async setTrustedPartnerOverride(vehicleOwnerId: string, trusted: boolean): Promise<{ success: boolean; tier: string }> {
+  async setTrustedPartnerOverride(
+    vehicleOwnerId: string,
+    trusted: boolean,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    tier: string;
+    admin_trusted_override: boolean;
+    trusted_override_by?: string;
+    trusted_override_reason?: string;
+    trusted_override_at?: string;
+  }> {
     return this.makeRequest(`/admin/vehicle-owners/${vehicleOwnerId}/trusted-override`, {
       method: 'PATCH',
-      body: JSON.stringify({ trusted }),
+      body: JSON.stringify({ trusted, reason }),
     });
   }
 

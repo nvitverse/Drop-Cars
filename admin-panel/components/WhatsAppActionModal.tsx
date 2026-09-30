@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -76,6 +76,10 @@ export default function WhatsAppActionModal({
         return <CheckCircle2 size={size} color={color} />;
       case 'driver_assigned':
         return <Car size={size} color={color} />;
+      case 'group_broadcast':
+        return <Send size={size} color={color} />;
+      case 'advance_request':
+        return <Calculator size={size} color={color} />;
       case 'fare_estimation':
         return <Calculator size={size} color={color} />;
       case 'trip_completed':
@@ -88,6 +92,8 @@ export default function WhatsAppActionModal({
   const types: TemplateType[] = [
     'booking_confirmed',
     'driver_assigned',
+    'group_broadcast',
+    'advance_request',
     'fare_estimation',
     'trip_completed',
     'feedback_request',

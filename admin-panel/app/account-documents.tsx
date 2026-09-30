@@ -138,7 +138,7 @@ export default function AccountDocumentsScreen() {
     if (!params.accountId) return;
     setSavingTrusted(true);
     try {
-      await apiService.setTrustedPartnerOverride(params.accountId, next);
+      await apiService.setTrustedPartnerOverride(params.accountId, next, next ? 'Marked Trusted from Documents Verification screen' : 'Removed Trusted from Documents Verification screen');
       setIsTrusted(next);
       showToast(next ? 'Marked as Trusted Partner' : 'Trusted Partner removed', 'success');
     } catch (e: any) {

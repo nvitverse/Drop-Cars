@@ -83,6 +83,9 @@ class VehicleOwnerDetails(Base):
     # Trusted Partner unlocks posting bookings to the whole driver network
     # and holding customer advances.
     admin_trusted_override = Column(Boolean, nullable=False, default=False, server_default="false")
+    trusted_override_by = Column(String, nullable=True)
+    trusted_override_reason = Column(String, nullable=True)
+    trusted_override_at = Column(TIMESTAMP(timezone=True), nullable=True)
     # Auto-trust window from a driver under this owner paying for the
     # Driver App's own "Pro" monthly/yearly subscription (POST
     # /subscriptions/driver/subscribe) - separate money flow from the

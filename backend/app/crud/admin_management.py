@@ -882,6 +882,9 @@ def get_account_details_by_id(db: Session, account_id: str, account_type: str) -
             ],
             "tier": owner_details.tier,
             "admin_trusted_override": bool(owner_details.admin_trusted_override),
+            "trusted_override_by": owner_details.trusted_override_by,
+            "trusted_override_reason": owner_details.trusted_override_reason,
+            "trusted_override_at": owner_details.trusted_override_at.isoformat() if owner_details.trusted_override_at else None,
         }
     
     elif account_type_lower in ["driver", "drivers", "quickdriver", "quickdrivers"]:

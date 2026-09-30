@@ -2752,6 +2752,10 @@ async def get_vehicle_owner_details(
             yearly_fee=billing_settings["yearly_fee"],
             tier=vehicle_owner_details.tier,
             subscription_type=vehicle_owner_details.subscription_type,
+            admin_trusted_override=bool(vehicle_owner_details.admin_trusted_override),
+            trusted_override_by=vehicle_owner_details.trusted_override_by,
+            trusted_override_reason=vehicle_owner_details.trusted_override_reason,
+            trusted_override_at=vehicle_owner_details.trusted_override_at,
         )
         
         # Get cars
@@ -3327,6 +3331,7 @@ async def permanent_unblock_account(
 
 class TrustedPartnerOverrideRequest(BaseModel):
     trusted: bool
+    reason: Optional[str] = None
 
 
 @router.patch("/admin/vehicle-owners/{vehicle_owner_id}/trusted-override")
@@ -3344,6 +3349,7 @@ async def set_trusted_partner_override(
     to the whole driver network and holding customer advances."""
     require_trusted_partner_permission(current_admin)
 
+    from datetime import datetime as _datetime, timezone as _timezone
     from app.models.vehicle_owner_details import VehicleOwnerDetails
     owner_details = db.query(VehicleOwnerDetails).filter(
         VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id
@@ -3351,17 +3357,35 @@ async def set_trusted_partner_override(
     if not owner_details:
         raise HTTPException(status_code=404, detail="Fleet owner not found")
 
+    updater_name = getattr(current_admin, "username", None) or getattr(current_admin, "full_name", None) or f"Admin ({getattr(current_admin, 'role', 'Staff')})"
+    clean_reason = (body.reason or "").strip() or ("Manual override to Trusted Partner" if body.trusted else "Manual override to Standard Partner")
+
     owner_details.admin_trusted_override = body.trusted
+    owner_details.trusted_override_by = updater_name
+    owner_details.trusted_override_reason = clean_reason
+    owner_details.trusted_override_at = _datetime.now(_timezone.utc)
     db.commit()
 
     from app.crud.admin_activity_log import log_admin_action
     log_admin_action(
         db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
         action="TRUSTED_PARTNER_OVERRIDE_SET", target_type="vehicle_owner", target_id=str(vehicle_owner_id),
-        target_name=owner_details.full_name, details={"trusted": body.trusted},
+        target_name=owner_details.full_name, details={
+            "trusted": body.trusted,
+            "reason": clean_reason,
+            "updated_by": updater_name,
+        },
     )
 
-    return {"success": True, "vehicle_owner_id": str(vehicle_owner_id), "tier": owner_details.tier}
+    return {
+        "success": True,
+        "vehicle_owner_id": str(vehicle_owner_id),
+        "tier": owner_details.tier,
+        "admin_trusted_override": owner_details.admin_trusted_override,
+        "trusted_override_by": owner_details.trusted_override_by,
+        "trusted_override_reason": owner_details.trusted_override_reason,
+        "trusted_override_at": owner_details.trusted_override_at,
+    }
 
 
 # ============ UNIFIED ACCOUNT STATUS UPDATE ============

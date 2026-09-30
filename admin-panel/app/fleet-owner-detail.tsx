@@ -13,6 +13,7 @@ import {
   StatusBar as RNStatusBar,
   Switch,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -68,6 +69,10 @@ interface OwnerProfile {
   yearly_fee?: number | null;
   tier?: 'PREFERRED' | 'STANDARD' | null;
   subscription_type?: 'MONTHLY' | 'YEARLY' | null;
+  admin_trusted_override?: boolean;
+  trusted_override_by?: string | null;
+  trusted_override_reason?: string | null;
+  trusted_override_at?: string | null;
 }
 
 interface CarItem {
@@ -167,6 +172,40 @@ export default function FleetOwnerDetailScreen() {
   const [editAddress, setEditAddress] = useState('');
   const [editAadhar, setEditAadhar] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Partner Tier Override State
+  const [tierModalVisible, setTierModalVisible] = useState(false);
+  const [selectedTierTarget, setSelectedTierTarget] = useState<'PREFERRED' | 'STANDARD'>('PREFERRED');
+  const [tierOverrideReason, setTierOverrideReason] = useState('');
+  const [submittingTier, setSubmittingTier] = useState(false);
+
+  const handleSaveTierOverride = async () => {
+    if (!owner) return;
+    if (!tierOverrideReason.trim()) {
+      Alert.alert('Reason Required', 'Please provide a reason for updating the partner tier.');
+      return;
+    }
+    setSubmittingTier(true);
+    try {
+      const isTrusted = selectedTierTarget === 'PREFERRED';
+      const res = await apiService.setTrustedPartnerOverride(owner.vehicle_owner_id, isTrusted, tierOverrideReason.trim());
+      setOwner(prev => prev ? {
+        ...prev,
+        tier: res.tier as any,
+        admin_trusted_override: res.admin_trusted_override,
+        trusted_override_by: res.trusted_override_by,
+        trusted_override_reason: res.trusted_override_reason,
+        trusted_override_at: res.trusted_override_at,
+      } : null);
+      setTierModalVisible(false);
+      setTierOverrideReason('');
+      showToast(`Partner tier updated to ${isTrusted ? 'Trusted' : 'Standard'} successfully!`, 'success');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update partner tier.');
+    } finally {
+      setSubmittingTier(false);
+    }
+  };
 
   useEffect(() => {
     if (owner) {
@@ -467,34 +506,13 @@ export default function FleetOwnerDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Go back" style={[styles.backButton, { backgroundColor: themeColors.background }]} hitSlop={10}>
             <ChevronLeft size={22} color={themeColors.text} />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: themeColors.text }]}>{owner.full_name}</Text>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={[styles.headerTitle, { color: themeColors.text }]} numberOfLines={1}>{owner.full_name}</Text>
             <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>Fleet Account</Text>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ThemeToggle size={20} />
-              <TouchableOpacity
-                style={{
-                  backgroundColor: themeColors.primary,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-                onPress={openDocuments}
-                activeOpacity={0.8}
-              >
-                <FileCheck size={13} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>Docs</Text>
-              </TouchableOpacity>
-              <StatusBadge status={owner.account_status} />
-            </View>
-            {!!owner.tier && (
-              <StatusPill label={owner.tier === 'PREFERRED' ? 'Trusted' : 'Standard'} variant={owner.tier === 'PREFERRED' ? 'info' : 'neutral'} />
-            )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <ThemeToggle size={20} />
+            <StatusBadge status={owner.account_status} />
           </View>
         </View>
       </View>
@@ -591,27 +609,109 @@ export default function FleetOwnerDetailScreen() {
           </TouchableOpacity>
         </Card>
 
-        {/* Subscription Status Card */}
+        {/* 2. Partner Tier & Subscription Status Card */}
         <Card style={[styles.card, { marginTop: 12 }]}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderLeft}>
               <ShieldCheck size={18} color={themeColors.primary} />
-              <Text style={[styles.cardTitle, { color: themeColors.text }]}>Subscription Status</Text>
+              <Text style={[styles.cardTitle, { color: themeColors.text }]}>Partner Tier & Subscription</Text>
             </View>
-            <StatusPill label={owner.subscription_type || 'FREE'} variant={owner.subscription_type ? 'success' : 'neutral'} />
+            <TouchableOpacity
+              style={{
+                backgroundColor: isDark ? themeColors.surfaceAlt : themeColors.primaryTint,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: themeColors.primary,
+              }}
+              onPress={() => {
+                setSelectedTierTarget(owner.tier === 'PREFERRED' ? 'STANDARD' : 'PREFERRED');
+                setTierOverrideReason(owner.trusted_override_reason || '');
+                setTierModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: themeColors.primary, fontSize: 12, fontWeight: '700' }}>Change Tier</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={{ gap: 8, marginTop: 8 }}>
+          {/* Current Tier Pill & Source */}
+          <View style={{
+            backgroundColor: owner.tier === 'PREFERRED' ? (isDark ? '#064E3B33' : '#ECFDF5') : (isDark ? '#37415133' : '#F3F4F6'),
+            padding: 12,
+            borderRadius: 8,
+            marginTop: 6,
+            borderWidth: 1,
+            borderColor: owner.tier === 'PREFERRED' ? '#10B98155' : themeColors.border,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {owner.tier === 'PREFERRED' ? (
+                  <ShieldCheck size={20} color="#10B981" />
+                ) : (
+                  <ShieldAlert size={20} color={themeColors.textSecondary} />
+                )}
+                <Text style={{ fontSize: 14, fontWeight: '800', color: owner.tier === 'PREFERRED' ? '#10B981' : themeColors.text }}>
+                  {owner.tier === 'PREFERRED' ? 'TRUSTED PARTNER' : 'STANDARD PARTNER'}
+                </Text>
+              </View>
+              <StatusPill
+                label={owner.tier === 'PREFERRED' ? 'Trusted' : 'Standard'}
+                variant={owner.tier === 'PREFERRED' ? 'success' : 'neutral'}
+              />
+            </View>
+
+            {/* Tier Source Explanation */}
+            <View style={{ marginTop: 8, gap: 4 }}>
+              {owner.admin_trusted_override ? (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.primary }}>
+                    ★ Manual Override by Admin
+                  </Text>
+                  {!!owner.trusted_override_by && (
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                      Updated by: <Text style={{ fontWeight: '600', color: themeColors.text }}>{owner.trusted_override_by}</Text>
+                      {owner.trusted_override_at ? ` on ${new Date(owner.trusted_override_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                    </Text>
+                  )}
+                  {!!owner.trusted_override_reason && (
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, fontStyle: 'italic' }}>
+                      Reason: "{owner.trusted_override_reason}"
+                    </Text>
+                  )}
+                </>
+              ) : owner.billing_next_date && new Date(owner.billing_next_date) >= new Date() && !owner.billing_suspended ? (
+                <Text style={{ fontSize: 12, color: themeColors.success, fontWeight: '600' }}>
+                  ✓ Active Subscription (Auto Trusted until {owner.billing_next_date})
+                </Text>
+              ) : owner.billing_next_date && new Date(owner.billing_next_date) < new Date() ? (
+                <Text style={{ fontSize: 12, color: themeColors.error, fontWeight: '600' }}>
+                  ⚠ Subscription Expired on {owner.billing_next_date} (Auto reverted to Standard Tier)
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
+                  ℹ Standard Free Tier (No active paid subscription)
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={{ gap: 8, marginTop: 12 }}>
             <View style={styles.detailRow}>
-              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>Current Tier:</Text>
+              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>Plan Type:</Text>
               <Text style={{ fontWeight: '800', color: themeColors.text, fontSize: 13 }}>
-                {owner.subscription_type === 'YEARLY' ? 'PRO (Yearly)' : owner.subscription_type === 'MONTHLY' ? 'PRO (Monthly)' : 'FREE / STANDARD'}
+                {owner.subscription_type === 'YEARLY' ? 'Yearly Maintenance Plan' : owner.subscription_type === 'MONTHLY' ? 'Monthly Plan (₹199/mo)' : 'Standard / Free'}
               </Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>Status:</Text>
-              <Text style={{ fontWeight: '800', color: owner.billing_suspended ? themeColors.error : themeColors.success, fontSize: 13 }}>
-                {owner.billing_suspended ? 'SUSPENDED' : 'ACTIVE'}
+              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>Billing Status:</Text>
+              <Text style={{
+                fontWeight: '800',
+                color: owner.billing_suspended ? themeColors.error : (owner.billing_next_date && new Date(owner.billing_next_date) < new Date() ? '#F59E0B' : themeColors.success),
+                fontSize: 13
+              }}>
+                {owner.billing_suspended ? 'SUSPENDED' : (owner.billing_next_date && new Date(owner.billing_next_date) < new Date() ? 'EXPIRED' : 'ACTIVE')}
               </Text>
             </View>
             <View style={styles.detailRow}>
@@ -1031,6 +1131,100 @@ export default function FleetOwnerDetailScreen() {
         </>
         )}
       </ScrollView>
+
+      {/* Modal for Changing Partner Tier Override */}
+      <Modal
+        visible={tierModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTierModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={styles.modalHeader}>
+              <ShieldCheck size={22} color={themeColors.primary} />
+              <Text style={[styles.modalTitle, { color: themeColors.text }]}>Change Partner Tier</Text>
+            </View>
+            <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
+              Manually set partner tier for {owner?.full_name}. This action will be audited with your admin username and timestamp.
+            </Text>
+
+            {/* Target Tier Picker */}
+            <View style={{ flexDirection: 'row', gap: 10, marginVertical: 14 }}>
+              <TouchableOpacity
+                style={[
+                  styles.tierOptionCard,
+                  selectedTierTarget === 'PREFERRED' && { borderColor: '#10B981', backgroundColor: isDark ? '#064E3B33' : '#ECFDF5' },
+                  { borderColor: selectedTierTarget === 'PREFERRED' ? '#10B981' : themeColors.border }
+                ]}
+                onPress={() => setSelectedTierTarget('PREFERRED')}
+                activeOpacity={0.8}
+              >
+                <ShieldCheck size={20} color={selectedTierTarget === 'PREFERRED' ? '#10B981' : themeColors.textSecondary} />
+                <Text style={{ fontWeight: '800', fontSize: 13, color: selectedTierTarget === 'PREFERRED' ? '#10B981' : themeColors.text }}>Trusted Partner</Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, textAlign: 'center' }}>Priority booking access & network posting</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tierOptionCard,
+                  selectedTierTarget === 'STANDARD' && { borderColor: themeColors.primary, backgroundColor: isDark ? themeColors.surfaceAlt : themeColors.primaryTint },
+                  { borderColor: selectedTierTarget === 'STANDARD' ? themeColors.primary : themeColors.border }
+                ]}
+                onPress={() => setSelectedTierTarget('STANDARD')}
+                activeOpacity={0.8}
+              >
+                <ShieldAlert size={20} color={selectedTierTarget === 'STANDARD' ? themeColors.primary : themeColors.textSecondary} />
+                <Text style={{ fontWeight: '800', fontSize: 13, color: selectedTierTarget === 'STANDARD' ? themeColors.primary : themeColors.text }}>Standard Partner</Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, textAlign: 'center' }}>Default free tier with standard features</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Reason Input */}
+            <Text style={[styles.fieldLabel, { color: themeColors.text }]}>Reason for Update <Text style={{ color: themeColors.error }}>*</Text></Text>
+            <TextInput
+              style={[
+                styles.textAreaInput,
+                {
+                  backgroundColor: themeColors.background,
+                  borderColor: themeColors.border,
+                  color: themeColors.text,
+                },
+              ]}
+              placeholder="e.g., Verified fleet documents, Long-term trusted partner, Trial promo, etc."
+              placeholderTextColor={themeColors.textSecondary}
+              value={tierOverrideReason}
+              onChangeText={setTierOverrideReason}
+              multiline
+              numberOfLines={3}
+            />
+
+            {/* Modal Actions */}
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
+                onPress={() => setTierModalVisible(false)}
+                disabled={submittingTier}
+              >
+                <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, { backgroundColor: themeColors.primary }, submittingTier && styles.buttonDisabled]}
+                onPress={handleSaveTierOverride}
+                disabled={submittingTier}
+              >
+                {submittingTier ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Save Partner Tier</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
     </View>
   );
@@ -1186,5 +1380,87 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     height: '100%',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 480,
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  tierOptionCard: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  textAreaInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  modalCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalConfirmBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 130,
+  },
+  modalConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
