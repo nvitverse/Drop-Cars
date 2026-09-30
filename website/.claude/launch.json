@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Drop Cars",
+      "runtimeExecutable": "C:/xampp/php/php.exe",
+      "runtimeArgs": ["-S", "localhost:8057", "-t", "public_html", "public_html/router.php"],
+      "port": 8057
+    },
+    {
+      "name": "Tata Call Taxi",
+      "runtimeExecutable": "C:/xampp/php/php.exe",
+      "runtimeArgs": ["-S", "localhost:8058", "-t", "C:/Users/Administrator/Desktop/Tata Call Taxi/public_html", "C:/Users/Administrator/Desktop/Tata Call Taxi/public_html/router.php"],
+      "port": 8058
+    },
+    {
+      "name": "admin-web",
+      "runtimeExecutable": "C:\\Users\\Administrator\\Desktop\\dropcars-review\\start-admin-web.bat",
+      "runtimeArgs": [],
+      "port": 8101
+    },
+    {
+      "name": "vendor-web",
+      "runtimeExecutable": "C:\\Users\\Administrator\\Desktop\\dropcars-review\\start-vendor-web.bat",
+      "runtimeArgs": [],
+      "port": 8102
+    },
+    {
+      "name": "driver-web",
+      "runtimeExecutable": "C:\\Users\\Administrator\\Desktop\\dropcars-review\\start-driver-web.bat",
+      "runtimeArgs": [],
+      "port": 8103
+    }
+  ]
+}

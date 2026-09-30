@@ -1,0 +1,68 @@
+/**
+ * Theme Switcher – Elegant taxi service selector in header
+ */
+
+.theme-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.theme-switcher__btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+}
+
+.theme-switcher__btn:hover {
+  color: var(--blue);
+  background: #fff;
+}
+
+.theme-switcher__btn--active {
+  background: var(--blue);
+  color: var(--white) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .theme-switcher {
+    display: none; /* Hide in mobile header, show in menu panel maybe? */
+  }
+}
+
+/* In Menu Panel */
+.menu-panel .theme-switcher {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 0.5rem;
+}
+
+.menu-panel .theme-switcher__btn {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.menu-panel .theme-switcher__btn--active {
+  background: var(--blue);
+  border-color: var(--blue);
+}

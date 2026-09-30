@@ -1,0 +1,114 @@
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from sqlalchemy.orm import Session
+from typing import Dict, Any, Optional
+
+from app.database.session import get_db
+from app.models.platform_setting import PlatformSetting
+from app.utils.unassigned_booking_expiry import (
+    auto_remove_unassigned_bookings,
+    get_unassigned_removal_timeout
+)
+
+router = APIRouter(tags=["Unassigned Booking Auto-Removal"])
+
+
+@router.post("/admin/auto-remove-unassigned")
+def trigger_unassigned_auto_removal(
+    timeout_minutes: Optional[int] = Query(None, description="Optional override timeout in minutes"),
+    db: Session = Depends(get_db)
+):
+    """Triggers 30-Minute Unassigned Booking Auto-Removal Engine."""
+    result = auto_remove_unassigned_bookings(db, custom_timeout_mins=timeout_minutes)
+    return result
+
+
+@router.get("/admin/settings/unassigned-timeout")
+def get_unassigned_timeout_setting(db: Session = Depends(get_db)):
+    """Fetch current Admin Unassigned Booking Removal Timeout (Default: 30 Mins)."""
+    timeout_mins = get_unassigned_removal_timeout(db)
+    return {"unassigned_removal_timeout_minutes": timeout_mins}
+
+
+@router.post("/admin/settings/unassigned-timeout")
+def update_unassigned_timeout_setting(
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Update Admin Unassigned Booking Removal Timeout (e.g., 30, 45, 60 mins)."""
+    timeout_mins = payload.get("unassigned_removal_timeout_minutes")
+    if not timeout_mins or not isinstance(timeout_mins, int) or timeout_mins < 5:
+        raise HTTPException(status_code=400, detail="unassigned_removal_timeout_minutes must be an integer >= 5")
+
+    setting = db.query(PlatformSetting).filter(
+        PlatformSetting.key == "UNASSIGNED_BOOKING_REMOVAL_TIMEOUT_MINUTES"
+    ).first()
+
+    if not setting:
+        setting = PlatformSetting(
+            key="UNASSIGNED_BOOKING_REMOVAL_TIMEOUT_MINUTES",
+            value=str(timeout_mins),
+            description="Timeout in minutes after which unassigned bookings are auto-removed"
+        )
+        db.add(setting)
+    else:
+        setting.value = str(timeout_mins)
+
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Unassigned booking removal timeout set to {timeout_mins} minutes.",
+        "unassigned_removal_timeout_minutes": timeout_mins
+    }
+
+
+@router.put("/orders/{order_id}/bump-fare")
+def bump_order_driver_fare(
+    order_id: str,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Manual Peak / Festival Demand Fare Adjustment:
+    Allows Vendor or Admin to increase/adjust driver_fare for pending unassigned bookings.
+    """
+    from app.models.orders import Orders
+    import uuid
+
+    new_driver_fare = payload.get("new_driver_fare")
+    reason = payload.get("reason", "Peak / Festival demand fare bump")
+
+    if new_driver_fare is None or not isinstance(new_driver_fare, (int, float)) or new_driver_fare <= 0:
+        raise HTTPException(status_code=400, detail="new_driver_fare must be a positive number")
+
+    order = None
+    try:
+        order_uuid = uuid.UUID(order_id)
+        order = db.query(Orders).filter(Orders.id == order_uuid).first()
+    except ValueError:
+        order = db.query(Orders).filter(Orders.booking_id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if getattr(order, "status", None) not in ("PENDING", "UNASSIGNED", "OPEN"):
+        raise HTTPException(status_code=400, detail=f"Fare can only be adjusted on unassigned/pending orders. Current status: {order.status}")
+
+    old_fare = float(getattr(order, "driver_fare", 0) or 0)
+    order.driver_fare = new_driver_fare
+
+    # Re-calculate total booking amount if total amount is synchronized
+    extra = float(getattr(order, "extra_amount", 0) or 0)
+    order.total_booking_amount = new_driver_fare + extra
+
+    db.commit()
+
+    return {
+        "success": True,
+        "order_id": order_id,
+        "old_driver_fare": old_fare,
+        "new_driver_fare": new_driver_fare,
+        "total_booking_amount": order.total_booking_amount,
+        "reason": reason,
+        "message": f"Driver fare updated from ₹{old_fare} to ₹{new_driver_fare} successfully."
+    }
+

@@ -1,0 +1,323 @@
+📁 DROP CARS PROJECT - COMPLETE FILE STRUCTURE
+===============================================
+
+Project-Drop-Cars/
+├── Driver-App/                           # Main Driver Application
+│   ├── 📱 APP STRUCTURE
+│   │   ├── app/                          # Expo Router App Directory
+│   │   │   ├── _layout.tsx              # Root layout with providers
+│   │   │   ├── index.tsx                # Main entry point (routing logic)
+│   │   │   ├── login.tsx                # Vehicle owner login
+│   │   │   ├── signup.tsx               # Vehicle owner signup
+│   │   │   ├── quick-login.tsx          # Quick driver login
+│   │   │   ├── verification.tsx         # Account verification screen
+│   │   │   ├── add-car.tsx              # Add car form
+│   │   │   ├── add-driver.tsx           # Add driver form
+│   │   │   ├── my-cars.tsx              # Vehicle owner's cars list
+│   │   │   ├── my-drivers.tsx           # Vehicle owner's drivers list
+│   │   │   ├── vo-pending-orders.tsx    # Vehicle owner pending orders
+│   │   │   ├── documents-review.tsx     # Document review screen
+│   │   │   ├── quick-dashboard.tsx      # Quick driver dashboard
+│   │   │   ├── +not-found.tsx           # 404 error page
+│   │   │   │
+│   │   │   ├── (tabs)/                  # Tab Navigation Group
+│   │   │   │   ├── _layout.tsx          # Tab layout
+│   │   │   │   ├── index.tsx            # Dashboard (pending orders)
+│   │   │   │   ├── rides.tsx            # Completed rides
+│   │   │   │   ├── future-rides.tsx     # Upcoming rides
+│   │   │   │   ├── wallet.tsx           # Wallet & transactions
+│   │   │   │   └── settings.tsx         # Settings & notifications
+│   │   │   │
+│   │   │   ├── car-driver/              # Car Driver Flow
+│   │   │   │   ├── _layout.tsx          # Car driver layout
+│   │   │   │   ├── signup.tsx           # Driver registration
+│   │   │   │   ├── signin.tsx           # Driver login
+│   │   │   │   └── dashboard.tsx        # Driver dashboard
+│   │   │   │
+│   │   │   ├── trip/                    # Trip Management
+│   │   │   │   ├── start.tsx            # Start trip screen
+│   │   │   │   ├── end.tsx              # End trip screen
+│   │   │   │   └── report.tsx           # Trip report
+│   │   │   │
+│   │   │   └── api/                     # API Configuration
+│   │   │       ├── axiosInstance.tsx    # Main API instance
+│   │   │       └── axiosDriver.ts       # Driver API instance
+│   │   │
+│   │   ├── components/                  # Reusable Components
+│   │   │   ├── AccountVerificationScreen.tsx
+│   │   │   ├── AutoDeductionModal.tsx
+│   │   │   ├── BookingCard.tsx          # Order booking card
+│   │   │   ├── DocumentStatusIcon.tsx
+│   │   │   ├── DocumentUpdateModal.tsx
+│   │   │   ├── DrawerNavigation.tsx
+│   │   │   ├── LazyDashboard.tsx
+│   │   │   ├── LoadingOverlay.tsx
+│   │   │   ├── SuccessScreen.tsx
+│   │   │   ├── TokenDebugger.tsx
+│   │   │   ├── WelcomeScreen.tsx
+│   │   │   └── signup/                  # Signup Form Components
+│   │   │       ├── CarDetailsStep.tsx
+│   │   │       ├── DocumentsStep.tsx
+│   │   │       └── PersonalDetailsStep.tsx
+│   │   │
+│   │   ├── contexts/                    # React Context Providers
+│   │   │   ├── AuthContext.tsx          # Authentication state
+│   │   │   ├── CarDriverContext.tsx     # Driver authentication
+│   │   │   ├── DashboardContext.tsx     # Dashboard data
+│   │   │   ├── NotificationContext.tsx  # Notification state
+│   │   │   ├── ThemeContext.tsx        # Theme management
+│   │   │   └── WalletContext.tsx        # Wallet state
+│   │   │
+│   │   ├── services/                    # Business Logic Services
+│   │   │   ├── auth/                    # Authentication Services
+│   │   │   │   ├── authService.ts       # Login/logout logic
+│   │   │   │   └── signupService.ts    # Registration logic
+│   │   │   │
+│   │   │   ├── driver/                  # Driver Services
+│   │   │   │   ├── carDriverService.ts  # Driver operations
+│   │   │   │   └── driverService.ts    # Driver management
+│   │   │   │
+│   │   │   ├── vehicle/                 # Vehicle Services
+│   │   │   │   ├── carManagementService.ts
+│   │   │   │   └── vehicleOwnerService.ts
+│   │   │   │
+│   │   │   ├── orders/                  # Order Services
+│   │   │   │   ├── assignmentService.ts
+│   │   │   │   └── dashboardService.ts
+│   │   │   │
+│   │   │   ├── notifications/           # Notification Services
+│   │   │   │   ├── notificationService.ts    # Core notification logic
+│   │   │   │   ├── driverNotificationApi.ts  # Driver notifications
+│   │   │   │   ├── notificationApi.ts        # Vehicle owner notifications
+│   │   │   │   └── google-services.json      # Firebase config
+│   │   │   │
+│   │   │   ├── documents/               # Document Services
+│   │   │   │   └── documentStatusService.ts
+│   │   │   │
+│   │   │   ├── payment/                 # Payment Services
+│   │   │   │   └── paymentService.ts
+│   │   │   │
+│   │   │   └── firebase/                # Firebase Services
+│   │   │       └── firebaseConfig.ts
+│   │   │
+│   │   ├── hooks/                       # Custom React Hooks
+│   │   │   └── useFrameworkReady.ts
+│   │   │
+│   │   ├── utils/                       # Utility Functions
+│   │   │   ├── jwtDecoder.ts           # JWT token decoder
+│   │   │   ├── quietConsole.ts        # Console logging control
+│   │   │   ├── session.ts              # Session management
+│   │   │   ├── smsService.ts           # SMS services
+│   │   │   └── tokenValidator.ts        # Token validation
+│   │   │
+│   │   ├── assets/                      # Static Assets
+│   │   │   ├── images/
+│   │   │   │   ├── favicon.png
+│   │   │   │   ├── icon.png
+│   │   │   │   ├── notification-icon.png
+│   │   │   │   └── sounds/
+│   │   │   │       └── notification.wav
+│   │   │   ├── google-services.json
+│   │   │   └── notification-icon.png
+│   │   │
+│   │   ├── android/                     # Android Build Files
+│   │   │   ├── app/
+│   │   │   │   ├── build.gradle
+│   │   │   │   ├── debug.keystore
+│   │   │   │   ├── google-services.json
+│   │   │   │   ├── proguard-rules.pro
+│   │   │   │   └── src/
+│   │   │   │       ├── debug/
+│   │   │   │       │   └── AndroidManifest.xml
+│   │   │   │       ├── main/
+│   │   │   │       │   ├── AndroidManifest.xml
+│   │   │   │       │   ├── java/
+│   │   │   │       │   └── res/
+│   │   │   │       └── build/
+│   │   │   ├── build.gradle
+│   │   │   ├── gradle/
+│   │   │   ├── gradle.properties
+│   │   │   ├── gradlew
+│   │   │   ├── gradlew.bat
+│   │   │   └── settings.gradle
+│   │   │
+│   │   ├── credentials/                 # App Signing Credentials
+│   │   │   └── android/
+│   │   │       └── keystore.jks
+│   │   │
+│   │   ├── dist/                        # Build Output
+│   │   │   ├── _expo/
+│   │   │   ├── assetmap.json
+│   │   │   ├── assets/
+│   │   │   └── metadata.json
+│   │   │
+│   │   ├── Flow/                        # Flow Documentation
+│   │   │
+│   │   ├── node_modules/                # Dependencies
+│   │   │
+│   │   ├── @dropcars__dropcars3.jks     # App signing key
+│   │   ├── app.json                     # Expo configuration
+│   │   ├── current_notification_flow.txt # Notification flow documentation
+│   │   ├── eas.json                     # EAS Build configuration
+│   │   ├── eslint.config.js             # ESLint configuration
+│   │   ├── expo-env.d.ts                # TypeScript definitions
+│   │   ├── index.js                     # Entry point
+│   │   ├── metro.config.js              # Metro bundler config
+│   │   ├── package.json                 # Dependencies & scripts
+│   │   ├── package-lock.json           # Lock file
+│   │   ├── react-native.config.js       # React Native config
+│   │   └── tsconfig.json                # TypeScript config
+│   │
+│   └── Frontend-App/                    # Frontend Web Application
+│       ├── app/                         # Next.js App Directory
+│       │   ├── _layout.tsx              # Root layout
+│       │   ├── index.tsx               # Home page
+│       │   ├── +not-found.tsx          # 404 page
+│       │   ├── api/                     # API Configuration
+│       │   │   └── axiosInstance.tsx    # API instance
+│       │   ├── auth/                    # Authentication
+│       │   │   ├── _layout.tsx
+│       │   │   └── index.tsx
+│       │   ├── (driver)/                # Driver Section
+│       │   │   ├── _layout.tsx
+│       │   │   └── (tabs)/
+│       │   │       ├── _layout.tsx
+│       │   │       ├── index.tsx        # Driver dashboard
+│       │   │       ├── bookings.tsx     # Driver bookings
+│       │   │       ├── notifications.tsx # Driver notifications
+│       │   │       └── wallet.tsx       # Driver wallet
+│       │   └── (vendor)/                # Vendor Section
+│       │       ├── _layout.tsx
+│       │       └── (tabs)/
+│       │           ├── _layout.tsx
+│       │           ├── index.tsx        # Vendor dashboard
+│       │           ├── bookings.tsx     # Vendor bookings
+│       │           ├── create-booking.tsx # Create booking
+│       │           └── notifications.tsx # Vendor notifications
+│       │
+│       ├── components/                  # Reusable Components
+│       │   ├── driver/
+│       │   │   └── DriverDrawerContent.tsx
+│       │   ├── vendor/
+│       │   │   └── DrawerContent.tsx
+│       │   ├── LoadingScreen.tsx
+│       │   ├── SafeArea.tsx
+│       │   └── ...
+│       │
+│       ├── contexts/                    # React Context Providers
+│       │   ├── AuthContext.tsx
+│       │   ├── BookingContext.tsx
+│       │   ├── NotificationContext.tsx
+│       │   └── WalletContext.tsx
+│       │
+│       ├── hooks/                       # Custom Hooks
+│       │   └── useFrameworkReady.ts
+│       │
+│       ├── services/                    # Business Logic
+│       │   ├── notifications.ts
+│       │   └── razorpay.ts
+│       │
+│       ├── types/                       # TypeScript Types
+│       │   ├── auth.ts
+│       │   ├── booking.ts
+│       │   └── wallet.ts
+│       │
+│       ├── assets/                      # Static Assets
+│       │   └── images/
+│       │       ├── favicon.png
+│       │       └── icon.png
+│       │
+│       ├── node_modules/                # Dependencies
+│       ├── app.json                     # Expo configuration
+│       ├── package.json                 # Dependencies & scripts
+│       ├── package-lock.json           # Lock file
+│       └── tsconfig.json                # TypeScript config
+
+📋 KEY FILES BY FUNCTIONALITY
+=============================
+
+🔐 AUTHENTICATION & AUTHORIZATION
+├── app/login.tsx                        # Vehicle owner login
+├── app/quick-login.tsx                  # Quick driver login
+├── app/signup.tsx                       # Vehicle owner signup
+├── app/car-driver/signup.tsx            # Driver registration
+├── app/car-driver/signin.tsx            # Driver login
+├── contexts/AuthContext.tsx             # Vehicle owner auth state
+├── contexts/CarDriverContext.tsx        # Driver auth state
+├── services/auth/authService.ts         # Auth logic
+├── services/auth/signupService.ts       # Registration logic
+└── utils/tokenValidator.ts              # Token validation
+
+🚗 VEHICLE & DRIVER MANAGEMENT
+├── app/my-cars.tsx                      # Vehicle owner's cars
+├── app/my-drivers.tsx                   # Vehicle owner's drivers
+├── app/add-car.tsx                      # Add new car
+├── app/add-driver.tsx                   # Add new driver
+├── services/vehicle/carManagementService.ts
+├── services/vehicle/vehicleOwnerService.ts
+├── services/driver/carDriverService.ts
+└── services/driver/driverService.ts
+
+📱 NOTIFICATIONS (RECENTLY FIXED)
+├── services/notifications/notificationService.ts    # Core logic
+├── services/notifications/driverNotificationApi.ts    # Driver API
+├── services/notifications/notificationApi.ts         # Owner API
+├── contexts/NotificationContext.tsx                  # State management
+├── app/(tabs)/settings.tsx                           # Notification toggle
+└── app/quick-dashboard.tsx                           # Driver notifications
+
+💰 WALLET & PAYMENTS
+├── app/(tabs)/wallet.tsx               # Wallet interface
+├── contexts/WalletContext.tsx           # Wallet state
+├── services/payment/paymentService.ts   # Payment logic
+└── services/razorpay.ts                # Razorpay integration
+
+📋 BOOKINGS & ORDERS
+├── app/(tabs)/index.tsx                # Pending orders dashboard
+├── app/vo-pending-orders.tsx           # Vehicle owner orders
+├── app/quick-dashboard.tsx             # Driver orders
+├── components/BookingCard.tsx          # Order display
+├── services/orders/assignmentService.ts
+└── services/orders/dashboardService.ts
+
+🚗 TRIP MANAGEMENT
+├── app/trip/start.tsx                   # Start trip
+├── app/trip/end.tsx                     # End trip
+├── app/trip/report.tsx                 # Trip report
+└── app/(tabs)/rides.tsx                # Completed rides
+
+📄 DOCUMENTS & VERIFICATION
+├── app/verification.tsx                # Account verification
+├── app/documents-review.tsx            # Document review
+├── components/AccountVerificationScreen.tsx
+├── components/DocumentStatusIcon.tsx
+├── services/documents/documentStatusService.ts
+└── services/firebase/firebaseConfig.ts
+
+⚙️ CONFIGURATION & UTILITIES
+├── app/_layout.tsx                     # Root layout
+├── app/index.tsx                       # Main routing
+├── app/api/axiosInstance.tsx           # Main API config
+├── app/api/axiosDriver.ts              # Driver API config
+├── utils/quietConsole.ts               # Console control
+├── utils/jwtDecoder.ts                 # JWT handling
+├── utils/session.ts                    # Session management
+├── utils/smsService.ts                 # SMS services
+├── app.json                            # Expo config
+├── package.json                        # Dependencies
+├── tsconfig.json                       # TypeScript config
+└── metro.config.js                     # Metro bundler
+
+📱 RECENT NOTIFICATION FIXES
+============================
+✅ Fixed deprecated properties in notification handler
+✅ Removed flawed FCM detection logic  
+✅ Enhanced Android channel configuration
+✅ Added automatic testing capabilities
+✅ Added manual test button in dashboard
+✅ Enhanced debug logging throughout
+✅ Simplified notification handler logic
+
+Generated on: $(date)
+Project: Drop Cars - Complete File Structure
+Version: Updated with Critical Notification Fixes

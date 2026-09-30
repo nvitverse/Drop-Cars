@@ -1,0 +1,46 @@
+# ================================================================
+# Drop Cars – API Directory Security
+# CORS: Only dropcars.in may call these endpoints
+# Credentials and config files are never accessible from browser
+# ================================================================
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "https://dropcars.in"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-DROPCARS-TOKEN"
+    Header always set Access-Control-Max-Age "86400"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Cache-Control "no-store, no-cache"
+</IfModule>
+
+# Admin App (React Native - incl. its web build/preview) endpoints are
+# deliberately cross-origin: auth is a static X-Admin-App-Key header, not
+# a dropcars.in session cookie, so the app can call these from whatever
+# origin it's hosted/previewed on. Re-open CORS for just this file family
+# so the origin-locked defaults above don't clobber what each
+# admin-app-*.php already sets itself (was silently breaking every
+# cross-origin call - CORS preflight failed for ALL of them until fixed
+# 2026-09-04).
+<FilesMatch "^admin-app-.*.php$">
+    <IfModule mod_headers.c>
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Content-Type, X-Admin-App-Key"
+    </IfModule>
+</FilesMatch>
+
+# Block all config and credential files from browser access
+<FilesMatch "^config(-.*)?\.php$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Block storage directory (PII logs)
+RewriteEngine On
+RewriteRule ^storage/ - [F,L]
+
+# Block debug files
+<FilesMatch "^(debug|test|tmp_)">
+    Order deny,allow
+    Deny from all
+</FilesMatch>

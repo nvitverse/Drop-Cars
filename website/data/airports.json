@@ -1,0 +1,11 @@
+[
+  { "code": "MAA", "name": "Chennai International Airport", "city": "Chennai", "state": "Tamil Nadu", "lat": 12.9941, "lng": 80.1709, "aliases": ["chennai", "chennai airport", "maa", "meenambakkam"] },
+  { "code": "CJB", "name": "Coimbatore International Airport", "city": "Coimbatore", "state": "Tamil Nadu", "lat": 11.0300, "lng": 77.0434, "aliases": ["coimbatore", "coimbatore airport", "cjb", "peelamedu"] },
+  { "code": "IXM", "name": "Madurai International Airport", "city": "Madurai", "state": "Tamil Nadu", "lat": 9.8345, "lng": 78.0934, "aliases": ["madurai", "madurai airport", "ixm"] },
+  { "code": "TRZ", "name": "Trichy International Airport", "city": "Trichy (Tiruchirappalli)", "state": "Tamil Nadu", "lat": 10.7654, "lng": 78.7097, "aliases": ["trichy", "tiruchirappalli", "trichy airport", "trz"] },
+  { "code": "SXV", "name": "Salem Airport", "city": "Salem", "state": "Tamil Nadu", "lat": 11.7833, "lng": 78.0728, "aliases": ["salem", "salem airport", "sxv"] },
+  { "code": "BLR", "name": "Kempegowda International Airport", "city": "Bangalore", "state": "Karnataka", "lat": 13.1986, "lng": 77.7066, "aliases": ["bangalore", "bengaluru", "bangalore airport", "blr", "kempegowda"] },
+  { "code": "HYD", "name": "Rajiv Gandhi International Airport", "city": "Hyderabad", "state": "Telangana", "lat": 17.2403, "lng": 78.4294, "aliases": ["hyderabad", "hyderabad airport", "hyd", "shamshabad"] },
+  { "code": "TIR", "name": "Tirupati Airport", "city": "Tirupati", "state": "Andhra Pradesh", "lat": 13.6325, "lng": 79.5433, "aliases": ["tirupati", "tirupati airport", "tir", "renigunta"] },
+  { "code": "COK", "name": "Cochin International Airport", "city": "Kochi", "state": "Kerala", "lat": 10.1520, "lng": 76.4019, "aliases": ["kochi", "cochin", "kochi airport", "cok", "nedumbassery"] }
+]

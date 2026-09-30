@@ -1,0 +1,159 @@
+[
+  {
+    "id": "drop-cars",
+    "name": "Drop Cars",
+    "slug": "drop-cars",
+    "title": "Drop Cars",
+    "heroTitle": "One-Way Drop Taxi & Outstation Cabs",
+    "heroSub": "Pay strictly for one-way travel — zero return charges, fixed per-km rates & guaranteed 24x7 pickup.",
+    "metaTitle": "One-Way Drop Taxi & Outstation Cabs South India | Drop Cars",
+    "metaDesc": "Book reliable one-way drop taxis & outstation cabs across South India. Fixed per-km rates, zero return charges & 24x7 confirmed pickup.",
+    "selectorLabel": "Book Drop Cars From"
+  },
+  {
+    "id": "airporttaxi",
+    "name": "Airport Taxi",
+    "slug": "airport-taxi",
+    "title": "AirportTaxi.International",
+    "heroTitle": "24x7 Airport Taxi Service",
+    "heroSub": "Dedicated 24x7 airport pickups & drops across South India — flat rates with zero flight delay surge.",
+    "metaTitle": "Airport Taxi Service | 24x7 Airport Cabs | Drop Cars",
+    "metaDesc": "Reliable 24x7 airport cabs for Chennai, Bangalore, Coimbatore & Trichy airports. Flat rates, zero flight delay surge & instant booking.",
+    "selectorLabel": "Book Airport Taxi From",
+    "isDistinctService": true,
+    "homeController": "engine/airporttaxi-home.php",
+    "externalDomain": "https://airporttaxi.international"
+  },
+  {
+    "id": "drop-taxi",
+    "name": "Drop Taxi",
+    "slug": "drop-taxi",
+    "title": "Drop Taxi",
+    "heroTitle": "One-Way Drop Taxi — Pay Only for Your Journey",
+    "heroSub": "Travel city-to-city, pay strictly one-way. Verified drivers, fixed per-km rates & guaranteed on-time pickup.",
+    "metaTitle": "Drop Taxi — One-Way Intercity Taxi | Drop Cars",
+    "metaDesc": "Book one-way drop taxis across South India. Verified drivers, fixed per-km rates & on-time pickup — zero return charges.",
+    "selectorLabel": "Book Drop Taxi From"
+  },
+  {
+    "id": "drop-taxi-service",
+    "name": "Drop Taxi Service",
+    "slug": "drop-taxi-service",
+    "title": "Drop Taxi Service",
+    "heroTitle": "Trusted Drop Taxi Service Across South India",
+    "heroSub": "Reliable one-way drop taxi service with professional chauffeurs and fixed fares across South India. Safe, secure & on-time.",
+    "metaTitle": "Drop Taxi Service | Reliable One-Way Cabs | Drop Cars",
+    "metaDesc": "Drop taxi service across Tamil Nadu, Pondicherry, AP, Karnataka & Kerala. Professional chauffeurs, fixed fares & 24x7 booking.",
+    "selectorLabel": "Book Drop Taxi Service From"
+  },
+  {
+    "id": "one-drop-taxi",
+    "name": "One Drop Taxi",
+    "slug": "one-drop-taxi",
+    "title": "One Drop Taxi",
+    "heroTitle": "One Drop Taxi — Single-Leg Comfort Travel",
+    "heroSub": "No return charges, no empty cab cost. Professional single-leg intercity taxi — fixed fares & verified chauffeurs.",
+    "metaTitle": "One Drop Taxi | Single-Leg Intercity Cab | Drop Cars",
+    "metaDesc": "Book a one drop taxi across South India — pay only for the leg you need. Verified drivers & fixed fares across South India.",
+    "selectorLabel": "Book One Drop Taxi From"
+  },
+  {
+    "id": "one-way-taxi",
+    "name": "One Way Taxi",
+    "slug": "one-way-taxi",
+    "title": "One Way Taxi",
+    "heroTitle": "One Way Taxi — Verified Cabs at Fixed Fares",
+    "heroSub": "Book a one-way taxi to any destination in South India. Professional chauffeurs, fixed transparent rates & on-time pickup.",
+    "metaTitle": "One Way Taxi | Fixed Fare Outstation Cabs | Drop Cars",
+    "metaDesc": "One way taxi across South India. Verified drivers, fixed fares, zero return charges — instant online cab booking with Drop Cars.",
+    "selectorLabel": "Book One Way Taxi From"
+  },
+  {
+    "id": "one-way-cab",
+    "name": "One Way Cab",
+    "slug": "one-way-cab",
+    "title": "One Way Cab",
+    "heroTitle": "One Way Cab — Smart Intercity Travel",
+    "heroSub": "The smarter way to travel city-to-city. One-way cab service with professional drivers, fixed fares & assured pickup.",
+    "metaTitle": "One-Way Cab Service | Pay Only One Way | Drop Cars",
+    "metaDesc": "Intercity one-way cabs across South India. Pay strictly for distance traveled—no return fare. Clean AC cabs & verified drivers.",
+    "selectorLabel": "Book One Way Cab From"
+  },
+  {
+    "id": "one-drop-cab",
+    "name": "One Drop Cab",
+    "slug": "one-drop-cab",
+    "title": "One Drop Cab",
+    "heroTitle": "One Drop Cab — Reliable Single-Journey Booking",
+    "heroSub": "Simple, reliable single-journey cab service. Book for the distance you travel — verified drivers & fixed fares.",
+    "metaTitle": "One Drop Cab | Single-Journey Taxi | Drop Cars",
+    "metaDesc": "Book a one drop cab across South India. Verified professional drivers, fixed fares & instant booking confirmation.",
+    "selectorLabel": "Book One Drop Cab From"
+  },
+  {
+    "id": "outstation-taxi",
+    "name": "Outstation Taxi",
+    "slug": "outstation-taxi",
+    "title": "Outstation Taxi",
+    "heroTitle": "Premier Outstation Taxi for Long-Distance Travel",
+    "heroSub": "Highway-experienced chauffeurs for pilgrimage, business & family travel across South India. Fixed per-km rates & AC cabs.",
+    "metaTitle": "Outstation Taxi | Long Distance Cabs | Drop Cars",
+    "metaDesc": "Book outstation taxi across South India. Professional chauffeurs, fixed fares & 24/7 support for family & business travel.",
+    "selectorLabel": "Book Outstation Taxi From"
+  },
+  {
+    "id": "outstation-cab",
+    "name": "Outstation Cab",
+    "slug": "outstation-cab",
+    "title": "Outstation Cab",
+    "heroTitle": "Comfortable Outstation Cab — South India's Trusted Choice",
+    "heroSub": "Well-maintained outstation cabs for secure intercity travel. Experienced drivers, fixed fares & 24/7 availability.",
+    "metaTitle": "Outstation Cabs | Intercity Round-Trip & One-Way",
+    "metaDesc": "Book outstation cabs for weekend getaways, temple tours & intercity travel. Transparent per-km pricing with no hidden charges.",
+    "selectorLabel": "Book Outstation Cab From"
+  },
+  {
+    "id": "outstation-cabs",
+    "name": "Outstation Cabs",
+    "slug": "outstation-cabs",
+    "title": "Outstation Cabs",
+    "heroTitle": "Outstation Cabs — Fixed Fares, Zero Return Charges",
+    "heroSub": "Book outstation cabs with fixed fares and no hidden charges across South India. Clean cabs & instant online booking.",
+    "metaTitle": "Outstation Cabs | Fixed Fare Intercity Travel | Drop Cars",
+    "metaDesc": "Outstation cabs across South India. Fixed fares, no hidden fees & verified drivers — book outstation cabs instantly with Drop Cars.",
+    "selectorLabel": "Book Outstation Cabs From"
+  },
+  {
+    "id": "intercity-taxi",
+    "name": "Intercity Taxi",
+    "slug": "intercity-taxi",
+    "title": "Intercity Taxi",
+    "heroTitle": "Intercity Taxi — Swift & Safe City-to-City Travel",
+    "heroSub": "GPS-enabled intercity taxis with professional chauffeurs for business & leisure travel across South India.",
+    "metaTitle": "Intercity Taxi | City-to-City Cab Service | Drop Cars",
+    "metaDesc": "Book intercity taxi across South India. GPS-enabled cabs, professional chauffeurs & fixed fares for safe city-to-city travel.",
+    "selectorLabel": "Book City to City Taxi From"
+  },
+  {
+    "id": "city-to-city-taxi",
+    "name": "City to City Taxi",
+    "slug": "city-to-city-taxi",
+    "title": "City to City Taxi",
+    "heroTitle": "City to City Taxi — Direct Drops, Zero Wasted Kms",
+    "heroSub": "Direct city-to-city taxi service with no return charges. Transparent per-km fares & professional verified drivers.",
+    "metaTitle": "City to City Taxi | Direct Intercity Cab | Drop Cars",
+    "metaDesc": "City to city taxi across South India. Direct drops, no return charges, transparent fares & verified drivers — book with Drop Cars.",
+    "selectorLabel": "Book City to City Taxi From"
+  },
+  {
+    "id": "intercity-cabs",
+    "name": "Intercity Cabs",
+    "slug": "intercity-cabs",
+    "title": "Intercity Cabs",
+    "heroTitle": "Intercity Cabs — Courteous Drivers, Premium Comfort",
+    "heroSub": "Premium intercity cabs for corporate and family travel across South India. Courteous drivers & fixed per-km fares.",
+    "metaTitle": "Intercity Cabs | Premium City-to-City Travel | Drop Cars",
+    "metaDesc": "Book intercity cabs across South India. Courteous drivers, premium AC cabs, fixed fares & reliable on-time pickup with Drop Cars.",
+    "selectorLabel": "Book Intercity Cabs From"
+  }
+]

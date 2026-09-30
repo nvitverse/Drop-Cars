@@ -1,0 +1,38 @@
+{
+  "updatedAt": "2026-07-24",
+  "currency": "INR",
+  "gstPercent": 5,
+
+  "vehicles": {
+    "SEDAN":   { "label": "Sedan",          "seats": "4",   "icon": "🚗", "tagline": "Best for 1–3 pax" },
+    "SUV":     { "label": "SUV",            "seats": "6",   "icon": "🚙", "tagline": "Extra boot space" },
+    "INNOVA":  { "label": "Innova",         "seats": "6/7", "icon": "🚐", "tagline": "Family favourite" },
+    "CRYSTA":  { "label": "Innova Crysta",  "seats": "6/7", "icon": "🚐", "tagline": "Executive comfort" },
+    "HYCROSS": { "label": "Innova Hycross", "seats": "6/7", "icon": "🚐", "tagline": "Premium hybrid" }
+  },
+
+  "local": {
+    "includedKm": 20,
+    "minPrice":    { "SEDAN": 750, "SUV": 950, "INNOVA": 1100, "CRYSTA": 1600, "HYCROSS": 2200 },
+    "extraKmRate": { "SEDAN": 30,  "SUV": 40,  "INNOVA": 50,   "CRYSTA": 70,   "HYCROSS": 90 }
+  },
+
+  "outstation": {
+    "minKm": 130,
+    "perKmRate":       { "SEDAN": 15,  "SUV": 19,  "INNOVA": 20,  "CRYSTA": 24,  "HYCROSS": 26 },
+    "driverAllowance": { "SEDAN": 400, "SUV": 500, "INNOVA": 550, "CRYSTA": 600, "HYCROSS": 650 },
+    "tollPerKm": 2,
+    "borderFeePerState": 500
+  },
+
+  "rental": {
+    "packages": [
+      { "hours": 5,  "includedKm": 50 },
+      { "hours": 8,  "includedKm": 80 },
+      { "hours": 10, "includedKm": 100 },
+      { "hours": 12, "includedKm": 120 }
+    ],
+    "hourlyRate":  { "SEDAN": 300, "SUV": 380, "INNOVA": 420, "CRYSTA": 520, "HYCROSS": 600 },
+    "extraKmRate": { "SEDAN": 14,  "SUV": 18,  "INNOVA": 20,  "CRYSTA": 24,  "HYCROSS": 27 }
+  }
+}

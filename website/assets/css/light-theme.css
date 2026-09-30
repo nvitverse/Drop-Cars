@@ -1,0 +1,1197 @@
+/**
+ * Light Theme – Premium Elevation
+ * Drop Cars – Premium intercity taxi
+ *
+ * Applied when html does NOT have .dark-mode
+ * Replaces plain white/grey with polished
+ * glass-card aesthetics & soft sky-blue tones.
+ */
+
+/* ── Navbar — luminous light header (light mode) ── */
+html:not(.dark-mode) .site-header {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05) !important;
+  border-top: none !important;
+}
+
+html:not(.dark-mode) .logo__brand {
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .nav > a {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark-mode) .nav > a:hover,
+html:not(.dark-mode) .nav > a:focus-visible {
+  color: #0284c7 !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+}
+
+html:not(.dark-mode) .nav .nav-dropdown__btn {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark-mode) .nav .nav-dropdown__btn:hover,
+html:not(.dark-mode) .nav .nav-dropdown__btn:focus-visible {
+  color: #0284c7 !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+}
+
+html:not(.dark-mode) .nav-dropdown__btn svg {
+  stroke: #334155 !important;
+}
+
+html:not(.dark-mode) .nav-dropdown:hover .nav-dropdown__btn svg {
+  stroke: #0284c7 !important;
+}
+
+html:not(.dark-mode) .nav-dropdown__content {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+}
+
+html:not(.dark-mode) .nav-dropdown__content a {
+  color: #475569 !important;
+}
+
+html:not(.dark-mode) .nav-dropdown__content a:hover {
+  background: #f1f5f9 !important;
+  color: #0284c7 !important;
+}
+
+html:not(.dark-mode) .menu-button {
+  color: #334155 !important;
+}
+
+html:not(.dark-mode) .menu-button:hover {
+  background: rgba(14, 165, 233, 0.08) !important;
+}
+
+html:not(.dark-mode) .menu-button svg {
+  stroke: #334155 !important;
+}
+
+html:not(.dark-mode) .menu-panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+}
+
+html:not(.dark-mode) .menu-panel a:not(.menu-panel__cta-btn) {
+  color: #475569 !important;
+}
+
+html:not(.dark-mode) .menu-panel a:not(.menu-panel__cta-btn):hover {
+  background: #f1f5f9 !important;
+  color: #0284c7 !important;
+}
+
+/* Mobile drawer quick-action buttons in light mode */
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--primary {
+  background: linear-gradient(135deg, #102a43 0%, #0c2035 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2) !important;
+}
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--primary svg {
+  stroke: #ffffff !important;
+}
+
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--secondary {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--secondary svg {
+  stroke: #0f172a !important;
+}
+
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--admin {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+html:not(.dark-mode) .menu-panel .menu-panel__cta-btn--admin svg {
+  stroke: #475569 !important;
+}
+
+html:not(.dark-mode) .menu-panel .menu-panel__close {
+  background: #0f172a !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark-mode) .menu-panel__title {
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .menu-panel__dropdown {
+  border-color: #e2e8f0 !important;
+  background: #f8fafc !important;
+}
+
+html:not(.dark-mode) .menu-panel__dropdown summary {
+  color: #0f172a !important;
+}
+
+
+/* ── Cards — premium light glass ── */
+html:not(.dark-mode) .seo-card,
+html:not(.dark-mode) .service-card,
+html:not(.dark-mode) .city-card:not(.highway-signboard):not(.route-card--highway),
+html:not(.dark-mode) .trust-card,
+html:not(.dark-mode) .route-card:not(.highway-signboard):not(.route-card--highway),
+html:not(.dark-mode) .testimonial-card,
+html:not(.dark-mode) .vehicle-card,
+html:not(.dark-mode) .feature-card,
+html:not(.dark-mode) .fare-card,
+html:not(.dark-mode) .city-accordion-card {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(10px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(140%) !important;
+  border: 1px solid rgba(186, 230, 253, 0.55) !important;
+  box-shadow: 0 4px 20px rgba(15, 28, 60, 0.08), 0 1px 4px rgba(15, 28, 60, 0.05) !important;
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease !important;
+}
+
+html:not(.dark-mode) .seo-card:hover,
+html:not(.dark-mode) .service-card:hover,
+html:not(.dark-mode) .city-card:not(.highway-signboard):not(.route-card--highway):hover,
+html:not(.dark-mode) .route-card:not(.highway-signboard):not(.route-card--highway):hover,
+html:not(.dark-mode) .testimonial-card:hover,
+html:not(.dark-mode) .vehicle-card:hover,
+html:not(.dark-mode) .feature-card:hover {
+  box-shadow: 0 12px 36px rgba(15, 28, 60, 0.15), 0 2px 8px rgba(15, 28, 60, 0.08) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+html:not(.dark-mode) .route-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .route-card__text {
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .route-card__text small {
+  color: #d97706 !important;
+}
+
+html:not(.dark-mode) .route-card__arrow {
+  color: #0284c7 !important;
+}
+
+/* ── Highway Signboard Cards (Light Mode) ── */
+html:not(.dark-mode) .highway-signboard,
+html:not(.dark-mode) .route-card--highway {
+  background: linear-gradient(145deg, #ffffff 0%, #edf6ff 100%) !important;
+  border: 2px solid #0284c7 !important;
+  outline: 1.5px solid #e0f2fe !important;
+  color: #0f172a !important;
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark-mode) .highway-signboard:hover,
+html:not(.dark-mode) .route-card--highway:hover {
+  background: linear-gradient(145deg, #ffffff 0%, #e0f2fe 100%) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.22), 0 0 0 2px #0ea5e9 !important;
+}
+
+html:not(.dark-mode) .highway-signboard__header {
+  border-bottom: 1px dashed rgba(2, 132, 199, 0.25) !important;
+}
+
+html:not(.dark-mode) .highway-signboard__code {
+  color: #0369a1 !important;
+}
+
+html:not(.dark-mode) .highway-signboard__route {
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .highway-signboard__metrics {
+  border-top: 1px solid rgba(2, 132, 199, 0.15) !important;
+  flex-wrap: wrap !important;
+  box-sizing: border-box !important;
+}
+
+html:not(.dark-mode) .highway-metric--kms {
+  color: #0369a1 !important;
+}
+
+html:not(.dark-mode) .highway-metric--timing {
+  color: #0369a1 !important;
+  background: rgba(2, 132, 199, 0.08) !important;
+  border: 1px solid rgba(2, 132, 199, 0.2) !important;
+  padding: 0.12rem 0.35rem !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html:not(.dark-mode) .highway-signboard__cta {
+  background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+  border: 1px solid transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3) !important;
+}
+
+html:not(.dark-mode) .highway-signboard:hover .highway-signboard__cta,
+html:not(.dark-mode) .route-card--highway:hover .highway-signboard__cta {
+  background: linear-gradient(135deg, #0369a1 0%, #1e40af 100%) !important;
+  color: #ffffff !important;
+}
+
+/* ── Booking form fields — subtle blue tint ── */
+html:not(.dark-mode) .field input,
+html:not(.dark-mode) .field select {
+  background: rgba(248, 252, 255, 0.92) !important;
+  border: 1px solid rgba(148, 196, 220, 0.65) !important;
+}
+
+html:not(.dark-mode) .field input:focus,
+html:not(.dark-mode) .field select:focus {
+  background: #ffffff !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
+}
+
+/* ── Trip type tabs — light blue active state ── */
+html:not(.dark-mode) .fare-toggle__switch input:checked + label,
+html:not(.dark-mode) .fare-toggle__switch .trip-type-option--active {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.35) !important;
+}
+
+/* ── FAQ items — elevated glass ── */
+html:not(.dark-mode) .faq-item,
+html:not(.dark-mode) .faq__items article,
+html:not(.dark-mode) .faq__item {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border: 1px solid rgba(186, 230, 253, 0.5) !important;
+  box-shadow: 0 2px 10px rgba(15, 28, 60, 0.06) !important;
+}
+
+/* ── Stats strip ── */
+html:not(.dark-mode) .d1t-stat-block {
+  background: rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(14px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(150%) !important;
+  border: 1.5px solid rgba(15, 28, 46, 0.15) !important;
+  border-radius: 12px !important;
+  box-shadow: 
+    0 10px 30px rgba(15, 28, 60, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+html:not(.dark-mode) .d1t-stat-block:hover {
+  transform: translateY(-4px) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 
+    0 18px 40px rgba(2, 132, 199, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+html:not(.dark-mode) .d1t-stat-block__num { 
+  color: #0369a1 !important; 
+  text-shadow: none !important;
+}
+
+html:not(.dark-mode) .d1t-stat-block__label { 
+  color: #475569 !important; 
+}
+
+/* ── Vehicle selector cards ── */
+html:not(.dark-mode) .vehicle-selector-card {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1.5px solid rgba(15, 28, 46, 0.12) !important;
+  box-shadow: 0 2px 8px rgba(15, 28, 60, 0.02) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* ── Navbar — luminous light header (light mode) ── */
+html:not(.dark-mode) .site-header {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08) !important;
+  border-top: none !important;
+}
+
+html:not(.dark-mode) .logo-img--light {
+  mix-blend-mode: multiply !important;
+}
+
+html:not(.dark-mode) .header-login-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  border-radius: 99px !important;
+  padding: 0.48rem 1.25rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35) !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+}
+
+html:not(.dark-mode) .header-login-btn:hover {
+  transform: translateY(-2px) scale(1.03) !important;
+  box-shadow: 0 8px 22px rgba(14, 165, 233, 0.5) !important;
+}
+
+/* ── Hero background — Single calm light-colored backdrop for Light Mode ── */
+html:not(.dark-mode) .hero,
+html:not(.dark-mode) .hero-slider {
+  background: url("../img/hero-calm-light-bg.png") center center/cover no-repeat !important;
+}
+
+html:not(.dark-mode) .hero-slide__bg {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+html:not(.dark-mode) .hero-slider::after,
+html:not(.dark-mode) .hero-slider::before {
+  display: none !important;
+  content: none !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Crisp high-contrast typography for Light Mode — NO text-shadows, pure dark navy font colors */
+html:not(.dark-mode) .hero__copy .hero-text-slide h1,
+html:not(.dark-mode) .hero__copy .hero-text-slide .hero__slide-title,
+html:not(.dark-mode) .hero__copy h1 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  font-size: clamp(1.45rem, 3.2vw, 2.35rem) !important;
+  line-height: 1.16 !important;
+  letter-spacing: -0.02em !important;
+  text-shadow: none !important;
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+html:not(.dark-mode) .hero__copy .hero-text-slide h1 .accent,
+html:not(.dark-mode) .hero__copy h1 .accent {
+  color: #0284c7 !important;
+  -webkit-text-fill-color: #0284c7 !important;
+  background: none !important;
+  text-shadow: none !important;
+}
+
+html:not(.dark-mode) .hero__copy .hero-text-slide p.hero__sub,
+html:not(.dark-mode) .hero__copy p.hero__sub {
+  color: #334155 !important;
+  text-shadow: none !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+html:not(.dark-mode) .hero__copy .hero-text-slide .hero__eyebrow,
+html:not(.dark-mode) .hero__copy .hero__eyebrow {
+  color: #0284c7 !important;
+  background: #e0f2fe !important;
+  border: 1px solid #7dd3fc !important;
+  border-radius: 99px !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding: 0.38rem 1.2rem !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-shadow: none !important;
+}
+
+/* ── Hero booking card — premium white glass (light mode) ── */
+html:not(.dark-mode) .booking-card--home {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(186, 230, 253, 0.75) !important;
+  border-top: 4px solid #0ea5e9 !important;
+  box-shadow:
+    0 35px 70px -15px rgba(14, 165, 233, 0.22),
+    0 15px 35px -10px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(14, 165, 233, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  border-radius: 24px !important;
+  padding: 1.5rem !important;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease !important;
+}
+
+/* ── Trip type & Oneway Subtypes tab row design (light mode) ── */
+html:not(.dark-mode) .trip-type-options,
+html:not(.dark-mode) .oneway-subtypes,
+html:not(.dark-mode) .fare-toggle__switch {
+  background: rgba(241, 245, 249, 0.95) !important;
+  border: 1.5px solid rgba(203, 213, 225, 0.8) !important;
+  border-radius: 12px !important;
+  padding: 3px 4px !important;
+  box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.05), 0 1px 4px rgba(15, 23, 42, 0.03) !important;
+  gap: 4px !important;
+  margin-bottom: 0.35rem !important;
+}
+
+html:not(.dark-mode) .trip-type-options .trip-type-option,
+html:not(.dark-mode) .oneway-subtypes label,
+html:not(.dark-mode) .fare-toggle__switch label {
+  border-radius: 9px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  color: #475569 !important;
+  font-weight: 700 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  cursor: pointer !important;
+}
+
+html:not(.dark-mode) .oneway-subtypes label {
+  font-size: 0.8rem !important;
+  padding: 5px 10px !important;
+}
+
+html:not(.dark-mode) .trip-type-options .trip-type-option:hover,
+html:not(.dark-mode) .oneway-subtypes label:hover,
+html:not(.dark-mode) .fare-toggle__switch label:hover {
+  color: #0284c7 !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  transform: translateY(-1px);
+}
+
+html:not(.dark-mode) .trip-type-options .trip-type-option.trip-type-option--active,
+html:not(.dark-mode) .trip-type-options .trip-type-option.active,
+html:not(.dark-mode) .oneway-subtypes input:checked+label,
+html:not(.dark-mode) .oneway-subtypes label.active,
+html:not(.dark-mode) .fare-toggle__switch input:checked + label,
+html:not(.dark-mode) .fare-toggle__switch .trip-type-option--active {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  font-weight: 800 !important;
+  transform: translateY(-1px) scale(1.02) !important;
+}
+
+/* ── Label typography enhancement in light mode for the booking form ── */
+html:not(.dark-mode) .booking-form label.field > span:not(.field-hint),
+html:not(.dark-mode) .booking-form .field > span:not(.field-hint),
+html:not(.dark-mode) .booking-form .field__label-row > span:not(.field-hint) {
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  display: block !important;
+  margin-bottom: 0.35rem !important;
+}
+
+/* ── Inputs & Fields styling in light mode ── */
+html:not(.dark-mode) .field input,
+html:not(.dark-mode) .field select,
+html:not(.dark-mode) .promo-row input {
+  background: #ffffff !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 5px !important;
+  font-size: 0.95rem !important;
+  color: #0f172a !important;
+  padding: 0.7rem 0.9rem !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+html:not(.dark-mode) .field input:focus,
+html:not(.dark-mode) .field select:focus,
+html:not(.dark-mode) .promo-row input:focus {
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12) !important;
+  background: #ffffff !important;
+  outline: none !important;
+}
+
+/* ── Promo apply button ── */
+html:not(.dark-mode) .btn-promo-apply {
+  background: rgba(248, 252, 255, 0.95) !important;
+  border: 1px solid rgba(148, 196, 220, 0.65) !important;
+  color: #0369a1 !important;
+  border-radius: 5px !important;
+}
+html:not(.dark-mode) .btn-promo-apply:hover {
+  background: rgba(224, 242, 254, 0.95) !important;
+  border-color: #38bdf8 !important;
+}
+
+/* ── Section backgrounds in light mode ── */
+html:not(.dark-mode) section:not(.hero):not(.city-hero):not(.route-hero):not(.dev-hero):not(.airport-hero):not(.page-hero) {
+  background: transparent;
+}
+
+/* ── Hero Sections (Services, Airport, Cities, Routes, Page-Hero) ── */
+html:not(.dark-mode) .page-hero,
+html:not(.dark-mode) .city-hero,
+html:not(.dark-mode) .route-hero,
+html:not(.dark-mode) .cities-hero {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(37, 99, 235, 0.45), transparent 70%),
+    radial-gradient(circle 600px at 85% 90%, rgba(14, 165, 233, 0.3), transparent 80%),
+    linear-gradient(135deg, #0b132b 0%, #1c315e 45%, #1e40af 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Hero overlays suppressed — dark gradient bg is the backdrop ── */
+html:not(.dark-mode) .hero::after,
+html:not(.dark-mode) .city-hero::before,
+html:not(.dark-mode) .route-hero::before,
+html:not(.dark-mode) .cities-hero::before {
+  display: none !important;
+}
+
+/* Eyebrow pill — high contrast white glass on dark gradient hero */
+html:not(.dark-mode) .hero__copy .hero__eyebrow,
+html:not(.dark-mode) .page-hero__badge {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+  animation: none !important;
+}
+
+/* Headings — crisp white on dark gradient hero */
+html:not(.dark-mode) .hero__copy h1,
+html:not(.dark-mode) .city-hero h1,
+html:not(.dark-mode) .route-hero h1,
+html:not(.dark-mode) .airport-hero h1,
+html:not(.dark-mode) .page-hero__title,
+html:not(.dark-mode) .cities-hero h1 {
+  color: #ffffff !important;
+  text-shadow: 0 2px 14px rgba(15, 23, 42, 0.85) !important;
+}
+
+html:not(.dark-mode) .page-hero__title .accent {
+  color: #fbbf24 !important;
+  -webkit-text-fill-color: #fbbf24 !important;
+  background: none !important;
+  text-shadow: 0 2px 16px rgba(251, 191, 36, 0.5) !important;
+  filter: none !important;
+}
+
+/* Sub-text — light slate/white in light mode */
+html:not(.dark-mode) .hero__copy .hero__sub,
+html:not(.dark-mode) .city-hero p,
+html:not(.dark-mode) .route-hero p,
+html:not(.dark-mode) .airport-hero p,
+html:not(.dark-mode) .page-hero__desc,
+html:not(.dark-mode) .page-hero .breadcrumb,
+html:not(.dark-mode) .page-hero .breadcrumb a,
+html:not(.dark-mode) .page-hero .breadcrumb__current,
+html:not(.dark-mode) .cities-hero p {
+  color: #f1f5f9 !important;
+  text-shadow: 0 1px 8px rgba(15, 23, 42, 0.75) !important;
+}
+
+html:not(.dark-mode) .page-hero .breadcrumb a {
+  color: #94a3b8 !important;
+}
+html:not(.dark-mode) .page-hero .breadcrumb a:hover {
+  color: #38bdf8 !important;
+}
+html:not(.dark-mode) .page-hero .breadcrumb__current {
+  color: #e2e8f0 !important;
+}
+
+html:not(.dark-mode) .btn-hero-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4) !important;
+}
+
+html:not(.dark-mode) .btn-hero-outline {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+}
+html:not(.dark-mode) .btn-hero-outline:hover {
+  background: rgba(255, 255, 255, 0.28) !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Focus glow for text input fields */
+html:not(.dark-mode) .field input:focus,
+html:not(.dark-mode) .field select:focus,
+html:not(.dark-mode) .field textarea:focus,
+html:not(.dark-mode) .promo-row input:focus {
+  background: #ffffff !important;
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+/* ── Light Mode Partner Pages Overrides ── */
+html:not(.dark-mode) .partner-form-card {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(10px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(140%) !important;
+  border: 1px solid rgba(186, 230, 253, 0.55) !important;
+  box-shadow: 0 4px 20px rgba(15, 28, 60, 0.08), 0 1px 4px rgba(15, 28, 60, 0.05) !important;
+}
+
+html:not(.dark-mode) .form-field label {
+  color: #0f1c2e !important;
+}
+
+html:not(.dark-mode) .form-field input,
+html:not(.dark-mode) .form-field select,
+html:not(.dark-mode) .form-field textarea {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1.5px solid rgba(15, 28, 46, 0.16) !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .form-field input:focus,
+html:not(.dark-mode) .form-field select:focus,
+html:not(.dark-mode) .form-field textarea:focus {
+  background: #ffffff !important;
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2) !important;
+}
+
+html:not(.dark-mode) .btn-submit {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25) !important;
+}
+
+html:not(.dark-mode) .btn-submit:hover {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
+}
+
+html:not(.dark-mode) .btn-submit:active {
+  transform: translateY(0);
+}
+
+html:not(.dark-mode) .benefit-icon {
+  background: rgba(15, 28, 46, 0.05) !important;
+  color: #0284c7 !important;
+}
+
+html:not(.dark-mode) .benefit-content h4 {
+  color: #0f1c2e !important;
+}
+
+html:not(.dark-mode) .benefit-content p {
+  color: #475569 !important;
+}
+
+html:not(.dark-mode) .partner-hero p {
+  color: #475569 !important;
+}
+
+/* ── Stats Strip Upgrades (light mode) ── */
+html:not(.dark-mode) .d1t-stat-block {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05) !important;
+  border-radius: 14px !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+html:not(.dark-mode) .d1t-stat-block:hover {
+  border-color: #0ea5e9 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 15px 30px -5px rgba(14, 165, 233, 0.1) !important;
+}
+
+/* ── Cities page accordion transparency overrides in light mode ── */
+html:not(.dark-mode) .city-accordion-header,
+html:not(.dark-mode) .city-accordion-content {
+  background: transparent !important;
+}
+html:not(.dark-mode) .city-accordion-header:hover {
+  background: rgba(15, 28, 60, 0.03) !important;
+}
+
+/* ── Premium Upgraded Sections (Light Mode) ── */
+html:not(.dark-mode) .stat-badge {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(186, 230, 253, 0.55);
+  box-shadow: 0 4px 16px rgba(15, 28, 60, 0.06);
+}
+html:not(.dark-mode) .stat-number {
+  color: #0284c7;
+}
+html:not(.dark-mode) .stat-label {
+  color: #475569;
+}
+
+html:not(.dark-mode) .feature-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(186, 230, 253, 0.55);
+  border-left: 4px solid #0284c7;
+  box-shadow: 0 4px 20px rgba(15, 28, 60, 0.06);
+}
+html:not(.dark-mode) .feature-card:hover {
+  box-shadow: 0 12px 32px rgba(2, 132, 199, 0.15);
+  transform: translateY(-3px);
+  border-color: #38bdf8;
+  border-left-color: #0284c7;
+}
+html:not(.dark-mode) .feature-card__number {
+  color: #0284c7;
+}
+html:not(.dark-mode) .feature-card__icon-wrapper {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  color: #0284c7;
+}
+html:not(.dark-mode) .feature-card__content h3 {
+  color: #0f172a;
+}
+html:not(.dark-mode) .feature-card__content p {
+  color: #475569;
+}
+
+html:not(.dark-mode) .testimonial-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(186, 230, 253, 0.55);
+  box-shadow: 0 4px 20px rgba(15, 28, 60, 0.06);
+}
+html:not(.dark-mode) .testimonial-card:hover {
+  box-shadow: 0 12px 32px rgba(15, 28, 60, 0.12);
+  transform: translateY(-3px);
+}
+html:not(.dark-mode) .testimonial-card::before {
+  color: #0284c7;
+}
+html:not(.dark-mode) .testimonial-text {
+  color: #1e293b;
+}
+html:not(.dark-mode) .testimonial-trip {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+html:not(.dark-mode) .testimonial-user strong {
+  color: #0f172a;
+}
+html:not(.dark-mode) .testimonial-user small {
+  color: #64748b;
+}
+
+html:not(.dark-mode) .faq__item {
+  background: rgba(248, 252, 255, 0.85);
+  border: 1px solid rgba(186, 230, 253, 0.55);
+}
+html:not(.dark-mode) .faq__item[open] {
+  border-left: 4px solid #0284c7;
+  background: #ffffff;
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.08);
+}
+html:not(.dark-mode) .faq__summary {
+  color: #0f172a;
+}
+html:not(.dark-mode) .faq__item p {
+  color: #475569;
+}
+
+/* ── Authentic Highway Signboard & City Card Design (Light Mode - Matching Target Screenshots 3 & 4) ── */
+html:not(.dark-mode) .highway-signboard,
+html:not(.dark-mode) .route-card--highway,
+html:not(.dark-mode) .city-card {
+  position: relative !important;
+  background: #ffffff !important;
+  border: 2px solid #0ea5e9 !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 0.9rem !important;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04) !important;
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+}
+
+/* Corner screw dots inside border */
+html:not(.dark-mode) .highway-signboard::before,
+html:not(.dark-mode) .highway-signboard::after,
+html:not(.dark-mode) .route-card--highway::before,
+html:not(.dark-mode) .route-card--highway::after,
+html:not(.dark-mode) .city-card::before,
+html:not(.dark-mode) .city-card::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute !important;
+  top: 5px !important;
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 50% !important;
+  background: #94a3b8 !important;
+  border: 1px solid #64748b !important;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.3) !important;
+  z-index: 2 !important;
+}
+html:not(.dark-mode) .highway-signboard::before,
+html:not(.dark-mode) .route-card--highway::before,
+html:not(.dark-mode) .city-card::before {
+  left: 5px !important;
+}
+html:not(.dark-mode) .highway-signboard::after,
+html:not(.dark-mode) .route-card--highway::after,
+html:not(.dark-mode) .city-card::after {
+  right: 5px !important;
+}
+
+html:not(.dark-mode) .highway-signboard:hover,
+html:not(.dark-mode) .route-card--highway:hover,
+html:not(.dark-mode) .city-card:hover {
+  transform: translateY(-5px) scale(1.01) !important;
+  box-shadow: 0 14px 32px rgba(14, 165, 233, 0.22), 0 0 0 2px #0284c7 !important;
+  border-color: #0284c7 !important;
+}
+
+/* Highway Signboard Header / Highway Badge */
+html:not(.dark-mode) .highway-signboard__header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-bottom: 0.4rem !important;
+  border-bottom: 1.5px dashed #bae6fd !important;
+  margin-bottom: 0.5rem !important;
+  width: 100% !important;
+}
+
+html:not(.dark-mode) .highway-badge {
+  background: #facc15 !important;
+  color: #0f172a !important;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.18rem 0.5rem !important;
+  border-radius: 4px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+}
+
+html:not(.dark-mode) .highway-signboard__code {
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  color: #0284c7 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+/* Route Title (ORIGIN -> DESTINATION) */
+html:not(.dark-mode) .highway-signboard__route {
+  color: #0f172a !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: uppercase !important;
+  margin: 0.35rem 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+}
+
+html:not(.dark-mode) .highway-signboard__route-arrow {
+  color: #f59e0b !important;
+  font-weight: 900 !important;
+  font-size: 0.9rem !important;
+}
+
+/* Highway Signboard Metrics Row (KMS & TIMING) */
+html:not(.dark-mode) .highway-signboard__metrics {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.35rem !important;
+  margin-top: 0.45rem !important;
+  padding-top: 0.4rem !important;
+  border-top: 1.5px dashed #e2e8f0 !important;
+  width: 100% !important;
+  flex-wrap: wrap !important;
+  box-sizing: border-box !important;
+}
+
+html:not(.dark-mode) .highway-metric {
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html:not(.dark-mode) .highway-metric--kms {
+  color: #0284c7 !important;
+  flex-shrink: 0 !important;
+}
+
+html:not(.dark-mode) .highway-metric--timing {
+  color: #0369a1 !important;
+  background: #e0f2fe !important;
+  padding: 0.12rem 0.35rem !important;
+  border-radius: 6px !important;
+  border: 1px solid #bae6fd !important;
+  flex-shrink: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Action CTA Button */
+html:not(.dark-mode) .highway-signboard__cta {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.35rem !important;
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+  color: #ffffff !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  padding: 0.45rem 0.8rem !important;
+  border-radius: 8px !important;
+  margin-top: 0.55rem !important;
+  transition: all 0.25s ease !important;
+  width: 100% !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3) !important;
+}
+
+html:not(.dark-mode) .highway-signboard:hover .highway-signboard__cta,
+html:not(.dark-mode) .route-card--highway:hover .highway-signboard__cta,
+html:not(.dark-mode) .city-card:hover .highway-signboard__cta {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.4) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HIGH-CONTRAST DARK BORDERS & TAB COLORS (LIGHT THEME ONLY)
+   ══════════════════════════════════════════════════════════════════════════ */
+#booking-form-dynamic-title,
+.airport-booking-title,
+.airport-top-badge {
+  color: #ffffff !important;
+}
+
+html:not(.dark-mode) .booking-card,
+html:not(.dark-mode) .booking-card--home {
+  background: #ffffff !important;
+  border: 2px solid #64748b !important;
+}
+
+/* Input Fields & Select Dropdowns in Light Theme */
+html:not(.dark-mode) .booking-form .field input,
+html:not(.dark-mode) .booking-form .field select,
+html:not(.dark-mode) .booking-form .phone-input-wrapper,
+html:not(.dark-mode) .booking-form .country-code-trigger,
+html:not(.dark-mode) .booking-form .promo-row input,
+html:not(.dark-mode) .booking-form input.phone-national-input {
+  background: #ffffff !important;
+  border: 1.5px solid #64748b !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark-mode) .booking-form .field input:focus,
+html:not(.dark-mode) .booking-form .field select:focus,
+html:not(.dark-mode) .booking-form .phone-input-wrapper:focus-within,
+html:not(.dark-mode) .booking-form .promo-row input:focus {
+  background: #ffffff !important;
+  border-color: #0284c7 !important;
+  outline: 1.5px solid #0284c7 !important;
+}
+
+/* Field Labels & Placeholders */
+html:not(.dark-mode) .booking-form .field > span,
+html:not(.dark-mode) .booking-form label.field > span,
+html:not(.dark-mode) .booking-form .field__label-row {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark-mode) .booking-form .field input::placeholder,
+html:not(.dark-mode) .booking-form .field select::placeholder {
+  color: #64748b !important;
+}
+
+/* Trip Type Tab Blocks & Option Buttons in Light Theme */
+html:not(.dark-mode) .trip-type-options,
+html:not(.dark-mode) .oneway-subtypes,
+html:not(.dark-mode) .fare-toggle__switch {
+  background: #f1f5f9 !important;
+  border: 1.5px solid #64748b !important;
+  padding: 3px !important;
+}
+
+/* Inactive Tab Options */
+html:not(.dark-mode) .trip-type-option,
+html:not(.dark-mode) .oneway-subtypes label,
+html:not(.dark-mode) .fare-toggle__switch label,
+html:not(.dark-mode) .trip-type-block button:not(.trip-type-option--active) {
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  background: transparent !important;
+}
+
+html:not(.dark-mode) .trip-type-option:hover,
+html:not(.dark-mode) .oneway-subtypes label:hover,
+html:not(.dark-mode) .fare-toggle__switch label:hover {
+  color: #0284c7 !important;
+  background: #e0f2fe !important;
+}
+
+/* Active Tab Options */
+html:not(.dark-mode) .trip-type-option--active,
+html:not(.dark-mode) .trip-type-option.active,
+html:not(.dark-mode) .oneway-subtypes input[type="radio"]:checked + label,
+html:not(.dark-mode) .fare-toggle__switch input:checked + label {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border-radius: 6px !important;
+}
+
+/* Vehicle Selector Cards in Light Theme */
+html:not(.dark-mode) .booking-card .vehicle-selector-card {
+  background: #ffffff !important;
+  border: 1.5px solid #64748b !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark-mode) .booking-card .vehicle-selector-card:hover,
+html:not(.dark-mode) .booking-card .vehicle-selector-card.selected {
+  border-color: #0284c7 !important;
+  background: #f0f9ff !important;
+}
+
+/* ── Fare Inclusions & Tax Info Popover ── */
+.fare-toggle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.fare-toggle-wrap .fare-toggle__switch {
+  flex: 1;
+  margin-bottom: 0 !important;
+}
+
+.fare-info-btn {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.fare-info-btn:hover {
+  background: #e0f2fe;
+  border-color: #0284c7;
+  transform: scale(1.08);
+}
+
+.fare-info-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  padding: 12px 14px;
+  z-index: 50;
+  animation: popIn 0.2s ease-out;
+}
+
+.fare-info-popover.is-hidden {
+  display: none !important;
+}
+
+.fare-info-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.fare-info-popover__close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.fare-info-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fare-info-list li {
+  font-size: 0.78rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.fare-info-list li strong {
+  color: #0f172a;
+}
+
+
+

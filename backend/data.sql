@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS "drop-cars"."admin_add_money_to_vehicle_owner" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."admin_wallet_ledger" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."end_records" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."hourly_rental" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."new_orders" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."notifications" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."order_assignments" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."orders" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."razorpay_transactions" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."transfer_transactions" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."vendor_wallet_ledger" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."wallet_ledger" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."vendor_details" CASCADE;
+DROP TABLE IF EXISTS "drop-cars"."vendor" CASCADE;

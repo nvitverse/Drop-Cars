@@ -1,0 +1,28 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Optional: ignore virtual environment
+venv/
+.env/
+.env
+# Optional: macOS system files
+.DS_Store
+
+#GCS Credentials
+app/core/drop-cars-468718-d08441443ada.json
+app/tests/*
+*test.py
+run_tests.py
+env.yaml
+cloud_push.sh
+Project-Drop-Cars-Backend\app\core\drop-cars-473714-b5e0ebd5f0ab.json
+backup.dump
+
+*dump
+full_backup_drop-cars.sql
+# Deployment logs
+deploy_output*.txt
+deploy_output.txt

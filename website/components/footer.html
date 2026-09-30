@@ -1,0 +1,364 @@
+<!-- Reusable footer component – include via SSI or JS fetch -->
+<footer class="site-footer" id="contact">
+  <div class="container footer__grid">
+    <div>
+      <div class="logo footer__logo">
+        <a href="/">
+          <div class="logo-wrapper" style="display:inline-flex; align-items:center; gap:8px;">
+            <img src="/assets/img/dropcars-emblem.png" alt="Drop Cars" class="logo-emblem-img" style="height:36px; width:36px; object-fit:contain; display:block;" />
+            <span class="logo-brand-pill"><span class="logo__mark">Drop</span><span class="logo__text">Cars</span></span>
+          </div>
+        </a>
+      </div>
+      <p>
+        Premium Drop Cars drop taxi, one way cab, and droptaxi service for seamless
+        intercity travel across South India.
+      </p>
+    </div>
+    <div>
+      <p class="footer__title">Contact</p>
+      <ul class="contact-list">
+        <li>Phone: <a href="tel:+917200217986">+91 7200217986</a></li>
+        <li>Email: <a href="mailto:support@dropcars.in">support@dropcars.in</a></li>
+        <li>Address: 2nd Floor, Tech Park, OMR, Chennai, Tamil Nadu 600097</li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer__title">Quick Links</p>
+      <ul class="footer-links">
+        <li><a href="/#services">Services</a></li>
+        <li><a href="/#routes">Service Areas</a></li>
+        <li><a href="/#trust">Safety &amp; Trust</a></li>
+        <li><a href="/#booking">Book A Cab</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <p>© <span id="year"></span> Drop Cars. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- DropBot AI 24/7 Live Assistant Floating Widget -->
+<div id="dropbot-widget-container">
+  <button id="dropbot-trigger-btn" aria-label="Open DropBot AI Support" onclick="toggleDropBotChat()">
+    <span class="dropbot-pulse-dot"></span>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8V4H8"></path>
+      <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+      <path d="M2 14h2"></path>
+      <path d="M20 14h2"></path>
+      <path d="M15 13v2"></path>
+      <path d="M9 13v2"></path>
+    </svg>
+    <span class="dropbot-btn-label">DropBot AI</span>
+  </button>
+
+  <div id="dropbot-chat-window" class="dropbot-hidden">
+    <div class="dropbot-chat-header">
+      <div class="dropbot-header-info">
+        <div class="dropbot-header-avatar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+            <path d="M12 8V4H8"></path>
+            <path d="M2 14h2"></path>
+            <path d="M20 14h2"></path>
+            <path d="M15 13v2"></path>
+            <path d="M9 13v2"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="dropbot-header-title">DropBot AI Assistant</div>
+          <div class="dropbot-header-status">● 24/7 Live Intercity Intelligence</div>
+        </div>
+      </div>
+      <button class="dropbot-close-btn" onclick="toggleDropBotChat()" aria-label="Close Chat">×</button>
+    </div>
+
+    <!-- Quick Suggestions Bar -->
+    <div class="dropbot-suggestions-bar">
+      <button class="dropbot-sug-chip" onclick="sendDropBotPreset('Estimate Chennai to Madurai fare')">💰 Chennai ➔ Madurai</button>
+      <button class="dropbot-sug-chip" onclick="sendDropBotPreset('Estimate Chennai to Bangalore fare')">🚗 Chennai ➔ Bangalore</button>
+      <button class="dropbot-sug-chip" onclick="sendDropBotPreset('How do Start & End OTPs work?')">🔑 OTP Rules</button>
+      <button class="dropbot-sug-chip" onclick="sendDropBotPreset('Are tolls and parking included?')">🅿️ Toll Policy</button>
+      <button class="dropbot-sug-chip" onclick="sendDropBotPreset('Luggage and pet guidelines')">🧳 Luggage Policy</button>
+    </div>
+
+    <!-- Messages Container -->
+    <div id="dropbot-messages-list" class="dropbot-messages-body">
+      <div class="dropbot-msg dropbot-msg-bot">
+        <div class="dropbot-msg-content">
+          Vanakkam! I am <strong>DropBot</strong>, your 24/7 Drop Cars AI Assistant. 🚗✨<br><br>
+          Ask me about outstation one-way drop fares, Start/End OTP rules, Fastag tolls, or luggage policies!
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Box -->
+    <form class="dropbot-input-area" onsubmit="handleDropBotSubmit(event)">
+      <input type="text" id="dropbot-text-input" placeholder="Ask DropBot (e.g. fare from Salem to Madurai)..." autocomplete="off" />
+      <button type="submit" id="dropbot-send-btn" aria-label="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<style>
+#dropbot-widget-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#dropbot-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+  color: #FFFFFF;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 28px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+#dropbot-trigger-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.55);
+}
+.dropbot-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: dropbotPulse 1.8s infinite;
+}
+@keyframes dropbotPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+#dropbot-chat-window {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  width: 370px;
+  max-width: calc(100vw - 32px);
+  height: 520px;
+  max-height: calc(100vh - 120px);
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#dropbot-chat-window.dropbot-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px) scale(0.96);
+}
+.dropbot-chat-header {
+  background: linear-gradient(135deg, #0EA5E9 0%, #0369A1 100%);
+  color: #FFFFFF;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dropbot-header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dropbot-header-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dropbot-header-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.dropbot-header-status {
+  font-size: 11px;
+  color: #BAE6FD;
+}
+.dropbot-close-btn {
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.dropbot-suggestions-bar {
+  display: flex;
+  overflow-x: auto;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+  scrollbar-width: none;
+}
+.dropbot-suggestions-bar::-webkit-scrollbar { display: none; }
+.dropbot-sug-chip {
+  white-space: nowrap;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  border: 1px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #0F172A;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.dropbot-sug-chip:hover {
+  background: #E0F2FE;
+  border-color: #38BDF8;
+  color: #0284C7;
+}
+.dropbot-messages-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #F8FAFC;
+}
+.dropbot-msg {
+  max-width: 85%;
+  font-size: 13px;
+  line-height: 1.45;
+  border-radius: 14px;
+  padding: 10px 14px;
+  word-break: break-word;
+}
+.dropbot-msg-bot {
+  align-self: flex-start;
+  background: #FFFFFF;
+  color: #0F172A;
+  border: 1px solid #E2E8F0;
+  border-bottom-left-radius: 2px;
+}
+.dropbot-msg-user {
+  align-self: flex-end;
+  background: #0EA5E9;
+  color: #FFFFFF;
+  border-bottom-right-radius: 2px;
+}
+.dropbot-input-area {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
+  gap: 8px;
+}
+#dropbot-text-input {
+  flex: 1;
+  height: 40px;
+  border: 1px solid #CBD5E1;
+  border-radius: 20px;
+  padding: 0 14px;
+  font-size: 13px;
+  outline: none;
+}
+#dropbot-text-input:focus {
+  border-color: #0EA5E9;
+}
+#dropbot-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: #0EA5E9;
+  color: #FFFFFF;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+</style>
+
+<script>
+function toggleDropBotChat() {
+  var win = document.getElementById('dropbot-chat-window');
+  if (win.classList.contains('dropbot-hidden')) {
+    win.classList.remove('dropbot-hidden');
+    setTimeout(function() {
+      document.getElementById('dropbot-text-input').focus();
+    }, 100);
+  } else {
+    win.classList.add('dropbot-hidden');
+  }
+}
+
+function sendDropBotPreset(text) {
+  var input = document.getElementById('dropbot-text-input');
+  input.value = text;
+  handleDropBotSubmit(new Event('submit'));
+}
+
+function handleDropBotSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  var input = document.getElementById('dropbot-text-input');
+  var query = (input.value || '').trim();
+  if (!query) return;
+
+  var container = document.getElementById('dropbot-messages-list');
+
+  // Append user message
+  var userDiv = document.createElement('div');
+  userDiv.className = 'dropbot-msg dropbot-msg-user';
+  userDiv.textContent = query;
+  container.appendChild(userDiv);
+  input.value = '';
+  container.scrollTop = container.scrollHeight;
+
+  // Typing placeholder
+  var botDiv = document.createElement('div');
+  botDiv.className = 'dropbot-msg dropbot-msg-bot';
+  botDiv.textContent = 'Thinking...';
+  container.appendChild(botDiv);
+  container.scrollTop = container.scrollHeight;
+
+  // API Request
+  fetch('https://drop-cars-api-207918408785.asia-south2.run.app/ai/chat-assistant', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: query, language: 'ta' })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data && data.reply) {
+      botDiv.innerHTML = data.reply.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    } else {
+      botDiv.innerHTML = 'Our drop taxi fares start from ₹14/km (Sedan) and ₹19/km (SUV). Tolls payable as per actuals. Call <strong>+91 7200217986</strong> for instant booking.';
+    }
+    container.scrollTop = container.scrollHeight;
+  })
+  .catch(function(err) {
+    botDiv.innerHTML = 'Drop Cars intercity one-way tariff:<br>• Sedan (Etios/Dzire): ₹14/km<br>• SUV (Ertiga): ₹19/km<br>• Innova: ₹21/km<br>Call <strong>+91 7200217986</strong> for instant booking!';
+    container.scrollTop = container.scrollHeight;
+  });
+}
+</script>
+

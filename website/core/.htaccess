@@ -1,0 +1,3 @@
+# Deny all - core must never be web-accessible
+Order deny,allow
+Deny from all

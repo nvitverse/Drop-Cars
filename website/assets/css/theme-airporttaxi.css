@@ -1,0 +1,72 @@
+/**
+ * AirportTaxi.International — elite black & champagne-gold theme overrides.
+ *
+ * Scoped under body.theme-airporttaxi.ati-native — the .ati-native class is
+ * only added when dropcars_is_native_airporttaxi_host() is true, i.e. the
+ * real airporttaxi.international domain (or a local preview server spoofing
+ * that Host header). When the airport-taxi page is reached via /airporttaxi
+ * under Drop Cars' own domain ("embedded"), body only has .theme-airporttaxi
+ * and none of these rules match, so the page inherits Drop Cars' normal
+ * navy/sky-blue palette from base.css/navbar.css/footer.css untouched.
+ */
+
+body.theme-airporttaxi.ati-native {
+  --blue: #14141a;
+  --blue-dark: #0a0a0c;
+  --blue-light: #1f1f28;
+  --accent: #c9a24b;
+  --accent-gradient: linear-gradient(135deg, #f0d38a 0%, #c9a24b 55%, #a67c2e 100%);
+  --accent-glow: rgba(201, 162, 75, 0.35);
+}
+
+/* Header logotype */
+body.theme-airporttaxi.ati-native .logo__brand { color: #14141a; }
+body.theme-airporttaxi.ati-native .logo__accent {
+  background: linear-gradient(135deg, #f0d38a 0%, #a67c2e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Header hairline */
+body.theme-airporttaxi.ati-native .site-header {
+  border-bottom: 1px solid rgba(201, 162, 75, 0.2);
+}
+
+/* Login / My Account CTA — hardcoded blue in navbar.css, not var-driven */
+body.theme-airporttaxi.ati-native .header-login-btn {
+  background: linear-gradient(135deg, #1f1f28 0%, #0a0a0c 100%);
+  border: 1px solid #c9a24b;
+  color: #f0d38a !important;
+  box-shadow: none;
+}
+body.theme-airporttaxi.ati-native .header-login-btn:hover {
+  background: linear-gradient(135deg, #2a2a35 0%, #14141a 100%);
+  box-shadow: 0 5px 16px rgba(201, 162, 75, 0.32);
+}
+
+/* Mobile menu close pill */
+body.theme-airporttaxi.ati-native .menu-panel__close {
+  background: linear-gradient(135deg, #1f1f28 0%, #0a0a0c 100%);
+}
+
+/* WhatsApp / call float buttons keep their brand colors intentionally —
+   they're recognizable utility affordances, not the site's own branding. */
+
+/* ── pages/contact.php ── */
+body.theme-airporttaxi.ati-native .contact-form-card::before { background: linear-gradient(90deg,#a67c2e,#f0d9a3 50%,#a67c2e); }
+body.theme-airporttaxi.ati-native .contact-form-field input:focus,
+body.theme-airporttaxi.ati-native .contact-form-field select:focus,
+body.theme-airporttaxi.ati-native .contact-form-field textarea:focus { border-color:#c9a24b; box-shadow:0 0 0 3px rgba(201,162,75,0.16); }
+body.theme-airporttaxi.ati-native .contact-submit-btn { background: linear-gradient(135deg,#171612,#000); }
+body.theme-airporttaxi.ati-native .office-map-placeholder { background: linear-gradient(135deg,#171612,#3a2f1a); }
+
+/* ── pages/driver-partner.php, vendor-partner.php, fleet-partner.php
+   (assets/css/partner-pages.css) ── */
+body.theme-airporttaxi.ati-native .download-app-card { background: linear-gradient(135deg,#171612 0%,#3a2f1a 100%); }
+body.theme-airporttaxi.ati-native .btn-playstore { background:#000; }
+body.theme-airporttaxi.ati-native .btn-playstore:hover { background:#171612; }
+body.theme-airporttaxi.ati-native .form-field input:focus,
+body.theme-airporttaxi.ati-native .form-field select:focus,
+body.theme-airporttaxi.ati-native .form-field textarea:focus { border-color:#c9a24b; }
+body.theme-airporttaxi.ati-native .btn-submit { background:#171612; }
+body.theme-airporttaxi.ati-native .btn-submit:hover { background:#000; }

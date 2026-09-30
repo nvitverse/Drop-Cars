@@ -1,0 +1,287 @@
+/**
+ * Premium Sections Stylesheet - Drop Cars
+ * Comprehensive enhancements for Booking Steps, Features, About, Testimonials, FAQ & Footer.
+ */
+
+/* ── 1. Booking Steps Indicator ── */
+.booking-steps-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.25rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.15);
+  margin-bottom: 0.85rem;
+  border-radius: 6px 6px 0 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.3s ease;
+}
+
+.step-item--active {
+  color: var(--blue, #0284c7);
+  font-weight: 700;
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+}
+
+.step-item--active .step-num {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+.step-divider {
+  flex: 1;
+  height: 2px;
+  background: rgba(226, 232, 240, 0.2);
+  margin: 0 0.5rem;
+  border-radius: 1px;
+}
+
+/* ── 2. About Section Split Layout ── */
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .about-grid {
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 3rem;
+  }
+}
+
+.about-stats-card {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.stat-badge {
+  padding: 1.25rem 1rem;
+  border-radius: 14px;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-badge:hover {
+  transform: translateY(-4px);
+}
+
+.stat-number {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+/* ── 3. Why Choose Us (Features) Upgrade ── */
+.premium-features-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.feature-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 1.35rem 1.25rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.feature-card__number {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  font-size: 2.2rem;
+  font-weight: 900;
+  opacity: 0.08;
+  pointer-events: none;
+  font-family: var(--font-heading, sans-serif);
+}
+
+.feature-card__icon-wrapper {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+}
+
+.feature-card__content h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.feature-card__content p {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* ── 4. Testimonials Redesign ── */
+.testimonial-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.85rem;
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.testimonial-card::before {
+  content: "“";
+  position: absolute;
+  top: -10px;
+  right: 15px;
+  font-size: 4.5rem;
+  font-family: Georgia, serif;
+  line-height: 1;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.testimonial-rating {
+  font-size: 0.95rem;
+  letter-spacing: 2px;
+}
+
+.testimonial-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  font-style: italic;
+  margin: 0;
+}
+
+.testimonial-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  margin-top: auto;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  font-size: 0.8rem;
+}
+
+.testimonial-user {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+}
+
+.testimonial-user strong {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.testimonial-user small {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.testimonial-trip {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  padding: 0.25rem 0.7rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 5. FAQ Accordion Enhancements ── */
+.faq__accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.faq__item {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.faq__summary {
+  padding: 1rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.98rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.faq__summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq__summary::after {
+  content: "+";
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--blue, #0284c7);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.faq__item[open] .faq__summary::after {
+  content: "−";
+  transform: rotate(180deg);
+}
+
+.faq__item p {
+  padding: 0 1.25rem 1rem 1.25rem;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}

@@ -1,0 +1,29 @@
+/* Airport Transfer Page Specific Styles */
+.keyword-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #f59e0b, #ffb703);
+  color: #1f2937;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  margin-left: 0.5rem;
+  border-radius: 9999px;
+  vertical-align: middle;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Hover effect for airport cards */
+.airport-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 45px rgba(0,0,0,0.12);
+  border-color: var(--accent, #f59e0b);
+}
+
+/* Route tag enhancements */
+.airport-card__route-tag {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.airport-card__route-tag:hover {
+  background: var(--accent, #f59e0b);
+  color: #fff;
+}

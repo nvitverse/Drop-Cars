@@ -1,0 +1,39 @@
+/**
+ * About section styling – aligned with other sections
+ */
+
+.about-section {
+  padding: var(--section-y-lg, 3rem) 0;
+  background: var(--white);
+}
+
+.about-section__content {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.about-section__content p {
+  font-size: 1.15rem;
+  line-height: 1.8;
+  color: #4b5563;
+  margin-bottom: 1.1rem;
+}
+
+.about-section__action {
+  margin-top: 1.35rem;
+}
+
+.about-section__action .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.1rem 2.2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: 0 10px 20px -5px rgba(56, 189, 248, 0.3);
+}
+
+.btn-icon {
+  font-size: 1.2rem;
+}

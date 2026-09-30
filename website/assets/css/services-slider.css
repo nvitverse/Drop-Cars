@@ -1,0 +1,45 @@
+/**
+ * Services Slider – optional override; homepage loads seo-content.css for carousel rules.
+ * Kept in sync with compact scroll-snap styles in seo-content.css.
+ */
+.services-slider-container {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    container-type: inline-size;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.services-slider-container::-webkit-scrollbar {
+    display: none;
+}
+
+.services-slider-track {
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.services-slider-slide {
+    flex: 0 0 100cqi;
+    min-width: 100cqi;
+    scroll-snap-align: center;
+}
+
+.service-card {
+    border-radius: 18px;
+    padding: 1.35rem 1.25rem 1.5rem;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.service-card img {
+    max-width: 280px;
+    height: 150px;
+}

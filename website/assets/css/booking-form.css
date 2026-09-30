@@ -1,0 +1,5037 @@
+/**
+ * Booking form â€“ card, fields, trip type, contact switch, quote modal
+ * Drop Cars â€“ Premium intercity taxi
+ */
+
+.booking-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.45);
+  border-radius: 16px !important;
+  padding: 1rem 1.15rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  text-align: left;
+  overflow: hidden;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: box-shadow 0.3s ease, opacity 0.3s ease;
+}
+
+.booking-card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* JS lockBodyScroll() applies position:fixed on body during modal â€” no CSS scroll lock needed here */
+
+body.quote-modal-open .booking-card {
+  opacity: 0;
+  pointer-events: none;
+}
+
+
+
+.booking-card__eyebrow {
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0;
+}
+
+.booking-card__header {
+  text-align: center;
+  margin-bottom: 0.85rem;
+}
+
+.booking-card__header h2 {
+  margin-top: 0.2rem;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  letter-spacing: -0.01em;
+}
+
+.booking-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0.2rem;
+  font-weight: 700;
+  color: #334155;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+
+.field>input,
+.field>select,
+.field>.trip-type-options,
+.field>.vehicle-selector-grid,
+.field>.contact-switch__inputs {
+  width: 100%;
+}
+
+.field>input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+.field>select,
+.field>.contact-switch__inputs,
+.field>.trip-type-options,
+.field>.phone-input-wrapper {
+  margin-top: auto;
+}
+
+/* Home page booking card only: country popover matches phone row (same light chrome as .phone-input-wrapper) */
+.booking-card--home .phone-input-wrapper--country .country-code-popover {
+  background: #ffffff;
+  border: 1px solid #cdd8e8;
+  box-shadow: 0 8px 24px rgba(15, 28, 46, 0.12);
+}
+
+.booking-card--home .phone-input-wrapper--country .country-code-option {
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  color: #0a0a0a;
+}
+
+.booking-card--home .phone-input-wrapper--country .country-code-option:hover {
+  background: var(--gray-200);
+  border-color: var(--gray-300);
+  color: #0a0a0a;
+}
+
+.booking-card--home .phone-input-wrapper--country .country-code-manual-inline {
+  background: #ffffff;
+  border: 1px dashed var(--gray-400);
+  color: #0a0a0a;
+}
+
+.booking-card--home .phone-input-wrapper--country .country-code-manual-inline:focus {
+  border-color: #1e88e5;
+  border-style: solid;
+  box-shadow: 0 0 0 1.5px rgba(30, 136, 229, 0.3);
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.field-pair>* {
+  min-width: 0;
+  width: 100%;
+}
+
+/* WhatsApp icon next to phone/contact checkbox */
+.wa-check-label .wa-label-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wa-check-label .wa-label-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.contact-switch {
+  gap: 0.8rem;
+}
+
+.contact-switch__controls {
+  display: inline-flex;
+  background: var(--gray-100);
+  border-radius: 5px !important;
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+}
+
+.contact-switch__inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.contact-switch__inputs>* {
+  min-width: 0;
+}
+
+.contact-switch__btn {
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  cursor: pointer;
+}
+
+.contact-switch__btn--active {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.field input[type="number"]::-webkit-outer-spin-button,
+.field input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.field input,
+.field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.45rem 0.75rem;
+  height: 38px;
+  border-radius: 5px !important;
+  border: 1px solid #cbd5e1;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  background: #f8fafc;
+  color: #1e293b;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.field input::placeholder {
+  color: #94a3b8;
+}
+
+.field>span:first-child,
+.field>div:first-child>span:first-child,
+.form-label {
+  font-size: 0.8125rem;
+}
+
+.field__label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.field__label-row>span {
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.field__label-row .wa-check-label {
+  flex-shrink: 0;
+}
+
+/* Row 2: Email under Name (col 1) | spacer or WhatsApp under Phone (col 2) */
+.field-pair--contact-second {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+
+.field-pair--contact-second>.field:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.field-pair--contact-second #phone-spacer {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+}
+
+.field-pair--contact-second #whatsapp-field {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.field-pair--contact-second .field>input,
+.field-pair--contact-second .field>.phone-input-wrapper {
+  margin-top: 0 !important;
+}
+
+/* Force field hints to stay on a single compact line and allow them to cross grid borders for full visibility */
+.field-hint {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  max-width: none !important;
+  display: block !important;
+  text-transform: none !important; /* Prevent inheritance of uppercase style */
+  margin-top: 6px !important;
+}
+
+input[type="date"],
+input[type="time"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Ensure text is always visible */
+  color: #1e293b !important;
+  background: #ffffff !important;
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 5px !important;
+  padding: 0.45rem 0.6rem;
+  height: 38px;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+/* Fix iOS Safari native alignment & height for date/time value */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  min-height: 20px;
+  line-height: normal;
+  display: flex;
+  align-items: center;
+}
+
+input[type="date"]:focus,
+input[type="time"]:focus {
+  border-color: #3b82f6 !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Force browser-native datetime edit text to be dark and visible */
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  color: #1e293b;
+  font-weight: 600;
+  padding: 0;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  color: #1e293b;
+  background: transparent;
+}
+
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="time"]::-webkit-datetime-edit-text {
+  color: #64748b;
+  padding: 0 1px;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field,
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field,
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: #1e293b;
+  font-weight: 700;
+  background: transparent;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field:focus,
+input[type="date"]::-webkit-datetime-edit-day-field:focus,
+input[type="date"]::-webkit-datetime-edit-year-field:focus,
+input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+input[type="time"]::-webkit-datetime-edit-minute-field:focus,
+input[type="time"]::-webkit-datetime-edit-ampm-field:focus {
+  background: #3b82f6;
+  color: #ffffff;
+  border-radius: 0 !important;
+}
+
+/* Calendar / clock icon */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+  cursor: pointer;
+  filter: brightness(0) saturate(100%) invert(24%) sepia(79%) saturate(522%) hue-rotate(198deg) brightness(97%) contrast(97%);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Empty state â€” make placeholder-style text visible */
+input[type="date"]:not([value])::-webkit-datetime-edit,
+input[type="time"]:not([value])::-webkit-datetime-edit {
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .booking-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 12px;
+    border-radius: 5px !important;
+    /* Keep form fields clear of floating buttons */
+    padding-bottom: 80px;
+  }
+
+  .booking-form {
+    gap: 12px;
+  }
+
+  .field {
+    font-size: 16px;
+    /* match .field input (iOS zoom baseline) */
+  }
+
+  .field input,
+  .field select {
+    height: 44px;
+    font-size: 16px;
+    /* Prevents auto-zoom on iOS */
+    padding: 0.55rem 0.8rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  input[type="date"],
+  input[type="time"] {
+    font-size: 16px !important;
+    padding: 0.55rem 0.6rem !important;
+    height: 44px !important;
+  }
+
+  /* Keep 2-column layout always, but prevent overflow */
+  .field-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  /* Tabs: allow wrapping instead of horizontal scroll */
+  .trip-type-options,
+  .oneway-subtypes {
+    gap: 4px;
+    overflow-x: hidden;
+  }
+
+  .trip-type-options .trip-type-option {
+    font-size: 0.95rem;
+    padding: 0.44rem 0.6rem;
+    white-space: nowrap;
+  }
+
+  .oneway-subtypes label {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.36rem;
+    white-space: nowrap;
+  }
+
+  .submit-wrapper .btn-primary {
+    max-width: 100%;
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .hourly-control>span:first-of-type {
+    font-size: 16px;
+  }
+
+  .fare-toggle__switch {
+    padding: 0.2rem !important;
+  }
+
+  .oneway-subtypes.fare-toggle__switch label {
+    font-size: 11px !important;
+    padding: 0.25rem 0.2rem !important;
+    white-space: nowrap !important;
+  }
+
+  .trip-type-options.fare-toggle__switch .trip-type-option {
+    font-size: 0.8125rem !important;
+    /* Matches Pick Up Location * label size (13px) */
+    padding: 0.35rem 0.4rem !important;
+    white-space: nowrap !important;
+  }
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  background: #ffffff;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 5px !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  color: var(--white);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -2px rgba(59, 130, 246, 0.1);
+  filter: brightness(1.1);
+}
+
+.terms {
+  font-size: 0.8rem;
+  color: var(--gray-400);
+  margin-bottom: 0;
+}
+
+.fare-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+}
+
+.fare-toggle__switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  background: var(--gray-100);
+  padding: 0.25rem;
+  border-radius: 5px !important;
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+  max-width: 100%;
+  font-size: 12px;
+}
+
+.fare-toggle__switch label,
+.fare-toggle__switch .trip-type-option {
+  min-width: 0;
+  padding: 0.25rem 0.4rem;
+}
+
+.fare-toggle__switch input {
+  display: none;
+}
+
+.fare-toggle__switch label,
+.fare-toggle__switch .trip-type-option {
+  border: none;
+  font-family: inherit;
+  color: var(--blue-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px !important;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  line-height: 1.2;
+}
+
+.fare-toggle__switch label:hover,
+.fare-toggle__switch .trip-type-option:hover {
+  background: var(--gray-200);
+}
+
+.fare-toggle__switch input:checked+label,
+.fare-toggle__switch .trip-type-option--active {
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--shadow);
+}
+
+/* Wrapper for trip type + subtypes so both rows align and stay compact */
+.trip-type-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.trip-type-block .trip-type-field {
+  width: 100%;
+  align-items: center;
+}
+
+.trip-type-block .trip-type-options,
+.trip-type-block .oneway-subtypes {
+  width: 100%;
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 1024px) {
+  .booking-card {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.25rem 1.75rem;
+  }
+
+  /* Both Admin flow and Home page flow get 3-column layout at 1024px+ */
+  .booking-form {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px 30px !important;
+    align-items: stretch !important;
+  }
+
+  .booking-form .field:not(.hidden) {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    height: auto !important;
+    margin: 0 !important;
+    position: relative !important;
+  }
+
+  .booking-form .field>span:not(.field-hint),
+  .booking-form .field .field__label-row {
+    height: 18px !important;
+    line-height: 18px !important;
+    margin: 0 0 6px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .booking-form .field>input:not([type="hidden"]),
+  .booking-form .field>select,
+  .booking-form .field>.phone-input-wrapper,
+  .booking-form .field>.contact-switch__inputs {
+    margin-top: 0 !important;
+    height: 38px !important;
+    box-sizing: border-box !important;
+  }
+
+  .booking-form .field .field-hint {
+    position: static !important;
+    white-space: nowrap !important;
+  }
+
+  .booking-form .trip-type-block {
+    grid-column: 1 / span 3 !important;
+    grid-row: 1 !important;
+  }
+
+  .booking-form #locations-wrapper,
+  .booking-form #locations-wrapper.airport-mode {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    grid-column: 1 !important;
+    grid-row: 2 / span 2 !important;
+    position: relative !important;
+    align-self: start !important;
+  }
+
+  .booking-form #locations-wrapper #pickup-field-container,
+  .booking-form #locations-wrapper #drop-field,
+  .booking-form #locations-wrapper.airport-mode #pickup-field-container,
+  .booking-form #locations-wrapper.airport-mode #drop-field,
+  .booking-form #pickup-field-container,
+  .booking-form #drop-field {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .booking-form #locations-wrapper.airport-mode #swap-btn-container {
+    display: flex !important;
+    position: absolute !important;
+    left: auto !important;
+    right: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 10 !important;
+    margin: 0 !important;
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .booking-form #locations-wrapper #swap-btn-container:not(.hidden),
+  .booking-form #swap-btn-container:not(.hidden) {
+    display: flex !important;
+    position: absolute !important;
+    left: auto !important;
+    right: 0 !important;
+    top: 85px !important;
+    transform: translate(50%, -50%) !important;
+    z-index: 10 !important;
+    margin: 0 !important;
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .booking-form #locations-wrapper #airport-swap-btn,
+  .booking-form #locations-wrapper.airport-mode #airport-swap-btn,
+  .booking-form #airport-swap-btn {
+    width: 32px !important;
+    height: 32px !important;
+    border-width: 2.5px !important;
+  }
+
+  .booking-form #locations-wrapper #airport-swap-btn svg,
+  .booking-form #locations-wrapper.airport-mode #airport-swap-btn svg,
+  .booking-form #airport-swap-btn svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .booking-form #stops-control {
+    width: 100% !important;
+    margin-top: 5px !important;
+  }
+
+  .booking-form .field-pair:not(.field-pair--contact-primary):not(.field-pair--contact-second):not(#end-date-drop-time-control):not(.hidden) {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .booking-form #end-date-drop-time-control:not(.hidden) {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .booking-form .field-pair--contact-primary {
+    grid-column: 3 !important;
+    grid-row: 2 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .booking-form .field-pair--contact-second {
+    grid-column: 3 !important;
+    grid-row: 3 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .booking-form #phone-spacer {
+    display: none !important;
+  }
+
+  /* Hourly pickup is redundant â€” the standard #pickup-field-container handles it.
+     Always hide it on desktop so it never overlaps the date/time field-pair at (col 2, row 2). */
+  .booking-form #hourly-pickup-field {
+    display: none !important;
+  }
+
+  /* Rental duration chips: column 2 only (NOT span 2) to avoid collision
+     with .field-pair--contact-second which occupies column 3, row 3. */
+  .booking-form #hourly-control {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    margin: 0 !important;
+  }
+
+  .booking-form #vehicle-selector-field {
+    grid-column: 1 / span 3 !important;
+    grid-row: 4 !important;
+  }
+
+  .booking-form .fare-toggle {
+    grid-column: 1 / span 2 !important;
+    grid-row: 5 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    height: 100% !important;
+  }
+
+  .booking-form .fare-toggle .fare-toggle__switch {
+    width: 100% !important;
+    margin: 0 !important;
+    height: 38px !important;
+    box-sizing: border-box !important;
+    padding: 2px !important;
+  }
+
+  .booking-form .fare-toggle .fare-toggle__switch label {
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .booking-form .promo-row {
+    grid-column: 3 !important;
+    grid-row: 5 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .booking-form .promo-row input[type="text"],
+  .booking-form .promo-row .btn-promo-apply {
+    height: 38px !important;
+    box-sizing: border-box !important;
+  }
+
+  .booking-form .submit-wrapper {
+    grid-column: 1 / span 3 !important;
+    grid-row: 6 !important;
+  }
+
+  .trip-type-block .trip-type-options,
+  .trip-type-block .oneway-subtypes {
+    width: 100%;
+  }
+
+  .field-pair {
+    gap: 10px;
+  }
+}
+
+/* Primary trip type row (One Way, Round Trip, Hourly) */
+.trip-type-options {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 5px !important;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: hidden;
+  justify-items: stretch;
+}
+
+.trip-type-options .trip-type-option {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.52rem 0.75rem;
+  border-radius: 4px !important;
+  border: 1px solid transparent;
+  background: transparent !important;
+  color: #263445;
+  transition: all 0.22s ease;
+  text-align: center;
+  line-height: 1.15;
+}
+
+/* Selected state: strong and unmistakable (only via JS "active") */
+.trip-type-options .trip-type-option.trip-type-option--active,
+.trip-type-options .trip-type-option.active {
+  background: linear-gradient(180deg, #133761 0%, #0d2b4f 100%);
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.trip-type-options .trip-type-option.trip-type-option--active:hover,
+.trip-type-options .trip-type-option.active:hover {
+  background: linear-gradient(180deg, #133761 0%, #0d2b4f 100%);
+  color: #fff;
+}
+
+/* Secondary trip type row (Outstation, Airport, Multi City) */
+.oneway-subtypes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  background: #f1f5f9;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 4px;
+  border-radius: 5px !important;
+  margin: 0;
+  overflow: visible;
+  align-items: center;
+  justify-items: stretch;
+  width: 100%;
+}
+
+.oneway-subtypes label {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.24rem 0.32rem;
+  height: auto;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: #263445;
+  border: 1px solid transparent;
+  transition: all 0.22s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.oneway-subtypes input:checked+label {
+  background: linear-gradient(180deg, #133761 0%, #0d2b4f 100%);
+  color: var(--white);
+  font-weight: 700;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.oneway-subtypes label.active {
+  background: linear-gradient(180deg, #133761 0%, #0d2b4f 100%);
+  color: var(--white);
+  font-weight: 700;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.oneway-subtypes label.active:hover,
+.oneway-subtypes input:checked+label:hover {
+  background: linear-gradient(180deg, #133761 0%, #0d2b4f 100%);
+  color: var(--white);
+}
+
+/* Promo: label above, input + Apply below on a single line */
+.promo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  margin-top: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.promo-row__text {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.2;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.promo-row input[type="text"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 0.5rem;
+  border-radius: 5px !important;
+  border: 1px solid #cdd8e8;
+  background: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+
+.promo-row input[type="text"]::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.btn-promo-apply {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 0.85rem;
+  border-radius: 5px !important;
+  border: 1px solid #1e4b7f;
+  background: linear-gradient(180deg, #1e5a9e 0%, #153d6b 100%);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-promo-apply:hover {
+  filter: brightness(1.06);
+}
+
+/* Promo in dark fare panel (route page): one row, navy glass + cyan accent */
+.promo-row.promo-row--on-dark {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem 0.5rem;
+  margin-top: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .promo-row.promo-row--on-dark {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .promo-row--on-dark .promo-row__text {
+    grid-column: 1 / -1;
+  }
+}
+
+.promo-row--on-dark .promo-row__text {
+  color: #e0f2fe;
+  font-size: clamp(0.62rem, 2.4vw, 0.75rem);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.promo-row--on-dark input[type="text"] {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 0.55rem;
+  border-radius: 10px;
+  background: rgba(8, 18, 32, 0.55);
+  border: 1px solid rgba(43, 196, 255, 0.45);
+  color: #f8fafc;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.promo-row--on-dark input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.48);
+  font-weight: 500;
+}
+
+.promo-row--on-dark input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.85);
+  box-shadow: 0 0 0 3px rgba(43, 196, 255, 0.22);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.btn-promo-apply--on-dark {
+  height: 38px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  color: #0c1929;
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+
+.btn-promo-apply--on-dark:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.45);
+}
+
+.form-response {
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.form-response--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-response--success {
+  display: block;
+  line-height: 1.5;
+}
+
+.form-response__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(30, 75, 127, 0.25);
+  border-top-color: #1e4b7f;
+  border-radius: 50%;
+  animation: bookingSpin 0.8s linear infinite;
+  flex: 0 0 14px;
+}
+
+@keyframes bookingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Vehicle type selector â€“ pill buttons (legacy) */
+.vehicle-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.vehicle-type-option {
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  border-radius: 999px;
+  padding: 0.45rem 0.6rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.vehicle-type-option--active,
+.vehicle-type-option:hover {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+/* Vehicle selector grid â€“ horizontal scroll (Chennai-style cards) */
+#vehicle-selector-field {
+  align-items: center;
+  text-align: center;
+}
+
+#vehicle-selector-field .vehicle-selector-grid {
+  margin-top: 0;
+}
+
+.vehicle-selector-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  overflow-x: auto;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
+  scroll-snap-type: x mandatory;
+  touch-action: pan-x pan-y !important;
+}
+
+.vehicle-selector-grid::-webkit-scrollbar {
+  display: none;
+  /* Chrome/Safari */
+}
+
+.sticky-submit-wrapper {
+  display: none;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
+}
+
+body.quote-modal-open .sticky-submit-wrapper {
+  transform: translateX(-120vw) !important;
+  opacity: 0;
+}
+
+@media (max-width: 600px) {
+  .sticky-submit-wrapper {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .vehicle-selector-grid {
+    gap: 0.5rem;
+    justify-content: flex-start;
+    /* Prevent clipping on small screens if they overflow */
+  }
+}
+
+.vehicle-selector-card {
+  flex: 1 1 auto;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.2rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 5px !important;
+  background: var(--white);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  scroll-snap-align: start;
+}
+
+.vehicle-selector-card:hover {
+  border-color: #d7dde5;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.vehicle-selector-card--active {
+  border-color: var(--blue-dark);
+  background: linear-gradient(135deg, #e8f4fd 0%, #f0f9ff 100%);
+  box-shadow: 0 4px 12px rgba(13, 71, 161, 0.12);
+}
+
+/* Vehicle Type cards: hover hint vs active selection */
+.vehicle-selector-card {
+  border: 1px solid #ddd;
+  background: #fff;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.vehicle-selector-card:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-color: #d7dde5;
+  background: #fafbfc;
+}
+
+.vehicle-selector-card.vehicle-selector-card--active,
+.vehicle-selector-card.active {
+  border: 2px solid #0d2b4f;
+  background: #e6f0ff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.vehicle-selector-card.vehicle-selector-card--active:hover,
+.vehicle-selector-card.active:hover {
+  border: 2px solid #0d2b4f;
+  background: #e6f0ff;
+}
+
+.vehicle-card.active {
+  border: 2px solid #0d2b4f;
+  background: #e6f0ff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.vehicle-card.active:hover {
+  border: 2px solid #0d2b4f;
+  background: #e6f0ff;
+}
+
+/* Desktop-only hover: subtle and temporary */
+@media (hover: hover) and (pointer: fine) {
+
+  .trip-type-options .trip-type-option:hover,
+  .oneway-subtypes label:hover,
+  .vehicle-card:hover {
+    background: #f2f4f7;
+    border-color: #ccc;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Disable hover effects on touch devices */
+@media (hover: none) {
+  .trip-type-options .trip-type-option:hover {
+    background: inherit;
+    color: inherit;
+    border: inherit;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .vehicle-selector-card:hover {
+    background: inherit;
+    color: inherit;
+    border: inherit;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .oneway-subtypes label:hover,
+  .vehicle-card:hover {
+    background: inherit;
+    color: inherit;
+    border-color: inherit;
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+/* Mobile tap feedback */
+.trip-type-options .trip-type-option:active,
+.oneway-subtypes label:active,
+.vehicle-selector-card:active,
+.vehicle-card:active {
+  transform: translateY(0);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Prevent sticky focus outlines after tap/click */
+.booking-form button:focus,
+.booking-form label:focus {
+  outline: none;
+}
+
+.vehicle-selector-card img {
+  width: 100%;
+  max-width: 56px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.vehicle-selector-card__name {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--blue-dark);
+}
+
+.vehicle-selector-card__price {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.vehicle-selector-grid .vehicle-selector-card__price {
+  display: none;
+}
+
+.vehicle-selector-card--active .vehicle-selector-card__price {
+  color: var(--blue);
+}
+
+/* Fare card (shown after Get Instant Fare) */
+.fare-card {
+  margin-top: 1rem;
+  padding: 1.35rem 1.15rem 1.05rem;
+  background: linear-gradient(160deg, #edf5ff 0%, #e9f2fc 45%, #f4f8ff 100%);
+  border: 1px solid #d8e4f3;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 16px 30px rgba(13, 43, 79, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  position: relative;
+  overflow: hidden;
+}
+
+.fare-card__label {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+  color: #304966;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.submit-wrapper {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.submit-wrapper .btn-primary {
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.fare-card__amount {
+  margin: 0.1rem 0 0.2rem;
+  font-size: 2.15rem;
+  font-weight: 800;
+  color: #102d52;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.fare-card__meta {
+  margin: 0.45rem 0;
+  font-size: 1rem;
+  color: #5f7290;
+  font-weight: 600;
+}
+
+.fare-card__disclaimer {
+  margin: 0.55rem 0 1rem;
+  font-size: 0.88rem;
+  color: #6c7f9a;
+}
+
+.btn-primary--confirm {
+  background: linear-gradient(120deg, #059669, #10b981);
+  margin-bottom: 0.5rem;
+  border-radius: 5px;
+  box-shadow: 0 12px 24px rgba(5, 150, 105, 0.3);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.fare-card__note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6a7f9b;
+  font-weight: 600;
+}
+
+/* Phone and Country Select Input */
+.phone-input-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: var(--white);
+  border: 1px solid #cdd8e8;
+  border-radius: 5px;
+  overflow: hidden;
+  height: 38px;
+  width: 100%;
+}
+
+.phone-input-wrapper:focus-within {
+  border-color: #1e88e5;
+  box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.16);
+}
+
+/* Country row: popover must escape; same chrome as .phone-input-wrapper */
+.phone-input-wrapper.phone-input-wrapper--country {
+  overflow: visible;
+}
+
+/* Country code: button + popover (+91 quick | empty manual) + national number */
+.phone-input-wrapper--country .phone-national-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Compact country column; wide enough for +91 â€¦ +999 without clipping */
+.country-code-field {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  align-self: stretch;
+}
+
+/* Country pill: light bluish-gray bg, black text (normal weight) */
+.country-code-trigger {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 8px;
+  border: none;
+  border-right: 1px solid var(--gray-200);
+  border-radius: 0;
+  background: var(--gray-100);
+  color: #0a0a0a;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-code-trigger:hover {
+  background: var(--gray-200);
+}
+
+.country-code-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  box-sizing: border-box;
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+  padding: 4px 3px;
+  background: var(--white);
+  border: 1px solid #cdd8e8;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(15, 28, 46, 0.14);
+}
+
+.country-code-popover.is-hidden {
+  display: none !important;
+}
+
+.country-code-option {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 3px 4px;
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  background: var(--gray-100);
+  color: #0a0a0a;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-code-option:hover {
+  background: var(--gray-200);
+  border-color: var(--gray-300);
+}
+
+.country-code-manual-inline {
+  box-sizing: border-box;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  min-height: 26px;
+  padding: 3px 2px;
+  border: 1px dashed var(--gray-400);
+  border-radius: 4px;
+  background: var(--white);
+  color: #0a0a0a;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  flex: none !important;
+  height: auto !important;
+}
+
+/* Override .field input (padding/height) â€” thin frame to fit 3 numbers */
+.field .country-code-manual-inline {
+  font-size: 12px;
+  padding: 3px 2px !important;
+  height: auto !important;
+  min-height: 26px;
+}
+
+.country-code-manual-inline:focus {
+  outline: none;
+  border-color: #1e88e5;
+  border-style: solid;
+  box-shadow: 0 0 0 1.5px rgba(30, 136, 229, 0.3);
+}
+
+.country-code-manual-inline::placeholder {
+  color: var(--gray-300);
+}
+
+.phone-input-wrapper .phone-national-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  padding-left: 0.6rem !important;
+  height: 100% !important;
+  color: #0a0a0a !important;
+  font-weight: 400;
+}
+
+/* Dark mode: override the hardcoded #0a0a0a so phone digits are readable on dark bg */
+html.dark-mode .phone-input-wrapper .phone-national-input {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+}
+
+.phone-input-wrapper .phone-national-input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+  opacity: 1;
+}
+
+html.dark-mode .phone-input-wrapper .phone-national-input::placeholder,
+[data-theme="dark"] .phone-input-wrapper .phone-national-input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.4) !important;
+  opacity: 1 !important;
+}
+
+.phone-input-wrapper .phone-national-input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Airport Mode Specific Styling */
+#locations-wrapper.airport-mode #pickup-field-container,
+#locations-wrapper.airport-mode #drop-field-container,
+#locations-wrapper.airport-mode #drop-field {
+  width: calc(100% - 46px) !important;
+}
+
+#locations-wrapper.airport-mode #swap-btn-container {
+  position: absolute !important;
+  right: 4px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  z-index: 10 !important;
+}
+
+#locations-wrapper.airport-mode #airport-swap-btn {
+  width: 36px !important;
+  height: 36px !important;
+  border-width: 2px !important;
+}
+
+#locations-wrapper.airport-mode #airport-swap-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Aggressive vertical space reduction for compact locations layout */
+#locations-wrapper.airport-mode {
+  gap: 0.2rem !important;
+}
+
+#locations-wrapper.airport-mode .field {
+  gap: 0.15rem !important;
+}
+
+/* Inherit default field span & input styling so airport mode fields match outstation size & fonts exactly */
+
+/* Hide empty response message to collapse dead space under submit button */
+#form-response:empty {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#form-response {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Compact the space above the login link */
+.booking-form+div,
+.booking-form+div[style] {
+  margin-top: 4px !important;
+}
+
+/* Stops (multi-city) */
+.stops-control {
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #f5f7fb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stops-control__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.stops-control__header p {
+  margin: 0;
+  color: var(--blue-dark);
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-chips {
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--blue-dark);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-chips:hover {
+  background: var(--gray-50);
+}
+
+.stops-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.stop-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--white);
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+  cursor: grab;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.stop-item.dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(11, 31, 58, 0.15);
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+.stop-item__drag {
+  color: var(--gray-400);
+  font-size: 1rem;
+  cursor: grab;
+  padding-right: 0.2rem;
+}
+
+.stop-item input {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  background: transparent !important;
+  font-size: 0.9rem;
+  padding: 0.2rem 0 !important;
+  height: auto !important;
+}
+
+.stop-item input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.stop-item__actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.stop-item__actions button {
+  border: none;
+  background: var(--gray-100);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--blue-dark);
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.stop-item__actions button:hover:not(:disabled) {
+  background: var(--blue-light);
+  color: var(--white);
+}
+
+.stop-item__actions button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stops-limit {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--gray-400);
+}
+
+/* Hourly rental */
+.hourly-control {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.hourly-control>span:first-of-type {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.hourly-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+.hourly-option {
+  border: 1.5px solid #94a3b8;
+  border-radius: 999px;
+  padding: 0.45rem 0.35rem;
+  background: var(--white);
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.hourly-option:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.hourly-option--active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+@media (max-width: 380px) {
+  .hourly-option {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.15rem;
+  }
+}
+
+/* Quote modal - Refactored to premium Right-Hand Slide Drawer */
+.quote-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0);
+  backdrop-filter: blur(0px);
+  display: none;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: background 0.4s ease, backdrop-filter 0.4s ease, opacity 0.4s ease;
+}
+
+.quote-modal.quote-modal--open {
+  opacity: 1;
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.quote-modal__card {
+  background: var(--white);
+  border-radius: 24px 0 0 24px;
+  max-width: 620px;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  box-shadow: -10px 0 50px rgba(15, 23, 42, 0.25);
+  transform: translateX(100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quote-modal.quote-modal--open .quote-modal__card {
+  transform: translateX(0);
+}
+
+/* Mobile soft-keyboard open (see assets/js/viewport-keyboard.js): 100vh
+   doesn't shrink with the keyboard on every mobile browser, which can push
+   this card's action buttons (Confirm/Back) below the visible area while
+   the user is typing a name/phone number inside it. --dc-visible-vh tracks
+   the real visualViewport height, so the card (and its flex children -
+   header/body/actions) resize to fit what's actually visible. */
+html.dc-keyboard-open .quote-modal__card {
+  height: var(--dc-visible-vh, 100vh) !important;
+  max-height: var(--dc-visible-vh, 100vh) !important;
+}
+
+.quote-modal.quote-modal--fare-mode .quote-modal__card {
+  max-width: 620px;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 24px 0 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__card {
+  max-width: 620px;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 24px 0 0 24px;
+  padding: 0;
+  background: var(--white);
+  box-shadow: -10px 0 50px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.quote-modal.quote-modal--estimate-mode #quote-summary {
+  display: block;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f2f56;
+  text-align: left;
+}
+
+.quote-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  border: none;
+  background: rgba(15, 28, 46, 0.08);
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #334155;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__close {
+  color: #334155;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__close:hover {
+  background: rgba(15, 28, 46, 0.12);
+}
+
+.quote-modal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  margin-top: 0.3rem;
+}
+
+.quote-modal .eyebrow {
+  display: none;
+}
+
+.vehicle-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+}
+
+.quote-modal--estimate-mode .vehicle-grid {
+  display: block;
+}
+
+.quote-modal--estimate-mode .quote-modal__meta {
+  justify-content: flex-start;
+  text-align: left;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  border: 1px solid #d8e5f4;
+  background: #f5f9ff;
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem 0.45rem;
+}
+
+.quote-modal--estimate-mode #quote-route {
+  width: 100%;
+  font-size: 0.9rem;
+  color: #1e4b7f;
+  font-weight: 700;
+}
+
+.quote-modal--estimate-mode #quote-fare {
+  width: 100%;
+  text-align: left;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: #426386;
+  font-weight: 600;
+}
+
+.quote-modal--fare-mode #quote-summary,
+.quote-modal--fare-mode .quote-modal__meta {
+  display: none;
+}
+
+.vehicle-grid--fare-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.15rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.fare-list-header {
+  text-align: center;
+  border: 1px solid #d8e5f4;
+  border-radius: 12px;
+  background: #f5f9ff;
+  padding: 0.5rem 0.6rem 0.45rem;
+}
+
+.fare-list-header__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f2f56;
+}
+
+.fare-list-header__route {
+  margin: 0.32rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e4b7f;
+}
+
+.fare-list-header__time {
+  margin: 0.22rem 0 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #426386;
+}
+
+.quote-fare-type-toggle {
+  border: 1px solid #c6dced;
+  background: #ffffffd9;
+  border-radius: 10px;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #2f4d72;
+  max-width: 420px;
+  margin: 0.05rem auto 0;
+}
+
+.quote-fare-type-title {
+  margin: 0.1rem 0 0;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #204265;
+}
+
+.quote-fare-type-toggle__option {
+  font-size: 0.74rem;
+  font-weight: 600;
+  opacity: 0.65;
+  transition: opacity 0.2s ease;
+}
+
+.quote-fare-type-toggle input:not(:checked)~.quote-fare-type-toggle__option--base {
+  opacity: 1;
+}
+
+.quote-fare-type-toggle input:checked~.quote-fare-type-toggle__option--inclusive {
+  opacity: 1;
+}
+
+.quote-fare-type-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.quote-fare-type-toggle__switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: #9db4c9;
+  position: relative;
+  flex: 0 0 36px;
+  transition: background 0.2s ease;
+}
+
+.quote-fare-type-toggle__switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(17, 40, 74, 0.3);
+  transition: transform 0.2s ease;
+  transform: translateX(0);
+}
+
+.quote-fare-type-toggle input:checked~.quote-fare-type-toggle__switch {
+  background: #1994ef;
+}
+
+.quote-fare-type-toggle input:checked~.quote-fare-type-toggle__switch::after {
+  transform: translateX(16px);
+}
+
+.quote-fare-type-line {
+  margin: -0.22rem 0 0.02rem;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.quote-fare-type-line.is-exclusive {
+  color: #cf2b2b;
+}
+
+.quote-fare-type-line.is-inclusive {
+  color: #1e88e5;
+}
+
+.vehicle-grid--fare-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.vehicle-card {
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  background: var(--white);
+}
+
+.vehicle-card--fare-option {
+  border: 2px solid #d5e5f7;
+  border-radius: 12px;
+  background: #eef7ff;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.24s ease, border-color 0.2s ease, background 0.24s ease;
+}
+
+.vehicle-card--fare-option.active {
+  border-color: #0ca6d2;
+  background: #dff4fb;
+  box-shadow: 0 8px 22px rgba(12, 166, 210, 0.22);
+  transform: translateY(-1px);
+}
+
+.vehicle-card--fare-option:hover {
+  border-color: #6fcbe4;
+  box-shadow: 0 6px 18px rgba(16, 61, 96, 0.14);
+}
+
+.vehicle-card__radio--left {
+  margin-left: 0;
+  margin-right: 0.35rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid #9ab5d1;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  transition: all 0.2s ease;
+}
+
+.vehicle-card__radio--left input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.vehicle-card--fare-option.active .vehicle-card__radio--left {
+  border-color: #0ca6d2;
+  background: linear-gradient(180deg, #12b5de 0%, #0ca6d2 100%);
+  box-shadow: 0 0 0 3px rgba(12, 166, 210, 0.2);
+}
+
+.vehicle-card--fare-option.active .vehicle-card__radio--left::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.vehicle-card__title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.vehicle-card__title-line small {
+  font-size: 0.72rem;
+  color: #6e7f97;
+  font-weight: 700;
+}
+
+.vehicle-card__distance {
+  color: #44566f;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.vehicle-fare-note {
+  margin: 0.1rem 0 0;
+  text-align: center;
+  color: #cf2b2b;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.quote-modal.quote-modal--fare-mode .quote-modal__actions {
+  justify-content: center;
+  gap: 0.55rem;
+  padding-top: 0.1rem;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__actions {
+  justify-content: center;
+  gap: 0.5rem;
+  padding-top: 0;
+  margin-top: 0.45rem;
+}
+
+.quote-modal.quote-modal--fare-mode .quote-modal__actions button {
+  flex: 0 0 auto;
+  min-width: 128px;
+  max-width: 152px;
+  padding: 0.58rem 0.9rem;
+  font-size: 0.84rem;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__actions button {
+  flex: 0 0 auto;
+  min-width: 108px;
+  max-width: 132px;
+  padding: 0.54rem 0.78rem;
+  font-size: 0.82rem;
+}
+
+.quote-modal.quote-modal--fare-mode .quote-modal__actions .btn-outline {
+  margin-left: 0;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__actions .btn-outline {
+  margin-left: 0;
+}
+
+.quote-modal.quote-modal--fare-mode .quote-modal__actions .btn-primary {
+  margin-right: 0;
+}
+
+.quote-modal.quote-modal--estimate-mode .quote-modal__actions .btn-primary {
+  margin-right: 0;
+}
+
+.selected-fare-card {
+  border: 2px solid #d5e5f7;
+  background: #eef7ff;
+  border-radius: 12px;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 6px 18px rgba(16, 61, 96, 0.14);
+  position: relative;
+}
+
+.selected-fare-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.selected-fare-card__media {
+  width: 88px;
+  height: 88px;
+  border-radius: 16px;
+  background: var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 88px;
+}
+
+.selected-fare-card__media img {
+  max-width: 80px;
+  max-height: 80px;
+}
+
+.selected-fare-card__details h4 {
+  margin: 0;
+  color: #0f2f56 !important;
+  font-size: 0.9rem;
+}
+
+.selected-fare-card__details h4 small {
+  color: #6e7f97 !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+.selected-fare-card__meta {
+  margin-top: 0.15rem;
+  display: flex;
+  gap: 0.42rem;
+  color: #44566f !important;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.selected-fare-card__distance {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #44566f !important;
+  font-weight: 600;
+}
+
+.selected-fare-card__amount {
+  margin: 0.42rem 0 0;
+  text-align: center;
+  color: #059669 !important;
+  font-size: 2.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.selected-fare-card__toggle {
+  margin-top: 0.25rem;
+  border: 1px solid #c6dced;
+  background: #ffffffd9;
+  border-radius: 10px;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #2f4d72;
+}
+
+.selected-fare-card__fare-title {
+  margin: 0.5rem 0 0.1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #204265;
+}
+
+.selected-fare-card__amount+.selected-fare-card__toggle {
+  margin-top: 0.45rem;
+}
+
+.selected-fare-card__option {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.65;
+  transition: opacity 0.2s ease;
+  color: #2f4d72;
+}
+
+.selected-fare-card__toggle input:not(:checked)~.selected-fare-card__option--base {
+  opacity: 1;
+}
+
+.selected-fare-card__toggle input:checked~.selected-fare-card__option--inclusive {
+  opacity: 1;
+}
+
+.selected-fare-card__toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.selected-fare-card__switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: #9db4c9;
+  position: relative;
+  flex: 0 0 36px;
+  transition: background 0.2s ease;
+}
+
+.selected-fare-card__switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(17, 40, 74, 0.3);
+  transition: transform 0.2s ease;
+  transform: translateX(0);
+}
+
+.selected-fare-card__toggle input:checked~.selected-fare-card__switch {
+  background: #1994ef;
+}
+
+.selected-fare-card__toggle input:checked~.selected-fare-card__switch::after {
+  transform: translateX(16px);
+}
+
+.selected-fare-card__extras {
+  margin: 0.3rem 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.selected-fare-card__extras.is-exclusive {
+  color: #cf2b2b;
+}
+
+.selected-fare-card__extras.is-inclusive {
+  color: #1e88e5;
+}
+
+
+.vehicle-card__media {
+  flex: 0 0 88px;
+  height: 88px;
+  border-radius: 16px;
+  background: var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vehicle-card__media img {
+  max-width: 80px;
+  max-height: 80px;
+}
+
+.vehicle-card__info {
+  flex: 1;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.vehicle-card__info h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--blue-dark);
+}
+
+.vehicle-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--gray-400);
+}
+
+.vehicle-card__price {
+  font-size: 1.35rem;
+  font-weight: 850;
+  color: #059669;
+}
+
+.vehicle-card__radio {
+  margin-left: auto;
+}
+
+.vehicle-card--recommended {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.quote-modal__actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.quote-modal__error {
+  margin: 0.65rem 0 0.2rem;
+  text-align: center;
+  color: #b42318;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.quote-modal__actions button {
+  flex: 1;
+  padding: 0.68rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.quote-modal__actions .btn-outline {
+  background: transparent;
+  border: 1px solid var(--gray-200);
+  color: var(--blue-dark);
+}
+
+.quote-modal__actions .btn-primary {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.quote-modal__cta {
+  margin-top: 1rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+  display: none;
+}
+
+.booking-success-card {
+  margin-top: 0.8rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 1rem;
+  background: #f8fbff;
+}
+
+.booking-success-card h4 {
+  margin: 0 0 0.5rem;
+  color: var(--blue-dark);
+}
+
+.booking-success-card p {
+  margin: 0;
+  color: var(--gray-400);
+  font-weight: 600;
+}
+
+.booking-success-card__actions {
+  margin-top: 0.9rem;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.booking-success-card__actions a {
+  text-decoration: none;
+  text-align: center;
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* Dark navy fare modal â€“ city and route pages only */
+html.dark-mode body.city-page .quote-modal__card,
+html.dark-mode body.route-page .quote-modal__card {
+  background: #0f1c2e !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .quote-modal__close,
+html.dark-mode body.route-page .quote-modal__close {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .quote-modal--estimate-mode .quote-modal__meta,
+html.dark-mode body.route-page .quote-modal--estimate-mode .quote-modal__meta {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode body.city-page .fare-list-header,
+html.dark-mode body.route-page .fare-list-header {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode body.city-page .fare-list-header__title,
+html.dark-mode body.city-page .fare-list-header__route,
+html.dark-mode body.city-page .fare-list-header__time,
+html.dark-mode body.city-page .quote-fare-type-title,
+html.dark-mode body.city-page .quote-modal__meta,
+html.dark-mode body.city-page #quote-route,
+html.dark-mode body.city-page #quote-fare,
+html.dark-mode body.route-page .fare-list-header__title,
+html.dark-mode body.route-page .fare-list-header__route,
+html.dark-mode body.route-page .fare-list-header__time,
+html.dark-mode body.route-page .quote-fare-type-title,
+html.dark-mode body.route-page .quote-modal__meta,
+html.dark-mode body.route-page #quote-route,
+html.dark-mode body.route-page #quote-fare {
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .quote-fare-type-toggle,
+html.dark-mode body.route-page .quote-fare-type-toggle {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .quote-fare-type-toggle__option,
+html.dark-mode body.route-page .quote-fare-type-toggle__option {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+html.dark-mode body.city-page .vehicle-card--fare-option,
+html.dark-mode body.route-page .vehicle-card--fare-option {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+html.dark-mode body.city-page .vehicle-card--fare-option.active,
+html.dark-mode body.route-page .vehicle-card--fare-option.active {
+  background: linear-gradient(180deg, #143761 0%, #0c2a4f 100%) !important;
+  border-color: #2bc4ff !important;
+  box-shadow: 0 8px 16px rgba(4, 18, 37, 0.46) !important;
+}
+
+html.dark-mode body.city-page .vehicle-card__title-line,
+html.dark-mode body.city-page .vehicle-card__title-line small,
+html.dark-mode body.city-page .vehicle-card__meta,
+html.dark-mode body.city-page .vehicle-card__distance,
+html.dark-mode body.route-page .vehicle-card__title-line,
+html.dark-mode body.route-page .vehicle-card__title-line small,
+html.dark-mode body.route-page .vehicle-card__meta,
+html.dark-mode body.route-page .vehicle-card__distance {
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .vehicle-card__price,
+html.dark-mode body.route-page .vehicle-card__price {
+  color: #2bc4ff !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card,
+html.dark-mode body.route-page .selected-fare-card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__fare-title,
+html.dark-mode body.city-page .selected-fare-card__details h4,
+html.dark-mode body.city-page .selected-fare-card__details h4 small,
+html.dark-mode body.city-page .selected-fare-card__meta,
+html.dark-mode body.city-page .selected-fare-card__distance,
+html.dark-mode body.route-page .selected-fare-card__fare-title,
+html.dark-mode body.route-page .selected-fare-card__details h4,
+html.dark-mode body.route-page .selected-fare-card__details h4 small,
+html.dark-mode body.route-page .selected-fare-card__meta,
+html.dark-mode body.route-page .selected-fare-card__distance {
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__amount,
+html.dark-mode body.route-page .selected-fare-card__amount {
+  color: #2bc4ff !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__toggle,
+html.dark-mode body.route-page .selected-fare-card__toggle {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__toggle input:checked~.selected-fare-card__switch,
+html.dark-mode body.route-page .selected-fare-card__toggle input:checked~.selected-fare-card__switch {
+  background: #2bc4ff !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__toggle input:not(:checked)~.selected-fare-card__option--base,
+html.dark-mode body.route-page .selected-fare-card__toggle input:not(:checked)~.selected-fare-card__option--base {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__toggle input:checked~.selected-fare-card__option--inclusive,
+html.dark-mode body.route-page .selected-fare-card__toggle input:checked~.selected-fare-card__option--inclusive {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+html.dark-mode body.city-page .selected-fare-card__option,
+html.dark-mode body.route-page .selected-fare-card__option {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+html.dark-mode body.city-page .quote-modal__actions .btn-outline,
+html.dark-mode body.route-page .quote-modal__actions .btn-outline {
+  background: transparent !important;
+  color: #fff !important;
+  border: 2px solid rgba(255, 255, 255, 0.6) !important;
+}
+
+html.dark-mode body.city-page .quote-modal__actions .btn-outline:hover,
+html.dark-mode body.route-page .quote-modal__actions .btn-outline:hover {
+  border-color: #fff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode body.city-page .quote-modal__actions .btn-primary,
+html.dark-mode body.city-page .quote-modal .quote-btn--confirm,
+html.dark-mode body.route-page .quote-modal__actions .btn-primary,
+html.dark-mode body.route-page .quote-modal .quote-btn--confirm {
+  background: linear-gradient(120deg, #0f1c2e, #152a45) !important;
+  color: #fff !important;
+  border: 2px solid #2eb5ff !important;
+  box-shadow: 0 4px 16px rgba(46, 181, 255, 0.25) !important;
+}
+
+html.dark-mode body.city-page .quote-modal__actions .btn-primary:hover,
+html.dark-mode body.city-page .quote-modal .quote-btn--confirm:hover,
+html.dark-mode body.route-page .quote-modal__actions .btn-primary:hover,
+html.dark-mode body.route-page .quote-modal .quote-btn--confirm:hover {
+  border-color: #5cc5ff !important;
+  box-shadow: 0 6px 20px rgba(46, 181, 255, 0.35) !important;
+}
+
+/* â”€â”€ Homepage Premium Booking Card Overrides â”€â”€ */
+.booking-card--home {
+  background: rgba(255, 255, 255, 0.97) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(226, 232, 240, 0.30) !important;
+  border-radius: 5px !important;
+  box-shadow:
+    0 20px 50px rgba(15, 28, 46, 0.14),
+    0 4px 12px rgba(15, 28, 46, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.booking-card--home:hover {
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow:
+    0 28px 60px rgba(15, 28, 46, 0.18),
+    0 8px 20px rgba(15, 28, 46, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Active focus halos on homepage inputs */
+.booking-card--home .field input:focus,
+.booking-card--home .field select:focus {
+  outline: none !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18) !important;
+  background: #ffffff !important;
+}
+
+/* Make trip-type block sit flush against the top and sides of the booking card */
+.booking-card--home .trip-type-block {
+  margin: -1rem -1.15rem 1.2rem -1.15rem;
+  width: auto !important;
+  max-width: none !important;
+  gap: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .booking-card--home .trip-type-block {
+    /* Horizontal margin must match .booking-card's mobile padding (12px)
+       exactly, or the tab bar bleeds past the card edge and gets clipped
+       by .booking-card's overflow:hidden. */
+    margin: -1rem -12px 1rem -12px;
+    width: auto !important;
+    gap: 0 !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .booking-card--home .trip-type-block {
+    margin: -1.25rem -1.5rem 1.5rem -1.5rem;
+    width: auto !important;
+    gap: 0 !important;
+  }
+}
+
+.booking-card--home .trip-type-options,
+.booking-card--home .oneway-subtypes {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Selector tabs active/hover transitions */
+.booking-card--home .trip-type-options {
+  background: #f1f5f9 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.booking-card--home .trip-type-options .trip-type-option {
+  color: #475569 !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.booking-card--home .trip-type-options .trip-type-option:hover {
+  background: rgba(15, 28, 46, 0.06) !important;
+}
+
+.booking-card--home .trip-type-options .trip-type-option.trip-type-option--active,
+.booking-card--home .trip-type-options .trip-type-option.active {
+  background: linear-gradient(180deg, #102a43 0%, #0c2035 100%) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.booking-card--home .oneway-subtypes {
+  background: #f1f5f9 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.booking-card--home .oneway-subtypes label {
+  color: #475569 !important;
+  transition: all 0.25s ease !important;
+}
+
+.booking-card--home .oneway-subtypes label:hover {
+  background: rgba(15, 28, 46, 0.05) !important;
+}
+
+.booking-card--home .oneway-subtypes input:checked+label,
+.booking-card--home .oneway-subtypes label.active {
+  background: linear-gradient(180deg, #102a43 0%, #0c2035 100%) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Vehicle card grid improvements */
+.booking-card--home .vehicle-selector-card {
+  background: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.booking-card--home .vehicle-selector-card:hover {
+  background: #ffffff !important;
+  border-color: #38bdf8 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.12) !important;
+}
+
+.booking-card--home .vehicle-selector-card.vehicle-selector-card--active,
+.booking-card--home .vehicle-selector-card.active {
+  border: 2px solid #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.05) !important;
+  box-shadow: 0 4px 15px rgba(56, 189, 248, 0.18) !important;
+}
+
+.booking-card--home .vehicle-selector-card__name {
+  color: #1e293b !important;
+}
+
+.booking-card--home .vehicle-selector-card__price {
+  color: #0ea5e9 !important;
+}
+
+/* Primary calculate button custom glowing transitions */
+.booking-card--home .btn-primary {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.22) !important;
+}
+
+.booking-card--home .btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* ==========================================
+   PREMIUM ANIMATED SLIDING FARE DRAWER
+   ========================================== */
+
+/* Glassmorphism backdrop */
+.quote-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  display: flex;
+  justify-content: flex-end;
+  /* Right side alignment */
+  align-items: stretch;
+  opacity: 0 !important;
+  pointer-events: none;
+  z-index: 99999;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.quote-modal.quote-modal--open {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+
+/* Drawer Card - Desktop */
+.quote-modal__card {
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 620px !important;
+  height: 100% !important;
+  max-height: 100vh !important;
+  border-radius: 24px 0 0 24px !important;
+  position: relative !important;
+  box-shadow: -10px 0 40px rgba(15, 23, 42, 0.12) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  transform: translateX(100%) !important;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.quote-modal.quote-modal--open .quote-modal__card {
+  transform: translateX(0) !important;
+}
+
+/* Header design */
+.drawer-header {
+  padding: 20px 16px 16px;
+  background: transparent !important;
+  border-bottom: none !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.drawer-header__title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.drawer-header__sub {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
+.drawer-close-btn {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #475569;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  margin: 0;
+  z-index: 12;
+}
+
+.drawer-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: scale(1.06);
+}
+
+/* Scrollable drawer body */
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 16px 32px;
+  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.drawer-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drawer-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* Quick Change Vehicle tabs at the top of the drawer */
+.drawer-vehicle-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 16px;
+  border-bottom: none !important;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  touch-action: pan-x pan-y !important;
+}
+
+.drawer-vehicle-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.drawer-vehicle-tab {
+  flex: 1;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.4rem 0.2rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  user-select: none;
+}
+
+.drawer-vehicle-tab:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  transform: translateY(-2px);
+}
+
+.drawer-vehicle-tab.active {
+  background: #f0f7ff;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.12);
+}
+
+.drawer-vehicle-tab img {
+  width: 100%;
+  max-width: 56px;
+  height: 40px;
+  object-fit: contain;
+  margin-bottom: 2px;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-vehicle-tab.active img {
+  transform: scale(1.08);
+}
+
+.drawer-vehicle-tab__name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #475569;
+  text-align: center;
+}
+
+.drawer-vehicle-tab.active .drawer-vehicle-tab__name {
+  color: #1e3a8a;
+}
+
+.drawer-vehicle-tab__price {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  margin-top: 1px;
+}
+
+.drawer-vehicle-tab.active .drawer-vehicle-tab__price {
+  color: #2563eb;
+}
+
+/* Timeline display */
+.drawer-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+}
+
+.drawer-timeline-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  position: relative;
+}
+
+.drawer-timeline-step::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  bottom: -22px;
+  width: 2px;
+  border-left: 2px dashed #cbd5e1;
+}
+
+.drawer-timeline-step:last-of-type::before {
+  display: none;
+}
+
+.drawer-timeline-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  margin-top: 3px;
+  flex: 0 0 16px;
+  border: 2px solid #ffffff;
+}
+
+.drawer-timeline-icon--pickup {
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.drawer-timeline-icon--drop {
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.drawer-timeline-icon--stop {
+  background: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+}
+
+.drawer-timeline-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-timeline-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.drawer-timeline-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Fare pricing details block */
+.drawer-pricing-box {
+  background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+  color: #ffffff;
+  padding: 20px;
+  border-radius: 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.drawer-pricing-amount {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
+  color: #ffffff;
+}
+
+.drawer-pricing-amount span.strikethrough-fare {
+  font-size: 1.25rem;
+  text-decoration: line-through;
+  opacity: 0.45;
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.drawer-pricing-meta {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+/* Inclusions & Exclusions columns */
+.drawer-inc-exc-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 480px) {
+  .drawer-inc-exc-container {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.drawer-inc-exc-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.drawer-list-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-list-item {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.drawer-list-item span.icon {
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.drawer-list-item--inc span.icon {
+  color: #22c55e;
+}
+
+.drawer-list-item--exc span.icon {
+  color: #f97316;
+}
+
+/* Coupon status text */
+.drawer-coupon-applied {
+  background: #f0fdf4;
+  border: 1px dashed #22c55e;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #15803d;
+}
+
+/* Legal/policies links section */
+.drawer-policies {
+  padding: 14px 20px;
+  text-align: center;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #64748b;
+  border-top: 1.5px solid #f1f5f9;
+  background: #f8fafc;
+  margin-top: auto;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.drawer-policies a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 700;
+  margin: 0 4px;
+  transition: color 0.2s ease;
+}
+
+.drawer-policies a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.drawer-login-offers {
+  padding: 10px 18px 0;
+  text-align: center;
+  background: #ffffff;
+  border-top: 1px solid #eef2f7;
+}
+
+.drawer-login-offers a {
+  color: #0284c7;
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-decoration: underline;
+}
+
+/* Sticky action footer in drawer */
+.drawer-footer {
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1.5px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.drawer-footer button {
+  padding: 12px 16px !important;
+  border-radius: 12px !important;
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.drawer-footer .btn-outline {
+  flex: 0 0 auto !important;
+  width: 90px !important;
+  min-width: 80px !important;
+  max-width: 100px !important;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.drawer-footer .btn-outline:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px);
+}
+
+.drawer-footer .btn-primary {
+  flex: 1 !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.22) !important;
+}
+
+.drawer-footer .btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.28) !important;
+}
+
+.quote-modal__error {
+  margin: 0;
+  padding: 8px 16px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Left-knob switches & policies click box checkbox styles */
+.drawer-toggles-container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  margin-top: 14px;
+  margin-bottom: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.drawer-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #334155;
+  user-select: none;
+}
+
+.drawer-switch-knob {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.drawer-switch-knob::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.drawer-switch-control input[type="checkbox"] {
+  display: none;
+}
+
+.drawer-switch-control input[type="checkbox"]:checked+.drawer-switch-knob {
+  background: #3b82f6;
+}
+
+.drawer-switch-control input[type="checkbox"]:checked+.drawer-switch-knob::before {
+  transform: translateX(20px);
+}
+
+.drawer-terms-agreement {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+  text-align: left;
+}
+
+.drawer-terms-agreement input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.drawer-footer-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.drawer-footer-price .price-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.drawer-footer-price .price-value {
+  font-size: 1.4rem;
+  font-weight: 850;
+  color: #1e3a8a;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+/* Mobile responsive sheet styling */
+@media (max-width: 540px) {
+  .quote-modal {
+    justify-content: flex-end;
+    align-items: stretch;
+  }
+
+  .quote-modal__card {
+    border-radius: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    transform: translateX(100%) !important;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .quote-modal.quote-modal--open .quote-modal__card {
+    transform: translateX(0) !important;
+  }
+
+  .drawer-body {
+    padding: 16px 16px 24px;
+  }
+
+  .drawer-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* ===== In-place fare swap (booking form <-> fare details) ===== */
+/* The legacy rule `body.quote-modal-open .booking-card` pushes the card off-screen
+   (it assumed a separate full-screen drawer). For the in-card swap, keep it in place. */
+body.quote-modal-open .booking-card.swap-host {
+  transform: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.booking-card.swap-host {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.booking-card.swap-host>#booking-form {
+  transition:
+    transform 0.56s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.34s ease,
+    visibility 0.34s ease,
+    filter 0.34s ease;
+  will-change: transform, opacity, filter, visibility;
+}
+
+.booking-card.swap-host.is-fare-open>#booking-form {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-14%) scale(0.985);
+  opacity: 0;
+  filter: blur(4px);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Closed: absolute overlay (no impact on card height). Open: in-flow so the
+   card STRETCHES to the panel's content height. */
+.booking-card__fare-panel {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border-radius: inherit;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  filter: blur(8px);
+  transform: translateX(28%) scale(0.985);
+  transition:
+    transform 0.56s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.34s ease,
+    visibility 0.34s ease,
+    filter 0.34s ease;
+  will-change: transform, opacity, filter, visibility;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.booking-card.swap-host.is-fare-open .booking-card__fare-panel {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  filter: blur(0);
+  pointer-events: auto;
+}
+
+/* The whole #quote-modal is moved in; render it flat, auto height (stretchable) */
+.booking-card__fare-panel>.quote-modal.is-swapped,
+.booking-card__fare-panel>.quote-modal.quote-modal--open.is-swapped {
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: auto !important;
+  transition: none !important;
+}
+
+.booking-card__fare-panel .quote-modal__card,
+.booking-card__fare-panel .quote-modal.quote-modal--open .quote-modal__card {
+  background: transparent !important;
+  transform: none !important;
+  position: relative !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: none !important;
+  display: block !important;
+}
+
+/* Natural flow â€” content defines height, no internal scroll */
+.booking-card__fare-panel .drawer-body {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+/* ===== Swap panel: centred header + compact spacing (fit without scrolling) ===== */
+.booking-card__fare-panel .drawer-header {
+  text-align: center;
+  align-items: center;
+  padding: 0.6rem 1rem 6px !important;
+}
+
+.booking-card__fare-panel .drawer-header__title {
+  width: 100%;
+  font-size: 1.05rem !important;
+}
+
+.booking-card__fare-panel .drawer-body {
+  padding: 0.35rem 1rem 1rem !important;
+  gap: 5px !important;
+}
+
+.booking-card__fare-panel .drawer-vehicle-tabs {
+  padding: 2px 1rem 6px 1rem !important;
+  margin-left: -1rem !important;
+  margin-right: -1rem !important;
+  margin-bottom: 6px !important;
+  gap: 6px !important;
+}
+
+.booking-card__fare-panel .drawer-vehicle-tab {
+  padding: 0.35rem 0.15rem !important;
+  border-radius: 8px !important;
+}
+
+.booking-card__fare-panel .drawer-vehicle-tab img {
+  max-width: 48px !important;
+  height: 34px !important;
+  object-fit: contain;
+}
+
+.booking-card__fare-panel .drawer-timeline {
+  padding: 6px 10px !important;
+  gap: 4px !important;
+  margin-bottom: 6px !important;
+}
+
+.booking-card__fare-panel .drawer-columns,
+.booking-card__fare-panel .drawer-section {
+  margin-bottom: 6px !important;
+}
+
+.booking-card__fare-panel .drawer-list-item {
+  padding: 1px 0 !important;
+  line-height: 1.2 !important;
+  font-size: 0.8rem !important;
+}
+
+.booking-card__fare-panel .drawer-policies {
+  padding: 8px 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.booking-card__fare-panel .drawer-login-offers {
+  padding: 6px 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.booking-card__fare-panel .drawer-footer {
+  padding: 10px 0 !important;
+  width: auto !important;
+  background: transparent !important;
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* ===== Inclusions/Exclusions as compact accordions (native <details>) ===== */
+.booking-card__fare-panel .drawer-inc-exc-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-acc {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.drawer-acc__head {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  user-select: none;
+}
+
+.drawer-acc__head::-webkit-details-marker {
+  display: none;
+}
+
+.drawer-acc__chev {
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #94a3b8;
+  border-bottom: 2px solid #94a3b8;
+  transform: rotate(45deg);
+  transition: transform 0.25s ease;
+  margin-right: 2px;
+}
+
+.drawer-acc[open] .drawer-acc__chev {
+  transform: rotate(-135deg);
+}
+
+.drawer-acc .drawer-list {
+  margin: 0;
+  padding: 0 14px 10px;
+  list-style: none;
+}
+
+/* ===== Responsive Stacking drawer footer layout.drawer-footer-responsive {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  border-top: 1.5px solid #f1f5f9 !important;
+  padding: 14px 20px 24px 20px !important;
+  margin: 0 !important;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+.booking-card__fare-panel .drawer-footer-responsive {
+  background: transparent !important;
+  margin: 16px 0 0 0 !important;
+  padding: 16px 0 6px 0 !important;
+  border: none !important;
+  border-top: 1.5px solid rgba(226, 232, 240, 0.6) !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  width: 100% !important;
+  box-shadow: none !important;
+}
+
+.drawer-footer-responsive .drawer-footer-price {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.drawer-footer-responsive .price-label {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  line-height: 1.2 !important;
+}
+
+.drawer-footer-responsive .price-value {
+  font-size: 1.45rem !important;
+  font-weight: 850 !important;
+  color: #0f172a !important;
+  line-height: 1.1 !important;
+  margin-top: 2px !important;
+  letter-spacing: -0.01em !important;
+}
+
+.drawer-footer-responsive .btn-outline {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 68px !important;
+  padding: 10px 14px !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #475569 !important;
+  border-radius: 50px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.drawer-footer-responsive .btn-outline:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
+}
+
+.drawer-footer-responsive .btn-primary {
+  flex: 1 1 auto !important;
+  min-width: 130px !important;
+  padding: 11px 18px !important;
+  font-size: 0.82rem !important;
+  font-weight: 750 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+  border: none !important;
+  border-radius: 50px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  box-shadow: 0 4px 10px rgba(29, 78, 216, 0.25) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  cursor: pointer !important;
+}
+
+.drawer-footer-responsive .btn-primary:hover {
+  background: linear-gradient(135deg, #1e40af, #1d4ed8) !important;
+  box-shadow: 0 6px 14px rgba(29, 78, 216, 0.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+@media (max-width: 480px) {
+  .drawer-footer-responsive {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 14px 16px 24px 16px !important;
+  }
+
+  .booking-card__fare-panel .drawer-footer-responsive {
+    padding: 14px 0 12px 0 !important;
+    border: none !important;
+    border-top: 1.5px solid rgba(226, 232, 240, 0.6) !important;
+    margin: 16px 0 0 0 !important;
+  }
+
+  .drawer-footer-responsive .drawer-footer-price {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-bottom: 6px !important;
+    display: flex !important;
+  }
+
+  .drawer-footer-responsive .price-label {
+    font-size: 0.75rem !important;
+  }
+
+  .drawer-footer-responsive .price-value {
+    font-size: 1.5rem !important;
+    margin-top: 0 !important;
+  }
+
+  .drawer-footer-responsive .btn-primary {
+    order: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    flex: none !important;
+    padding: 12px 18px !important;
+    font-size: 0.88rem !important;
+  }
+
+  .drawer-footer-responsive .btn-outline {
+    order: 2 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    flex: none !important;
+    padding: 10px 14px !important;
+    font-size: 0.82rem !important;
+    text-align: center !important;
+  }
+}
+
+
+
+/* ===== Fare-card confirming state â€” booking submission animation ===== */
+.fare-card-confirming {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: inherit;
+  animation: fare-confirm-fadein 0.3s ease both;
+}
+
+@keyframes fare-confirm-fadein {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fare-confirming-rings {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 2rem;
+  flex-shrink: 0;
+}
+
+.fare-confirming-ring,
+.fare-confirming-inner {
+  position: absolute;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: transparent;
+  box-sizing: border-box;
+}
+
+.fare-confirming-ring {
+  width: 80px;
+  height: 80px;
+  top: 0;
+  left: 0;
+  border-width: 6px;
+  border-top-color: #1d4ed8;
+  animation: fare-spin 0.9s linear infinite;
+}
+
+.fare-confirming-inner {
+  width: 52px;
+  height: 52px;
+  top: 14px;
+  left: 14px;
+  border-width: 5px;
+  border-top-color: #60a5fa;
+  animation: fare-spin-rev 0.65s linear infinite;
+}
+
+@keyframes fare-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fare-spin-rev {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.fare-confirming-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.45rem;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.fare-confirming-sub {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Glassy transparent booking card overrides for City and Route pages */
+html.dark-mode body.city-page .booking-card--home,
+html.dark-mode body.route-page .booking-card--home {
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .booking-card__header,
+html.dark-mode body.route-page .booking-card--home .booking-card__header,
+html.dark-mode body.city-page .booking-card--home .field,
+html.dark-mode body.route-page .booking-card--home .field,
+html.dark-mode body.city-page .booking-card--home .wa-check-label,
+html.dark-mode body.route-page .booking-card--home .wa-check-label,
+html.dark-mode body.city-page .booking-card--home .promo-row__text,
+html.dark-mode body.route-page .booking-card--home .promo-row__text,
+html.dark-mode body.city-page .booking-card--home .fare-toggle>span,
+html.dark-mode body.route-page .booking-card--home .fare-toggle>span {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input,
+html.dark-mode body.city-page .booking-card--home .field select,
+html.dark-mode body.route-page .booking-card--home .field input,
+html.dark-mode body.route-page .booking-card--home .field select {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input::placeholder,
+html.dark-mode body.route-page .booking-card--home .field input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input:focus,
+html.dark-mode body.city-page .booking-card--home .field select:focus,
+html.dark-mode body.route-page .booking-card--home .field input:focus,
+html.dark-mode body.route-page .booking-card--home .field select:focus {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .trip-type-options,
+html.dark-mode body.route-page .booking-card--home .trip-type-options,
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes,
+html.dark-mode body.city-page .booking-card--home .fare-toggle__switch,
+html.dark-mode body.route-page .booking-card--home .fare-toggle__switch {
+  background: rgba(15, 23, 42, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes {
+  border-top: none !important;
+  margin-top: -1px !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .trip-type-option,
+html.dark-mode body.route-page .booking-card--home .trip-type-option,
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes label,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes label,
+html.dark-mode body.city-page .booking-card--home .fare-toggle__switch label,
+html.dark-mode body.route-page .booking-card--home .fare-toggle__switch label {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .trip-type-option:hover,
+html.dark-mode body.route-page .booking-card--home .trip-type-option:hover,
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes label:hover,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes label:hover,
+html.dark-mode body.city-page .booking-card--home .fare-toggle__switch label:hover,
+html.dark-mode body.route-page .booking-card--home .fare-toggle__switch label:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .trip-type-option.trip-type-option--active,
+html.dark-mode body.city-page .booking-card--home .trip-type-option.active,
+html.dark-mode body.route-page .booking-card--home .trip-type-option.trip-type-option--active,
+html.dark-mode body.route-page .booking-card--home .trip-type-option.active,
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes input:checked+label,
+html.dark-mode body.city-page .booking-card--home .oneway-subtypes label.active,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes input:checked+label,
+html.dark-mode body.route-page .booking-card--home .oneway-subtypes label.active,
+html.dark-mode body.city-page .booking-card--home .fare-toggle__switch input:checked+label,
+html.dark-mode body.route-page .booking-card--home .fare-toggle__switch input:checked+label {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  color: #070d18 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card:hover,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card.vehicle-selector-card--active,
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card.active,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card.vehicle-selector-card--active,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card.active {
+  background: rgba(56, 189, 248, 0.16) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card__name,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card__name {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .vehicle-selector-card__price,
+html.dark-mode body.route-page .booking-card--home .vehicle-selector-card__price {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .btn-promo-apply,
+html.dark-mode body.route-page .booking-card--home .btn-promo-apply {
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .btn-promo-apply:hover,
+html.dark-mode body.route-page .booking-card--home .btn-promo-apply:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field-hint,
+html.dark-mode body.route-page .booking-card--home .field-hint {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Phone input wrapper overrides for City and Route pages */
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper:focus-within,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper:focus-within {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper .country-code-trigger,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper .country-code-trigger {
+  background: rgba(15, 23, 42, 0.2) !important;
+  color: #ffffff !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper .country-code-trigger:hover,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper .country-code-trigger:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper .phone-national-input,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper .phone-national-input {
+  background: transparent !important;
+  color: #ffffff !important;
+}
+
+/* Country code popover dark theme overrides for City and Route pages */
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper--country .country-code-popover,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper--country .country-code-popover {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper--country .country-code-option,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper--country .country-code-option {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper--country .country-code-option:hover,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper--country .country-code-option:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper--country .country-code-manual-inline,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper--country .country-code-manual-inline {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .phone-input-wrapper--country .country-code-manual-inline:focus,
+html.dark-mode body.route-page .booking-card--home .phone-input-wrapper--country .country-code-manual-inline:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2) !important;
+}
+
+/* Promo code field overrides for City and Route pages */
+html.dark-mode body.city-page .booking-card--home .promo-row input[type="text"],
+html.dark-mode body.route-page .booking-card--home .promo-row input[type="text"] {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .promo-row input[type="text"]::placeholder,
+html.dark-mode body.route-page .booking-card--home .promo-row input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .promo-row input[type="text"]:focus,
+html.dark-mode body.route-page .booking-card--home .promo-row input[type="text"]:focus {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+/* ==========================================================================
+   Dark Theme Overrides for Booking Form Inputs & Drawer (City & Route Pages)
+   ========================================================================== */
+
+/* 1. Date & Time Picker visibility inside dark booking cards */
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-text,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-text,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-text,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-text {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-month-field,
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-day-field,
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-year-field,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-hour-field,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-minute-field,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-ampm-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-month-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-day-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-year-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-hour-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-minute-field,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-month-field:focus,
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-day-field:focus,
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-year-field:focus,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-minute-field:focus,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-ampm-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-month-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-day-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-datetime-edit-year-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-minute-field:focus,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-datetime-edit-ampm-field:focus {
+  background: #38bdf8 !important;
+  color: #070d18 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]:not([value])::-webkit-datetime-edit,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]:not([value])::-webkit-datetime-edit,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]:not([value])::-webkit-datetime-edit,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]:not([value])::-webkit-datetime-edit {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .field input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark-mode body.city-page .booking-card--home .field input[type="time"]::-webkit-calendar-picker-indicator,
+html.dark-mode body.route-page .booking-card--home .field input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark-mode body.route-page .booking-card--home .field input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.85 !important;
+}
+
+/* 2. Drawer Elements (Quote Modal) dark theme styling overrides */
+html.dark-mode body.city-page .quote-modal__card,
+html.dark-mode body.route-page .quote-modal__card {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-header__title,
+html.dark-mode body.route-page .drawer-header__title {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-header__sub,
+html.dark-mode body.route-page .drawer-header__sub {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+html.dark-mode body.city-page .drawer-close-btn,
+html.dark-mode body.route-page .drawer-close-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-close-btn:hover,
+html.dark-mode body.route-page .drawer-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab,
+html.dark-mode body.route-page .drawer-vehicle-tab {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab:hover,
+html.dark-mode body.route-page .drawer-vehicle-tab:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab.active,
+html.dark-mode body.route-page .drawer-vehicle-tab.active {
+  background: rgba(56, 189, 248, 0.16) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab__name,
+html.dark-mode body.route-page .drawer-vehicle-tab__name {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab.active .drawer-vehicle-tab__name,
+html.dark-mode body.route-page .drawer-vehicle-tab.active .drawer-vehicle-tab__name {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab__price,
+html.dark-mode body.route-page .drawer-vehicle-tab__price {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.dark-mode body.city-page .drawer-vehicle-tab.active .drawer-vehicle-tab__price,
+html.dark-mode body.route-page .drawer-vehicle-tab.active .drawer-vehicle-tab__price {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .drawer-timeline,
+html.dark-mode body.route-page .drawer-timeline {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode body.city-page .drawer-timeline-step::before,
+html.dark-mode body.route-page .drawer-timeline-step::before {
+  border-left-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+html.dark-mode body.city-page .drawer-timeline-icon,
+html.dark-mode body.route-page .drawer-timeline-icon {
+  border-color: #0f172a !important;
+  /* matches dark bg contrast */
+}
+
+html.dark-mode body.city-page .drawer-timeline-label,
+html.dark-mode body.route-page .drawer-timeline-label {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.dark-mode body.city-page .drawer-timeline-value,
+html.dark-mode body.route-page .drawer-timeline-value {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-inc-exc-block,
+html.dark-mode body.route-page .drawer-inc-exc-block,
+html.dark-mode body.city-page .drawer-acc,
+html.dark-mode body.route-page .drawer-acc {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode body.city-page .drawer-list-title,
+html.dark-mode body.route-page .drawer-list-title {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-list-item,
+html.dark-mode body.route-page .drawer-list-item {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+html.dark-mode body.city-page .drawer-acc__head,
+html.dark-mode body.route-page .drawer-acc__head {
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark-mode body.city-page .drawer-acc__chev,
+html.dark-mode body.route-page .drawer-acc__chev {
+  border-right-color: #ffffff !important;
+  border-bottom-color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-coupon-applied,
+html.dark-mode body.route-page .drawer-coupon-applied {
+  background: rgba(34, 197, 94, 0.1) !important;
+  border: 1px dashed rgba(34, 197, 94, 0.4) !important;
+  color: #4ade80 !important;
+}
+
+html.dark-mode body.city-page .drawer-policies,
+html.dark-mode body.route-page .drawer-policies {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+html.dark-mode body.city-page .drawer-policies a,
+html.dark-mode body.route-page .drawer-policies a {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .drawer-policies a:hover,
+html.dark-mode body.route-page .drawer-policies a:hover {
+  color: #7dd3fc !important;
+}
+
+html.dark-mode body.city-page .drawer-terms-agreement,
+html.dark-mode body.route-page .drawer-terms-agreement {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+html.dark-mode body.city-page .drawer-terms-agreement a,
+html.dark-mode body.route-page .drawer-terms-agreement a {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .drawer-terms-agreement a:hover,
+html.dark-mode body.route-page .drawer-terms-agreement a:hover {
+  color: #7dd3fc !important;
+}
+
+html.dark-mode body.city-page .drawer-login-offers,
+html.dark-mode body.route-page .drawer-login-offers {
+  background: transparent !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark-mode body.city-page .drawer-login-offers a,
+html.dark-mode body.route-page .drawer-login-offers a {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .drawer-footer,
+html.dark-mode body.route-page .drawer-footer {
+  background: transparent !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark-mode body.city-page .drawer-footer .btn-outline,
+html.dark-mode body.route-page .drawer-footer .btn-outline {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
+html.dark-mode body.city-page .drawer-footer .btn-outline:hover,
+html.dark-mode body.route-page .drawer-footer .btn-outline:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border-color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .drawer-footer .btn-primary,
+html.dark-mode body.route-page .drawer-footer .btn-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.22) !important;
+}
+
+html.dark-mode body.city-page .drawer-footer .btn-primary:hover,
+html.dark-mode body.route-page .drawer-footer .btn-primary:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
+  box-shadow: 0 8px 20px rgba(56, 189, 248, 0.28) !important;
+}
+
+html.dark-mode body.city-page .drawer-footer-price .price-label,
+html.dark-mode body.route-page .drawer-footer-price .price-label {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.dark-mode body.city-page .drawer-footer-price .price-value,
+html.dark-mode body.route-page .drawer-footer-price .price-value {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .drawer-toggles-container,
+html.dark-mode body.route-page .drawer-toggles-container {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode body.city-page .drawer-switch-control,
+html.dark-mode body.route-page .drawer-switch-control {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+html.dark-mode body.city-page .drawer-switch-knob,
+html.dark-mode body.route-page .drawer-switch-knob {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode body.city-page .drawer-switch-control input[type="checkbox"]:checked+.drawer-switch-knob,
+html.dark-mode body.route-page .drawer-switch-control input[type="checkbox"]:checked+.drawer-switch-knob {
+  background: #38bdf8 !important;
+}
+
+/* Dark glassy overrides for stops elements on City and Route pages */
+html.dark-mode body.city-page .booking-card--home .stops-control,
+html.dark-mode body.route-page .booking-card--home .stops-control {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stops-control__header p,
+html.dark-mode body.route-page .booking-card--home .stops-control__header p {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .btn-chips,
+html.dark-mode body.route-page .booking-card--home .btn-chips {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .btn-chips:hover,
+html.dark-mode body.route-page .booking-card--home .btn-chips:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: #38bdf8 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stops-limit,
+html.dark-mode body.route-page .booking-card--home .stops-limit {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item,
+html.dark-mode body.route-page .booking-card--home .stop-item {
+  background: rgba(15, 23, 42, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item input,
+html.dark-mode body.route-page .booking-card--home .stop-item input {
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item__drag,
+html.dark-mode body.route-page .booking-card--home .stop-item__drag {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item__actions button,
+html.dark-mode body.route-page .booking-card--home .stop-item__actions button {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item__actions button:hover:not(:disabled),
+html.dark-mode body.route-page .booking-card--home .stop-item__actions button:hover:not(:disabled) {
+  background: #38bdf8 !important;
+  color: #070d18 !important;
+}
+
+html.dark-mode body.city-page .booking-card--home .stop-item__actions button:disabled,
+html.dark-mode body.route-page .booking-card--home .stop-item__actions button:disabled {
+  opacity: 0.25 !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* â”€â”€ Dark-mode rental duration chips â”€â”€
+   The base .hourly-option uses var(--white) bg + var(--gray-400) text which
+   both render as near-invisible on the dark navy booking card.
+   Override for ALL dark-mode pages (home, city, route). */
+html.dark-mode .booking-card .hourly-option,
+html.dark-mode .booking-card--home .hourly-option {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+html.dark-mode .booking-card .hourly-option:hover,
+html.dark-mode .booking-card--home .hourly-option:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode .booking-card .hourly-option--active,
+html.dark-mode .booking-card--home .hourly-option--active {
+  background: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+  color: #070d18 !important;
+  font-weight: 700 !important;
+}
+
+/* â”€â”€ Dark-mode "RENTAL DURATION" label â”€â”€ */
+html.dark-mode .booking-card .hourly-control > span:first-of-type,
+html.dark-mode .booking-card--home .hourly-control > span:first-of-type {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+/* â”€â”€ Prevent Secondary Autocomplete Dropdown Overlapping â”€â”€ */
+.local-autocomplete-dropdown {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* ══ Progressive disclosure: contact fields hidden until locations/date/time filled ══ */
+.booking-form .field-pair--contact-primary.contact-step-hidden,
+.booking-form .field-pair--contact-second.contact-step-hidden,
+.contact-step-hidden {
+  display: none !important;
+}
+
+.booking-form .field-pair--contact-primary:not(.contact-step-hidden),
+.booking-form .field-pair--contact-second:not(.contact-step-hidden) {
+  animation: smoothContactReveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes smoothContactReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ══ WIDER BOOKING FORM (stretches up to container edges) ══ */
+.booking-card,
+.booking-card--home,
+.hero .booking-card {
+  max-width: 1240px !important;
+  width: 100% !important;
+}
+
+@media (max-width: 768px) {
+  .booking-card,
+  .booking-card--home {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 8px !important;
+  }
+  .hero__layout {
+    padding-inline: 0.35rem !important;
+  }
+}
+
+/* ══ SLEEK SHARP (SLIGHTLY CURVED) EDGES (6px radius) ══ */
+.booking-card,
+.booking-card--home,
+.hero .booking-card {
+  border-radius: 6px !important;
+}
+
+.booking-form .field input,
+.booking-form .field select,
+.booking-form .phone-input-wrapper,
+.booking-form .country-code-trigger,
+.booking-form .vehicle-selector-card,
+.booking-form .fare-toggle__switch,
+.booking-form .trip-type-options,
+.booking-form .oneway-subtypes,
+.booking-form .promo-row input,
+.booking-form .btn-primary,
+.booking-form .btn-promo-apply {
+  border-radius: 6px !important;
+}
+
+/* ══ FLUSH ATTACHED TRIP TYPE BLOCK (Zero gap at top/sides) ══ */
+.booking-card .trip-type-block,
+.booking-card--home .trip-type-block {
+  margin: -1rem -1.15rem 1rem -1.15rem !important;
+  width: calc(100% + 2.3rem) !important;
+  border-top-left-radius: inherit !important;
+  border-top-right-radius: inherit !important;
+  overflow: hidden !important;
+}
+
+@media (min-width: 1024px) {
+  .booking-card .trip-type-block,
+  .booking-card--home .trip-type-block {
+    margin: -1.25rem -1.75rem 1.25rem -1.75rem !important;
+    width: calc(100% + 3.5rem) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .booking-card .trip-type-block,
+  .booking-card--home .trip-type-block {
+    margin: -12px -8px 12px -8px !important;
+    width: calc(100% + 16px) !important;
+  }
+}
+/* ══ CRISP SHARP SEMI-TRANSPARENT BOOKING CARD (Zero Blur Haze) ══ */
+.booking-card,
+.booking-card--home {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
+}
+
+html.dark-mode .booking-card,
+html.dark-mode .booking-card--home {
+  background: rgba(15, 23, 42, 0.82) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ══ GLOBAL: HIDE SCROLLBARS WHILE KEEPING SCROLL FUNCTIONALITY ══ */
+html, body, *, *::before, *::after {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ══ UNIFIED BOOKING FORM COLOR SYSTEM (Zero Color Mismatch) ══ */
+.booking-card,
+.booking-card--home {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.booking-form .field input,
+.booking-form .field select,
+.booking-form .phone-input-wrapper,
+.booking-form .country-code-trigger,
+.booking-form .promo-row input,
+.booking-card .trip-type-options,
+.booking-card .oneway-subtypes,
+.booking-card .fare-toggle__switch,
+.booking-card .vehicle-selector-card {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Dark Mode Unified Form Colors */
+html.dark-mode .booking-card,
+html.dark-mode .booking-card--home {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode .booking-form .field input,
+html.dark-mode .booking-form .field select,
+html.dark-mode .booking-form .phone-input-wrapper,
+html.dark-mode .booking-form .country-code-trigger,
+html.dark-mode .booking-form .promo-row input,
+html.dark-mode .booking-card .trip-type-options,
+html.dark-mode .booking-card .oneway-subtypes,
+html.dark-mode .booking-card .fare-toggle__switch,
+html.dark-mode .booking-card .vehicle-selector-card,
+html.dark-mode .booking-card--home .trip-type-options,
+html.dark-mode .booking-card--home .oneway-subtypes,
+html.dark-mode .booking-card--home .fare-toggle__switch,
+html.dark-mode .booking-card--home .vehicle-selector-card {
+  background: #1e293b !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode .booking-form .field input:focus,
+html.dark-mode .booking-form .field select:focus,
+html.dark-mode .booking-form .phone-input-wrapper:focus-within,
+html.dark-mode .booking-form .promo-row input:focus {
+  background: #334155 !important;
+  border-color: #38bdf8 !important;
+}
+
+/* ══ UNIFIED PASSENGERS & LUGGAGE SELECTOR STYLES (Zero Color Mismatch) ══ */
+.booking-form select,
+.booking-form .luggage-picker-trigger {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  padding-right: 2rem !important;
+}
+
+html.dark-mode .booking-form select,
+html.dark-mode .booking-form .luggage-picker-trigger,
+[data-theme="dark"] .booking-form select,
+[data-theme="dark"] .booking-form .luggage-picker-trigger {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark-mode .booking-form select option,
+[data-theme="dark"] .booking-form select option {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+/* Fare-calculating loader pill: JS sets a light-mode-only inline style
+   (pale blue gradient + dark blue text), so in dark mode it renders as a
+   washed-out, low-contrast card against the dark page. Override with
+   !important, which does win over an inline style. */
+html.dark-mode .inline-fare-loader-badge,
+[data-theme="dark"] .inline-fare-loader-badge {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.22) 0%, rgba(56, 189, 248, 0.14) 100%) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  color: #7dd3fc !important;
+  box-shadow: none !important;
+}
+html.dark-mode .inline-fare-loader-badge span[style*="border-top-color"],
+[data-theme="dark"] .inline-fare-loader-badge span[style*="border-top-color"] {
+  border-color: #7dd3fc !important;
+  border-top-color: transparent !important;
+}
+
+/* Centrally align dynamic top titles and badges across all pages & avoid unwanted shadows */
+.airport-top-badge,
+.booking-top-badge,
+#booking-form-dynamic-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+.airport-form-top-title-wrap {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+/* Urgent booking toggle - "Need it urgently? Get it in minutes" (injected
+   by assets/js/booking-form.js's ensureUrgentToggleUI(), same DOM shell on
+   every page that renders #confirm-booking-btn: index.php, engine/route.php,
+   engine/city.php, pages/airport-transfer.php). Off by default; checking it
+   requires a Razorpay 15% advance payment before the booking is submitted. */
+.urgent-toggle-row {
+  margin: 0.65rem 0;
+}
+
+.urgent-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.urgent-toggle-label:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.urgent-toggle-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.urgent-toggle-switch {
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--gray-200);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.urgent-toggle-switch::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.urgent-toggle-label input:checked + .urgent-toggle-switch {
+  background: #f59e0b;
+}
+
+.urgent-toggle-label input:checked + .urgent-toggle-switch::before {
+  transform: translateX(16px);
+}
+
+.urgent-toggle-label input:focus-visible + .urgent-toggle-switch {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+}
+
+.urgent-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.urgent-toggle-text strong {
+  font-size: 0.85rem;
+  color: var(--blue-dark);
+  font-weight: 700;
+}
+
+.urgent-toggle-sub {
+  font-size: 0.72rem;
+  color: var(--muted-text, #64748b);
+  line-height: 1.35;
+}
+
+html.dark-mode .urgent-toggle-label,
+[data-theme="dark"] .urgent-toggle-label {
+  background: rgba(245, 158, 11, 0.1) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html.dark-mode .urgent-toggle-text strong,
+[data-theme="dark"] .urgent-toggle-text strong {
+  color: #ffffff !important;
+}
+
+html.dark-mode .urgent-toggle-sub,
+[data-theme="dark"] .urgent-toggle-sub {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+html.dark-mode .urgent-toggle-switch,
+[data-theme="dark"] .urgent-toggle-switch {
+  background: rgba(255, 255, 255, 0.2) !important;
+}

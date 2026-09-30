@@ -1,0 +1,503 @@
+/**
+ * Vehicle / Services section – fleet cards, fare modes, rate card
+ * Drop Cars – Premium intercity taxi
+ */
+
+/* Our Taxi – Explore Our Options (Chennai-style) */
+.fleet-showcase {
+  padding: var(--section-y, 2rem) 0;
+  background: var(--blue-subtle);
+}
+
+.fleet-showcase .eyebrow {
+  text-align: center;
+}
+
+.fleet-showcase h2 {
+  text-align: center;
+  margin-bottom: 1.35rem;
+  font-size: clamp(1.65rem, 3.2vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.fleet-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-bottom: 1.5rem;
+}
+
+.fleet-filter__btn {
+  padding: 0.65rem 1.4rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 999px;
+  background: var(--white);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.fleet-filter__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.fleet-filter__btn--active {
+  background: var(--accent-gradient);
+  border-color: transparent;
+  color: var(--white);
+  box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+}
+
+.fleet-slider-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.5rem 0 1rem;
+}
+
+.fleet-slider-track {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 0;
+}
+
+/* Compact carousel: matches reference grid feel (~320px cards), scroll-snap strip */
+.fleet-showcase--slider .fleet-slider-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  scroll-padding-inline: 1rem;
+  /* Dots are the only visible nav; keep native scroll without a second bar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.fleet-showcase--slider .fleet-slider-container:focus {
+  outline: none;
+}
+
+.fleet-showcase--slider .fleet-slider-container:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.fleet-showcase--slider .fleet-slider-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* When in slider mode */
+.fleet-showcase--slider .fleet-slider-track {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 1rem;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+  padding: 0 max(1rem, calc(50% - min(140px, 45vw - 1rem)));
+}
+
+.fleet-showcase--slider .fleet-slider-slide {
+  flex: 0 0 min(280px, calc(100vw - 2.5rem));
+  width: min(280px, calc(100vw - 2.5rem));
+  max-width: min(280px, calc(100vw - 2.5rem));
+  min-width: 0;
+  padding: 0;
+  box-sizing: border-box;
+  scroll-snap-align: center;
+  scroll-snap-stop: normal;
+  opacity: 1;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.fleet-showcase--slider .fleet-slider-slide:not(.active) {
+  opacity: 0.88;
+}
+
+.fleet-showcase--slider .fleet-slider-slide.active {
+  opacity: 1;
+}
+
+.fleet-showcase--slider .fleet-showcase__card {
+  max-width: none;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.fleet-showcase__card {
+  background: var(--white);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--gray-100);
+  display: flex;
+  flex-direction: column;
+}
+
+/* One vehicle selected: centered static showcase (no carousel) */
+.fleet-showcase:not(.fleet-showcase--slider) .fleet-slider-container {
+  overflow: visible;
+  touch-action: auto;
+}
+
+.fleet-slider-track--static {
+  flex-wrap: wrap !important;
+  justify-content: center;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  gap: 1.5rem !important;
+}
+
+.fleet-slider-track--static .fleet-slider-slide {
+  flex: 1 1 100%;
+  max-width: 300px;
+  width: 100%;
+  margin: 0 auto;
+  opacity: 1 !important;
+  transform: none !important;
+  padding-left: 0;
+  padding-right: 0;
+  box-sizing: border-box;
+  scroll-snap-align: unset;
+}
+
+/* Fleet filter (main.js toggles this when a tab is selected) */
+.fleet-showcase__card--hidden {
+  display: none !important;
+}
+
+.fleet-showcase__card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+}
+
+.fleet-showcase__img {
+  padding: 2.5rem 1.5rem;
+  background: #ffffff !important;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Compact fleet cards in slider (align with reference grid ~320px columns) */
+.fleet-showcase--slider .fleet-showcase__img {
+  padding: 1.35rem 1rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__img img {
+  height: clamp(76px, 10vw, 112px);
+}
+
+.fleet-showcase--slider .fleet-showcase__content {
+  padding: 1.15rem 1.25rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__head h3 {
+  font-size: 1.15rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__head span {
+  font-size: 0.98rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__category {
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__features {
+  margin-bottom: 1.1rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.fleet-showcase--slider .fleet-showcase__content .btn-primary {
+  padding: 0.55rem 1.35rem;
+  min-width: 130px;
+  font-size: 0.9rem;
+}
+
+.fleet-showcase__img::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background: linear-gradient(to top, rgba(255,255,255,1), rgba(255,255,255,0));
+}
+
+.fleet-showcase__img img {
+  height: clamp(100px, 15vw, 140px);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  transition: transform 0.4s ease;
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.1));
+}
+
+.fleet-showcase__card:hover .fleet-showcase__img img {
+  transform: scale(1.08) translateX(5px);
+}
+
+.fleet-showcase__content {
+  padding: 1.2rem 1.35rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet-showcase__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.fleet-showcase__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+.fleet-showcase__head span {
+  font-weight: 800;
+  color: #0ea5e9;
+  font-size: 0.95rem;
+  background: rgba(14, 165, 233, 0.08);
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.fleet-showcase__category {
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  margin: 0 0 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fleet-showcase__features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.1rem;
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.fleet-showcase__features li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fleet-showcase__features li span {
+  font-size: 0.9rem;
+  width: 18px;
+  text-align: center;
+}
+
+.fleet-showcase__features li.pricing-detail {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--gray-200) !important;
+  font-size: 0.76rem;
+  color: var(--gray-600);
+  font-weight: 600;
+}
+
+.fleet-showcase__content .btn-primary {
+  margin: auto auto 0 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.services {
+  padding: 2.5rem 0;
+}
+
+.services__layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.services__visual {
+  margin: 0;
+  background: var(--white);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.services__visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 360px;
+  object-fit: cover;
+}
+
+.services__visual figcaption {
+  padding: 1rem 1.2rem;
+  font-size: 0.9rem;
+  color: var(--gray-400);
+}
+
+.benefits {
+  padding-left: 1.2rem;
+  color: var(--gray-400);
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.fleet-card {
+  background: var(--gray-100);
+  border-radius: 18px;
+  padding: 1.2rem 1.4rem;
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+.fleet-card--highlight {
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.fleet-card__title {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.fleet-card ul {
+  padding-left: 1.1rem;
+  margin: 0.6rem 0 0;
+  color: inherit;
+}
+
+.fare-modes {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 1.2rem 1.5rem;
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+.fare-modes__title {
+  font-weight: 700;
+  margin: 0 0 0.8rem;
+}
+
+.fare-modes__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.rate-card {
+  background: var(--blue);
+  color: var(--white);
+  padding: 2rem;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.rate-card h3 {
+  color: var(--white);
+}
+
+.rate-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.rate-card li {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.rate-card__note {
+  font-size: 0.85rem;
+  margin-top: 1.2rem;
+  opacity: 0.8;
+}
+
+/* ── Colored feature icons & Desktop grid showcase ── */
+.feature-icon--passengers {
+  color: #8b5cf6 !important;
+}
+.feature-icon--luggage {
+  color: #3b82f6 !important;
+}
+.feature-icon--ac {
+  color: #0ea5e9 !important;
+}
+.feature-icon--arrow {
+  color: #64748b !important;
+}
+
+@media (min-width: 992px) {
+  .fleet-showcase--slider .fleet-slider-container {
+    overflow: visible !important;
+  }
+  .fleet-showcase--slider .fleet-slider-track {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.5rem !important;
+    width: 100% !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .fleet-showcase--slider .fleet-slider-slide {
+    flex: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* Pure white background for vehicle cards */
+  .fleet-showcase__card {
+    background: #ffffff !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04) !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  }
+  .fleet-showcase__card:hover {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08) !important;
+  }
+}

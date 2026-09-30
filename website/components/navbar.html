@@ -1,0 +1,36 @@
+<!-- Reusable navbar component – include via SSI or JS fetch -->
+<header class="site-header">
+  <div class="container header__content">
+    <div class="logo">
+      <a href="/">
+        <div class="logo-wrapper" style="display:inline-flex; align-items:center; gap:8px;">
+          <img src="/assets/img/dropcars-emblem.png" alt="Drop Cars" class="logo-emblem-img" style="height:34px; width:34px; object-fit:contain; display:block;" />
+          <span class="logo-brand-pill"><span class="logo__mark">Drop</span><span class="logo__text">Cars</span></span>
+        </div>
+      </a>
+    </div>
+    <!-- Removed middle nav links to fix spacing as requested -->
+
+    <div class="header__cta">
+      <button class="menu-button" id="menu-toggle" aria-expanded="false" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7h18M3 12h18M3 17h18" />
+        </svg>
+      </button>
+  <div class="menu-panel" id="menu-panel" aria-hidden="true" hidden tabindex="-1">
+            <div class="menu-panel__section">
+      <p class="menu-panel__title">Customers</p>
+      <ul>
+        <li><a href="/#booking">Book A Cab</a></li>
+        <li><a href="/#offers">Current Offers</a></li>
+        <li><a href="/#routes">Coverage Map</a></li>
+        <li><a href="/#faq">FAQs</a></li>
+        <li><a href="/pages/driver-partner.php">Driver Partner Hub</a></li>
+        <li><a href="mailto:support@dropcars.in">Contact Support</a></li>
+        <li><a href="/admin/login">Admin Login</a></li>
+      </ul>
+            <button class="menu-panel__close" id="menu-close">Close</button>
+          </div>
+        </div>
+      </div>
+</header>

@@ -1,0 +1,14 @@
+[
+    {
+        "hours": 5,
+        "km_range": 50
+    },
+    {
+        "hours": 10,
+        "km_range": 100
+    },
+    {
+        "hours": 12,
+        "km_range": 120
+    }
+]

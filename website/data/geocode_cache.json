@@ -1,0 +1,175 @@
+{
+    "nellikuppam": [
+        {
+            "display_name": "Nellikuppam, Cuddalore, Tamil Nadu",
+            "lat": 11.7709,
+            "lng": 79.6738,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "nellik": [
+        {
+            "display_name": "Nellikuppam, Cuddalore, Tamil Nadu",
+            "lat": 11.7709,
+            "lng": 79.6738,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "nelli": [
+        {
+            "display_name": "Nellikuppam, Cuddalore, Tamil Nadu",
+            "lat": 11.7709,
+            "lng": 79.6738,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "neepa": [
+        {
+            "display_name": "Neepathurai, Chengam, Tiruvannamalai, Tamil Nadu",
+            "lat": 12.21225,
+            "lng": 78.69085,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "neepathurai": [
+        {
+            "display_name": "Neepathurai, Chengam, Tiruvannamalai, Tamil Nadu",
+            "lat": 12.21225,
+            "lng": 78.69085,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "naiduma": [
+        {
+            "display_name": "Naidumangalam, Tiruvannamalai, Tamil Nadu",
+            "lat": 12.2965,
+            "lng": 79.1412,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "naidumangalam": [
+        {
+            "display_name": "Naidumangalam, Tiruvannamalai, Tamil Nadu",
+            "lat": 12.2965,
+            "lng": 79.1412,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "naidumanagalam": [
+        {
+            "display_name": "Naidumangalam, Tiruvannamalai, Tamil Nadu",
+            "lat": 12.2965,
+            "lng": 79.1412,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "chennai": [
+        {
+            "display_name": "Chennai, Tamil Nadu",
+            "lat": 13.0836939,
+            "lng": 80.270186,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Chennai, Tamil Nadu",
+            "lat": 13.0008413,
+            "lng": 80.2023035,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "chennai international airport, chennai, tamil nadu": [
+        {
+            "display_name": "Chennai International Airport, Chennai, Tamil Nadu",
+            "lat": 12.993374,
+            "lng": 80.1725867,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Chennai International Airport, St.thomas Mount-pallavaram Cantonment Board, Tamil Nadu",
+            "lat": 12.9808092,
+            "lng": 80.1642026,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "tiruvannamalai, tamil nadu": [
+        {
+            "display_name": "Tiruvannamalai, Tamil Nadu",
+            "lat": 12.4289282,
+            "lng": 78.99915,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Tiruvannamalai, Tamil Nadu",
+            "lat": 12.2343228,
+            "lng": 79.0761989,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Tiruvannamalai, Tamil Nadu",
+            "lat": 12.2271378,
+            "lng": 79.0701288,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ],
+    "vit": [
+        {
+            "display_name": "Vit, Vellore, Tamil Nadu",
+            "lat": 12.9681282,
+            "lng": 79.155531,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Vit, Vellore, Tamil Nadu",
+            "lat": 12.9681416,
+            "lng": 79.1562523,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Vishwakarma Institute Of Technology (vit), Pune, Maharashtra",
+            "lat": 18.4637697,
+            "lng": 73.8682067,
+            "state": "maharashtra",
+            "source": "osm"
+        }
+    ],
+    "vit, vellore, tamil nadu": [
+        {
+            "display_name": "Vit, Vellore, Tamil Nadu",
+            "lat": 12.9681282,
+            "lng": 79.155531,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Vit, Vellore, Tamil Nadu",
+            "lat": 12.9681416,
+            "lng": 79.1562523,
+            "state": "tamil nadu",
+            "source": "osm"
+        },
+        {
+            "display_name": "Vellore Institute Of Technology, Vellore, Tamil Nadu",
+            "lat": 12.9697498,
+            "lng": 79.1606601,
+            "state": "tamil nadu",
+            "source": "osm"
+        }
+    ]
+}

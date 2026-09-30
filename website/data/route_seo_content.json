@@ -1,0 +1,40 @@
+{
+  "chennai-to-bangalore": {
+    "overview": "Book a premium, air-conditioned one-way drop taxi from Chennai to Bangalore with Drop Cars. Experience a safe, seamless road journey across the ~350 km distance in approximately 6 hours. Enjoy transparent per-km billing, professional highway-trained chauffeurs, and zero return fare charges. Perfect for business travelers, families, and airport transfers.",
+    "highlights": [
+      "Travel via NH 48: The cleanest, fastest 6-lane national highway corridor connecting Tamil Nadu and Karnataka.",
+      "Flexible Pickup Points: We offer doorstep pickup anywhere in Chennai, including T. Nagar, Adyar, Velachery, and Chennai International Airport (MAA).",
+      "Interstate Permits & Tolls: State border permit taxes and highway tolls are computed dynamically or charged at actuals for complete transparency.",
+      "Reliable Chauffeurs: Chauffeurs are fully experienced in highway safety protocols and night driving."
+    ],
+    "faqs": [
+      {
+        "question": "What are the toll and state tax charges between Chennai and Bangalore?",
+        "answer": "The highway tolls on the Chennai-Bangalore route total approximately ₹370 one-way. Since you cross state borders from Tamil Nadu into Karnataka, an interstate permit fee of ₹500 is applicable. You can pay these at actuals or choose our all-inclusive fare package."
+      },
+      {
+        "question": "Can I request pickup from Chennai Airport and drop at Bangalore Airport?",
+        "answer": "Yes, we specialize in airport-to-airport transfers. You can specify Chennai Airport (MAA) as your pickup and Kempegowda International Airport (BLR) as your drop point. Flight tracking is included to adjust for any delays."
+      }
+    ]
+  },
+  "chennai-to-pondicherry": {
+    "overview": "Embark on a scenic coastal drive from Chennai to Pondicherry with Drop Cars. Travel along the East Coast Road (ECR) covering ~165 km in under 3.5 hours. Our flat-rate one-way drop taxi services guarantee verified drivers, clean air-conditioned vehicles, and zero return charges, allowing you to relax and enjoy the coastal vistas.",
+    "highlights": [
+      "Scenic ECR Drive: Experience the beautiful East Coast Road with stops at Mahabalipuram, Kovalam, and coastal cafes.",
+      "Doorstep Pickups: We pick up from all locations in Chennai, including central railway stations and residential areas.",
+      "Pondicherry Sightseeing Ready: Get dropped off directly at your hotel, Auroville, or the French Quarter without any hassle.",
+      "No Hidden Night Charges: Clear, fixed billing with no hidden late-night driver fees."
+    ],
+    "faqs": [
+      {
+        "question": "Which route is better for Chennai to Pondicherry: ECR or bypass?",
+        "answer": "We recommend the East Coast Road (ECR) for scenic views and shorter travel times. However, if you prefer wider multi-lane highways or are departing from West Chennai (e.g. Poonamallee), our driver may route via the Tindivanam bypass."
+      },
+      {
+        "question": "Are there state border entry permit fees for Pondicherry?",
+        "answer": "Yes, Pondicherry is a Union Territory. A state border permit fee is applicable when crossing from Tamil Nadu, which is included in our transparent all-inclusive tariff option or charged at actuals."
+      }
+    ]
+  }
+}

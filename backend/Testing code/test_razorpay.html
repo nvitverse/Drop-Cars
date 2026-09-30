@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Razorpay Test Payment</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  </head>
+  <body>
+    <h2>Simulate Razorpay Payment</h2>
+    <button id="pay-btn">Pay ₹500</button>
+
+    <script>
+      var options = {
+        "key": "rzp_test_RGj0EDXZq8QnUS",  // Your Test Key ID
+        "amount": "50000", // Amount in paise = ₹500
+        "currency": "INR",
+        "name": "Test App",
+        "description": "Testing UPI",
+        "order_id": "order_RINO9BpRpZJrOy", // Your order_id
+        "handler": function (response){
+          // This function gets called on successful payment
+          console.log("Payment successful!");
+          console.log("Payment ID:", response.razorpay_payment_id);
+          console.log("Order ID:", response.razorpay_order_id);
+          console.log("Signature:", response.razorpay_signature);
+
+          // Send these to your backend for verification
+          fetch('http://172.20.10.2:8000/api/wallet/razorpay/verify', {  // <-- Change to your backend URL
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if(data.status === 'success'){
+              alert('Payment verified successfully!');
+            } else {
+              alert('Payment verification failed!');
+            }
+          })
+          .catch(err => {
+            console.error('Error verifying payment:', err);
+            alert('Error verifying payment. Check console.');
+          });
+        },
+        "prefill": {
+          "email": "test@example.com",
+          "contact": "9999999999"
+        },
+        "theme": {
+          "color": "#3399cc"
+        },
+        "method": {
+          "netbanking": true,
+          "card": true,
+          "upi": true,
+          "wallet": true
+        }
+      };
+
+      document.getElementById("pay-btn").onclick = function(e){
+        var rzp1 = new Razorpay(options);
+        rzp1.open();
+        e.preventDefault();
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,268 @@
+{
+    "company": {
+        "name": "Drop Cars",
+        "phone": "7200217986",
+        "whatsapp": "917200217986",
+        "email": "support@dropcars.in",
+        "website": "https:\/\/dropcars.in",
+        "whatsappTemplates": {
+            "confirmation": "",
+            "enquiry": ""
+        },
+        "cancellationPolicy": ""
+    },
+    "googleAds": {
+        "conversionId": "AW-17389722138",
+        "callConversionLabel": "",
+        "formConversionLabel": "",`n        "ga4MeasurementId": ""
+    },
+    "fares": {
+        "driverBata": 400,
+        "minDistanceOneWay": 130,
+        "minDistanceRoundTripPerDay": 250,
+        "hourlyRates": {
+            "SEDAN": 300,
+            "SUV": 400,
+            "INNOVA": 450,
+            "CRYSTA": 600
+        },
+        "baseFareOneWay": {
+            "SEDAN": 15,
+            "SUV": 20,
+            "INNOVA": 20,
+            "CRYSTA": 24
+        },
+        "baseFareRoundTrip": {
+            "SEDAN": 13,
+            "SUV": 18,
+            "INNOVA": 19,
+            "CRYSTA": 22
+        },
+        "bataOneWay": {
+            "SEDAN": 400,
+            "SUV": 500,
+            "INNOVA": 500,
+            "CRYSTA": 500
+        },
+        "bataRoundTrip": {
+            "SEDAN": 400,
+            "SUV": 400,
+            "INNOVA": 500,
+            "CRYSTA": 600
+        },
+        "oldFareOneWay": {
+            "SEDAN": 0,
+            "SUV": 0,
+            "INNOVA": 0,
+            "CRYSTA": 0
+        },
+        "oldFareRoundTrip": {
+            "SEDAN": 0,
+            "SUV": 0,
+            "INNOVA": 0,
+            "CRYSTA": 0
+        },
+        "oldBataOneWay": {
+            "SEDAN": 0,
+            "SUV": 0,
+            "INNOVA": 0,
+            "CRYSTA": 0
+        },
+        "oldBataRoundTrip": {
+            "SEDAN": 0,
+            "SUV": 0,
+            "INNOVA": 0,
+            "CRYSTA": 0
+        },
+        "reasoningNotes": []
+    },
+    "vehicles": [
+        {
+            "value": "SEDAN",
+            "label": "SEDAN (Swift Dzire \/ Etios)",
+            "rate": 15,
+            "capacity": "4+1",
+            "luggage": 3,
+            "is_ac": true,
+            "model": "Swift Dzire \/ Etios",
+            "old_rate": 0,
+            "reasoning_note": ""
+        },
+        {
+            "value": "SUV",
+            "label": "SUV (Maruti Ertiga \/ Kia Carens)",
+            "rate": 20,
+            "capacity": "6+1",
+            "luggage": 5,
+            "is_ac": true,
+            "model": "Maruti Ertiga \/ Kia Carens",
+            "old_rate": 0,
+            "reasoning_note": ""
+        },
+        {
+            "value": "INNOVA",
+            "label": "INNOVA (Toyota Innova)",
+            "rate": 20,
+            "capacity": "7+1",
+            "luggage": 6,
+            "is_ac": true,
+            "model": "Toyota Innova",
+            "old_rate": 0,
+            "reasoning_note": ""
+        },
+        {
+            "value": "CRYSTA",
+            "label": "CRYSTA (Toyota Innova Crysta)",
+            "rate": 24,
+            "capacity": "7+1",
+            "luggage": 6,
+            "is_ac": true,
+            "model": "Toyota Innova Crysta",
+            "old_rate": 0,
+            "reasoning_note": ""
+        }
+    ],
+    "enable_dynamic_pricing": false,
+    "enableWhatsAppWidget": true,
+    "enableFloatingEstimates": true,
+    "enableSuccessConfetti": true,
+    "enablePriceHighlighting": true,
+    "announcement": {
+        "announcementEnabled": true,
+        "announcementText": "flat offer",
+        "announcementLink": "",
+        "announcementLinkText": "Book Now",
+        "announcementVariant": "info",
+        "announcementDismissable": false
+    },
+    "tariffSchedules": [
+        {
+            "id": 1,
+            "vehicle": "SEDAN",
+            "tripType": "oneway",
+            "rate": 15,
+            "oldRate": 0,
+            "bata": 400,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 2,
+            "vehicle": "SUV",
+            "tripType": "oneway",
+            "rate": 20,
+            "oldRate": 0,
+            "bata": 500,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 3,
+            "vehicle": "INNOVA",
+            "tripType": "oneway",
+            "rate": 20,
+            "oldRate": 0,
+            "bata": 500,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 4,
+            "vehicle": "CRYSTA",
+            "tripType": "oneway",
+            "rate": 24,
+            "oldRate": 0,
+            "bata": 500,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 5,
+            "vehicle": "SEDAN",
+            "tripType": "round",
+            "rate": 13,
+            "oldRate": 0,
+            "bata": 400,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 6,
+            "vehicle": "SUV",
+            "tripType": "round",
+            "rate": 18,
+            "oldRate": 0,
+            "bata": 400,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 7,
+            "vehicle": "INNOVA",
+            "tripType": "round",
+            "rate": 19,
+            "oldRate": 0,
+            "bata": 500,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        },
+        {
+            "id": 8,
+            "vehicle": "CRYSTA",
+            "tripType": "round",
+            "rate": 22,
+            "oldRate": 0,
+            "bata": 600,
+            "oldBata": 0,
+            "isDynamic": false,
+            "strikeOn": false,
+            "reasoningNote": "",
+            "effectiveFrom": null,
+            "effectiveUntil": null,
+            "isLive": true
+        }
+    ],
+    "advancePayment": {
+        "enabled": false,
+        "upiId": "7200217986-1@okbizaxis",
+        "qrPath": "assets\/img\/qr-code.jpg",
+        "percent": 20,
+        "minAmount": 300,
+        "note": ""
+    }
+}

@@ -1,0 +1,1624 @@
+/* ══════════════════════════════════════════
+   DROP CARS – THEME SYSTEM
+   Light = default (no class)
+   Dark  = html.dark-mode
+══════════════════════════════════════════ */
+
+/* ══════════════════════════════════════
+   DROP CARS — PREMIUM SUN / MOON TOGGLE
+══════════════════════════════════════ */
+
+.theme-toggle {
+  /* sizing */
+  width: 42px !important;
+  height: 42px !important;
+  /* appearance */
+  background: transparent !important;
+  border: none !important;
+  border-radius: 50% !important;
+  cursor: pointer;
+  flex-shrink: 0;
+  /* layout */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* transitions */
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1),
+              box-shadow 0.3s ease,
+              background 0.35s ease;
+  /* reset */
+  padding: 0;
+  outline: none;
+  box-shadow: none !important;
+}
+
+.theme-toggle::after,
+.theme-toggle::before {
+  display: none !important;
+  content: none !important;
+}
+
+
+/* Subtle ring on hover */
+.theme-toggle:hover {
+  transform: scale(1.12);
+  background: rgba(245,184,0,0.10);
+  box-shadow: 0 0 0 6px rgba(245,184,0,0.12),
+              0 0 16px rgba(245,184,0,0.18);
+}
+.theme-toggle:active { transform: scale(0.92); }
+
+/* ── SVG icon container ── */
+.theme-toggle svg {
+  width: 22px; height: 22px;
+  display: block;
+  overflow: visible;
+  transition: transform 0.55s cubic-bezier(.34,1.56,.64,1),
+              opacity 0.3s ease;
+}
+
+/* ── SUN (light mode) ── */
+.theme-toggle .icon-sun {
+  display: block;
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+  transition: transform 0.55s cubic-bezier(.34,1.56,.64,1),
+              opacity 0.3s ease;
+}
+.theme-toggle .icon-moon {
+  display: none;
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.5);
+  transition: transform 0.55s cubic-bezier(.34,1.56,.64,1),
+              opacity 0.3s ease;
+}
+
+html.dark-mode .theme-toggle {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+html.dark-mode .theme-toggle:hover {
+  background: rgba(148,163,255,0.10) !important;
+  box-shadow: 0 0 0 6px rgba(148,163,255,0.12),
+              0 0 18px rgba(148,163,255,0.20) !important;
+}
+html.dark-mode .theme-toggle .icon-sun {
+  display: none;
+  opacity: 0;
+  transform: rotate(90deg) scale(0.5);
+}
+html.dark-mode .theme-toggle .icon-moon {
+  display: block;
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+/* ── Spin animation for the sun rays ── */
+@keyframes dc-sun-spin {
+  from { transform: rotate(0deg) scale(1); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+.theme-toggle:hover .icon-sun {
+  animation: dc-sun-spin 4s linear infinite;
+}
+
+/* ── Moon gentle pulse ── */
+@keyframes dc-moon-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(129,140,248,0.5)); }
+  50%       { filter: drop-shadow(0 0 10px rgba(129,140,248,0.85)); }
+}
+html.dark-mode .theme-toggle .icon-moon {
+  animation: dc-moon-pulse 2.5s ease-in-out infinite;
+}
+
+/* ── Dark mode logo styling ── */
+html.dark-mode .logo__brand {
+  color: #ffffff !important;
+}
+
+html.dark-mode .logo__accent {
+  background: linear-gradient(135deg, #38bdf8 0%, #7dd3fc 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+html.dark-mode .logo__emblem {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%) !important;
+  color: #070d18 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.45) !important;
+}
+
+/* ── Theme-adaptive PNG logo swap ── */
+html.dark-mode .logo-img--light {
+  display: none !important;
+}
+
+html.dark-mode .logo-img--dark {
+  display: block !important;
+}
+
+/* Hero overlay is now handled uniformly in hero.css for both themes — no extra layer needed */
+
+
+html.dark-mode body { background: #060d1e !important; background-image: none !important; color: #cbd5e1 !important; }
+html.dark-mode h1, html.dark-mode h2, html.dark-mode h3, html.dark-mode h4 { color: #ffffff !important; }
+html.dark-mode p { color: rgba(226,240,255,0.75); }
+
+/* ── Navbar ── */
+html.dark-mode .site-header { background-color: rgba(7,13,24,0.95) !important; border-bottom: 1px solid rgba(255,255,255,0.08) !important; border-top: none !important; margin-top: 0 !important; backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important; }
+html.dark-mode .nav > a,
+html.dark-mode .nav .nav-dropdown__btn {
+  color: rgba(226, 240, 255, 0.9) !important;
+  font-weight: 600 !important;
+}
+html.dark-mode .nav > a:hover,
+html.dark-mode .nav > a:focus-visible,
+html.dark-mode .nav .nav-dropdown__btn:hover,
+html.dark-mode .nav .nav-dropdown__btn:focus-visible {
+  color: #38bdf8 !important;
+}
+html.dark-mode .nav-dropdown__content { background: #0f172a !important; border: 1px solid #1e293b !important; box-shadow: 0 10px 25px rgba(0,0,0,.4) !important; }
+html.dark-mode .nav-dropdown__content a { color: #cbd5e1 !important; }
+html.dark-mode .nav-dropdown__content a:hover { background: #1e293b !important; color: #ffffff !important; }
+
+/* ── Menu hamburger button – must be visible on dark header ── */
+html.dark-mode .menu-button {
+  color: #e2f0ff !important;
+}
+html.dark-mode .menu-button svg {
+  stroke: #e2f0ff !important;
+}
+html.dark-mode .menu-button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Slide-out menu panel ── */
+html.dark-mode .menu-panel { background: #0b1424 !important; color: #e2f0ff !important; border-left: 1px solid rgba(255,255,255,0.08) !important; box-shadow: -12px 0 40px rgba(0,0,0,0.5) !important; }
+html.dark-mode .menu-panel a:not(.menu-panel__cta-btn),
+html.dark-mode .menu-panel button:not(.menu-panel__cta-btn):not(.menu-panel__close),
+html.dark-mode .menu-panel__section,
+html.dark-mode .menu-panel__section > a:not(.menu-panel__cta-btn),
+html.dark-mode .menu-panel__section > button { color: #e2f0ff !important; }
+
+/* Mobile drawer quick-action buttons in dark mode */
+html.dark-mode .menu-panel .menu-panel__cta-btn--primary {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35) !important;
+}
+html.dark-mode .menu-panel .menu-panel__cta-btn--primary svg {
+  stroke: #ffffff !important;
+}
+
+html.dark-mode .menu-panel .menu-panel__cta-btn--secondary {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+}
+html.dark-mode .menu-panel .menu-panel__cta-btn--secondary svg {
+  stroke: #e2e8f0 !important;
+}
+
+html.dark-mode .menu-panel .menu-panel__cta-btn--admin {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+}
+html.dark-mode .menu-panel .menu-panel__cta-btn--admin svg {
+  stroke: #94a3b8 !important;
+}
+
+html.dark-mode .menu-panel .menu-panel__close {
+  background: #1e293b !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+html.dark-mode .menu-panel__section { border-color: rgba(255,255,255,0.08) !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; background: transparent !important; }
+html.dark-mode .menu-panel__section:hover { background: rgba(255,255,255,0.04) !important; }
+html.dark-mode .menu-panel__dropdown { background: rgba(255,255,255,0.03) !important; border-color: rgba(255,255,255,0.08) !important; }
+html.dark-mode .menu-panel__dropdown > summary,
+html.dark-mode .menu-panel summary { color: #e2f0ff !important; }
+html.dark-mode .menu-panel__dropdown > summary::-webkit-details-marker { color: #e2f0ff !important; }
+html.dark-mode .menu-panel__dropdown-links a { color: rgba(226,240,255,0.78) !important; background: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.08) !important; }
+html.dark-mode .menu-panel__dropdown-links a:hover { color: #38bdf8 !important; background: rgba(56,189,248,0.08) !important; }
+
+/* ── Hero Dark Mode Background, Slides & Overlay ── */
+html.dark-mode .hero-slider {
+  background: #0f172a !important;
+}
+
+html.dark-mode .hero-slide__bg {
+  display: block !important;
+  visibility: visible !important;
+}
+
+html.dark-mode .hero-slide.active .hero-slide__bg {
+  opacity: 1 !important;
+}
+
+html.dark-mode .hero-slider::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(37, 99, 235, 0.4), transparent 70%),
+    radial-gradient(circle 500px at 90% 80%, rgba(14, 165, 233, 0.25), transparent 80%),
+    radial-gradient(circle 400px at 10% 90%, rgba(99, 102, 241, 0.2), transparent 75%),
+    linear-gradient(180deg,
+      rgba(15, 23, 42, 0.72) 0%,
+      rgba(24, 48, 108, 0.85) 50%,
+      rgba(10, 18, 42, 0.94) 100%) !important;
+  z-index: 3 !important;
+  pointer-events: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Hero (homepage & route pages) typography & contrast ── */
+html.dark-mode .hero__copy .hero-text-slide h1, html.dark-mode .hero__copy .hero-text-slide .hero__slide-title { color: #ffffff !important; font-weight: 800 !important; text-align: center !important; margin-left: auto !important; margin-right: auto !important; }
+html.dark-mode .hero__copy .hero-text-slide p.hero__sub { color: #e2e8f0 !important; font-weight: 500 !important; text-align: center !important; margin-left: auto !important; margin-right: auto !important; }
+html.dark-mode .hero__copy .hero-text-slide .hero__eyebrow { color: #38bdf8 !important; background: rgba(14,165,233,0.18) !important; border: 1.5px solid rgba(56,189,248,0.45) !important; text-align: center !important; margin-left: auto !important; margin-right: auto !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+
+/* ── Hero booking card (dark mode) ── */
+html.dark-mode .booking-card--home {
+  background: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-top: 3.5px solid #38bdf8 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 16px !important;
+}
+
+html.dark-mode .booking-card--home .booking-card__header,
+html.dark-mode .booking-card--home .field,
+html.dark-mode .booking-card--home .wa-check-label,
+html.dark-mode .booking-card--home .promo-row__text,
+html.dark-mode .booking-card--home .fare-toggle > span { color: #ffffff !important; }
+
+/* Booking form field labels in dark mode */
+html.dark-mode .booking-form label.field > span:not(.field-hint),
+html.dark-mode .booking-form .field > span:not(.field-hint),
+html.dark-mode .booking-form .field__label-row > span:not(.field-hint) {
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Fields in dark mode */
+html.dark-mode .booking-card--home .field input,
+html.dark-mode .booking-card--home .field select,
+html.dark-mode .field input,
+html.dark-mode .field select {
+  background: #0f172a !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  color-scheme: dark !important;
+  border-radius: 10px !important;
+}
+
+html.dark-mode .booking-card--home .field input::placeholder,
+html.dark-mode .field input::placeholder { color: rgba(255, 255, 255, 0.5) !important; }
+
+html.dark-mode .booking-card--home .field input:focus,
+html.dark-mode .booking-card--home .field select:focus,
+html.dark-mode .field input:focus,
+html.dark-mode .field select:focus {
+  background: #1e293b !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25) !important;
+}
+
+/* Trip type & Oneway Subtypes tab track design (dark mode) */
+html.dark-mode .trip-type-options,
+html.dark-mode .oneway-subtypes,
+html.dark-mode .fare-toggle__switch {
+  background: #1e293b !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 10px !important;
+  padding: 3px 4px !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+  gap: 4px !important;
+  margin-bottom: 0.35rem !important;
+}
+
+html.dark-mode .trip-type-options .trip-type-option,
+html.dark-mode .oneway-subtypes label,
+html.dark-mode .fare-toggle__switch label {
+  border-radius: 8px !important;
+  border: none !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: #cbd5e1 !important;
+  font-weight: 600 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+}
+
+html.dark-mode .oneway-subtypes label {
+  font-size: 0.78rem !important;
+  padding: 5px 10px !important;
+}
+
+html.dark-mode .trip-type-options .trip-type-option:hover,
+html.dark-mode .oneway-subtypes label:hover,
+html.dark-mode .fare-toggle__switch label:hover {
+  color: #38bdf8 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .trip-type-options .trip-type-option.trip-type-option--active,
+html.dark-mode .trip-type-options .trip-type-option.active,
+html.dark-mode .oneway-subtypes input:checked+label,
+html.dark-mode .oneway-subtypes label.active,
+html.dark-mode .fare-toggle__switch input:checked+label {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.45) !important;
+  font-weight: 700 !important;
+}
+html.dark-mode .booking-card--home .oneway-subtypes label:hover,
+html.dark-mode .booking-card--home .fare-toggle__switch label:hover { background: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; }
+html.dark-mode .booking-card--home .trip-type-option.trip-type-option--active,
+html.dark-mode .booking-card--home .trip-type-option.active,
+html.dark-mode .booking-card--home .oneway-subtypes input:checked + label,
+html.dark-mode .booking-card--home .oneway-subtypes label.active,
+html.dark-mode .booking-card--home .fare-toggle__switch input:checked + label {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  color: #070d18 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3) !important;
+}
+/* Toll-tax toggle — clear selected vs unselected (like vehicle cards) */
+html.dark-mode .booking-card--home .fare-toggle__switch label { color: rgba(255,255,255,0.55) !important; }
+html.dark-mode .booking-card--home .fare-toggle__switch input:checked + label {
+  background: rgba(56,189,248,0.22) !important;
+  color: #ffffff !important;
+  border: 1.5px solid #38bdf8 !important;
+  box-shadow: 0 0 14px rgba(56,189,248,0.45) !important;
+  text-shadow: none !important;
+  font-weight: 700 !important;
+}
+html.dark-mode .booking-card--home .fare-toggle__switch { background: rgba(8,15,30,0.55) !important; }
+
+/* ── CHECK FARE NOW — matches selected vehicle card (cyan glass + glow) ── */
+html.dark-mode .booking-card--home .btn-primary {
+  background: rgba(56,189,248,0.16) !important;
+  color: #ffffff !important;
+  border: 1px solid #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56,189,248,0.30) !important;
+  letter-spacing: 0.04em !important;
+  text-shadow: none !important;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+html.dark-mode .booking-card--home .btn-primary:hover {
+  background: rgba(56,189,248,0.26) !important;
+  box-shadow: 0 0 20px rgba(56,189,248,0.45) !important;
+  transform: translateY(-2px) !important;
+}
+html.dark-mode .booking-card--home .btn-primary:active { transform: translateY(0) !important; }
+/* glossy sheen sweep */
+html.dark-mode .booking-card--home .btn-primary::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important; left: -60% !important; width: 45% !important; height: 100% !important;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent) !important;
+  transform: skewX(-18deg) !important;
+  transition: left 0.6s ease !important;
+  pointer-events: none !important;
+}
+html.dark-mode .booking-card--home .btn-primary:hover::after { left: 130% !important; }
+
+/* Vehicle selector cards */
+html.dark-mode .booking-card--home .vehicle-selector-card {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+}
+html.dark-mode .booking-card--home .vehicle-selector-card:hover { background: rgba(255, 255, 255, 0.12) !important; border-color: #38bdf8 !important; }
+html.dark-mode .booking-card--home .vehicle-selector-card.vehicle-selector-card--active,
+html.dark-mode .booking-card--home .vehicle-selector-card.active {
+  background: rgba(56, 189, 248, 0.16) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3) !important;
+}
+html.dark-mode .booking-card--home .vehicle-selector-card__name { color: #ffffff !important; }
+html.dark-mode .booking-card--home .vehicle-selector-card__price { color: #38bdf8 !important; }
+
+/* Promo apply & hints */
+html.dark-mode .booking-card--home .btn-promo-apply {
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+html.dark-mode .booking-card--home .btn-promo-apply:hover { background: rgba(255, 255, 255, 0.18) !important; border-color: #38bdf8 !important; }
+html.dark-mode .booking-card--home .field-hint { color: rgba(255, 255, 255, 0.5) !important; }
+
+/* Phone input wrapper */
+html.dark-mode .phone-input-wrapper {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+html.dark-mode .phone-input-wrapper:focus-within {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+html.dark-mode .country-code-trigger { color: #ffffff !important; background: transparent !important; }
+html.dark-mode .country-code-popover { background: #0f1c2e !important; border-color: rgba(255,255,255,0.16) !important; }
+html.dark-mode .country-code-option { color: #ffffff !important; }
+html.dark-mode .country-code-option:hover { background: rgba(255,255,255,0.12) !important; }
+html.dark-mode .booking-card--home .promo-row input { background: rgba(15, 23, 42, 0.45) !important; border: 1px solid rgba(255,255,255,0.16) !important; color: #ffffff !important; }
+
+/* Optional stops control (Round Trip / Multi-city) — mirror city/route */
+html.dark-mode .booking-card--home .stops-control { background: rgba(15, 23, 42, 0.45) !important; border: 1px solid rgba(255, 255, 255, 0.12) !important; }
+html.dark-mode .booking-card--home .stops-control__header p { color: #ffffff !important; }
+html.dark-mode .booking-card--home .btn-chips { background: rgba(255, 255, 255, 0.08) !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #ffffff !important; }
+html.dark-mode .booking-card--home .btn-chips:hover { background: rgba(255, 255, 255, 0.15) !important; border-color: #38bdf8 !important; }
+html.dark-mode .booking-card--home .stops-limit { color: rgba(255, 255, 255, 0.5) !important; }
+html.dark-mode .booking-card--home .stop-item { background: rgba(15, 23, 42, 0.55) !important; border: 1px solid rgba(255, 255, 255, 0.16) !important; color: #ffffff !important; }
+html.dark-mode .booking-card--home .stop-item input { color: #ffffff !important; }
+html.dark-mode .booking-card--home .stop-item__drag { color: rgba(255, 255, 255, 0.6) !important; }
+html.dark-mode .booking-card--home .stop-item__actions button { background: rgba(255, 255, 255, 0.08) !important; color: #ffffff !important; }
+html.dark-mode .booking-card--home .stop-item__actions button:hover:not(:disabled) { background: #38bdf8 !important; color: #070d18 !important; }
+html.dark-mode .booking-card--home .stop-item__actions button:disabled { opacity: 0.25 !important; background: rgba(255, 255, 255, 0.03) !important; color: rgba(255, 255, 255, 0.3) !important; }
+
+/* ── Google Places autocomplete dropdown (appended to <body>) ── */
+html.dark-mode .pac-container {
+  background: #0f1c2e !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
+  border-radius: 5px !important;
+}
+html.dark-mode .pac-item {
+  background: transparent !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+html.dark-mode .pac-item:hover,
+html.dark-mode .pac-item-selected,
+html.dark-mode .pac-item.pac-item-selected { background: rgba(56, 189, 248, 0.14) !important; }
+html.dark-mode .pac-item-query { color: #ffffff !important; }
+html.dark-mode .pac-matched { color: #38bdf8 !important; }
+html.dark-mode .pac-icon { filter: invert(1) brightness(1.4); opacity: 0.7; }
+html.dark-mode .pac-logo::after { filter: invert(0.9) brightness(1.2); opacity: 0.7; }
+
+/* ── Vehicle selector (booking form) ── */
+html.dark-mode .vehicle-btn, html.dark-mode .vehicle-option, html.dark-mode .vehicle-selector-grid > * { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.12) !important; color: #e2f0ff !important; }
+html.dark-mode .vehicle-btn.active, html.dark-mode .vehicle-option.active { border-color: #38bdf8 !important; background: rgba(56,189,248,0.15) !important; }
+
+/* ── Popular Routes city filter chips (.city-tab) ── */
+html.dark-mode .city-tabs .city-tab,
+html.dark-mode .city-tab { background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.14) !important; color: rgba(226,240,255,0.82) !important; }
+html.dark-mode .city-tabs .city-tab:hover,
+html.dark-mode .city-tab:hover { border-color: #38bdf8 !important; color: #ffffff !important; background: rgba(56,189,248,0.12) !important; }
+html.dark-mode .city-tabs .city-tab.active,
+html.dark-mode .city-tab.active { background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important; color: #070d18 !important; border-color: #38bdf8 !important; box-shadow: 0 4px 12px rgba(56,189,248,0.3) !important; }
+
+/* ── "View All Cities" toggle button & expand panel ── */
+html.dark-mode .city-toggle-btn { color: #7dd3fc !important; border-color: #38bdf8 !important; background: rgba(56,189,248,0.08) !important; }
+html.dark-mode .city-toggle-btn:hover { background: rgba(56,189,248,0.18) !important; color: #ffffff !important; }
+html.dark-mode .city-collapse { background: transparent !important; border-color: rgba(255,255,255,0.08) !important; }
+
+/* ── Section backgrounds ── */
+html.dark-mode section:not(.hero):not(.city-hero):not(.route-hero) { background: inherit; }
+html.dark-mode .services-section { background: #060d1e !important; }
+html.dark-mode .section-light, html.dark-mode .bg-white, html.dark-mode .bg-light { background: #060d1e !important; }
+
+/* ── Cards ── */
+html.dark-mode .seo-card, html.dark-mode .service-card, html.dark-mode .city-card:not(.highway-signboard):not(.route-card--highway) { background: #0e1626 !important; border-color: #1e293b !important; color: #e2f0ff !important; }
+html.dark-mode .service-card__highlight { background: rgba(56,189,248,0.12) !important; border: 1px solid rgba(56,189,248,0.35) !important; color: #7dd3fc !important; }
+html.dark-mode .trust-card, html.dark-mode .trust__item, html.dark-mode .trust-badges__item { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .faq-item, html.dark-mode .faq__items article, html.dark-mode .faq__item { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .faq__item summary, html.dark-mode .faq__item p, html.dark-mode .faq__question, html.dark-mode .faq__answer { color: #e2f0ff !important; }
+html.dark-mode .route-card:not(.highway-signboard):not(.route-card--highway) { background: #0e1626 !important; border-color: #1e293b !important; color: #e2f0ff !important; }
+html.dark-mode .route-card:not(.highway-signboard):not(.route-card--highway):hover { border-color: #38bdf8 !important; background: #121e36 !important; }
+html.dark-mode .route-card__text { color: #f8fafc !important; }
+html.dark-mode .route-card__text small { color: #f59e0b !important; }
+html.dark-mode .route-card__arrow { color: #38bdf8 !important; }
+html.dark-mode .highway-signboard,
+html.dark-mode .route-card--highway {
+  background: linear-gradient(145deg, #0b1329 0%, #030816 100%) !important;
+  border: 1.5px solid #1d4ed8 !important;
+  outline: 1.5px solid #0284c7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .highway-signboard:hover,
+html.dark-mode .route-card--highway:hover {
+  background: linear-gradient(145deg, #101e42 0%, #061129 100%) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.35) !important;
+}
+
+html.dark-mode .highway-signboard__header {
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark-mode .highway-signboard__code {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode .highway-signboard__route {
+  color: #ffffff !important;
+}
+
+html.dark-mode .highway-signboard__metrics {
+  border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+  flex-wrap: wrap !important;
+  box-sizing: border-box !important;
+}
+
+html.dark-mode .highway-metric--kms {
+  color: #facc15 !important;
+}
+
+html.dark-mode .highway-metric--timing {
+  color: #e0f2fe !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  padding: 0.12rem 0.35rem !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html.dark-mode .highway-signboard__cta {
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%) !important;
+  border: 1px solid transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4) !important;
+}
+
+html.dark-mode .highway-signboard:hover .highway-signboard__cta,
+html.dark-mode .route-card--highway:hover .highway-signboard__cta {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
+  color: #ffffff !important;
+}
+html.dark-mode .vehicle-card { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .vehicle-card__name, html.dark-mode .vehicle-card__price-val { color: #ffffff !important; }
+html.dark-mode .vehicle-card__price-sub { color: #94a3b8 !important; }
+html.dark-mode .routes__category { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .city-about-section { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .fare-card { background: rgba(15,22,38,0.8) !important; border-color: #1e293b !important; }
+html.dark-mode .feature-card { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .feature-card__icon { background: rgba(255,255,255,0.06) !important; }
+/* ── Fleet showcase cards — premium dark treatment ── */
+html.dark-mode .fleet-showcase__card {
+  background: linear-gradient(180deg, #101d33 0%, #0b1424 100%) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45) !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
+}
+html.dark-mode .fleet-showcase__card:hover {
+  transform: translateY(-4px) !important;
+  border-color: rgba(56,189,248,0.45) !important;
+  box-shadow: 0 24px 54px rgba(0,0,0,0.55), 0 0 24px rgba(56,189,248,0.12) !important;
+}
+/* Image area — spotlight glow so the car pops */
+html.dark-mode .fleet-showcase__img {
+  background:
+    radial-gradient(120% 90% at 50% 28%, rgba(56,189,248,0.16) 0%, rgba(56,189,248,0.04) 45%, transparent 72%),
+    linear-gradient(180deg, #16243d 0%, #0d1828 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+/* Kill the light "floor reflection" gradient under the car */
+html.dark-mode .fleet-showcase__img::after {
+  background: linear-gradient(to top, rgba(13,24,40,0.95) 0%, rgba(13,24,40,0.4) 40%, transparent 100%) !important;
+}
+html.dark-mode .fleet-showcase__name { color: #ffffff !important; }
+html.dark-mode .fleet-showcase__category { color: rgba(226,240,255,0.62) !important; }
+html.dark-mode .fleet-showcase__price, html.dark-mode .fleet-showcase__rate { color: #38bdf8 !important; }
+html.dark-mode .fleet-showcase__spec, html.dark-mode .fleet-showcase__feature { color: rgba(226,240,255,0.80) !important; }
+html.dark-mode .fleet-showcase__spec svg, html.dark-mode .fleet-showcase__feature svg { opacity: 0.95 !important; }
+html.dark-mode .fleet-showcase__divider, html.dark-mode .fleet-showcase__content hr { border-color: rgba(255,255,255,0.08) !important; }
+html.dark-mode .fleet-filter__btn { background: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.1) !important; color: #e2f0ff !important; }
+html.dark-mode .fleet-filter__btn.active { background: rgba(56,189,248,0.18) !important; border-color: #38bdf8 !important; color: #7dd3fc !important; }
+html.dark-mode .seo-card__image { background: rgba(255,255,255,0.04) !important; }
+
+/* ── Testimonials ── */
+html.dark-mode .testimonial-card { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .testimonial-text, html.dark-mode .testimonial-card p { color: rgba(226,240,255,0.78) !important; }
+html.dark-mode .testimonial-user, html.dark-mode .testimonial-meta,
+html.dark-mode .testimonial-user strong, html.dark-mode .testimonial-user b,
+html.dark-mode .testimonial-card strong, html.dark-mode .testimonial-author { color: #ffffff !important; }
+html.dark-mode .testimonial-user small, html.dark-mode .testimonial-meta small, html.dark-mode .testimonial-user span { color: rgba(226,240,255,0.6) !important; }
+html.dark-mode .testimonials-view-more a, html.dark-mode .testimonials-view-more button { background: transparent !important; border-color: rgba(255,255,255,0.2) !important; color: #e2f0ff !important; }
+
+/* ── Rate Us / Review form ── */
+html.dark-mode .rate-us-box { background: #0e1626 !important; border-color: #1e293b !important; color: #e2f0ff !important; }
+html.dark-mode .rate-us-box h2, html.dark-mode .rate-us-box h3, html.dark-mode .rate-us-box p { color: #e2f0ff !important; }
+html.dark-mode .rate-us-box textarea, html.dark-mode .rate-us-box input { background: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.12) !important; color: #e2f0ff !important; }
+html.dark-mode .rate-us-box textarea::placeholder, html.dark-mode .rate-us-box input::placeholder { color: rgba(255,255,255,0.3) !important; }
+html.dark-mode .rate-us-box label { color: rgba(255,255,255,0.55) !important; }
+
+/* ── Quote modal & fare cards (matches city/route inline styles exactly) ── */
+html.dark-mode .quote-modal__card { background: #0f1c2e !important; border: 1px solid rgba(255,255,255,0.16) !important; color: #fff !important; }
+html.dark-mode .quote-modal__close { background: rgba(255,255,255,0.14) !important; color: #fff !important; }
+html.dark-mode .quote-modal--estimate-mode .quote-modal__meta { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.2) !important; }
+html.dark-mode .fare-list-header { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.2) !important; }
+html.dark-mode .fare-list-header__title, html.dark-mode .fare-list-header__route, html.dark-mode .fare-list-header__time,
+html.dark-mode .quote-fare-type-title, html.dark-mode .quote-modal__meta, html.dark-mode #quote-route, html.dark-mode #quote-fare { color: #fff !important; }
+html.dark-mode .quote-fare-type-toggle { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.2) !important; color: #fff !important; }
+html.dark-mode .quote-fare-type-toggle__option { color: rgba(255,255,255,0.8) !important; }
+html.dark-mode .vehicle-card--fare-option { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.22) !important; }
+html.dark-mode .vehicle-card--fare-option.active { background: linear-gradient(180deg, #143761 0%, #0c2a4f 100%) !important; border-color: #2bc4ff !important; box-shadow: 0 8px 16px rgba(4,18,37,0.46) !important; }
+html.dark-mode .vehicle-card__title-line, html.dark-mode .vehicle-card__title-line small,
+html.dark-mode .vehicle-card__meta, html.dark-mode .vehicle-card__distance, html.dark-mode .vehicle-card__price { color: #fff !important; }
+html.dark-mode .selected-fare-card { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.2) !important; }
+html.dark-mode .selected-fare-card__fare-title, html.dark-mode .selected-fare-card__details h4,
+html.dark-mode .selected-fare-card__meta, html.dark-mode .selected-fare-card__distance, html.dark-mode .selected-fare-card__amount { color: #fff !important; }
+html.dark-mode .selected-fare-card__toggle { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.2) !important; color: #fff !important; }
+html.dark-mode .selected-fare-card__option { color: rgba(255,255,255,0.85) !important; }
+html.dark-mode .quote-modal__actions .btn-outline { background: transparent !important; color: #fff !important; border: 2px solid rgba(255,255,255,0.6) !important; }
+html.dark-mode .quote-modal__actions .btn-primary,
+html.dark-mode .quote-modal .quote-btn--confirm { background: linear-gradient(120deg, #0f1c2e, #152a45) !important; color: #fff !important; border: 2px solid #2eb5ff !important; box-shadow: 0 4px 16px rgba(46,181,255,0.25) !important; }
+
+/* ── Fare drawer panels (GST toggle, timeline, inclusions accordion) ── */
+html.dark-mode .drawer-vehicle-tab { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.16) !important; }
+html.dark-mode .drawer-vehicle-tab.active { background: rgba(56,189,248,0.16) !important; border-color: #38bdf8 !important; box-shadow: 0 0 12px rgba(56,189,248,0.3) !important; }
+html.dark-mode .drawer-vehicle-tab__name { color: #ffffff !important; }
+html.dark-mode .drawer-vehicle-tab__price { color: rgba(255,255,255,0.7) !important; }
+html.dark-mode .drawer-vehicle-tab.active .drawer-vehicle-tab__price { color: #38bdf8 !important; }
+/* GST / Toll toggle bar */
+html.dark-mode .drawer-toggles-container { background: rgba(15,23,42,0.45) !important; border: 1px solid rgba(255,255,255,0.12) !important; color: #ffffff !important; }
+html.dark-mode .drawer-toggles-container .drawer-switch-label,
+html.dark-mode .drawer-toggles-container .drawer-switch-control { color: #ffffff !important; }
+/* iOS-style toggle track + active fill */
+html.dark-mode .drawer-switch-knob { background: rgba(255,255,255,0.2) !important; }
+html.dark-mode .drawer-switch-control input[type="checkbox"]:checked + .drawer-switch-knob { background: #38bdf8 !important; }
+/* Pickup / Drop timeline card */
+html.dark-mode .drawer-timeline { background: rgba(15,23,42,0.45) !important; border: 1px solid rgba(255,255,255,0.12) !important; }
+html.dark-mode .drawer-timeline-label { color: rgba(255,255,255,0.55) !important; }
+html.dark-mode .drawer-timeline-value { color: #ffffff !important; }
+/* Inclusions / Exclusions accordion */
+html.dark-mode .drawer-acc { background: rgba(15,23,42,0.45) !important; border: 1px solid rgba(255,255,255,0.12) !important; }
+html.dark-mode .drawer-acc__label { color: #4ade80 !important; }
+html.dark-mode .drawer-acc__chev { border-color: rgba(255,255,255,0.6) !important; }
+html.dark-mode .drawer-acc .drawer-list,
+html.dark-mode .drawer-acc li,
+html.dark-mode .drawer-acc p { color: rgba(255,255,255,0.85) !important; }
+/* Outline buttons inside the drawer */
+html.dark-mode .drawer-body .btn-outline,
+html.dark-mode .drawer-footer .btn-outline { background: rgba(255,255,255,0.06) !important; color: #ffffff !important; border: 1.5px solid rgba(255,255,255,0.45) !important; }
+html.dark-mode .drawer-footer .btn-outline:hover { background: rgba(255,255,255,0.14) !important; border-color: #38bdf8 !important; }
+/* Drawer footer bar */
+html.dark-mode .drawer-footer { background: transparent !important; border-top: 1px solid rgba(255,255,255,0.08) !important; }
+html.dark-mode .drawer-footer .drawer-fare-label, html.dark-mode .drawer-footer__label { color: rgba(255,255,255,0.55) !important; }
+html.dark-mode .drawer-footer .drawer-fare-amount, html.dark-mode .drawer-footer__amount { color: #38bdf8 !important; }
+
+/* ══════════════════════════════════════════
+   Cities hub page (/drop-cars/cities)
+══════════════════════════════════════════ */
+html.dark-mode .cities-hub-section { background: #060d1e !important; border-top-color: rgba(255,255,255,0.08) !important; }
+html.dark-mode .cities-hub-title h2 { color: #ffffff !important; }
+html.dark-mode .cities-hub-title p { color: rgba(226,240,255,0.6) !important; }
+/* City accordion cards */
+html.dark-mode .city-accordion-card { background: #0e1626 !important; border-color: #1e293b !important; box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important; }
+html.dark-mode .city-accordion-card:hover { border-color: #38bdf8 !important; }
+html.dark-mode .city-accordion-header { background: #0e1626 !important; }
+html.dark-mode .city-accordion-header:hover { background: #121e36 !important; }
+html.dark-mode .city-card-info h3, html.dark-mode .city-card-info h3 a { color: #ffffff !important; }
+html.dark-mode .city-card-desc { color: rgba(226, 240, 255, 0.6) !important; }
+html.dark-mode .city-state-tag { background: rgba(255, 255, 255, 0.06) !important; color: rgba(226, 240, 255, 0.8) !important; }
+html.dark-mode .city-airport-tag { background: rgba(56, 189, 248, 0.16) !important; color: #38bdf8 !important; }
+html.dark-mode .city-route-badge { background: rgba(56,189,248,0.16) !important; color: #38bdf8 !important; }
+html.dark-mode .city-accordion-icon { background: rgba(255,255,255,0.08) !important; color: #e2f0ff !important; }
+html.dark-mode .city-accordion-card.active .city-accordion-icon { background: #38bdf8 !important; color: #070d18 !important; }
+html.dark-mode .city-accordion-content { background: #0b1424 !important; }
+html.dark-mode .city-accordion-card.active .city-accordion-content { border-top-color: rgba(255,255,255,0.08) !important; }
+/* Route links inside accordions */
+html.dark-mode .city-route-link { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.08) !important; color: rgba(226,240,255,0.78) !important; }
+html.dark-mode .city-route-link:hover { background: rgba(56,189,248,0.10) !important; border-color: rgba(56,189,248,0.3) !important; color: #38bdf8 !important; }
+html.dark-mode .city-route-link svg { color: rgba(255,255,255,0.4) !important; }
+html.dark-mode .city-route-link:hover svg { color: #38bdf8 !important; }
+/* Trust benefits section (inline-styled cards) */
+html.dark-mode .trust-benefits-section { background: #060d1e !important; }
+html.dark-mode .trust-benefits-section h2,
+html.dark-mode .trust-benefits-section h3 { color: #ffffff !important; }
+html.dark-mode .trust-benefits-section p { color: rgba(226,240,255,0.65) !important; }
+html.dark-mode .trust-benefits-section [style*="border-radius: 16px"] { background: #0e1626 !important; border-color: #1e293b !important; }
+
+/* ── Light-mode accent: darker blue instead of skyblue for eyebrows ── */
+html:not(.dark-mode) .eyebrow,
+html:not(.dark-mode) .section-eyebrow,
+html:not(.dark-mode) .section-title-center .eyebrow { color: #0369a1 !important; }
+/* keep skyblue accent in dark mode */
+html.dark-mode .eyebrow,
+html.dark-mode .section-eyebrow { color: #38bdf8 !important; }
+
+/* ── Footer – light default ── */
+.site-footer { background: #f1f5f9 !important; color: #1e293b !important; border-top: 1px solid #e2e8f0 !important; }
+.site-footer .footer__description { color: #475569 !important; }
+.site-footer .footer__engage-title,
+.site-footer .footer__col-title { color: #0f172a !important; }
+.site-footer .footer__contact-details,
+.site-footer .footer__contact-details li,
+.site-footer .footer__coverage { color: #334155 !important; }
+.site-footer .footer__contact-details a { color: #0369a1 !important; }
+/* Copyright / attribution bar */
+.site-footer .footer__copyright,
+.site-footer .footer__copyright span,
+.site-footer .footer__bottom-bar,
+.site-footer .footer__attribution { color: #64748b !important; }
+.site-footer .footer__attribution a { color: #0369a1 !important; }
+.site-footer a { color: #0369a1 !important; }
+.site-footer .newsletter-form { background: rgba(3,105,161,0.07) !important; border-color: rgba(3,105,161,0.18) !important; }
+.site-footer .newsletter-form input { color: #0f172a !important; }
+.site-footer .newsletter-form input::placeholder { color: #94a3b8 !important; }
+.footer__divider { border-color: #e2e8f0 !important; }
+.footer__brand-hit { background: #e2e8f0 !important; color: #475569 !important; }
+.footer__theme-panel {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12) !important;
+}
+.footer__theme-panel .footer__theme-link {
+  display: inline-block !important;
+  padding: 0.35rem 0.65rem !important;
+  border-radius: 6px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+}
+.footer__theme-panel .footer__theme-link:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+.footer__theme-panel .footer__theme-link.active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+}
+.logo-brand-pill { border-color: #070d18 !important; }
+.logo__mark { background: #070d18 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+.logo__text { background: #ffffff !important; color: #070d18 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+
+/* ── Footer – dark ── */
+html.dark-mode .site-footer { background: #040810 !important; color: rgba(226,240,255,0.65) !important; border-top: 1px solid #0f172a !important; }
+html.dark-mode .site-footer .footer__description { color: rgba(226,240,255,0.55) !important; }
+html.dark-mode .site-footer .footer__engage-title,
+html.dark-mode .site-footer .footer__col-title { color: #ffffff !important; }
+html.dark-mode .site-footer a { color: #7dd3fc !important; }
+html.dark-mode .site-footer .footer__contact-details,
+html.dark-mode .site-footer .footer__contact-details li,
+html.dark-mode .site-footer .footer__coverage { color: rgba(226, 240, 255, 0.65) !important; }
+html.dark-mode .site-footer .newsletter-form { background: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.12) !important; }
+html.dark-mode .site-footer .newsletter-form input { color: #e2f0ff !important; }
+html.dark-mode .site-footer .newsletter-form input::placeholder { color: rgba(255,255,255,0.35) !important; }
+html.dark-mode .footer__divider { border-color: #0f172a !important; }
+html.dark-mode .footer__brand-hit { background: #0f172a !important; color: #94a3b8 !important; }
+html.dark-mode .footer__theme-panel {
+  background: #0b1220 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45) !important;
+}
+html.dark-mode .footer__theme-panel .footer__theme-link {
+  background: #0e1626 !important;
+  border-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+html.dark-mode .footer__theme-panel .footer__theme-link:hover {
+  color: #ffffff !important;
+  background: #1e293b !important;
+}
+html.dark-mode .footer__theme-panel .footer__theme-link.active {
+  background: #0ea5e9 !important;
+  color: #ffffff !important;
+  border-color: #0ea5e9 !important;
+}
+html.dark-mode .logo-brand-pill { border-color: #070d18 !important; }
+html.dark-mode .logo__mark { background: #070d18 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+html.dark-mode .logo__text { background: #ffffff !important; color: #070d18 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+
+/* Manual country code input styling in dark mode */
+html.dark-mode .country-code-manual-inline {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+html.dark-mode .country-code-manual-inline:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.3) !important;
+}
+
+/* ── Section dividers ── */
+html.dark-mode hr, html.dark-mode .divider, html.dark-mode [class*="divider"] { border-color: rgba(255,255,255,0.08) !important; background: rgba(255,255,255,0.08) !important; }
+
+/* ── Inline Style Overrides & Contrast Fixes ── */
+html.dark-mode .city-about-section,
+html.dark-mode section.trust,
+html.dark-mode section.routes-section,
+html.dark-mode section.testimonials-section,
+html.dark-mode section.faq {
+    background: #060d1e !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .trust .container > div[style*="background: var(--white)"],
+html.dark-mode .trust .container > div[style*="background:var(--white)"] {
+    background: #0e1626 !important;
+    border-color: #1e293b !important;
+}
+
+html.dark-mode h1,
+html.dark-mode h2,
+html.dark-mode h3,
+html.dark-mode h4,
+html.dark-mode [style*="color: var(--blue-dark)"],
+html.dark-mode [style*="color:var(--blue-dark)"],
+html.dark-mode [style*="color: var(--blue)"],
+html.dark-mode [style*="color:var(--blue)"] {
+    color: #ffffff !important;
+}
+
+html.dark-mode p,
+html.dark-mode li,
+html.dark-mode [style*="color: var(--gray-600)"],
+html.dark-mode [style*="color:var(--gray-600)"],
+html.dark-mode [style*="color: var(--text)"],
+html.dark-mode [style*="color:var(--text)"] {
+    color: rgba(226, 240, 255, 0.75) !important;
+}
+
+html.dark-mode .wa-check-label,
+html.dark-mode .wa-label-icon svg,
+html.dark-mode [style*="color: var(--wa-green)"] {
+    color: #25D366 !important;
+}
+
+html.dark-mode .eyebrow,
+html.dark-mode .section-eyebrow,
+html.dark-mode [style*="color: var(--accent)"] {
+    color: #38bdf8 !important;
+}
+
+/* ── Legal & Policy Pages ── */
+html.dark-mode .legal-page { background: #060d1e !important; }
+html.dark-mode .legal-hero h1 { color: #ffffff !important; }
+html.dark-mode .legal-hero p { color: #94a3b8 !important; }
+html.dark-mode .legal-card { background: #0e1626 !important; border-color: #1e293b !important; }
+html.dark-mode .legal-section h2 { color: #ffffff !important; }
+html.dark-mode .legal-section p, html.dark-mode .legal-section li { color: #cbd5e1 !important; }
+html.dark-mode .policy-badge { background: rgba(56,189,248,0.12) !important; color: #38bdf8 !important; }
+
+
+/* ── Customer Login, Registration & Review Verification Cards (Dark Mode) ── */
+html.dark-mode .login-section {
+    background: transparent !important;
+}
+
+html.dark-mode .login-card {
+    background: #0e1626 !important;
+    border-color: #1e293b !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark-mode .login-card h1 {
+    color: #ffffff !important;
+}
+
+html.dark-mode .login-card .subtitle,
+html.dark-mode .login-card p,
+html.dark-mode .login-card .step-label {
+    color: rgba(226, 240, 255, 0.7) !important;
+}
+
+html.dark-mode .login-card .step-label strong {
+    color: #ffffff !important;
+}
+
+html.dark-mode .login-card .or-divider {
+    color: #64748b !important;
+}
+
+html.dark-mode .login-card .or-divider::before,
+html.dark-mode .login-card .or-divider::after {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .login-card .field span {
+    color: #94a3b8 !important;
+}
+
+html.dark-mode .login-card .field input {
+    background: rgba(15, 23, 42, 0.45) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
+    color-scheme: dark !important;
+}
+
+html.dark-mode .login-card .field input:focus {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode .login-card .field input::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+html.dark-mode .login-card .google-signin-btn {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #e2f0ff !important;
+}
+
+html.dark-mode .login-card .google-signin-btn:hover {
+    background: #27354b !important;
+    border-color: #4285f4 !important;
+}
+
+html.dark-mode .login-card .btn-primary {
+    background: rgba(56, 189, 248, 0.16) !important;
+    color: #ffffff !important;
+    border: 1px solid #38bdf8 !important;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3) !important;
+    text-shadow: none !important;
+}
+
+html.dark-mode .login-card .btn-primary:hover {
+    background: rgba(56, 189, 248, 0.26) !important;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.45) !important;
+}
+
+html.dark-mode .login-card .auth-switch {
+    color: rgba(226, 240, 255, 0.6) !important;
+}
+
+html.dark-mode .login-card .auth-switch a {
+    color: #38bdf8 !important;
+}
+
+html.dark-mode .login-card .auth-steps .dot {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+html.dark-mode .login-card .auth-steps .dot.active {
+    background: #38bdf8 !important;
+}
+
+html.dark-mode .login-card .auth-steps .dot.done {
+    background: #4ade80 !important;
+}
+
+html.dark-mode .login-card .auth-check {
+    color: rgba(226, 240, 255, 0.75) !important;
+}
+
+html.dark-mode .login-card .auth-check strong {
+    color: #ffffff !important;
+}
+
+html.dark-mode .login-card .auth-check--confirm {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .login-card .wa-verify {
+    background: rgba(37, 211, 102, 0.08) !important;
+    border-color: rgba(37, 211, 102, 0.2) !important;
+}
+
+html.dark-mode .login-card .wa-verify p {
+    color: #4ade80 !important;
+}
+
+html.dark-mode .login-card .wa-verify a {
+    background: #25D366 !important;
+    color: #ffffff !important;
+}
+
+html.dark-mode .login-card .wa-verify a:hover {
+    background: #128C7E !important;
+}
+
+
+/* ── Customer Dashboard variables and styling overrides (Dark Mode) ── */
+html.dark-mode {
+    --dash-bg: #060d1e;
+    --card-bg: #0e1626;
+    --card-border: rgba(255, 255, 255, 0.08);
+    --text: #ffffff;
+    --muted: #94a3b8;
+}
+
+html.dark-mode .sidebar-nav a:hover,
+html.dark-mode .sidebar-nav a.active {
+    background: rgba(37, 99, 235, 0.15) !important;
+    color: #38bdf8 !important;
+}
+
+html.dark-mode .sidebar-help {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.45), rgba(16, 185, 129, 0.08)) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .review-form-wrap {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.45), rgba(16, 185, 129, 0.08)) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .review-textarea {
+    background: rgba(15, 23, 42, 0.45) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
+}
+
+html.dark-mode .review-card {
+    background: rgba(255, 255, 255, 0.02) !important;
+}
+
+html.dark-mode .empty-icon {
+    background: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark-mode .mob-tab:not(.active):hover {
+    background: rgba(37, 99, 235, 0.12) !important;
+}
+
+html.dark-mode .step-dot {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ── Autofill contrast fix ──
+   Chrome/Safari override text to near-black on autofill even when color is white.
+   -webkit-text-fill-color bypasses this and keeps values readable in dark mode. */
+html.dark-mode input:-webkit-autofill,
+html.dark-mode input:-webkit-autofill:hover,
+html.dark-mode input:-webkit-autofill:focus,
+html.dark-mode input:-webkit-autofill:active {
+    -webkit-text-fill-color: #ffffff !important;
+    caret-color: #ffffff !important;
+    /* Long transition delays browser from restoring autofill bg */
+    transition: background-color 9999s ease-in-out 0s !important;
+}
+
+/* ── field-hint default color (dark mode) ──
+   Ensures hint text like "Provide email ID to get real time updates"
+   is readable without relying on the inline color that was removed. */
+html.dark-mode .field-hint {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ── Dark Mode Partner Pages Overrides ── */
+html.dark-mode .partner-form-card {
+  background: #0e1626 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45) !important;
+}
+
+html.dark-mode .partner-form-card h3 {
+  color: #ffffff !important;
+}
+
+html.dark-mode .partner-form-card p {
+  color: rgba(226, 240, 255, 0.65) !important;
+}
+
+html.dark-mode .form-field label {
+  color: #e2f0ff !important;
+}
+
+html.dark-mode .form-field input,
+html.dark-mode .form-field select,
+html.dark-mode .form-field textarea {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  color-scheme: dark !important;
+}
+
+html.dark-mode .form-field input:focus,
+html.dark-mode .form-field select:focus,
+html.dark-mode .form-field textarea:focus {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode .btn-submit {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  color: #070d18 !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+html.dark-mode .btn-submit:hover {
+  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.4) !important;
+}
+
+html.dark-mode .btn-submit:active {
+  transform: translateY(0);
+}
+
+html.dark-mode .benefit-icon {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #38bdf8 !important;
+}
+
+html.dark-mode .benefit-content h4 {
+  color: #ffffff !important;
+}
+
+html.dark-mode .benefit-content p {
+  color: rgba(226, 240, 255, 0.65) !important;
+}
+
+html.dark-mode .partner-hero p {
+  color: rgba(226, 240, 255, 0.75) !important;
+}
+
+html.dark-mode .partner-response--success {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #4ade80 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark-mode .partner-response--error {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.dark-mode .form-field input::placeholder,
+html.dark-mode .form-field textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* ══════════════════════════════════════════
+   DISCOVERY SECTION — "Explore Tamil Nadu"
+   City photo-card grid on the city/state-hub pages
+══════════════════════════════════════════ */
+
+/* Section wrapper — override the inline background: var(--white) */
+html.dark-mode .discovery-section {
+  background: #060d1e !important;
+}
+
+/* Section header text */
+html.dark-mode .discovery-section .seo-section__header h2 {
+  color: #ffffff !important;
+}
+html.dark-mode .discovery-section .seo-section__header p {
+  color: rgba(226, 240, 255, 0.72) !important;
+}
+
+/* Tour cards — photo cards are mostly image-based so the overlay already
+   works, but give the card a darker shadow on dark backgrounds */
+html.dark-mode .tour-card {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+}
+html.dark-mode .tour-card:hover {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65) !important;
+}
+
+/* "View More Cities" / "View Less Cities" button */
+html.dark-mode #view-more-cities-btn {
+  background: rgba(56, 189, 248, 0.16) !important;
+  color: #ffffff !important;
+  border: 1px solid #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.30) !important;
+}
+html.dark-mode #view-more-cities-btn:hover {
+  background: rgba(56, 189, 248, 0.28) !important;
+  box-shadow: 0 0 22px rgba(56, 189, 248, 0.48) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Seasons box */
+html.dark-mode .seasons-box {
+  background: rgba(14, 22, 38, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+html.dark-mode .seasons-box h3 {
+  color: #ffffff !important;
+}
+html.dark-mode .seasons-box > div > p {
+  color: rgba(226, 240, 255, 0.68) !important;
+}
+html.dark-mode .seasons-box h4 {
+  color: #7dd3fc !important;
+}
+html.dark-mode .seasons-box p {
+  color: rgba(226, 240, 255, 0.68) !important;
+}
+
+/* Premium Drawer Footer Responsive Dark-Mode Overrides */
+html.dark-mode .drawer-footer-responsive {
+  background: #0f172a !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+html.dark-mode .booking-card__fare-panel .drawer-footer-responsive {
+  background: transparent !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+}
+
+html.dark-mode .drawer-footer-responsive .price-label {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.dark-mode .drawer-footer-responsive .price-value {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode .drawer-footer-responsive .btn-outline {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html.dark-mode .drawer-footer-responsive .btn-outline:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+}
+
+html.dark-mode .drawer-footer-responsive .btn-primary {
+  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+  box-shadow: 0 4px 10px rgba(3, 105, 161, 0.3) !important;
+}
+
+html.dark-mode .drawer-footer-responsive .btn-primary:hover {
+  background: linear-gradient(135deg, #0369a1, #075985) !important;
+  box-shadow: 0 6px 14px rgba(3, 105, 161, 0.45) !important;
+}
+
+/* ── Premium Upgraded Sections (Dark Mode) ── */
+html.dark-mode .stat-badge {
+  background: #0e1626 !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-mode .stat-number {
+  color: #38bdf8 !important;
+}
+html.dark-mode .stat-label {
+  color: #cbd5e1 !important;
+}
+
+html.dark-mode .feature-card {
+  background: #0e1626 !important;
+  border: 1px solid #1e293b !important;
+  border-left: 4px solid #38bdf8 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-mode .feature-card:hover {
+  box-shadow: 0 12px 32px rgba(56, 189, 248, 0.2) !important;
+  transform: translateY(-3px);
+  border-color: #38bdf8 !important;
+}
+html.dark-mode .feature-card__number {
+  color: #38bdf8 !important;
+}
+html.dark-mode .feature-card__icon-wrapper {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+}
+html.dark-mode .feature-card__content h3 {
+  color: #ffffff !important;
+}
+html.dark-mode .feature-card__content p {
+  color: #cbd5e1 !important;
+}
+
+html.dark-mode .testimonial-card {
+  background: #0e1626 !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-mode .testimonial-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important;
+  transform: translateY(-3px);
+}
+html.dark-mode .testimonial-card::before {
+  color: rgba(255, 255, 255, 0.1) !important;
+}
+html.dark-mode .testimonial-text {
+  color: #e2f0ff !important;
+}
+html.dark-mode .testimonial-trip {
+  background: #1e293b !important;
+  color: #38bdf8 !important;
+}
+html.dark-mode .testimonial-user strong {
+  color: #ffffff !important;
+}
+html.dark-mode .testimonial-user small {
+  color: #94a3b8 !important;
+}
+
+html.dark-mode .faq__item {
+  background: #0e1626 !important;
+  border: 1px solid #1e293b !important;
+}
+html.dark-mode .faq__item[open] {
+  border-left: 4px solid #38bdf8 !important;
+  background: #121e36 !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+html.dark-mode .faq__summary {
+  color: #ffffff !important;
+}
+html.dark-mode .faq__item p {
+  color: #cbd5e1 !important;
+}
+
+/* ── Date & Time Picker Controls in Dark Mode ── */
+html.dark-mode input[type="date"],
+html.dark-mode input[type="time"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="time"] {
+  color-scheme: dark !important;
+  color: #f8fafc !important;
+}
+
+html.dark-mode input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark-mode input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.8) !important;
+  opacity: 0.9 !important;
+  cursor: pointer !important;
+}
+
+html.dark-mode input[type="date"]::-webkit-datetime-edit,
+html.dark-mode input[type="time"]::-webkit-datetime-edit,
+html.dark-mode input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+html.dark-mode input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+html.dark-mode input[type="date"]::-webkit-datetime-edit-text,
+html.dark-mode input[type="time"]::-webkit-datetime-edit-text,
+html.dark-mode input[type="date"]::-webkit-datetime-edit-month-field,
+html.dark-mode input[type="time"]::-webkit-datetime-edit-hour-field,
+html.dark-mode input[type="date"]::-webkit-datetime-edit-day-field,
+html.dark-mode input[type="time"]::-webkit-datetime-edit-minute-field,
+html.dark-mode input[type="time"]::-webkit-datetime-edit-ampm-field,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit-text,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit-text,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit-month-field,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit-hour-field,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit-day-field,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit-minute-field,
+[data-theme="dark"] input[type="date"]::-webkit-datetime-edit-year-field,
+[data-theme="dark"] input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: #f8fafc !important;
+}
+
+/* ── Route Map Section & Link in Dark Mode ── */
+html.dark-mode .route-map-section,
+[data-theme="dark"] .route-map-section {
+  background: #060d1e !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark-mode .route-map-container,
+[data-theme="dark"] .route-map-container {
+  background: #0f1c2e !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+html.dark-mode .route-map-footer,
+[data-theme="dark"] .route-map-footer {
+  background: #13233a !important;
+  border-top-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode .route-map-link,
+[data-theme="dark"] .route-map-link,
+html.dark-mode .route-map-footer a,
+[data-theme="dark"] .route-map-footer a {
+  color: #38bdf8 !important;
+  font-weight: 700 !important;
+}
+
+html.dark-mode .route-map-link:hover,
+[data-theme="dark"] .route-map-link:hover,
+html.dark-mode .route-map-footer a:hover,
+[data-theme="dark"] .route-map-footer a:hover {
+  color: #7dd3fc !important;
+  text-decoration: underline !important;
+}
+
+html.dark-mode .route-stat-card,
+[data-theme="dark"] .route-stat-card {
+  background: #0f1c2e !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark-mode .route-stat-card p,
+[data-theme="dark"] .route-stat-card p {
+  color: #38bdf8 !important;
+}
+
+html.dark-mode #popular-routes,
+[data-theme="dark"] #popular-routes {
+  background: #060d1e !important;
+}
+
+html.dark-mode #popular-routes h2,
+[data-theme="dark"] #popular-routes h2 {
+  color: #ffffff !important;
+}
+
+/* ── Toast Notifications (Base + Dark Mode) ── */
+.dropcars-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  z-index: 999999;
+  background: #ffffff;
+  border-left: 5px solid #dc2626;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(220, 38, 38, 0.15);
+  padding: 0.85rem 1.1rem;
+  max-width: 90vw;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+
+.dropcars-toast .toast-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #dc2626;
+  margin-bottom: 0.15rem;
+}
+
+.dropcars-toast .toast-message {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.dropcars-toast .toast-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.dropcars-toast .toast-close:hover {
+  color: #64748b;
+}
+
+/* Dark mode toast notification override */
+html.dark-mode .dropcars-toast,
+[data-theme="dark"] .dropcars-toast {
+  background: #0f1c2e !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-left: 5px solid #f43f5e !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(244, 63, 94, 0.3) !important;
+}
+
+html.dark-mode .dropcars-toast .toast-title,
+[data-theme="dark"] .dropcars-toast .toast-title {
+  color: #fb7185 !important;
+}
+
+html.dark-mode .dropcars-toast .toast-message,
+[data-theme="dark"] .dropcars-toast .toast-message {
+  color: #ffffff !important;
+}
+
+html.dark-mode .dropcars-toast .toast-close,
+[data-theme="dark"] .dropcars-toast .toast-close {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+html.dark-mode #booking-form-dynamic-title,
+html.dark-mode .airport-booking-title,
+html.dark-mode .airport-top-badge,
+[data-theme="dark"] #booking-form-dynamic-title,
+[data-theme="dark"] .airport-booking-title,
+[data-theme="dark"] .airport-top-badge {
+  color: #ffffff !important;
+}
+
+html.dark-mode .dropcars-toast .toast-close:hover,
+[data-theme="dark"] .dropcars-toast .toast-close:hover {
+  color: #ffffff !important;
+}
+
+/* Ensure WhatsApp popup chat bubble and input box have high-contrast dark text in both light and dark mode */
+html.dark-mode .wa-chat-bubble,
+[data-theme="dark"] .wa-chat-bubble {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.dark-mode .wa-chat-bubble p,
+[data-theme="dark"] .wa-chat-bubble p {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html.dark-mode .wa-input-box,
+[data-theme="dark"] .wa-input-box {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #25d366 !important;
+  font-weight: 600 !important;
+}
+
+/* Global shadow removal override */
+html.dark-mode *,
+html.dark-mode *::before,
+html.dark-mode *::after,
+[data-theme="dark"] *,
+[data-theme="dark"] *::before,
+[data-theme="dark"] *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+html.dark-mode .fare-info-btn,
+[data-theme="dark"] .fare-info-btn {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+
+html.dark-mode .fare-info-popover,
+[data-theme="dark"] .fare-info-popover {
+  background: #0f172a !important;
+  border: 1.5px solid #38bdf8 !important;
+  color: #f8fafc !important;
+}
+
+html.dark-mode .fare-info-popover__header,
+[data-theme="dark"] .fare-info-popover__header {
+  border-bottom-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark-mode .fare-info-list li,
+[data-theme="dark"] .fare-info-list li {
+  color: #94a3b8 !important;
+}
+
+html.dark-mode .fare-info-list li strong,
+[data-theme="dark"] .fare-info-list li strong {
+  color: #f1f5f9 !important;
+}
+
+
+
+
+

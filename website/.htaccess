@@ -1,0 +1,224 @@
+ErrorDocument 404 /404.php
+
+RewriteEngine On
+RewriteBase /
+
+# Force HTTPS and non-www canonical domain (dropcars.in) on production only
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|::1)(:\d+)?$ [NC]
+RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|::1)(:\d+)?$ [NC]
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+DirectoryIndex index.php index.html
+Options -Indexes
+Options -MultiViews
+
+# Production environment (Hostinger)
+SetEnv APP_ENV production
+
+# ================================================================
+# SECURITY HEADERS (Cloudflare-compatible)
+# ================================================================
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Block MIME-type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Enable XSS protection
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Content Security Policy — only dropcars.in can load resources
+    Header always set Content-Security-Policy "default-src 'self' https://dropcars.in https://*.dropcars.in; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://dropcars.in https://*.dropcars.in https://maps.googleapis.com https://maps.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://kit.fontawesome.com https://*.fontawesome.com https://ka-f.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://dropcars.in https://*.dropcars.in https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.fontawesome.com https://ka-f.fontawesome.com https://use.fontawesome.com https://maps.googleapis.com; img-src 'self' data: blob: https://dropcars.in https://*.dropcars.in https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://cdn.jsdelivr.net https://www.google-analytics.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://*.fontawesome.com https://ka-f.fontawesome.com; connect-src 'self' https://dropcars.in https://*.dropcars.in https://maps.googleapis.com https://www.google-analytics.com; frame-src 'self' https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self';"
+
+    # Permissions policy â€” restrict browser features
+    Header always set Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(), usb=(), bluetooth=()"
+
+    # HSTS â€” force HTTPS for 1 year (only activate when SSL is confirmed live)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # CORS: Allow dropcars.in, drpcars.in, and their subdomains dynamically
+    SetEnvIf Origin "^https?://(?:[a-zA-Z0-9-]+\.)*(?:dropcars|drpcars)\.in$" AccessControlAllowOrigin=$0
+    SetEnvIf Origin "^https?://(?:[a-zA-Z0-9-]+\.)*localhost(:\d+)?$" AccessControlAllowOrigin=$0
+    Header always set Access-Control-Allow-Origin %{AccessControlAllowOrigin}e env=AccessControlAllowOrigin
+    Header always set Access-Control-Allow-Credentials "true"
+    Header always set Access-Control-Allow-Methods "POST, GET, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-DROPCARS-TOKEN"
+    Header always set Access-Control-Max-Age "86400"
+
+    # Remove server fingerprinting headers
+    Header unset Server
+    Header unset X-Powered-By
+    Header always unset X-Powered-By
+</IfModule>
+
+# ================================================================
+# RATE LIMITING â€” Block bulk downloaders and scrapers
+# ================================================================
+<IfModule mod_rewrite.c>
+    # Block common scraper/copier user-agents (allowing Googlebot, Bingbot, AhrefsBot, SemrushBot, DataForSeoBot for SEO audits)
+    RewriteCond %{HTTP_USER_AGENT} (HTTrack|WebCopier|SiteSnagger|Teleport|WebReaper|WebStripper|Offline\.Explorer|SurfOffline|BlackWidow|WebZIP|wget|python-requests|python-urllib|scrapy|Scrapy|libwww-perl|lwp-trivial|libcurl|java/|jakarta|okhttp|Go-http-client|Nikto|sqlmap|dirbuster|masscan|zgrab) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block empty user-agents (programmatic bots)
+    RewriteCond %{HTTP_USER_AGENT} ^-?$
+    RewriteRule .* - [F,L]
+
+    # Block requests with no Accept header (bots, not browsers)
+    RewriteCond %{HTTP_ACCEPT} ^$
+    RewriteCond %{REQUEST_URI} ^/api/
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# ================================================================
+# PROTECT SENSITIVE FILES & DIRECTORIES
+# ================================================================
+
+# Block access to environment/config files
+<FilesMatch "^(?:\.env|composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|secret\.php|db\.local\.php|database\.local\.php|config\.php|\.gitignore|\.git)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Block direct HTTP access to internal system directories completely (except internal rewrites)
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteRule ^(?:engine|includes|helpers|core|config|scripts|tmp|logs)/ - [F,L,NC]
+
+# Block direct access to sensitive JSON files in the data directory, except public data JSON files used by frontend JavaScript
+RewriteRule ^data/(?!cities\.json|routes\.json|airports\.json|geocode_cache\.json|distance_cache\.json)[^/]+$ - [F,L,NC]
+
+# Block debug/setup files that may expose internals
+RewriteRule ^(?:debug_db|debug_db_v2|test-db|test-dbs|test-seo|tmp_|create-tables|fix-db|reset_admin|execute-tables).*\.php$ - [F,L,NC]
+
+# Allow robots.txt and sitemaps before extension blocking
+RewriteRule ^robots\.txt$ - [L]
+RewriteRule ^sitemap\.xml$ engine/sitemap.php [L]
+RewriteRule ^sitemap-cities\.xml$ engine/sitemap-cities.php [L]
+RewriteRule ^sitemap-routes\.xml$ engine/sitemap-routes.php [L]
+
+RewriteRule ^(?:docs|agent-transcripts)/ - [F,L,NC]
+RewriteRule ^(?:.*\.(?:md|log|sql|bak|dist|txt|sh|ps1))$ - [F,L,NC]
+
+# Block access to api/storage (contains PII logs)
+<IfModule mod_rewrite.c>
+    RewriteRule ^api/storage/ - [F,L]
+</IfModule>
+
+# ================================================================
+# CORS â€” OPTIONS preflight (must return 204 before auth checks)
+# ================================================================
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=204,L]
+
+# URL ROUTING (SEO + Clean URLs)
+# ================================================================
+
+# Airport Taxi: canonical slug is now "airport-taxi" (hyphenated, matching
+# every other theme) - permanently redirect the old "airporttaxi" slug so
+# indexed pages, inbound links and any Google Ads URLs still using it
+# consolidate onto the one canonical URL instead of serving duplicate content.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^airporttaxi(/.*)?$ /airport-taxi$1 [R=301,L,QSA]
+
+# Explicitly handle theme homepages first to ensure landing pages resolve immediately
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(airporttaxi|city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)/?$ index.php [QSA,L]
+
+# Contact: legacy .html URL â†’ PHP page
+RewriteRule ^pages/contact\.html$ pages/contact.php [L,QSA]
+
+# Policies: legacy .html URLs â†’ PHP pages
+RewriteRule ^pages/privacy\.html$ pages/privacy.php [L,QSA]
+RewriteRule ^pages/terms\.html$ pages/terms.php [L,QSA]
+RewriteRule ^pages/payment-policy\.html$ pages/payment-policy.php [L,QSA]
+RewriteRule ^pages/refund-policy\.html$ pages/refund-policy.php [L,QSA]
+
+
+# Blog: clean URL /blog/{slug}/ -> blog/post.php?slug={slug}
+# (blog/index.php and blog/posts/*.php link to this clean form, but nothing
+# previously routed it — it fell through to index.php's city/theme routing,
+# which treats "blog" as a reserved segment and silently rendered the
+# homepage instead of the post.)
+RewriteRule ^blog/([a-zA-Z0-9-]+)/?$ blog/post.php?slug=$1 [L,QSA]
+
+# Pretty URLs
+RewriteRule ^tariff/?$ engine/tariff.php [L,QSA]
+RewriteRule ^thank-you/([a-zA-Z0-9-]+)/?$ pages/thank-you.php?booking_id=$1 [L,QSA]
+RewriteRule ^review/([A-Za-z0-9_-]{16,80})/?$ pages/review.php?token=$1 [L,QSA]
+RewriteRule ^track-booking/([a-zA-Z0-9]+)/?$ pages/track-booking.php?booking_id=$1 [L,QSA]
+RewriteRule ^dashboard/?$ pages/customer-dashboard.php [L,QSA]
+RewriteRule ^customer-login/?$ pages/customer-login.php [L,QSA]
+RewriteRule ^developer/?$ pages/developer.php [L,QSA]
+
+# New Dedicated Pages
+RewriteRule ^about/?$ pages/about-us.php [L,QSA]
+RewriteRule ^about-us/?$ pages/about-us.php [L,QSA]
+RewriteRule ^services/?$ pages/services.php [L,QSA]
+RewriteRule ^our-services/?$ pages/services.php [L,QSA]
+RewriteRule ^airport-transfer/?$ pages/airport-transfer.php [L,QSA]
+RewriteRule ^airport-taxi/?$ pages/airport-transfer.php [L,QSA]
+RewriteRule ^airport-cab/?$ pages/airport-transfer.php [L,QSA]
+RewriteRule ^contact/?$ pages/contact.php [L,QSA]
+RewriteRule ^driver-partner/?$ pages/driver-partner.php [L,QSA]
+RewriteRule ^vendor-partner/?$ pages/vendor-partner.php [L,QSA]
+RewriteRule ^fleet-partner/?$ pages/fleet-partner.php [L,QSA]
+RewriteRule ^driver-agreement/?$ pages/driver-agreement.php [L,QSA]
+RewriteRule ^vendor-agreement/?$ pages/vendor-agreement.php [L,QSA]
+RewriteRule ^trust-safety/?$ pages/trust-safety.php [L,QSA]
+RewriteRule ^driver-trip/?$ pages/driver-trip.php [L,QSA]
+
+# Theme Cities Page routing
+RewriteRule ^(city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)/cities/?$ engine/cities.php?theme=$1 [L,QSA]
+
+# Drop Cars native theme — redirect old /drop-cars/{slug} URLs to root-level equivalents
+# This covers /drop-cars/chennai → /chennai and /drop-cars/chennai-vellore → /chennai/vellore
+RewriteRule ^drop-cars/(.+)$ engine/route-redirect.php?__dc_redirect=$1 [L,QSA]
+
+# Theme home + section (SEO): /drop-taxi/booknow, etc.
+RewriteRule ^(city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)/(booknow|routes|guides|fleet|services|about|why-us|reviews|faq)/?$ index.php [QSA,L]
+
+# Legacy /theme-city â†’ /theme/city (301)
+RewriteRule ^(city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)-([a-zA-Z0-9-]+)/?$ /$1/$2 [R=301,L]
+
+# Legacy pickup-to-drop-taxi -> redirect dynamically via PHP
+RewriteRule ^([a-zA-Z0-9-]+)-to-([a-zA-Z0-9-]+)-taxi/?$ engine/route-redirect.php?pickup=$1&drop=$2 [L,QSA]
+
+# 1. Existing file/dir logic
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Drop Cars native theme: /city1/city2 → route page
+# Route to engine via index.php (PHP router handles disambiguation)
+# Excludes known non-city two-segment patterns already matched above
+RewriteRule ^([a-zA-Z0-9-]+)/([a-zA-Z0-9-]+)/?$ index.php [QSA,L]
+
+# Pretty URLs (SEO): /theme/city and /theme/pickup-drop
+RewriteRule ^(city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)/(.+)$ engine/theme-path.php?__theme=$1&__path=$2 [QSA,L]
+
+# Legacy "from" aliases â†’ /drop-taxi/{city}
+RewriteRule ^drop-taxi-from-([a-zA-Z0-9-]+)/?$ /drop-taxi-$1 [R=301,L,QSA]
+RewriteRule ^taxi-from-([a-zA-Z0-9-]+)/?$ /drop-taxi-$1 [R=301,L,QSA]
+
+# Drop Cars native theme: /city → city hub
+# Single-segment non-file paths route to index.php for drop-cars resolution
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-zA-Z0-9-]+)/?$ index.php [QSA,L]
+
+# Theme URLs (Homepage roots) — still needed for /drop-cars /drop-taxi etc when no trailing content
+RewriteRule ^(airporttaxi|city-to-city-cabs|city-to-city-taxi|drop-car-service|drop-cars|drop-taxi|drop-taxi-service|intercity-cabs|intercity-drop-taxi|intercity-taxi|one-drop-cab|one-drop-taxi|one-way-cab|one-way-taxi|outstation-cab|outstation-cabs|outstation-drop-taxi|outstation-taxi)/?$ index.php [QSA,L]
+
+# Legacy /city/chennai.html â†’ dynamic hub
+RewriteRule ^city/([a-zA-Z0-9-]+)\.html$ engine/city.php?city=$1 [QSA,L]
+
+# Handle routes/ folder legacy -> redirect dynamically via PHP
+RewriteRule ^routes/([a-zA-Z0-9-]+)-to-([a-zA-Z0-9-]+)-taxi\.html$ engine/route-redirect.php?pickup=$1&drop=$2 [L,QSA]

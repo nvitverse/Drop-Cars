@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "contexts/AuthContext.tsx",
+    "app/auth/index.tsx",
+    "app/(customer)/my-trips.tsx",
+    "types/auth.ts",
+    "app/api/axiosInstance.tsx"
+  ]
+}

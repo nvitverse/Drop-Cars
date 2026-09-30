@@ -1,0 +1,3 @@
+# Deny all - admin DB config must never be web-accessible
+Order deny,allow
+Deny from all

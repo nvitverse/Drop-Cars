@@ -1,0 +1,24 @@
+# Drop Cars – Ignored files
+
+# API config (contains secrets)
+api/config.php
+
+# Config (credentials)
+admin/config/database.local.php
+config/db.local.php
+config/admin.local.php
+config/app.local.php
+config/env.php
+
+# Logs (never expose)
+logs/
+
+# Rate limit / cache / blocks
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Stale reference extract (not part of the site)
+_ref_zip_extract/

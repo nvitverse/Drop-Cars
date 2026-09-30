@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.env
+*.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+.gcloud/
+*.json
+venv
+cloud_push.sh
+backup.dump

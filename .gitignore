@@ -1,0 +1,45 @@
+# System & OS
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+
+# Node & JS Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo & Mobile Builds
+.expo/
+.expo-shared/
+dist/
+dist-ota/
+web-build/
+*.apk
+*.aab
+*.ipa
+
+# Android & iOS Local Builds
+.gradle/
+build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env.local
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo

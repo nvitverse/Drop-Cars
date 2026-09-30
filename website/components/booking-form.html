@@ -1,0 +1,84 @@
+<!-- Reusable booking form snippet – for use on route pages or embed -->
+<div class="booking-card" aria-label="Drop Cars booking form">
+  <div class="booking-card__header">
+    <p class="booking-card__eyebrow">Instant Quote</p>
+    <h2>Book Your One-Way Drop Taxi</h2>
+  </div>
+  <form id="booking-form" class="booking-form">
+    <label class="field">
+      <span>Select Trip Type</span>
+      <select name="serviceType" id="service-type" class="visually-hidden" tabindex="-1" aria-hidden="true" required>
+        <option value="one_way">One-Way Drop</option>
+        <option value="round_trip">Round Trip</option>
+        <option value="multi_city">Multi City (One-Way + Stops)</option>
+        <option value="hourly_rental">Local Rental</option>
+      </select>
+      <div class="trip-type-options" role="group" aria-label="Trip type">
+        <button type="button" class="trip-type-option trip-type-option--active" data-type="one_way">One-Way</button>
+        <button type="button" class="trip-type-option" data-type="round_trip">Round Trip</button>
+        <button type="button" class="trip-type-option" data-type="multi_city">Multi City</button>
+        <button type="button" class="trip-type-option" data-type="hourly_rental">Local</button>
+      </div>
+    </label>
+    <div class="field-pair">
+      <label class="field">
+        <span>Name</span>
+        <input type="text" name="customerName" placeholder="Full Name" required />
+      </label>
+      <label class="field">
+        <span>Contact No.</span>
+        <input type="tel" name="contactPhone" placeholder="+91 98765 43210" id="contact-phone" required />
+      </label>
+    </div>
+    <label class="field">
+      <span>Email (Optional)</span>
+      <input type="email" name="contactEmail" placeholder="name@email.com" id="contact-email" />
+      <span class="field-hint" style="font-size: 0.72rem; color: #64748b; margin-top: 4px; display: block; white-space: nowrap !important;">Provide email ID to get real time updates</span>
+    </label>
+    <input type="hidden" name="contactMode" value="phone" id="contact-mode-input" />
+    <label class="field">
+      <span>Pickup City</span>
+      <input type="text" name="pickup" id="pickup" placeholder="e.g., Chennai" required />
+    </label>
+    <div class="stops-control hidden" id="stops-control">
+      <div class="stops-control__header">
+        <p id="stops-note">Add stops between pickup and drop.</p>
+        <button type="button" id="add-stop" class="btn-chips">+ Add Stop</button>
+      </div>
+      <div class="stops-list" id="stops-list"></div>
+      <p class="stops-limit">Up to 10 stops</p>
+    </div>
+    <label class="field" id="drop-field">
+      <span>Drop City</span>
+      <input type="text" name="drop" id="drop" placeholder="e.g., Bangalore" required />
+    </label>
+    <div class="field-pair">
+      <label class="field">
+        <span>Travel Date</span>
+        <input type="date" name="date" required />
+      </label>
+      <label class="field">
+        <span>Pickup Time</span>
+        <input type="time" name="time" required />
+      </label>
+    </div>
+    <label class="field hidden" id="hourly-pickup-field">
+      <span>Hourly Rental Pickup Location</span>
+      <input type="text" name="hourlyPickup" id="maps-hourly-pickup" placeholder="e.g., Chennai Central" />
+    </label>
+    <div class="hourly-control hidden" id="hourly-control">
+      <span>Rental Duration</span>
+      <div class="hourly-options" role="group" aria-label="Hourly rental duration">
+        <button type="button" class="hourly-option hourly-option--active" data-hours="5_hours">5 Hours</button>
+        <button type="button" class="hourly-option" data-hours="8_hours">8 Hours</button>
+        <button type="button" class="hourly-option" data-hours="10_hours">10 Hours</button>
+        <button type="button" class="hourly-option" data-hours="12_hours">12 Hours</button>
+      </div>
+      <input type="hidden" name="hourlyPackage" id="hourly-package" value="5_hours" />
+    </div>
+    <input type="hidden" name="fareType" value="base" />
+    <button type="submit" class="btn-primary">Get Instant Quote</button>
+    <p class="terms">By submitting, you agree to receive trip confirmations &amp; updates from Drop Cars.</p>
+    <p id="form-response" class="form-response" role="status"></p>
+  </form>
+</div>

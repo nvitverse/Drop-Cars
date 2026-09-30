@@ -1,0 +1,793 @@
+/* Master Category Tabs for Routes & Cities Explorer */
+.master-tabs-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+.master-tabs {
+    display: inline-flex;
+    gap: 8px;
+    background: rgba(241, 245, 249, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(203, 213, 225, 0.6);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.master-tab {
+    padding: 10px 24px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: #475569;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.master-tab:hover {
+    color: #0b2d6e;
+    transform: translateY(-1px);
+}
+.master-tab.active {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+}
+.master-tab-pane {
+    animation: fadeInTab 0.35s ease-in-out;
+}
+@keyframes fadeInTab {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--gray-400);
+  margin-bottom: 1rem;
+}
+
+.breadcrumb a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb__sep {
+  opacity: 0.6;
+}
+
+/* City grid – Book Drop Taxi From */
+.city-section {
+  padding: 1.5rem 0 0.75rem;
+  background: var(--white);
+}
+
+.city-section h2 {
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.1rem;
+}
+
+.city-grid--important {
+  margin-bottom: 1rem;
+}
+
+.city-toggle-btn {
+    margin: 2rem auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 1rem 2.5rem;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--blue-dark);
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+}
+
+.city-toggle-btn:hover {
+    background: var(--accent);
+    color: var(--white);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px var(--accent-glow);
+}
+
+.city-toggle-btn.active {
+    background: var(--blue-dark);
+    border-color: var(--blue-dark);
+    color: var(--white);
+}
+
+.city-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.city-toggle-btn.active svg {
+    transform: rotate(180deg);
+}
+
+.city-collapse {
+  height: 0;
+  overflow: hidden;
+  /* GPU-composited transition for zero jank */
+  transition: height 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.35s ease,
+              padding 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--gray-50);
+  border-radius: 0 0 16px 16px;
+  opacity: 0;
+  will-change: height, opacity;
+}
+
+.city-collapse.active {
+  /* height is set via JS to exact scrollHeight */
+  /* No horizontal padding: the extra inset here was shrinking the grid's
+     available width vs. the important-cities grid above it, making these
+     cards render visibly slimmer/smaller for the same minmax() column
+     rule. Keep vertical breathing room only so both grids line up. */
+  border: 1.5px solid var(--gray-200);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  padding: 1.5rem 0;
+  opacity: 1;
+}
+
+.city-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.city-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(145deg, #0B4D94 0%, #002D62 100%);
+  border: 3px solid #FFFFFF;
+  outline: 2px solid #001A3B;
+  border-radius: 14px;
+  padding: 1.15rem 1.3rem;
+  color: #FFFFFF !important;
+  text-decoration: none !important;
+  box-shadow: 0 8px 22px rgba(11, 77, 148, 0.32), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.city-card:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: 0 14px 32px rgba(11, 77, 148, 0.48), 0 0 0 2px #FACC15;
+  border-color: #FFFFFF;
+  background: linear-gradient(145deg, #135DB3 0%, #003675 100%);
+}
+
+/* Popular routes */
+.routes-section {
+  padding: var(--section-y, 2rem) 0;
+  background: var(--gray-50);
+}
+
+.routes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.75rem;
+}
+
+/* Highway Blue Overhead Signboard for Routes & City Pages */
+.highway-signboard,
+.route-card--highway {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  text-decoration: none !important;
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow: hidden;
+  /* City/route names vary a lot in length ("Kochi" vs "Ammapattinam"),
+     which otherwise makes the route line wrap to 1 vs 2 lines and gives
+     every row a different card height. Fix the card height so all cards
+     in the grid line up regardless of name length. */
+  height: 100%;
+  min-height: 9.75rem;
+}
+
+/* Corner screw/bolt accents typical of highway sign boards */
+.highway-signboard::before,
+.highway-signboard::after,
+.route-card--highway::before,
+.route-card--highway::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 1px solid #64748b;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.3);
+  z-index: 2;
+}
+
+.highway-signboard::before,
+.route-card--highway::before {
+  left: 5px;
+}
+
+.highway-signboard::after,
+.route-card--highway::after {
+  right: 5px;
+}
+
+/* Metallic reflective sheen on hover */
+.highway-signboard-shine {
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 70%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: skewX(-25deg);
+  transition: left 0.75s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.highway-signboard:hover .highway-signboard-shine,
+.route-card--highway:hover .highway-signboard-shine {
+  left: 150%;
+}
+
+.highway-signboard:hover,
+.route-card--highway:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 10px 24px rgba(11, 77, 148, 0.45), 0 0 0 2px #FACC15 !important;
+  border-color: #FFFFFF !important;
+  background: linear-gradient(145deg, #135DB3 0%, #003675 100%) !important;
+}
+
+/* Highway Signboard Header / Highway Badge */
+.highway-signboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
+  margin-bottom: 0.45rem;
+  width: 100%;
+  gap: 0.4rem;
+}
+
+.highway-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #FACC15;
+  color: #0F172A;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  line-height: 1.15;
+}
+
+.highway-signboard__code {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+  text-align: right;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Route Title (ORIGIN -> DESTINATION) */
+.highway-signboard__route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.highway-signboard__route-arrow {
+  color: #FACC15;
+  font-weight: 900;
+  font-size: 0.82rem;
+  display: inline-block;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.highway-signboard:hover .highway-signboard__route-arrow,
+.route-card--highway:hover .highway-signboard__route-arrow {
+  transform: translateX(3px);
+}
+
+/* Highway Signboard Metrics Row (KMS & TIMING) */
+.highway-signboard__metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  width: 100%;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+}
+
+.highway-metric {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.highway-metric--kms {
+  color: #FACC15;
+  flex-shrink: 0;
+}
+
+.highway-metric--timing {
+  color: #F8FAFC;
+  background: rgba(0, 23, 54, 0.45);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.highway-metric__icon {
+  font-size: 0.72rem;
+}
+
+/* Action CTA Pill */
+.highway-signboard__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #FFFFFF;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 14px;
+  margin-top: 0.45rem;
+  transition: all 0.3s ease;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.highway-signboard:hover .highway-signboard__cta,
+.route-card--highway:hover .highway-signboard__cta {
+  background: #FACC15;
+  color: #002D62;
+  border-color: #FACC15;
+}
+
+.route-card__arrow {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: #FACC15;
+  transition: transform 0.3s ease;
+}
+
+.route-card:hover .route-card__arrow {
+  transform: translateX(5px);
+}
+
+.route-card__text {
+  flex: 1;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.route-card__text small {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #b45309;
+  margin-top: 0.35rem;
+}
+
+.user-context-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--blue-dark);
+  color: var(--white);
+  padding: 0.75rem 1.5rem;
+  border-radius: 100px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  box-shadow: var(--shadow-md);
+}
+
+.change-city-link {
+  color: var(--accent);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.2);
+  padding-left: 1rem;
+  margin-left: 0.5rem;
+}
+
+.change-city-link:hover {
+  opacity: 0.8;
+  color: var(--white);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Route Explorer Selectors */
+.route-explorer-controls {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.keyword-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.keyword-selector label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.keyword-selector select {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.8rem 1rem;
+  border: 2px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--white);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.keyword-selector select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(6, 18, 33, 0.05);
+}
+
+.city-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.city-selector__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.city-tabs {
+  display: flex;
+  gap: 0.8rem;
+  overflow-x: auto;
+  padding: 0.2rem 0.2rem 1rem 0.2rem;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+}
+
+.city-tabs::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari, Opera */
+}
+
+.city-tab {
+  flex: 0 0 auto;
+  padding: 0.7rem 1.4rem;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 100px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.city-tab:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.city-tab.active {
+  background: var(--blue);
+  color: var(--white);
+  border-color: var(--blue);
+  box-shadow: 0 4px 12px rgba(6, 18, 33, 0.15);
+}
+
+.view-more-container {
+  margin-top: 3rem;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-view-more {
+  padding: 1rem 2.5rem;
+  background: var(--white);
+  border: 2px solid var(--blue);
+  color: var(--blue);
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-view-more:hover {
+  background: var(--blue);
+  color: var(--white);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(6, 18, 33, 0.1);
+}
+
+@media (max-width: 768px) {
+  .city-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .routes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .route-card {
+    padding: 0.8rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border-radius: 12px;
+  }
+
+  .route-card__arrow {
+    width: 14px;
+    height: 14px;
+  }
+
+  .route-card__text {
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+
+  .route-card__text small {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+  }
+}
+
+/* Toggle Switch for Route Summary */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  transform: translateX(20px);
+  background: var(--accent);
+}
+
+.toggle-switch:has(input:checked) {
+  border-color: var(--accent) !important;
+  background: rgba(247, 183, 51, 0.2) !important;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  background: #fff;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.summary-toggle:hover .toggle-switch {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Premium Cities and Routes Explorer Overrides ── */
+.city-card:not(.highway-signboard):not(.route-card--highway) {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.city-card:not(.highway-signboard):not(.route-card--highway):hover {
+  border-color: #38bdf8 !important;
+  color: #0ea5e9 !important;
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 10px 20px rgba(56, 189, 248, 0.12) !important;
+}
+
+.route-card:not(.highway-signboard):not(.route-card--highway) {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 4px 20px rgba(15, 28, 46, 0.02) !important;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.route-card:not(.highway-signboard):not(.route-card--highway):hover {
+  transform: translateY(-6px) scale(1.02) !important;
+  box-shadow: 0 16px 36px rgba(56, 189, 248, 0.15) !important;
+  border-color: #38bdf8 !important;
+}
+
+.city-tab {
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.city-tab:hover {
+  border-color: #38bdf8 !important;
+  color: #0ea5e9 !important;
+}
+
+.city-tab.active {
+  background: linear-gradient(135deg, #102a43 0%, #0c2035 100%) !important;
+  color: #ffffff !important;
+  border-color: #0b1a2b !important;
+  box-shadow: 0 6px 18px rgba(12, 32, 53, 0.22) !important;
+}
+
+/* Airport Hub Cards */
+.airport-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+.airport-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 18px;
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: #1e293b;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    position: relative;
+    overflow: hidden;
+}
+.airport-card:hover {
+    transform: translateY(-6px);
+    border-color: #0ea5e9;
+    box-shadow: 0 16px 36px rgba(14, 165, 233, 0.15);
+}
+.airport-card__badge {
+    align-self: flex-start;
+    background: rgba(14, 165, 233, 0.1);
+    color: #0284c7;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+}
+.airport-card__title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+.airport-card__desc {
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+    flex-grow: 1;
+}
+.airport-card__cta {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #0ea5e9;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: gap 0.2s ease;
+}
+.airport-card:hover .airport-card__cta {
+    gap: 10px;
+    color: #0284c7;
+}
+

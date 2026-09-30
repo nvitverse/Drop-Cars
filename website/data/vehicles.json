@@ -1,0 +1,40 @@
+{
+  "vehicles": [
+    {
+      "id": "sedan",
+      "name": "Premium Sedan",
+      "capacity": "4 seats",
+      "comfort": "A/C",
+      "ratePerKm": 14,
+      "priceLabel": "From ₹4,999",
+      "image": "https://cdn-icons-png.flaticon.com/512/7438/7438187.png"
+    },
+    {
+      "id": "suv",
+      "name": "Spacious SUV",
+      "capacity": "6 + 1 seats",
+      "comfort": "Dual A/C",
+      "ratePerKm": 16,
+      "priceLabel": "From ₹6,999",
+      "image": "https://cdn-icons-png.flaticon.com/512/7438/7438100.png"
+    },
+    {
+      "id": "innova",
+      "name": "Assured Innova",
+      "capacity": "7 seats",
+      "comfort": "Captain seats",
+      "ratePerKm": 18,
+      "priceLabel": "From ₹7,999",
+      "image": "https://cdn-icons-png.flaticon.com/512/7438/7438108.png"
+    },
+    {
+      "id": "crysta",
+      "name": "Innova Crysta",
+      "capacity": "7 luxury seats",
+      "comfort": "Elite A/C",
+      "ratePerKm": 20,
+      "priceLabel": "From ₹8,999",
+      "image": "https://cdn-icons-png.flaticon.com/512/7438/7438116.png"
+    }
+  ]
+}

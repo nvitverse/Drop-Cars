@@ -1,0 +1,232 @@
+# ============================================================
+# Drop Cars (dropcars.in) - robots.txt
+# Allows only Google and Bing bots. Blocks all scrapers,
+# HTTrack, and all unofficial crawlers.
+# ============================================================
+
+# === DEFAULT CRAWLER RULES (ALLOW PUBLIC PAGES, BLOCK PRIVATE BACKEND) ===
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /helpers/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Disallow: /pages/thank-you.php
+Disallow: /pages/track-booking.php
+Disallow: /pages/customer-dashboard.php
+Disallow: /pages/customer-login.php
+Allow: /
+
+# === ALLOW GOOGLE & BING ===
+User-agent: Googlebot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /helpers/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Disallow: /pages/thank-you.php
+Disallow: /pages/track-booking.php
+Disallow: /pages/customer-dashboard.php
+Disallow: /pages/customer-login.php
+Allow: /
+
+User-agent: Googlebot-Image
+Disallow: /admin/
+Allow: /assets/
+
+
+# === ALLOW BING ===
+User-agent: Bingbot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /helpers/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Disallow: /pages/thank-you.php
+Disallow: /pages/track-booking.php
+Disallow: /pages/customer-dashboard.php
+Disallow: /pages/customer-login.php
+Allow: /
+
+# === EXPLICITLY BLOCK KNOWN SCRAPERS, COPIERS, BAD BOTS ===
+User-agent: HTTrack
+Disallow: /
+
+User-agent: WebCopier
+Disallow: /
+
+User-agent: SiteSnagger
+Disallow: /
+
+User-agent: Teleport
+Disallow: /
+
+User-agent: TeleportPro
+Disallow: /
+
+User-agent: WebReaper
+Disallow: /
+
+User-agent: WebStripper
+Disallow: /
+
+User-agent: NetAttaché
+Disallow: /
+
+User-agent: Offline Explorer
+Disallow: /
+
+User-agent: SurfOffline
+Disallow: /
+
+User-agent: BlackWidow
+Disallow: /
+
+User-agent: WebZIP
+Disallow: /
+
+User-agent: Wget
+Disallow: /
+
+User-agent: curl
+Disallow: /
+
+User-agent: python-requests
+Disallow: /
+
+User-agent: python-urllib
+Disallow: /
+
+User-agent: scrapy
+Disallow: /
+
+User-agent: Scrapy
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Allow: /
+
+User-agent: SemrushBot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Allow: /
+
+User-agent: DataForSeoBot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Allow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# === ALLOW AI SEARCH & ANSWER ENGINES (AEO / GEO OPTIMIZATION) ===
+User-agent: GPTBot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Disallow: /pages/thank-you.php
+Disallow: /pages/track-booking.php
+Disallow: /pages/customer-dashboard.php
+Disallow: /pages/customer-login.php
+Allow: /
+
+User-agent: Claude-Web
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Allow: /
+
+User-agent: anthropic-ai
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Allow: /
+
+User-agent: PerplexityBot
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Allow: /
+
+User-agent: Google-Extended
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Allow: /
+
+User-agent: Applebot-Extended
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /core/
+Disallow: /engine/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /logs/
+Disallow: /tmp/
+Allow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ia_archiver
+Disallow: /
+
+Sitemap: https://dropcars.in/sitemap.xml
+

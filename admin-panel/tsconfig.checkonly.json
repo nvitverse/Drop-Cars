@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "utils/performance.ts",
+    "components/DutySignOffModal.tsx",
+    "components/EnquiryAlarmHost.tsx",
+    "app/enquiries.tsx",
+    "app/(tabs)/index.tsx",
+    "app/profile.tsx",
+    "app/review-tasks.tsx",
+    "app/(tabs)/tasks.tsx"
+  ]
+}

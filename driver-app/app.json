@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Drop Cars-Driver App",
+    "slug": "dropcars3",
+    "version": "1.1.0",
+    "icon": "./assets/logo_icon.png",
+    "splash": {
+      "image": "./assets/logo_icon.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0B1E4A"
+    },
+    "newArchEnabled": true,
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "./plugins/withBubbleOverlay.js",
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "notification_tone.wav"
+          ],
+          "defaultChannel": "dropcars-custom-sound-v2",
+          "mode": "production"
+        }
+      ],
+      "expo-audio",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Drop Cars needs your location while a trip is running so the customer can see how far away you are.",
+          "locationWhenInUsePermission": "Drop Cars needs your location while a trip is running so the customer can see how far away you are.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "31f4ffee-37b4-4db6-a102-1cd99bd74f8e"
+      }
+    },
+    "android": {
+      "package": "com.dropcars.driverapp",
+      "softwareKeyboardLayoutMode": "resize",
+      "googleServicesFile": "./assets/google-services.json",
+      "versionCode": 30,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo_icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://drop-cars-api-207918408785.asia-south2.run.app/api/app-updates/driver/manifest",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "owner": "dropcars",
+    "ios": {}
+  }
+}

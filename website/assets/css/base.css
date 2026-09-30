@@ -1,0 +1,241 @@
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css");
+
+/**
+ * Base styles – variables, reset, typography
+ * Drop Cars – Premium intercity taxi
+ */
+
+:root {
+  /* Core Palette */
+  --blue: #0f1c2e;
+  --blue-dark: #070d18;
+  --blue-light: #1a2b45;
+  --blue-subtle: #f8fafc;
+  --white: #ffffff;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-600: #475569;
+  
+  /* Accent Colors */
+  --accent: #38bdf8;
+  --accent-glow: rgba(203, 248, 56, 0.442);
+  --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.48);
+  --glass-shadow: none;
+  --glass-blur: blur(12px);
+  
+  /* Elevation Shadows — Disabled Globally */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-quote: none;
+
+  /* Section vertical rhythm – use for consistent, compact spacing */
+  --section-y: clamp(1.65rem, 2.6vw, 2.35rem);
+  --section-y-lg: clamp(2rem, 3.2vw, 2.85rem);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  color: var(--blue);
+  /* Premium light background — subtle sky-to-white gradient */
+  background: linear-gradient(180deg, #f0f9ff 0%, #f8fafc 30%, #f1f5f9 100%);
+  background-attachment: fixed;
+  line-height: 1.6;
+}
+
+img {
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  margin: 0 0 0.55rem;
+  color: var(--blue-dark);
+}
+
+p {
+  margin: 0 0 0.65rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.strikethrough-fare {
+  text-decoration: line-through;
+  color: var(--gray-400);
+  margin-right: 0.5rem;
+  font-size: 0.9em;
+}
+
+.top-banner {
+  z-index: 200;
+  position: relative;
+}
+.text-banner {
+  box-shadow: 0 4px 15px rgba(247, 183, 51, 0.3);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-bottom: 2px solid #e1a31f;
+}
+
+.image-banner img {
+  border-bottom: 1px solid var(--gray-200);
+}
+
+/* Global Button Styles – Premium Drop Cars Theme */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0 !important; /* Sharp corners for modern look */
+  background: var(--accent-gradient);
+  color: var(--white);
+  padding: 0.85rem 2.2rem;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px var(--accent-glow);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.btn-primary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: 0.5s;
+  z-index: -1;
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 10px 25px var(--accent-glow);
+}
+
+.btn-primary:hover::before {
+  left: 100%;
+}
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 2.2rem;
+  border: 2px solid var(--accent);
+  border-radius: 0 !important;
+  background: transparent;
+  color: var(--blue-dark);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.35s ease;
+}
+
+.btn-outline:hover {
+  background: var(--accent);
+  color: var(--white);
+  box-shadow: 0 6px 18px var(--accent-glow);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 600px) {
+  .btn-primary, .btn-outline {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ── Autocomplete & Picker Dropdowns — Hide scrollbar UI while keeping mouse & touch scrolling ── */
+.local-autocomplete-dropdown,
+.location-picker-dropdown,
+.pac-container,
+.location-suggestions-dropdown,
+.location-suggestions,
+.autocomplete-suggestions,
+.luggage-popover {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.local-autocomplete-dropdown::-webkit-scrollbar,
+.location-picker-dropdown::-webkit-scrollbar,
+.pac-container::-webkit-scrollbar,
+.location-suggestions-dropdown::-webkit-scrollbar,
+.location-suggestions::-webkit-scrollbar,
+.autocomplete-suggestions::-webkit-scrollbar,
+.luggage-popover::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLOBAL NO SHADOW OVERRIDE — AVOID SHADOWS EVERYWHERE
+   ══════════════════════════════════════════════════════════════════════════ */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}

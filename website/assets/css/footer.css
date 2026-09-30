@@ -1,0 +1,668 @@
+/**
+ * Footer, CTA section, floating contact, buttons
+ * Drop Cars – Premium intercity taxi
+ */
+
+.cta {
+  padding: var(--section-y, 1.85rem) 0;
+  background: var(--blue-dark);
+  color: var(--white);
+}
+
+.cta__layout {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.cta__layout--split {
+  flex-direction: column;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .cta__layout--split {
+    flex-direction: row;
+    text-align: left;
+    justify-content: space-between;
+  }
+}
+
+.cta__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .cta__title {
+    font-size: 2rem;
+  }
+}
+
+.cta__desc {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+.cta__actions--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  .cta__actions--stacked {
+    align-items: flex-end;
+  }
+}
+
+.cta__phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--white);
+  font-weight: 700;
+  font-size: 1.25rem;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.cta__phone:hover {
+  opacity: 0.9;
+}
+
+.cta__phone .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem 1.2rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
+.btn-secondary--outline {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.btn-link {
+  color: var(--white);
+  font-weight: 600;
+  text-decoration: underline;
+  margin-left: 1rem;
+}
+
+.site-footer {
+  background: var(--blue-dark);
+  color: var(--white);
+  padding: 2rem 0 4.2rem; /* padding-bottom clears floating buttons on desktop/tablet */
+}
+
+.footer__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.footer__branding {
+  max-width: 450px;
+}
+
+.footer__logo {
+  margin-bottom: 1rem;
+  font-size: 2rem;
+}
+
+.footer__description {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.footer__engage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+}
+
+.footer__engage-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.75rem;
+  color: var(--white);
+}
+
+/* Newsletter Form */
+.newsletter-form {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px;
+  border-radius: 8px;
+  max-width: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.newsletter-form input {
+  flex: 1;
+  border: none;
+  padding: 0.8rem 1rem;
+  font-size: 0.95rem;
+  outline: none;
+  background: transparent;
+  color: var(--white);
+}
+
+.newsletter-form input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.newsletter-form button {
+  background: var(--accent);
+  color: var(--blue-dark);
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.newsletter-form button:hover {
+  background: #5dd3ff;
+  transform: translateY(-1px);
+}
+
+/* Social Links */
+.social-links {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.social-link {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.social-link:hover {
+  background: var(--accent);
+  color: var(--blue-dark);
+  transform: translateY(-3px);
+}
+
+.social-link svg {
+  width: 20px;
+  height: 20px;
+}
+
+.footer__divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1.25rem 0;
+}
+
+/* Main Grid */
+.footer__main-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.footer__column--wide {
+  grid-column: span 2;
+}
+
+.footer__col-title {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.85rem;
+}
+
+.footer__nav-links,
+.footer__contact-details {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.footer__nav-links a,
+.footer__contact-details a {
+  color: var(--white);
+  font-size: 0.95rem;
+  transition: color 0.2s;
+}
+
+.footer__nav-links a:hover {
+  color: var(--accent);
+}
+
+.footer__contact-details li {
+  color: var(--white);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.footer__contact-details li span:not(.icon),
+.footer__contact-details li a {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.footer__coverage {
+  margin-top: 0.5rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Destinations Grid */
+.footer__destinations-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.footer__dest-col {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.footer__dest-link {
+  color: var(--white);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.footer__dest-link:hover {
+  color: var(--accent);
+}
+
+/* Bottom Bar */
+.footer__bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.35rem 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  position: relative;
+}
+
+.footer__bottom-bar a {
+  color: var(--white);
+  font-weight: 600;
+}
+
+.footer__attribution {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+/* Copyright: "Drop Cars" + subtle disclosure (themes open only via small ▸ control) */
+.footer__copyright {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 0.15rem;
+  margin: 0;
+  white-space: nowrap !important;
+}
+
+.footer__brand-text {
+  pointer-events: none;
+  user-select: none;
+}
+
+.footer__brand-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  opacity: 0.55;
+  font-size: 0.65rem;
+  line-height: 1;
+  margin-left: 0.02em;
+  padding: 0.2em 0.25em;
+  min-width: 1em;
+  vertical-align: middle;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.footer__brand-hit:hover,
+.footer__brand-hit:focus {
+  opacity: 0.85;
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.footer__brand-hit.is-open {
+  opacity: 0.75;
+  transform: rotate(90deg);
+}
+
+.footer__theme-panel {
+  position: absolute;
+  bottom: calc(100% + 0.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 220px;
+  max-width: min(92vw, 340px);
+  padding: 0.65rem 0.75rem;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  justify-content: center;
+  line-height: 1.35;
+}
+
+/* Ensure panel is truly closed by default when HTML has hidden attribute */
+.footer__theme-panel[hidden] {
+  display: none !important;
+}
+
+.footer__theme-panel .footer__theme-link {
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.footer__theme-panel .footer__theme-link:hover {
+  color: var(--accent);
+}
+
+.footer__theme-panel .footer__theme-link.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .footer__theme-panel {
+    left: 50%;
+    right: auto;
+    max-width: min(94vw, 340px);
+  }
+}
+
+.footer__theme-inline {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.footer__theme-inline .footer__theme-link {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.footer__theme-inline .footer__theme-link:hover {
+  color: var(--accent);
+}
+
+.footer__theme-inline .footer__theme-link.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 1200px) {
+  .footer__column--wide {
+    grid-column: span 1;
+  }
+  .footer__destinations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .site-footer {
+    padding-top: 1.5rem;
+    padding-bottom: 4.8rem; /* Compact padding with safe clearance for floating elements */
+  }
+
+html.dc-dropdown-active .floating-contact {
+  display: none !important;
+}
+  .footer__main-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem 1rem;
+  }
+  .footer__column:first-child {
+    grid-column: span 2; /* Contact Us spans full width */
+  }
+  .footer__column--wide {
+    grid-column: span 2; /* Popular Destinations spans full width */
+  }
+  .footer__col-title {
+    margin-bottom: 0.75rem;
+    font-size: 1.05rem;
+  }
+  .footer__nav-links,
+  .footer__contact-details {
+    gap: 0.4rem;
+  }
+  .footer__nav-links a,
+  .footer__contact-details li,
+  .footer__contact-details a {
+    font-size: 0.9rem;
+  }
+  .footer__destinations-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1rem;
+  }
+  .footer__dest-link {
+    font-size: 0.85rem;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .footer__top {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .footer__engage {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .newsletter-form {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.4rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  .newsletter-form input {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    margin-bottom: 0;
+    padding: 0.65rem 0.85rem;
+  }
+  .newsletter-form button {
+    padding: 0.65rem 1.2rem;
+  }
+  .footer__divider {
+    margin: 1.25rem 0;
+  }
+  .footer__bottom-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+    padding: 1rem 0;
+  }
+  .footer__theme-inline {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Floating contact — Call sits left of WhatsApp; sizes match .wa-floating-btn (46px) */
+body:has(.wa-widget-container) .floating-contact {
+  display: none !important;
+}
+
+.floating-contact {
+  position: fixed;
+  right: calc(1.875rem + 46px + 0.75rem); /* WA container right + WA btn + gap */
+  bottom: 2rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+  z-index: 9998;
+}
+
+.floating-contact a {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.floating-contact a:hover {
+  transform: scale(1.1) translateY(-5px);
+  box-shadow: var(--shadow-quote);
+}
+
+.floating-contact a svg {
+  width: 22px;
+  height: 22px;
+}
+
+.floating-contact a[aria-label="Call"],
+.floating-contact a.floating-call {
+  background: var(--blue-dark);
+  color: #fff;
+}
+
+.floating-contact a[aria-label="WhatsApp"],
+.floating-contact a.floating-whatsapp {
+  background: #25d366;
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .floating-contact {
+    right: 4.75rem;
+    bottom: 20px;
+  }
+}
+
+/* ══ ULTRA COMPACT FOOTER BOTTOM BAR & FLOATING BUTTONS ══ */
+.footer__bottom-bar {
+  padding: 0.4rem 0 !important;
+  gap: 0.2rem !important;
+  font-size: 0.78rem !important;
+}
+
+.footer__bottom-bar p,
+.footer__copyright,
+.footer__attribution {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 0.78rem !important;
+  line-height: 1.25 !important;
+}
+
+.footer__divider {
+  margin: 0.4rem 0 !important;
+}
+
+/* Compact Floating Buttons */
+.wa-widget-container {
+  bottom: 1.2rem !important;
+  right: 1rem !important;
+  gap: 6px !important;
+}
+
+.wa-floating-btn,
+.wa-call-btn,
+.wa-ai-btn,
+#dc-ai-trigger {
+  width: 44px !important;
+  height: 44px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+.wa-floating-btn svg,
+.wa-call-btn svg,
+.wa-ai-btn svg,
+.dc-ai-trigger-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* ══ REDUCE SPACE BELOW DEVELOPED BY (Tight Footer Bottom) ══ */
+.site-footer,
+footer,
+footer.site-footer {
+  padding-bottom: 0.5rem !important;
+}
+
+.footer__bottom-bar {
+  padding-bottom: 0.25rem !important;
+  margin-bottom: 0 !important;
+}
+
+.footer__attribution {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
