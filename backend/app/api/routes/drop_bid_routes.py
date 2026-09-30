@@ -17,7 +17,7 @@ import random
 import secrets
 
 from app.database.session import get_db
-from app.core.security import get_current_customer, get_current_driver
+from app.core.security import get_current_customer, get_current_driver, get_current_admin, get_current_user_flexible
 from app.models.drop_bid import DropBidRequest, DropBidOffer
 from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 from app.models.orders import Order, Trip_status
@@ -236,7 +236,7 @@ class DropBidSettingsUpdateSchema(BaseModel):
     allow_change_bid: bool
 
 
-@router.get("/settings")
+@router.get("/settings", dependencies=[Depends(get_current_user_flexible)])
 async def get_drop_bid_settings(db: Session = Depends(get_db)):
     """Public / driver / admin endpoint to get Drop Bid settings."""
     from app.models.platform_setting import PlatformSetting
@@ -245,7 +245,7 @@ async def get_drop_bid_settings(db: Session = Depends(get_db)):
     return {"allow_change_bid": allow_change_bid}
 
 
-@router.put("/settings")
+@router.put("/settings", dependencies=[Depends(get_current_admin)])
 async def update_drop_bid_settings(
     payload: DropBidSettingsUpdateSchema,
     db: Session = Depends(get_db),

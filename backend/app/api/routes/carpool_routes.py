@@ -7,7 +7,7 @@ import uuid
 
 from app.database.session import get_db
 from app.models.carpool import CarPoolJourneyModel, CarPoolRequestModel
-from app.core.security import get_current_driver
+from app.core.security import get_current_driver, get_current_user_flexible
 
 router = APIRouter(prefix="/carpool", tags=["CarPool & Shared Trips"])
 
@@ -44,7 +44,7 @@ class SeatJoinRequestSchema(BaseModel):
     seats_requested: int = 1
 
 
-@router.get("/journeys")
+@router.get("/journeys", dependencies=[Depends(get_current_user_flexible)])
 def list_carpool_journeys(
     pickup_city: Optional[str] = Query(None),
     drop_city: Optional[str] = Query(None),
@@ -214,7 +214,7 @@ def list_my_carpool_journeys(
     return {"journeys": result}
 
 
-@router.post("/journeys/{journey_id}/request", status_code=status.HTTP_201_CREATED)
+@router.post("/journeys/{journey_id}/request", status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user_flexible)])
 def request_seat_join(
     journey_id: str,
     payload: SeatJoinRequestSchema,
@@ -270,7 +270,7 @@ def request_seat_join(
     }
 
 
-@router.get("/journeys/{journey_id}/requests")
+@router.get("/journeys/{journey_id}/requests", dependencies=[Depends(get_current_user_flexible)])
 def list_journey_requests(
     journey_id: str,
     db: Session = Depends(get_db)

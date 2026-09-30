@@ -797,15 +797,129 @@ async def download_invoice_pdf(
 # ---------------------------------------------------------------------------
 # Customer & Website Public Invoice / PDF Endpoint (Works for any Booking)
 # ---------------------------------------------------------------------------
-@router.get("/customer/bookings/{booking_id}/invoice-pdf")
-@router.get("/bookings/{booking_id}/invoice-pdf")
-@router.get("/api/customer/bookings/{booking_id}/invoice-pdf")
-@router.get("/api/bookings/{booking_id}/invoice-pdf")
+def invoice_link_signature(booking_id: str) -> Optional[str]:
+    """HMAC the website puts on its invoice download link (?sig=...), made
+    with the WEBSITE_INTEGRATION_KEY both sides already share."""
+    import hashlib
+    import hmac
+    import os
+    key = os.getenv("WEBSITE_INTEGRATION_KEY") or ""
+    if not key:
+        return None
+    return hmac.new(key.encode(), str(booking_id).encode(), hashlib.sha256).hexdigest()
+
+
+def _as_uuid(value: str):
+    import uuid as _uuid
+    try:
+        return _uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _find_tax_invoice(db: Session, booking_id: str):
+    """TaxInvoice has no order_id column: an order's invoice is
+    source_type='order' + source_id=<order id>."""
+    conds = [
+        TaxInvoice.invoice_number == booking_id,
+        (TaxInvoice.source_type == "order") & (TaxInvoice.source_id == str(booking_id)),
+    ]
+    u = _as_uuid(booking_id)
+    if u is not None:
+        conds.append(TaxInvoice.id == u)
+    from sqlalchemy import or_
+    return db.query(TaxInvoice).filter(or_(*conds)).first()
+
+
+def _find_booking_request(db: Session, booking_id: str):
+    from app.models.customer_booking_request import CustomerBookingRequest
+    u = _as_uuid(booking_id)
+    q = db.query(CustomerBookingRequest)
+    if u is not None:
+        return q.filter((CustomerBookingRequest.id == u) | (CustomerBookingRequest.rp_order_id == booking_id)).first()
+    return q.filter(CustomerBookingRequest.rp_order_id == booking_id).first()
+
+
+def _invoice_order_and_request(db: Session, booking_id: str):
+    from app.models.orders import Order
+    from app.models.customer_booking_request import CustomerBookingRequest
+
+    order = cb = None
+    inv = _find_tax_invoice(db, booking_id)
+    ref = str(inv.source_id) if inv is not None and inv.source_type == "order" and inv.source_id else str(booking_id)
+    if ref.isdigit():
+        order = db.query(Order).filter(Order.id == int(ref)).first()
+    if order is None:
+        cb = _find_booking_request(db, ref)
+        if cb is not None and cb.linked_order_id:
+            order = db.query(Order).filter(Order.id == cb.linked_order_id).first()
+    else:
+        cb = db.query(CustomerBookingRequest).filter(CustomerBookingRequest.linked_order_id == order.id).first()
+    return order, cb
+
+
+def require_invoice_access(booking_id: str, request: Request, db: Session = Depends(get_db)):
+    """Invoices are no longer downloadable by guessing a booking number.
+    Allowed: a signed website link (?sig=), or a login token (header, or
+    ?token= which the Customer App uses to open the PDF in the browser) that
+    belongs to admin or to someone on this booking."""
+    import hmac
+    from fastapi.security import HTTPAuthorizationCredentials
+    from app.core.security import get_current_user_flexible
+    from app.models.order_assignments import OrderAssignment
+
+    sig = request.query_params.get("sig")
+    expected = invoice_link_signature(booking_id)
+    if sig and expected and hmac.compare_digest(sig, expected):
+        return {"via": "signed_link"}
+
+    auth = request.headers.get("authorization") or ""
+    raw = auth.split(" ", 1)[1] if auth.lower().startswith("bearer ") else request.query_params.get("token")
+    if not raw:
+        raise HTTPException(status_code=401, detail="Login required to download this invoice")
+    who = get_current_user_flexible(HTTPAuthorizationCredentials(scheme="Bearer", credentials=raw), db)
+    role, uid = who["role"], str(who["user_id"])
+    if role == "ADMIN":
+        return who
+
+    order, cb = _invoice_order_and_request(db, booking_id)
+    if order is None and cb is None:
+        raise HTTPException(status_code=404, detail="Booking or invoice not found")
+    allowed = False
+    if role == "CUSTOMER":
+        from app.models.customer import CustomerCredentials
+        if cb is not None and str(cb.customer_id) == uid:
+            allowed = True
+        else:
+            me = db.query(CustomerCredentials).filter(CustomerCredentials.id == uid).first()
+            mine = (me.primary_number or "")[-10:] if me else ""
+            theirs = ((order.customer_number if order else None) or (cb.customer_number if cb else "") or "")[-10:]
+            allowed = bool(mine) and mine == theirs
+    elif order is not None:
+        if role == "VENDOR":
+            allowed = str(order.vendor_id or "") == uid
+        elif role in ("VEHICLE_OWNER", "DRIVER"):
+            if str(getattr(order, "posted_by_vehicle_owner_id", "") or "") == uid:
+                allowed = True
+            else:
+                for a in db.query(OrderAssignment).filter(OrderAssignment.order_id == order.id).all():
+                    if uid in (str(a.vehicle_owner_id or ""), str(a.driver_id or "")):
+                        allowed = True
+                        break
+    if not allowed:
+        raise HTTPException(status_code=403, detail="This invoice is not yours")
+    return who
+
+
+@router.get("/customer/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
+@router.get("/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
+@router.get("/api/customer/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
+@router.get("/api/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
 async def get_booking_invoice_pdf(
     booking_id: str,
     db: Session = Depends(get_db),
 ):
-    """Public/Customer-accessible GST Tax Invoice PDF/HTML generator.
+    """GST Tax Invoice PDF/HTML generator (access: see require_invoice_access).
     Finds invoice by order_id/invoice_id, or generates on-the-fly from the booking/order record."""
     from app.models.orders import Order
     from app.models.end_records import EndRecord
@@ -814,11 +928,7 @@ async def get_booking_invoice_pdf(
     from app.models.car_details import CarDetails
     from app.models.customer_booking_request import CustomerBookingRequest
 
-    invoice = db.query(TaxInvoice).filter(
-        (TaxInvoice.order_id == booking_id) |
-        (TaxInvoice.id == booking_id) |
-        (TaxInvoice.invoice_number == booking_id)
-    ).first()
+    invoice = _find_tax_invoice(db, booking_id)
 
     company = tax_engine.get_company_profile(db)
 
@@ -829,12 +939,9 @@ async def get_booking_invoice_pdf(
             order = db.query(Order).filter(Order.id == int(booking_id)).first()
 
         if not order:
-            cb_req = db.query(CustomerBookingRequest).filter(
-                (CustomerBookingRequest.id == booking_id) |
-                (CustomerBookingRequest.rp_order_id == booking_id)
-            ).first()
-            if cb_req and cb_req.order_id:
-                order = db.query(Order).filter(Order.id == cb_req.order_id).first()
+            cb_req = _find_booking_request(db, booking_id)
+            if cb_req and cb_req.linked_order_id:
+                order = db.query(Order).filter(Order.id == cb_req.linked_order_id).first()
 
         if not order:
             raise HTTPException(status_code=404, detail="Booking or invoice not found")

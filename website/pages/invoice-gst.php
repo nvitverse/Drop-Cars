@@ -368,7 +368,17 @@ $invoiceDate = !empty($bookingRow['created_at']) ? date('d M Y', strtotime($book
 
     <div class="actions-bar" style="display:flex; gap:12px; justify-content:center;">
         <button onclick="window.print()" class="btn-print">🖨️ Print Invoice</button>
-        <a href="https://drop-cars-api-207918408785.asia-south2.run.app/api/customer/bookings/<?php echo urlencode($bookingId); ?>/invoice-pdf" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <?php
+            // The backend no longer serves invoices by booking number alone:
+            // sign the link with the website key it already shares
+            // (backend: tax_admin.invoice_link_signature).
+            require_once __DIR__ . '/../api/includes/backend-client.php';
+            $cfgPath = is_file(__DIR__ . '/../api/config.php') ? __DIR__ . '/../api/config.php' : __DIR__ . '/../api/config.example.php';
+            $backendCfg = dropcars_backend_config(is_file($cfgPath) ? (include $cfgPath) : []);
+            $pdfSig = $backendCfg['key'] !== '' ? hash_hmac('sha256', $bookingId, $backendCfg['key']) : '';
+            $pdfBase = $backendCfg['baseUrl'] !== '' ? $backendCfg['baseUrl'] : 'https://drop-cars-api-207918408785.asia-south2.run.app';
+        ?>
+        <a href="<?php echo htmlspecialchars($pdfBase . '/api/customer/bookings/' . rawurlencode($bookingId) . '/invoice-pdf?sig=' . $pdfSig); ?>" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
             📥 Download Vector PDF (ReportLab)
         </a>
     </div>

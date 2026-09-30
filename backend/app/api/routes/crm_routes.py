@@ -13,8 +13,11 @@ from pydantic import BaseModel
 from datetime import date, datetime
 import uuid
 import os
+import hmac
+import secrets
 
 from app.database.session import get_db
+from app.core.security import get_current_admin
 from app.models.crm_models import CrmLead, GoogleAdsCallLog, CrmSettings
 from app.models.customer_booking_request import CustomerBookingRequest
 
@@ -45,17 +48,37 @@ class CrmSettingsUpdateSchema(BaseModel):
     google_ads_customer_id: Optional[str] = None
 
 
+# The old code shipped this value as a hard-coded default, so it is public.
+# It is never accepted, even if it is still stored in CrmSettings.
+_LEAKED_DEFAULT_KEY = "dropcars_crm_secret_2026"
+
+
 # --- Helper: Verify Webhook Key ---
 def verify_webhook_key(db: Session, key_provided: Optional[str]):
-    fallback_key = os.getenv("WEBSITE_INTEGRATION_KEY", "dropcars_crm_secret_2026")
     settings = db.query(CrmSettings).first()
-    valid_key = settings.webhook_secret_key if (settings and settings.webhook_secret_key) else fallback_key
-
-    if key_provided != valid_key:
+    valid_keys = [
+        k for k in (
+            settings.webhook_secret_key if settings else None,
+            os.getenv("WEBSITE_INTEGRATION_KEY"),
+        )
+        if k and k != _LEAKED_DEFAULT_KEY
+    ]
+    if not valid_keys:
+        raise HTTPException(status_code=503, detail="CRM webhook key is not configured")
+    provided = key_provided or ""
+    if not any(hmac.compare_digest(provided, k) for k in valid_keys):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid CRM Webhook Secret Key"
         )
+
+
+def require_crm_owner(current_admin=Depends(get_current_admin)):
+    """Owner-only CRM pages. The role comes from the admin's token/account;
+    the old ?user_role=owner query param is accepted but ignored."""
+    if (getattr(current_admin, "role", "") or "").lower() != "owner":
+        raise HTTPException(status_code=403, detail="Owner Access Only")
+    return current_admin
 
 
 # --- 1. Public Webhook Endpoint (Website Lead Form & Call Clicks) ---
@@ -106,7 +129,7 @@ def submit_crm_lead(
 
 
 # --- 2. Staff & Admin: List Leads ---
-@router.get("/leads")
+@router.get("/leads", dependencies=[Depends(get_current_admin)])
 def list_crm_leads(
     db: Session = Depends(get_db),
     lead_status: Optional[str] = Query(None, alias="status"),
@@ -155,7 +178,7 @@ def list_crm_leads(
 
 
 # --- 3. Staff & Admin: Update Lead ---
-@router.patch("/leads/{lead_id}")
+@router.patch("/leads/{lead_id}", dependencies=[Depends(get_current_admin)])
 def update_crm_lead(
     lead_id: str,
     payload: LeadUpdateSchema,
@@ -168,7 +191,7 @@ def update_crm_lead(
 
     lead = db.query(CrmLead).filter(CrmLead.id == lead_uuid).first()
     if not lead:
-        raise HTTPException(status_code=44, detail="Lead not found")
+        raise HTTPException(status_code=404, detail="Lead not found")
 
     if payload.status:
         lead.status = payload.status
@@ -183,7 +206,7 @@ def update_crm_lead(
 
 
 # --- 4. Staff & Admin: 1-Click Convert Lead to Booking Request ---
-@router.post("/leads/{lead_id}/convert")
+@router.post("/leads/{lead_id}/convert", dependencies=[Depends(get_current_admin)])
 def convert_lead_to_booking(
     lead_id: str,
     db: Session = Depends(get_db)
@@ -222,16 +245,11 @@ def convert_lead_to_booking(
 
 
 # --- 5. Owner Only: Financials & ROI Analytics ---
-@router.get("/owner/financials")
+@router.get("/owner/financials", dependencies=[Depends(require_crm_owner)])
 def get_crm_owner_financials(
-    user_role: str = Query("owner"),  # Expected: "owner"
+    user_role: str = Query("owner"),  # ignored - role comes from the token
     db: Session = Depends(get_db)
 ):
-    if user_role.lower() != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access Denied: Only Owner can view financial metrics and ad spend"
-        )
 
     settings = db.query(CrmSettings).first()
     monthly_budget = settings.monthly_ad_budget if settings else 0.0
@@ -259,18 +277,15 @@ def get_crm_owner_financials(
 
 
 # --- 6. Owner Only: Settings Management ---
-@router.get("/owner/settings")
+@router.get("/owner/settings", dependencies=[Depends(require_crm_owner)])
 def get_crm_settings(
-    user_role: str = Query("owner"),
+    user_role: str = Query("owner"),  # ignored - role comes from the token
     db: Session = Depends(get_db)
 ):
-    if user_role.lower() != "owner":
-        raise HTTPException(status_code=403, detail="Owner Access Only")
-
     settings = db.query(CrmSettings).first()
     if not settings:
         settings = CrmSettings(
-            webhook_secret_key="dropcars_crm_secret_2026",
+            webhook_secret_key=secrets.token_urlsafe(24),
             monthly_ad_budget=0.0
         )
         db.add(settings)
@@ -280,15 +295,12 @@ def get_crm_settings(
     return settings
 
 
-@router.put("/owner/settings")
+@router.put("/owner/settings", dependencies=[Depends(require_crm_owner)])
 def update_crm_settings(
     payload: CrmSettingsUpdateSchema,
-    user_role: str = Query("owner"),
+    user_role: str = Query("owner"),  # ignored - role comes from the token
     db: Session = Depends(get_db)
 ):
-    if user_role.lower() != "owner":
-        raise HTTPException(status_code=403, detail="Owner Access Only")
-
     settings = db.query(CrmSettings).first()
     if not settings:
         settings = CrmSettings()

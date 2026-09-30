@@ -16,6 +16,7 @@ import json
 from fastapi.responses import JSONResponse
 
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter()
 
 JSON_FILE_PATH = Path("load_data/hourly_plans.json")
@@ -44,11 +45,11 @@ def get_data():
 # POST /refresh — kept for backward compatibility with existing callers;
 # there's no cache to invalidate anymore, this just confirms the current
 # on-disk content.
-@router.post("/refresh-rental-hrs-data")
+@router.post("/refresh-rental-hrs-data", dependencies=[Depends(get_current_admin)])
 def refresh_data():
     return {"message": "Data refreshed", "data": load_json_file()}
 
-@router.post("/hourly/quote", response_model=HourlyQuoteResponse)
+@router.post("/hourly/quote", response_model=HourlyQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
 async def hourly_quote(payload: RentalOrderRequest):
     try:
         fare = calculate_hourly_fare(

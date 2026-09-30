@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from app.crud.notification import send_booking_accepted_to_telegram, send_booking_cancelled_to_telegram, send_push_notification_to_vendor, send_push_notification_to_vendor_driver
 from app.database.session import get_db
-from app.core.security import get_current_user, get_current_vehicleOwner_id, get_current_driver, get_current_vendor
+from app.core.security import get_current_user, get_current_vehicleOwner_id, get_current_driver, get_current_vendor, get_current_user_flexible
 from app.schemas.order_assignments import (
     OrderAssignmentCreate,
     OrderAssignmentResponse,
@@ -1334,7 +1334,7 @@ class UpdateAdvanceReceivedPayload(BaseModel):
     advance_received: int
 
 
-@router.put("/orders/{order_id}/advance-received")
+@router.put("/orders/{order_id}/advance-received", dependencies=[Depends(get_current_user_flexible)])
 async def update_order_advance_received(
     order_id: str,
     payload: UpdateAdvanceReceivedPayload,

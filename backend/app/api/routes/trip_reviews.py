@@ -17,6 +17,7 @@ from app.models.order_assignments import OrderAssignment
 from app.models.trip_review import TripReview
 from app.models.platform_setting import PlatformSetting
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter(prefix="/trip-review", tags=["Trip Review"])
 
 DEFAULT_REVIEW_BASE_URL = "https://dropcars.in/review"
@@ -39,7 +40,7 @@ def _cities(order: Order):
     return _cities(order)
 
 
-@router.get("/link/{order_id}")
+@router.get("/link/{order_id}", dependencies=[Depends(get_current_user_flexible)])
 def get_review_link(order_id: int, request: Request, db: Session = Depends(get_db)):
     """Link + token for the QR the Driver App shows after the trip (driver / fleet owner of that trip only)."""
     from app.api.routes.booking_chat import _resolve_caller

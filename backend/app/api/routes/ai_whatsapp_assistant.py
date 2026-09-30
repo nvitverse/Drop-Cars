@@ -9,6 +9,7 @@ from app.database.session import get_db
 from app.models.ai_automation_log import AIAutomationLog
 
 logger = logging.getLogger(__name__)
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter(tags=["AI WhatsApp & Voice Assistant"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -124,7 +125,7 @@ def get_distance(city1: str, city2: str) -> int:
         return DISTANCE_DB[(c2, c1)]
     return 320  # Average outstation default fallback
 
-@router.post("/ai/chat-assistant")
+@router.post("/ai/chat-assistant", dependencies=[Depends(get_current_user_flexible)])
 async def chat_assistant_query(
     payload: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db)
@@ -500,6 +501,8 @@ async def chat_assistant_query(
 @router.post("/ai/webhook/whatsapp")
 async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     """Standard Webhook handler for Meta WhatsApp Cloud API."""
-    data = await request.json()
-    logger.info(f"Incoming WhatsApp Webhook: {data}")
+    # Acknowledge only - nothing is processed yet. Don't log the body: it
+    # carries customers' phone numbers and message text.
+    body = await request.body()
+    logger.info(f"Incoming WhatsApp webhook ({len(body)} bytes) - not processed")
     return {"status": "received"}

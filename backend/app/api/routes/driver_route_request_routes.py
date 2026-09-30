@@ -11,14 +11,18 @@ from app.utils.driver_route_matcher import (
     match_and_auto_assign_order
 )
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter(tags=["Driver Route Requests & Auto-Assign"])
 
 
 @router.post("/driver/route-requests")
 def create_driver_route_request(
     payload: Dict[str, Any] = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_driver=Depends(get_current_driver),
 ):
+    # The driver comes from the token, never from the body.
+    payload["driver_id"] = str(current_driver.id)
     """
     Registers a driver preferred route request (Max 3 active per driver).
     Must provide origin_city, destination_city, and available_until timestamp.
@@ -67,9 +71,12 @@ def create_driver_route_request(
 @router.get("/driver/route-requests/{driver_id}")
 def get_driver_active_route_requests(
     driver_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_driver=Depends(get_current_driver),
 ):
-    """Fetch all active route requests registered for a driver."""
+    """Fetch all active route requests registered for a driver (own only)."""
+    if str(current_driver.id) != str(driver_id):
+        raise HTTPException(status_code=403, detail="You can only view your own route requests")
     requests = db.query(DriverRouteRequest).filter(
         DriverRouteRequest.driver_id == driver_id,
         DriverRouteRequest.is_active == True,
@@ -95,7 +102,7 @@ def get_driver_active_route_requests(
     }
 
 
-@router.delete("/driver/route-requests/{request_id}")
+@router.delete("/driver/route-requests/{request_id}", dependencies=[Depends(get_current_driver)])
 def cancel_driver_route_request(
     request_id: str,
     db: Session = Depends(get_db)
@@ -117,7 +124,7 @@ def cancel_driver_route_request(
     return {"success": True, "message": "Driver route request cancelled successfully."}
 
 
-@router.post("/orders/{order_id}/trigger-route-assign")
+@router.post("/orders/{order_id}/trigger-route-assign", dependencies=[Depends(get_current_admin)])
 def trigger_route_auto_assignment(
     order_id: str,
     payload: Dict[str, Any] = Body(...),

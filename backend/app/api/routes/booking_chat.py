@@ -11,13 +11,13 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.core.security import get_current_vendor, get_current_user, get_current_driver, get_current_admin
+from app.core.security import get_current_vendor, get_current_user, get_current_driver, get_current_admin, get_current_user_flexible
 from app.models.orders import Order
 from app.models.booking_chat import BookingChatMessage
 from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 from app.crud import booking_chat as chat
 
-router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"])
+router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"], dependencies=[Depends(get_current_user_flexible)])
 
 
 class Actor:

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from app.core.limiter import limiter
 import time
 import requests
 
@@ -35,8 +36,11 @@ def _throttle():
     _last_request_at = time.monotonic()
 
 
+# Open without login: the Driver App signup address field uses it before an
+# account exists. Rate limited per client so it can't be used as a free proxy.
 @router.get("/reverse")
-def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+@limiter.limit("60/minute")
+def reverse_geocode(request: Request, lat: float = Query(...), lng: float = Query(...)):
     """Free reverse geocode for Drop Bid's 'use current location' pickup.
     Rounds to ~11m precision for cache keying/deduping - plenty for a
     pickup pin, and keeps the cache useful instead of missing on every
@@ -73,7 +77,8 @@ def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
 
 
 @router.get("/search")
-def search_location(q: str = Query(..., min_length=2)):
+@limiter.limit("60/minute")
+def search_location(request: Request, q: str = Query(..., min_length=2)):
     """Free forward geocode/search for Drop Bid's destination search box."""
     cache_key = q.strip().lower()
     cached = _search_cache.get(cache_key)

@@ -7,7 +7,8 @@ import uuid
 from app.database.session import get_db
 from app.models.ai_automation_log import AIAutomationLog
 
-router = APIRouter(tags=["AI Automation Logs"])
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
+router = APIRouter(tags=["AI Automation Logs"], dependencies=[Depends(get_current_admin)])
 
 
 @router.get("/admin/ai-automation-logs")

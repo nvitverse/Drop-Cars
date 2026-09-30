@@ -28,6 +28,7 @@ from app.schemas.customer_booking import (
 from app.schemas.rating import RateableTripOut, RatingSubmitRequest, RatingOut
 from app.crud.ratings import get_rateable_bookings, submit_rating
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter()
 
 
@@ -82,7 +83,7 @@ def _calculate_fare_internal(db: Session, pickup_drop_location: dict, trip_type_
     return fare, rates
 
 
-@router.post("/customer/bookings/quote", response_model=CustomerQuoteResponse)
+@router.post("/customer/bookings/quote", response_model=CustomerQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
 def customer_quote(payload: CustomerQuoteRequest, db: Session = Depends(get_db)):
     try:
         fare, _ = _calculate_fare_internal(

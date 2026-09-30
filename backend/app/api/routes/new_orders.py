@@ -24,10 +24,11 @@ from app.schemas.baseorder import BaseOrderSchema
 from app.crud.orders import get_vendor_orders, recreate_order
 
 
+from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
 router = APIRouter()
 admin_commession_env = os.getenv("ADMIN_COMMESSION_ENV")
 
-@router.post("/oneway/quote", response_model=OnewayQuoteResponse)
+@router.post("/oneway/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
 def oneway_quote(payload: OnewayQuoteRequest):
     try:
         fare = calculate_oneway_fare(
@@ -200,7 +201,7 @@ def oneway_confirm(
         )
 
 
-@router.post("/roundtrip/quote", response_model=OnewayQuoteResponse)
+@router.post("/roundtrip/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
 def roundtrip_quote(payload: RoundTripQuoteRequest):
     try:
         fare = calculate_multisegment_fare(
@@ -352,7 +353,7 @@ def roundtrip_confirm(
         )
 
 
-@router.post("/multicity/quote", response_model=OnewayQuoteResponse)
+@router.post("/multicity/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
 def multicity_quote(payload: MulticityQuoteRequest):
     try:
         fare = calculate_multisegment_fare(
@@ -503,7 +504,7 @@ def multicity_confirm(
             detail=f"Failed to confirm order: {str(e)}",
         )
 
-@router.get("/pending-all", response_model=List[NewOrderResponse])
+@router.get("/pending-all", response_model=List[NewOrderResponse], dependencies=[Depends(get_current_admin)])
 def get_pending_all_orders(db: Session = Depends(get_db)):
     return get_pending_all_city_orders(db)
 
