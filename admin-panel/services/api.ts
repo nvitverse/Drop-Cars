@@ -173,6 +173,11 @@ class ApiService {
     return this.makeRequest('/admin/live-fleet-map');
   }
 
+  // Manual "Notify drivers" alarm - re-sends the new-booking alert (60s cooldown per booking)
+  async notifyOrderDrivers(orderId: number | string): Promise<any> {
+    return this.makeRequest(`/admin/orders/${orderId}/notify`, { method: 'POST' });
+  }
+
   async logout(): Promise<void> {
     await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('admin_role');

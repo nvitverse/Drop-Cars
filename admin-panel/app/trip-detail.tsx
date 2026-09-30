@@ -43,6 +43,7 @@ import {
   TrendingUp,
   CheckCircle2,
   Copy,
+  BellRing,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { formatCarType } from '@/utils/format';
@@ -246,6 +247,22 @@ export default function TripDetailScreen() {
       `👉 ${portalUrl}\n\n` +
       `_Fastest acceptance gets the trip. 24x7 Support: +91 93630 12345_`
     );
+  };
+
+  // Manual re-alert: the one automatic push at posting time is easy to miss.
+  const [notifying, setNotifying] = useState(false);
+  const notifyDrivers = async () => {
+    if (!orderId) return;
+    setNotifying(true);
+    try {
+      const res: any = await apiService.notifyOrderDrivers(orderId);
+      const count = res?.detail?.count;
+      showToast(count ? `Alert sent to ${count} driver${count === 1 ? '' : 's'}` : 'Drivers alerted', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Could not send the alert', 'error');
+    } finally {
+      setNotifying(false);
+    }
   };
 
   const [custVisible, setCustVisible] = useState<boolean | null>(null);
@@ -995,6 +1012,15 @@ export default function TripDetailScreen() {
           <View style={[styles.governanceCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <Text style={[styles.governanceTitle, { color: themeColors.text }]}>Operational & Governance Controls</Text>
             <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#F59E0B', opacity: notifying ? 0.7 : 1 }]}
+                onPress={notifyDrivers}
+                disabled={notifying}
+                activeOpacity={0.85}
+              >
+                <BellRing size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>{notifying ? 'Alerting drivers...' : 'Notify drivers again'}</Text>
+              </TouchableOpacity>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: themeColors.text }}>Show customer number to driver</Text>
