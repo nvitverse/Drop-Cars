@@ -2,6 +2,10 @@
 
 For the next Claude session. The user writes in Tamil / Tanglish and prefers replies in the same language. They asked to see the full plan before any execution, to be told clearly what is a fact and what is a suggestion, and to get expert-level depth. Keep answers simple and concrete; they said earlier answers were too technical.
 
+
+## 0. Read BACKLOG.md
+`BACKLOG.md` is the master list of EVERY pending task (IDs A1-J6, with status, dependencies, file zones, merge order and coordination rules). It exists so that several people/agents can work in parallel without colliding. Claim a task there before starting, work on a `fix/<id>-...` branch, never on `main`. Section 6 below is only a short summary of the order; BACKLOG.md is authoritative.
+
 ## 1. Repo and branch state (read this first)
 - Repo: `nvitverse/Drop-Cars`.
 - **`origin/main`** has the real ecosystem: `backend/` (FastAPI, Postgres/Cloud SQL, Cloud Run), `website/` (PHP + MySQL on Hostinger), `customer-app/`, `driver-app/`, `admin-panel/` (Expo React Native). Latest commits: `503da0b` (ecosystem), `c92d94a` (swap/SOS/WhatsApp templates by another agent, Antigravity).
