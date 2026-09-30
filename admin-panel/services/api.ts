@@ -2691,38 +2691,24 @@ class ApiService {
   }
 
   // --- Fleet Driver & Car Swap ---
-  async requestDriverSwap(driverId: string, newOwnerId?: string): Promise<any> {
-    return this.makeRequest('/fleet-swap/request-swap', {
-      method: 'POST',
-      body: JSON.stringify({ driver_id: driverId, new_owner_id: newOwnerId }),
-    });
-  }
-
-  async verifyDriverSwap(swapId: string, otp: string): Promise<any> {
-    return this.makeRequest('/fleet-swap/verify-swap', {
-      method: 'POST',
-      body: JSON.stringify({ swap_id: swapId, otp }),
-    });
-  }
-
-  async requestCarSwap(carNumber: string, newOwnerId?: string): Promise<any> {
-    return this.makeRequest('/fleet-swap/request-car-swap', {
-      method: 'POST',
-      body: JSON.stringify({ car_number: carNumber, new_owner_id: newOwnerId }),
-    });
-  }
-
-  async verifyCarSwap(swapId: string, otp: string): Promise<any> {
-    return this.makeRequest('/fleet-swap/verify-car-swap', {
-      method: 'POST',
-      body: JSON.stringify({ swap_id: swapId, otp }),
-    });
-  }
-
-  async adminOverrideSwap(swapId: string, reason: string): Promise<any> {
+  // OTP swaps (/fleet-swap/request-swap, /verify-swap) take a fleet driver
+  // (vehicle owner) token, so the Admin App only uses the audited override.
+  async adminOverrideSwap(params: {
+    swapType: 'DRIVER' | 'CAR';
+    driverId?: string;
+    carNumber?: string;
+    newOwnerId: string;
+    reason: string;
+  }): Promise<any> {
     return this.makeRequest('/fleet-swap/admin-override', {
       method: 'POST',
-      body: JSON.stringify({ swap_id: swapId, reason }),
+      body: JSON.stringify({
+        swap_type: params.swapType,
+        driver_id: params.driverId,
+        car_number: params.carNumber,
+        new_owner_id: params.newOwnerId,
+        reason: params.reason,
+      }),
     });
   }
 

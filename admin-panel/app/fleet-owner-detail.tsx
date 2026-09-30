@@ -215,85 +215,48 @@ export default function FleetOwnerDetailScreen() {
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [swapType, setSwapType] = useState<'DRIVER' | 'CAR'>('DRIVER');
   const [swapTargetInput, setSwapTargetInput] = useState('');
-  const [activeSwapUuid, setActiveSwapUuid] = useState<string | null>(null);
-  const [swapStep, setSwapStep] = useState<'REQUEST' | 'VERIFY' | 'OVERRIDE'>('REQUEST');
-  const [swapOtp, setSwapOtp] = useState('');
+  const [swapStep, setSwapStep] = useState<'REQUEST' | 'OVERRIDE'>('REQUEST');
   const [overrideReason, setOverrideReason] = useState('');
   const [swapSubmitting, setSwapSubmitting] = useState(false);
-  const [swapInfo, setSwapInfo] = useState<string | null>(null);
 
   const handleOpenSwapModal = (type: 'DRIVER' | 'CAR') => {
     setSwapType(type);
     setSwapTargetInput('');
-    setActiveSwapUuid(null);
     setSwapStep('REQUEST');
-    setSwapOtp('');
     setOverrideReason('');
-    setSwapInfo(null);
     setSwapModalVisible(true);
   };
 
-  const handleInitiateSwap = async () => {
+  // The OTP swap (/fleet-swap/request-swap, /verify-swap) is done by the
+  // fleet driver from the Driver App - those routes only accept a vehicle
+  // owner token. From the Admin App a transfer is always the audited admin
+  // override (/fleet-swap/admin-override), which the backend limits to the
+  // Owner role and logs with the admin's name and reason.
+  const handleInitiateSwap = () => {
     if (!owner) return;
     if (!swapTargetInput.trim()) {
-      Alert.alert('Required', swapType === 'DRIVER' ? 'Please enter Driver UUID / Mobile' : 'Please enter Car Number');
+      Alert.alert('Required', swapType === 'DRIVER' ? 'Please enter the Driver ID' : 'Please enter the Car Number');
       return;
     }
-    setSwapSubmitting(true);
-    try {
-      if (swapType === 'DRIVER') {
-        const res = await apiService.requestDriverSwap(swapTargetInput.trim(), owner.vehicle_owner_id);
-        setActiveSwapUuid(res.swap_id);
-        setSwapInfo(res.message || 'OTP sent to driver.');
-        setSwapStep('VERIFY');
-        showToast('Swap request created. OTP sent to driver.', 'info');
-      } else {
-        const res = await apiService.requestCarSwap(swapTargetInput.trim(), owner.vehicle_owner_id);
-        setActiveSwapUuid(res.swap_id);
-        setSwapInfo(res.message || 'OTP sent to current car owner.');
-        setSwapStep('VERIFY');
-        showToast('Swap request created. OTP sent to current car owner.', 'info');
-      }
-    } catch (err: any) {
-      Alert.alert('Swap Blocked', err?.message || 'Failed to initiate swap.');
-    } finally {
-      setSwapSubmitting(false);
-    }
-  };
-
-  const handleVerifySwap = async () => {
-    if (!activeSwapUuid) return;
-    if (!swapOtp.trim() || swapOtp.trim().length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter a 6-digit OTP.');
-      return;
-    }
-    setSwapSubmitting(true);
-    try {
-      if (swapType === 'DRIVER') {
-        await apiService.verifyDriverSwap(activeSwapUuid, swapOtp.trim());
-      } else {
-        await apiService.verifyCarSwap(activeSwapUuid, swapOtp.trim());
-      }
-      showToast('Fleet swap completed successfully!', 'success');
-      setSwapModalVisible(false);
-      fetchDetails();
-    } catch (err: any) {
-      Alert.alert('Verification Failed', err?.message || 'Invalid or expired OTP.');
-    } finally {
-      setSwapSubmitting(false);
-    }
+    setSwapStep('OVERRIDE');
   };
 
   const handleAdminOverride = async () => {
-    if (!activeSwapUuid) return;
+    if (!owner) return;
     if (!overrideReason.trim() || overrideReason.trim().length < 10) {
       Alert.alert('Reason Required', 'Please provide a detailed reason (at least 10 characters) for admin override.');
       return;
     }
     setSwapSubmitting(true);
     try {
-      await apiService.adminOverrideSwap(activeSwapUuid, overrideReason.trim());
-      showToast('Admin override swap completed successfully!', 'success');
+      await apiService.adminOverrideSwap({
+        swapType,
+        driverId: swapType === 'DRIVER' ? swapTargetInput.trim() : undefined,
+        carNumber: swapType === 'CAR' ? swapTargetInput.trim() : undefined,
+        newOwnerId: owner.vehicle_owner_id,
+        reason: overrideReason.trim(),
+      });
+      showToast('Transfer completed and logged.', 'success');
       setSwapModalVisible(false);
       fetchDetails();
     } catch (err: any) {
@@ -1364,7 +1327,7 @@ export default function FleetOwnerDetailScreen() {
             <View style={styles.modalHeader}>
               <ArrowLeftRight size={22} color="#8B5CF6" />
               <Text style={[styles.modalTitle, { color: themeColors.text }]}>
-                {swapStep === 'REQUEST' ? `Initiate ${swapType === 'DRIVER' ? 'Driver' : 'Car'} Swap` : swapStep === 'VERIFY' ? 'Enter 6-Digit OTP' : 'Admin Override Swap'}
+                {swapStep === 'REQUEST' ? `Transfer ${swapType === 'DRIVER' ? 'Driver' : 'Car'}` : 'Admin Override Swap'}
               </Text>
             </View>
 
@@ -1372,15 +1335,15 @@ export default function FleetOwnerDetailScreen() {
               <>
                 <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
                   Transfer {swapType === 'DRIVER' ? 'a driver' : 'a car'} to <Text style={{ fontWeight: '700', color: themeColors.text }}>{owner?.full_name}</Text>.
-                  An OTP will be dispatched to the {swapType === 'DRIVER' ? "driver's phone" : "current car owner's phone"}.
+                  OTP-based swaps are started by the fleet driver in the Driver App; from here the transfer is an admin override with a reason.
                 </Text>
 
                 <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>
-                  {swapType === 'DRIVER' ? 'Driver UUID or Phone Number' : 'Car Plate Number (e.g. TN01AB1234)'} <Text style={{ color: themeColors.error }}>*</Text>
+                  {swapType === 'DRIVER' ? 'Driver ID' : 'Car Plate Number (e.g. TN01AB1234)'} <Text style={{ color: themeColors.error }}>*</Text>
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]}
-                  placeholder={swapType === 'DRIVER' ? 'Enter Driver ID / Mobile' : 'Enter Car Registration Number'}
+                  placeholder={swapType === 'DRIVER' ? 'Enter Driver ID' : 'Enter Car Registration Number'}
                   placeholderTextColor={themeColors.textSecondary}
                   value={swapTargetInput}
                   onChangeText={setSwapTargetInput}
@@ -1404,57 +1367,7 @@ export default function FleetOwnerDetailScreen() {
                     {swapSubmitting ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.modalConfirmText}>Request Swap OTP</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-
-            {swapStep === 'VERIFY' && (
-              <>
-                <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
-                  {swapInfo || `A 6-digit OTP has been sent to the ${swapType === 'DRIVER' ? 'driver' : 'current owner'}. Enter it below to complete the transfer.`}
-                </Text>
-
-                <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>6-Digit OTP <Text style={{ color: themeColors.error }}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text, letterSpacing: 4, textAlign: 'center', fontSize: 18, fontWeight: '800' }]}
-                  placeholder="••••••"
-                  placeholderTextColor={themeColors.textSecondary}
-                  value={swapOtp}
-                  onChangeText={setSwapOtp}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-
-                <TouchableOpacity
-                  onPress={() => setSwapStep('OVERRIDE')}
-                  style={{ alignSelf: 'center', marginVertical: 8 }}
-                >
-                  <Text style={{ color: themeColors.error, fontSize: 12, fontWeight: '700' }}>
-                    Owner/Driver unavailable? Use Admin Override →
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.modalActionRow}>
-                  <TouchableOpacity
-                    style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
-                    onPress={() => setSwapStep('REQUEST')}
-                    disabled={swapSubmitting}
-                  >
-                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.modalConfirmBtn, { backgroundColor: '#10B981' }, swapSubmitting && styles.buttonDisabled]}
-                    onPress={handleVerifySwap}
-                    disabled={swapSubmitting}
-                  >
-                    {swapSubmitting ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.modalConfirmText}>Verify & Complete</Text>
+                      <Text style={styles.modalConfirmText}>Continue</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1481,10 +1394,10 @@ export default function FleetOwnerDetailScreen() {
                 <View style={styles.modalActionRow}>
                   <TouchableOpacity
                     style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
-                    onPress={() => setSwapStep('VERIFY')}
+                    onPress={() => setSwapStep('REQUEST')}
                     disabled={swapSubmitting}
                   >
-                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back to OTP</Text>
+                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
