@@ -2659,6 +2659,62 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // --- SOS Emergency Management ---
+  async getActiveSosAlerts(): Promise<any[]> {
+    return this.makeRequest('/sos/active');
+  }
+
+  async getSosAlerts(status?: string, skip = 0, limit = 50): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (status) params.set('status_filter', status);
+    params.set('skip', String(skip));
+    params.set('limit', String(limit));
+    return this.makeRequest(`/sos/alerts?${params.toString()}`);
+  }
+
+  async acknowledgeSosAlert(id: number | string): Promise<any> {
+    return this.makeRequest(`/sos/${id}/acknowledge`, {
+      method: 'POST',
+    });
+  }
+
+  async resolveSosAlert(
+    id: number | string,
+    status: 'RESOLVED' | 'FALSE_ALARM' = 'RESOLVED',
+    resolutionNotes?: string
+  ): Promise<any> {
+    return this.makeRequest(`/sos/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ status, resolution_notes: resolutionNotes }),
+    });
+  }
+
+  // --- Fleet Driver & Car Swap ---
+  // OTP swaps (/fleet-swap/request-swap, /verify-swap) take a fleet driver
+  // (vehicle owner) token, so the Admin App only uses the audited override.
+  async adminOverrideSwap(params: {
+    swapType: 'DRIVER' | 'CAR';
+    driverId?: string;
+    carNumber?: string;
+    newOwnerId: string;
+    reason: string;
+  }): Promise<any> {
+    return this.makeRequest('/fleet-swap/admin-override', {
+      method: 'POST',
+      body: JSON.stringify({
+        swap_type: params.swapType,
+        driver_id: params.driverId,
+        car_number: params.carNumber,
+        new_owner_id: params.newOwnerId,
+        reason: params.reason,
+      }),
+    });
+  }
+
+  async getCommissionRates(): Promise<any> {
+    return this.makeRequest('/admin/commission-rates');
+  }
 }
 export const apiService = new ApiService();
 

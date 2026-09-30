@@ -176,6 +176,15 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     from app.crud.vehicle_owner import get_user_by_mobile
     existing = get_user_by_mobile(db, user.mobile_number)
     if not existing:
+        # Wrong-login hint (F3), same contract as /cardriver/signin: still
+        # 404 NOT_REGISTERED for shipped apps (a 200 without access_token
+        # made the shipped Driver App log in with an undefined token), plus
+        # a header once the password matches a duty driver account.
+        from app.models.car_driver import CarDriver
+        from app.core.security import verify_password
+        duty_driver = db.query(CarDriver).filter(CarDriver.primary_number == user.mobile_number).first()
+        if duty_driver and verify_password(user.password, duty_driver.hashed_password):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT_REGISTERED", headers={"X-Account-Role-Hint": "DUTY_DRIVER"})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT_REGISTERED")
 
     db_user = authenticate_user(db, user)

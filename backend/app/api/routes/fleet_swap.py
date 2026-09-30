@@ -1,89 +1,187 @@
-import random
+import hashlib
 import logging
-from datetime import datetime, timedelta
-from typing import Optional
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.car_driver import CarDriver
+from app.models.car_details import CarDetails
 from app.models.vehicle_owner import VehicleOwnerCredentials
-from app.models.orders import Orders
+from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
+from app.models.payout_request import PayoutRequest
 from app.models.fleet_swap_audit import FleetDriverSwapAudit
+from app.core.security import get_current_vehicleOwner_id, get_current_driver, get_current_admin
+from app.core.limiter import limiter
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("dropcars.fleet_swap")
 router = APIRouter(prefix="/fleet-swap", tags=["Fleet & Driver Swap"])
 
 MAX_OTP_ATTEMPTS = 5
 OTP_VALIDITY_MINUTES = 10
 
 
-class SwapInitiateRequest(BaseModel):
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _as_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """otp_expires_at is TIMESTAMPTZ now; rows written before the column was
+    converted may still come back naive - those were stored as UTC."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _hash_otp(otp: str, salt: str) -> str:
+    """Generate SHA256 salted hash for constant-time comparison."""
+    return hashlib.sha256(f"{salt}:{otp}".encode("utf-8")).hexdigest()
+
+
+def _verify_otp_hash(otp: str, salt: str, expected_hash: str) -> bool:
+    """Verify OTP against salted hash using constant-time comparison."""
+    if not otp or not salt or not expected_hash:
+        return False
+    computed = _hash_otp(otp.strip(), salt)
+    return secrets.compare_digest(computed, expected_hash)
+
+
+def has_active_trip_driver(db: Session, driver_id: UUID) -> bool:
+    """Check if driver has any non-completed, non-cancelled order assignment."""
+    return db.query(OrderAssignment).filter(
+        OrderAssignment.driver_id == driver_id,
+        OrderAssignment.assignment_status.in_([
+            AssignmentStatusEnum.PENDING,
+            AssignmentStatusEnum.ASSIGNED,
+            AssignmentStatusEnum.DRIVING
+        ])
+    ).first() is not None
+
+
+def has_active_trip_car(db: Session, car_id: UUID) -> bool:
+    """Check if car has any non-completed, non-cancelled order assignment."""
+    return db.query(OrderAssignment).filter(
+        OrderAssignment.car_id == car_id,
+        OrderAssignment.assignment_status.in_([
+            AssignmentStatusEnum.PENDING,
+            AssignmentStatusEnum.ASSIGNED,
+            AssignmentStatusEnum.DRIVING
+        ])
+    ).first() is not None
+
+
+def _mask_phone(phone: Optional[str]) -> str:
+    """Mask phone number for privacy: e.g. '9876543210' -> '******3210'."""
+    if not phone or len(phone) < 4:
+        return "******"
+    return f"******{phone[-4:]}"
+
+
+class SwapDriverInitiateRequest(BaseModel):
     driver_id: str
-    new_owner_id: str
-    initiated_by: str = "OWNER"  # OWNER, DRIVER, ADMIN
+
+
+class SwapCarInitiateRequest(BaseModel):
+    car_number: str
 
 
 class SwapVerifyRequest(BaseModel):
-    swap_id: int
+    swap_id: str  # Non-guessable UUID string
     otp_code: str
 
 
 class AdminSwapOverrideRequest(BaseModel):
-    driver_id: str
+    swap_type: str = "DRIVER"  # "DRIVER" or "CAR"
+    driver_id: Optional[str] = None
+    car_number: Optional[str] = None
     new_owner_id: str
     reason: str
-    admin_name: str = "Super Admin"
 
 
+# -------------------------------------------------------------------------
+# 1. Driver Swap Request (Fleet Owner Initiates)
+# -------------------------------------------------------------------------
 @router.post("/request-swap")
-def request_driver_swap(payload: SwapInitiateRequest, db: Session = Depends(get_db)):
-    """Initiate a driver transfer between fleets with safety checks and 6-digit OTP."""
+@limiter.limit("5/minute")
+def request_driver_swap(
+    request: Request,
+    payload: SwapDriverInitiateRequest,
+    current_owner_id: str = Depends(get_current_vehicleOwner_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Fleet owner requests a driver transfer to their fleet.
+    Generates a 6-digit secure OTP delivered directly to the driver.
+    """
     try:
         d_uuid = UUID(payload.driver_id)
-        new_o_uuid = UUID(payload.new_owner_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format for driver_id or new_owner_id")
+        new_o_uuid = UUID(current_owner_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid driver_id UUID format")
 
     driver = db.query(CarDriver).filter(CarDriver.id == d_uuid).first()
     if not driver:
         raise HTTPException(status_code=404, detail="Driver not found")
 
-    new_owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == new_o_uuid).first()
-    if not new_owner:
-        raise HTTPException(status_code=404, detail="New fleet owner not found")
-
     if driver.vehicle_owner_id == new_o_uuid:
-        raise HTTPException(status_code=400, detail="Driver is already assigned to this fleet owner")
+        raise HTTPException(status_code=400, detail="Driver is already assigned to your fleet")
 
-    # SAFETY CHECK 1: Active trip blocking
-    active_trips = (
-        db.query(Orders)
+    # SAFETY CHECK 1: Active trip blocking on OrderAssignment
+    active_assignment = (
+        db.query(OrderAssignment)
         .filter(
-            Orders.driver_id == str(driver.id),
-            Orders.order_status.in_(["ASSIGNED", "STARTED", "IN_PROGRESS", "ACTIVE", "CONFIRMED"]),
+            OrderAssignment.driver_id == driver.id,
+            OrderAssignment.assignment_status.in_([
+                AssignmentStatusEnum.PENDING,
+                AssignmentStatusEnum.ASSIGNED,
+                AssignmentStatusEnum.DRIVING
+            ])
         )
-        .count()
+        .first()
     )
-    if active_trips > 0:
+    if active_assignment:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Swap blocked: Driver has an active or in-progress trip. Complete all rides before transferring.",
+            detail="Swap blocked: Driver has an active assignment in progress. Complete all trips before transfer.",
         )
 
-    # Generate 6-digit secure numeric OTP
-    otp = f"{random.randint(100000, 999999)}"
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
+    # SAFETY CHECK 2: Pending payout blocking
+    pending_payout = (
+        db.query(PayoutRequest)
+        .filter(
+            PayoutRequest.vehicle_owner_id == driver.vehicle_owner_id,
+            PayoutRequest.status == "PENDING"
+        )
+        .first()
+    )
+    if pending_payout:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Swap blocked: Fleet has a pending payout settlement. Settle all pending payouts first.",
+        )
+
+    # Cryptographically secure 6-digit numeric OTP
+    otp_code = str(secrets.randbelow(900000) + 100000)
+    salt = secrets.token_hex(16)
+    otp_hash = _hash_otp(otp_code, salt)
+    expires_at = _utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
+    swap_uuid = uuid.uuid4()
 
     audit_entry = FleetDriverSwapAudit(
+        swap_uuid=swap_uuid,
+        swap_type="DRIVER",
         driver_id=d_uuid,
         old_owner_id=driver.vehicle_owner_id,
         new_owner_id=new_o_uuid,
-        initiated_by=payload.initiated_by,
-        otp_code=otp,
+        initiated_by="OWNER",
+        otp_hash=otp_hash,
+        otp_salt=salt,
         otp_expires_at=expires_at,
         otp_attempts=0,
         status="PENDING_OTP",
@@ -93,42 +191,180 @@ def request_driver_swap(payload: SwapInitiateRequest, db: Session = Depends(get_
     db.commit()
     db.refresh(audit_entry)
 
+    # Deliver OTP via Push Notification to Driver
+    try:
+        from app.utils.notification_dispatch import send_push_to_driver
+        send_push_to_driver(
+            db,
+            driver_id=str(driver.id),
+            title="🚖 Fleet Transfer Request",
+            body=f"A new fleet owner has requested to add you. Your verification OTP is: {otp_code}. Valid for {OTP_VALIDITY_MINUTES} mins.",
+            data={"type": "FLEET_SWAP_OTP", "swap_id": str(swap_uuid)}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send push OTP to driver {driver.id}: {e}")
+
     logger.info(
-        f"Fleet swap initiated for Driver {driver.full_name} ({driver.primary_number}). "
-        f"Swap ID={audit_entry.id}, OTP generated (valid {OTP_VALIDITY_MINUTES}m)."
+        f"Fleet swap initiated for driver {driver.id} ({_mask_phone(driver.primary_number)}). "
+        f"Swap UUID={swap_uuid}, valid {OTP_VALIDITY_MINUTES}m."
     )
 
     return {
         "status": "ok",
-        "swap_id": audit_entry.id,
-        "message": f"Verification OTP sent. Valid for {OTP_VALIDITY_MINUTES} minutes.",
+        "swap_id": str(swap_uuid),
+        "message": f"Verification OTP sent to driver's registered phone ({_mask_phone(driver.primary_number)}). Valid for {OTP_VALIDITY_MINUTES} minutes.",
         "driver_name": driver.full_name,
         "expires_in_seconds": OTP_VALIDITY_MINUTES * 60,
     }
 
 
+# -------------------------------------------------------------------------
+# 2. Car Swap Request (Fleet Owner Initiates)
+# -------------------------------------------------------------------------
+@router.post("/request-car-swap")
+@limiter.limit("5/minute")
+def request_car_swap(
+    request: Request,
+    payload: SwapCarInitiateRequest,
+    current_owner_id: str = Depends(get_current_vehicleOwner_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Fleet owner requests a car transfer by registered plate number.
+    Generates a 6-digit secure OTP delivered directly to the car's current registered owner.
+    """
+    clean_num = payload.car_number.strip().upper().replace(" ", "")
+    try:
+        new_o_uuid = UUID(current_owner_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid session")
+
+    car = db.query(CarDetails).filter(CarDetails.car_number == clean_num).first()
+    if not car:
+        raise HTTPException(status_code=404, detail=f"Car with plate number '{clean_num}' not found")
+
+    if car.vehicle_owner_id == new_o_uuid:
+        raise HTTPException(status_code=400, detail="Car is already registered under your fleet")
+
+    # SAFETY CHECK 1: Active assignment blocking on car
+    active_car_assignment = (
+        db.query(OrderAssignment)
+        .filter(
+            OrderAssignment.car_id == car.id,
+            OrderAssignment.assignment_status.in_([
+                AssignmentStatusEnum.PENDING,
+                AssignmentStatusEnum.ASSIGNED,
+                AssignmentStatusEnum.DRIVING
+            ])
+        )
+        .first()
+    )
+    if active_car_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Swap blocked: Car is currently assigned to an active trip. Wait until completion.",
+        )
+
+    # Current owner details for OTP delivery
+    current_owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == car.vehicle_owner_id).first()
+
+    # Generate 6-digit secure numeric OTP
+    otp_code = str(secrets.randbelow(900000) + 100000)
+    salt = secrets.token_hex(16)
+    otp_hash = _hash_otp(otp_code, salt)
+    expires_at = _utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
+    swap_uuid = uuid.uuid4()
+
+    audit_entry = FleetDriverSwapAudit(
+        swap_uuid=swap_uuid,
+        swap_type="CAR",
+        car_id=car.id,
+        car_number=car.car_number,
+        old_owner_id=car.vehicle_owner_id,
+        new_owner_id=new_o_uuid,
+        initiated_by="OWNER",
+        otp_hash=otp_hash,
+        otp_salt=salt,
+        otp_expires_at=expires_at,
+        otp_attempts=0,
+        status="PENDING_OTP",
+        created_at=datetime.utcnow(),
+    )
+    db.add(audit_entry)
+    db.commit()
+    db.refresh(audit_entry)
+
+    # Deliver the OTP to the car's CURRENT owner, who shares it with the
+    # requester only if they agree to the transfer. Never in the response.
+    try:
+        from app.utils.notification_dispatch import send_push_to_vehicle_owner
+        send_push_to_vehicle_owner(
+            db,
+            vehicle_owner_id=str(car.vehicle_owner_id),
+            title="🚖 Car Transfer Request",
+            body=(
+                f"Another fleet driver has requested to move {car.car_number} to their fleet. "
+                f"Share this OTP only if you agree: {otp_code}. Valid for {OTP_VALIDITY_MINUTES} mins."
+            ),
+            data={"type": "FLEET_SWAP_OTP", "swap_id": str(swap_uuid), "swap_type": "CAR"},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send car swap OTP push for {car.car_number}: {e}")
+
+    masked_phone = _mask_phone(current_owner.primary_number if current_owner else None)
+    logger.info(f"Car swap requested for {car.car_number}. Swap UUID={swap_uuid}, OTP dispatched.")
+
+    return {
+        "status": "ok",
+        "swap_id": str(swap_uuid),
+        "car_number": car.car_number,
+        "message": f"Verification OTP sent to registered owner ({masked_phone}). Valid for {OTP_VALIDITY_MINUTES} minutes.",
+        "expires_in_seconds": OTP_VALIDITY_MINUTES * 60,
+    }
+
+
+# -------------------------------------------------------------------------
+# 3. Verify Swap with OTP (Driver or Car)
+# -------------------------------------------------------------------------
 @router.post("/verify-swap")
-def verify_driver_swap(payload: SwapVerifyRequest, db: Session = Depends(get_db)):
-    """Verify OTP and safely execute the fleet driver swap."""
-    audit = db.query(FleetDriverSwapAudit).filter(FleetDriverSwapAudit.id == payload.swap_id).first()
+@router.post("/verify-car-swap")
+@limiter.limit("10/minute")
+def verify_swap_otp(
+    request: Request,
+    payload: SwapVerifyRequest,
+    current_owner_id: str = Depends(get_current_vehicleOwner_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Verifies the 6-digit OTP in constant time and executes the ownership transfer.
+    """
+    try:
+        swap_uuid = UUID(payload.swap_id)
+        owner_uuid = UUID(current_owner_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid swap_id UUID format")
+
+    audit = db.query(FleetDriverSwapAudit).filter(FleetDriverSwapAudit.swap_uuid == swap_uuid).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Swap request not found")
 
+    if audit.new_owner_id != owner_uuid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized: Only the requesting owner can verify this swap")
+
     if audit.status == "COMPLETED":
-        return {"status": "ok", "message": "Swap already verified and completed"}
+        return {"status": "ok", "message": "Swap already verified and completed successfully"}
 
     if audit.status == "LOCKED":
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Swap request is locked due to too many failed attempts. Please request a new swap or contact Admin.",
+            detail="Swap request is locked due to too many failed attempts. Please request a new swap.",
         )
 
-    if audit.otp_expires_at and audit.otp_expires_at < datetime.utcnow():
+    if audit.otp_expires_at and _as_aware(audit.otp_expires_at) < _utcnow():
         audit.status = "EXPIRED"
         db.commit()
         raise HTTPException(status_code=400, detail="OTP has expired. Please initiate a new swap request.")
 
-    # Check attempt threshold
     if audit.otp_attempts >= MAX_OTP_ATTEMPTS:
         audit.status = "LOCKED"
         db.commit()
@@ -137,86 +373,181 @@ def verify_driver_swap(payload: SwapVerifyRequest, db: Session = Depends(get_db)
             detail="Too many incorrect OTP attempts. Swap request locked.",
         )
 
-    if audit.otp_code != payload.otp_code.strip():
+    # Constant-time comparison
+    computed_hash = _hash_otp(payload.otp_code.strip(), audit.otp_salt or "")
+    if not secrets.compare_digest(computed_hash, audit.otp_hash or ""):
         audit.otp_attempts += 1
+        if audit.otp_attempts >= MAX_OTP_ATTEMPTS:
+            audit.status = "LOCKED"
         db.commit()
-        remaining = MAX_OTP_ATTEMPTS - audit.otp_attempts
+        remaining = max(0, MAX_OTP_ATTEMPTS - audit.otp_attempts)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid OTP code. {remaining} attempt(s) remaining.",
         )
 
-    # Perform the swap safely
-    driver = db.query(CarDriver).filter(CarDriver.id == audit.driver_id).first()
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver record no longer exists")
+    # Execute transfer based on swap_type. The safety checks from the request
+    # step are repeated here: a trip may have been assigned in the 10 minutes
+    # between request and verify.
+    if audit.swap_type == "CAR":
+        car = db.query(CarDetails).filter(CarDetails.id == audit.car_id).first()
+        if not car:
+            raise HTTPException(status_code=404, detail="Car record no longer exists")
+        if car.vehicle_owner_id != audit.old_owner_id:
+            raise HTTPException(status_code=409, detail="Car owner changed since this request. Please request a new swap.")
+        if has_active_trip_car(db, car.id):
+            raise HTTPException(status_code=400, detail="Swap blocked: Car is currently assigned to an active trip. Wait until completion.")
+        car.vehicle_owner_id = audit.new_owner_id
+        entity_name = car.car_number
+    else:
+        driver = db.query(CarDriver).filter(CarDriver.id == audit.driver_id).first()
+        if not driver:
+            raise HTTPException(status_code=404, detail="Driver record no longer exists")
+        if driver.vehicle_owner_id != audit.old_owner_id:
+            raise HTTPException(status_code=409, detail="Driver's fleet changed since this request. Please request a new swap.")
+        if has_active_trip_driver(db, driver.id):
+            raise HTTPException(status_code=400, detail="Swap blocked: Driver has an active assignment in progress. Complete all trips before transfer.")
+        driver.vehicle_owner_id = audit.new_owner_id
+        entity_name = driver.full_name
 
-    driver.vehicle_owner_id = audit.new_owner_id
     audit.is_verified = True
     audit.status = "COMPLETED"
-    audit.completed_at = datetime.utcnow()
+    audit.completed_at = _utcnow()
 
     db.commit()
-    db.refresh(driver)
 
-    logger.info(f"Fleet Swap COMPLETED: Driver {driver.id} transferred to New Owner {audit.new_owner_id}")
+    logger.info(f"Swap COMPLETED for {audit.swap_type} {entity_name} -> New Owner {audit.new_owner_id}")
 
     return {
         "status": "ok",
-        "message": f"Driver {driver.full_name} successfully transferred to the new fleet.",
-        "driver_id": str(driver.id),
-        "new_owner_id": str(driver.vehicle_owner_id),
+        "message": f"{audit.swap_type} '{entity_name}' successfully transferred to your fleet.",
+        "swap_id": str(audit.swap_uuid),
+        "swap_type": audit.swap_type,
     }
 
 
+# -------------------------------------------------------------------------
+# 4. Driver Pending Swap Poll
+# -------------------------------------------------------------------------
+@router.get("/pending-for-driver")
+def get_pending_swap_for_driver(
+    current_driver=Depends(get_current_driver),
+    db: Session = Depends(get_db)
+):
+    """
+    Driver App polling endpoint: Checks if there is a pending fleet transfer request
+    for this driver, allowing the app to show a confirmation dialog.
+    """
+    pending = (
+        db.query(FleetDriverSwapAudit)
+        .filter(
+            FleetDriverSwapAudit.driver_id == current_driver.id,
+            FleetDriverSwapAudit.status == "PENDING_OTP",
+            FleetDriverSwapAudit.otp_expires_at > _utcnow()
+        )
+        .order_by(FleetDriverSwapAudit.created_at.desc())
+        .first()
+    )
+    if not pending:
+        return {"has_pending": False}
+
+    new_owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == pending.new_owner_id).first()
+    return {
+        "has_pending": True,
+        "swap_id": str(pending.swap_uuid),
+        "new_owner_phone": _mask_phone(new_owner.primary_number if new_owner else None),
+        "expires_at": _as_aware(pending.otp_expires_at).isoformat() if pending.otp_expires_at else None,
+    }
+
+
+# -------------------------------------------------------------------------
+# 5. Admin Override Swap
+# -------------------------------------------------------------------------
 @router.post("/admin-override")
-def admin_override_swap(payload: AdminSwapOverrideRequest, db: Session = Depends(get_db)):
-    """Admin override to swap fleet driver when owner is unreachable, with mandatory audit reason."""
+def admin_override_swap(
+    payload: AdminSwapOverrideRequest,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin override (Owner/SuperAdmin role only):
+    Executes an immediate transfer with mandatory audit explanation.
+    """
+    admin_role = getattr(current_admin, "role", "")
+    if admin_role not in ("Owner", "Super Admin", "Admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin override requires Owner or Super Admin privileges."
+        )
+
     if not payload.reason or len(payload.reason.strip()) < 10:
         raise HTTPException(
             status_code=400,
-            detail="Mandatory admin reason required (minimum 10 characters explaining the override rationale).",
+            detail="Mandatory admin reason required (minimum 10 characters explaining override rationale).",
         )
 
     try:
-        d_uuid = UUID(payload.driver_id)
         new_o_uuid = UUID(payload.new_owner_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
-
-    driver = db.query(CarDriver).filter(CarDriver.id == d_uuid).first()
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver not found")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid new_owner_id UUID format")
 
     new_owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == new_o_uuid).first()
     if not new_owner:
-        raise HTTPException(status_code=404, detail="New fleet owner not found")
+        raise HTTPException(status_code=404, detail="Target fleet owner not found")
 
-    old_owner_id = driver.vehicle_owner_id
-    driver.vehicle_owner_id = new_o_uuid
+    admin_name = getattr(current_admin, "full_name", None) or getattr(current_admin, "username", "Admin")
+
+    if payload.swap_type.upper() == "CAR":
+        if not payload.car_number:
+            raise HTTPException(status_code=400, detail="car_number is required for CAR swap")
+        clean_num = payload.car_number.strip().upper().replace(" ", "")
+        car = db.query(CarDetails).filter(CarDetails.car_number == clean_num).first()
+        if not car:
+            raise HTTPException(status_code=404, detail=f"Car '{clean_num}' not found")
+        old_owner_id = car.vehicle_owner_id
+        car.vehicle_owner_id = new_o_uuid
+        entity_name = car.car_number
+        swap_target_args = {"car_id": car.id, "car_number": car.car_number}
+    else:
+        if not payload.driver_id:
+            raise HTTPException(status_code=400, detail="driver_id is required for DRIVER swap")
+        try:
+            d_uuid = UUID(payload.driver_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid driver_id UUID")
+        driver = db.query(CarDriver).filter(CarDriver.id == d_uuid).first()
+        if not driver:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        old_owner_id = driver.vehicle_owner_id
+        driver.vehicle_owner_id = new_o_uuid
+        entity_name = driver.full_name
+        swap_target_args = {"driver_id": driver.id}
 
     audit_entry = FleetDriverSwapAudit(
-        driver_id=d_uuid,
+        swap_uuid=uuid.uuid4(),
+        swap_type=payload.swap_type.upper(),
         old_owner_id=old_owner_id,
         new_owner_id=new_o_uuid,
-        initiated_by=f"ADMIN:{payload.admin_name}",
+        initiated_by=f"ADMIN:{admin_name}",
         is_verified=True,
         admin_override=True,
         admin_override_reason=payload.reason.strip(),
         status="COMPLETED",
         created_at=datetime.utcnow(),
         completed_at=datetime.utcnow(),
+        **swap_target_args
     )
     db.add(audit_entry)
     db.commit()
 
     logger.warning(
-        f"ADMIN OVERRIDE FLEET SWAP: Driver {driver.id} transferred by {payload.admin_name}. "
-        f"Reason: {payload.reason}"
+        f"ADMIN OVERRIDE SWAP: {payload.swap_type} '{entity_name}' transferred by {admin_name}. "
+        f"Reason: {payload.reason.strip()[:200]}"
     )
 
     return {
         "status": "ok",
-        "message": f"Admin override swap completed for driver {driver.full_name}.",
-        "audit_id": audit_entry.id,
+        "message": f"Admin override swap completed for {payload.swap_type} '{entity_name}'.",
+        "swap_id": str(audit_entry.swap_uuid),
+        "admin_name": admin_name,
     }

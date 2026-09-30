@@ -192,6 +192,15 @@ async def signin_car_driver(
 
     existing = get_driver_by_mobile(db, signin_data.primary_number)
     if not existing:
+        # Wrong-login hint (F3): only after the password matches a fleet
+        # driver / vehicle owner account. Shipped apps key on
+        # 404 + detail == "NOT_REGISTERED", so that contract is unchanged and
+        # the hint travels in a header that newer app builds can read.
+        from app.models.vehicle_owner import VehicleOwnerCredentials
+        from app.core.security import verify_password
+        owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.primary_number == signin_data.primary_number).first()
+        if owner and verify_password(signin_data.password, owner.hashed_password):
+            raise HTTPException(status_code=404, detail="NOT_REGISTERED", headers={"X-Account-Role-Hint": "VEHICLE_OWNER"})
         raise HTTPException(status_code=404, detail="NOT_REGISTERED")
 
     # Authenticate driver

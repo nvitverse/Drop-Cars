@@ -27,6 +27,8 @@ export interface WhatsAppTemplateData {
   brandName?: string;
   brandPhone?: string;
   reviewToken?: string;
+  commissionPercent?: number;
+  advancePercent?: number;
 }
 
 export function formatPhoneForWhatsApp(phone?: string): string {
@@ -70,7 +72,7 @@ export const TEMPLATE_METADATA: Record<
   },
   advance_request: {
     title: 'Advance Payment Request',
-    subtitle: '20% booking advance payment link & UPI confirmation',
+    subtitle: 'Booking advance payment link & UPI confirmation',
     icon: 'Calculator',
     defaultColor: '#F59E0B',
   },
@@ -97,7 +99,7 @@ export const TEMPLATE_METADATA: Record<
 export function buildWhatsAppMessage(type: TemplateType, data: WhatsAppTemplateData): string {
   const brand = data.brandName || 'Drop Cars';
   const brandPhone = data.brandPhone || '7200217986';
-  const bid = data.bookingId ? String(data.bookingId).replace(/^#/, '') : 'DC-BOOKING';
+  const bid = data.bookingId ? String(data.bookingId) : 'DC-BOOKING';
   const custName = data.customerName || 'Valued Customer';
   const pickup = data.pickupLocation || 'Pickup Location';
   const drop = data.dropLocation || 'Destination';
@@ -115,7 +117,7 @@ export function buildWhatsAppMessage(type: TemplateType, data: WhatsAppTemplateD
     case 'booking_confirmed': {
       const fare = data.totalFare || data.baseFare || 0;
       return `🚗 *${brand.toUpperCase()} - BOOKING CONFIRMED*
-Booking ID: *#DC-${bid}*
+Booking ID: *${bid}*
 Status: *Confirmed & Fleet Allocated*
 
 👤 *Customer Details:*
@@ -141,7 +143,7 @@ Thank you for choosing ${brand}! Have a safe and pleasant journey.`;
       const cNumber = data.carNumber || 'Plate assigned on arrival';
 
       return `🚖 *${brand.toUpperCase()} - DRIVER & CAB DETAILS*
-Booking ID: *#DC-${bid}*
+Booking ID: *${bid}*
 
 Your cab has been assigned for your journey on ${date} at ${time}.
 
@@ -162,20 +164,28 @@ Driver will report 15 minutes before pickup time. For immediate assistance, call
 
     case 'group_broadcast': {
       const grossFare = data.totalFare || data.baseFare || 0;
-      const commission = Math.round(grossFare * 0.1);
-      const netPayout = Math.max(0, grossFare - commission);
+      let fareBreakdown = '';
+      if (grossFare > 0) {
+        if (data.commissionPercent !== undefined && data.commissionPercent !== null && !isNaN(data.commissionPercent)) {
+          const commAmt = Math.round(grossFare * (data.commissionPercent / 100));
+          const netPayout = Math.max(0, grossFare - commAmt);
+          fareBreakdown = `💰 *Fare Breakdown:*
+• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)
+• App Commission (${data.commissionPercent}%): ₹${commAmt.toLocaleString('en-IN')}
+• *Net Driver Payout: ₹${netPayout.toLocaleString('en-IN')}*`;
+        } else {
+          fareBreakdown = `💰 *Fare:*
+• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)`;
+        }
+      }
+
       return `🚖 *${brand.toUpperCase()} - NEW TRIP AVAILABLE* 🚖
-Booking: *#DC-${bid}*
+Booking: *${bid}*
 
 📍 *Route:* ${pickup} ➔ ${drop}
 📅 *Date & Time:* ${date} at ${time}
 🚗 *Vehicle Required:* ${vehicle} (${tripType})
-${data.distanceKm ? `📏 *Distance:* ~${data.distanceKm} KM\n` : ''}
-💰 *Fare Breakdown:*
-• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)
-• App Commission: ₹${commission.toLocaleString('en-IN')}
-• *Net Driver Payout: ₹${netPayout.toLocaleString('en-IN')}*
-
+${data.distanceKm ? `📏 *Distance:* ~${data.distanceKm} KM\n` : ''}${fareBreakdown ? `${fareBreakdown}\n` : ''}
 ⚡ *Interested Drivers/Vendors:*
 Reply / Call immediately to claim: tel:${brandPhone}
 Claim via Driver App or Helpline. First come, first served!`;
@@ -183,17 +193,18 @@ Claim via Driver App or Helpline. First come, first served!`;
 
     case 'advance_request': {
       const total = data.totalFare || data.baseFare || 0;
-      const advance = data.advanceAmount || Math.round(total * 0.2);
+      const advPercent = data.advancePercent !== undefined && data.advancePercent !== null ? data.advancePercent : 20;
+      const advance = data.advanceAmount || (total > 0 ? Math.round(total * (advPercent / 100)) : 0);
       const balance = Math.max(0, total - advance);
       return `💳 *${brand.toUpperCase()} - ADVANCE PAYMENT REQUEST*
-Booking ID: *#DC-${bid}*
+Booking ID: *${bid}*
 
 Dear ${custName},
-To confirm your booking for *${pickup} ➔ ${drop}* on *${date} at ${time}*, please pay the 20% confirmation advance.
+To confirm your booking for *${pickup} ➔ ${drop}* on *${date} at ${time}*, please pay the ${advPercent}% confirmation advance.
 
 💰 *Payment Details:*
 • Total Trip Fare: ₹${total.toLocaleString('en-IN')}
-• *Advance Required (20%): ₹${advance.toLocaleString('en-IN')}*
+• *Advance Required (${advPercent}%): ₹${advance.toLocaleString('en-IN')}*
 • Balance on Trip Completion: ₹${balance.toLocaleString('en-IN')}
 
 🔗 *Pay Advance Online (UPI / Card / NetBanking):*
@@ -208,11 +219,12 @@ After payment, driver and vehicle details will be assigned immediately.
       const bata = data.driverBata || 0;
       const toll = data.tollCharges || 0;
       const total = data.totalFare || (base + bata + toll);
-      const advance = data.advanceAmount || Math.round(total * 0.2);
+      const advPercent = data.advancePercent !== undefined && data.advancePercent !== null ? data.advancePercent : 20;
+      const advance = data.advanceAmount || (total > 0 ? Math.round(total * (advPercent / 100)) : 0);
       const balance = Math.max(0, total - advance);
 
       return `📋 *${brand.toUpperCase()} - FARE ESTIMATION & QUOTE*
-Reference: *EST-${bid}*
+Reference: *${bid}*
 
 📍 *Route Information:*
 • ${pickup} ➔ ${drop}
@@ -222,11 +234,11 @@ ${data.distanceKm ? `• Estimated Distance: ~${data.distanceKm} KM\n` : ''}
 • Base Trip Fare: ₹${base.toLocaleString('en-IN')}
 ${bata > 0 ? `• Driver Beta / Allowance: ₹${bata.toLocaleString('en-IN')}\n` : ''}${toll > 0 ? `• Standard Toll Allowance: ₹${toll.toLocaleString('en-IN')}\n` : ''}----------------------------------------
 *TOTAL QUOTED ESTIMATION: ₹${total.toLocaleString('en-IN')}*
-• 20% Booking Advance: ₹${advance.toLocaleString('en-IN')}
+• ${advPercent}% Booking Advance: ₹${advance.toLocaleString('en-IN')}
 • Balance Payable to Driver: ₹${balance.toLocaleString('en-IN')}
 ----------------------------------------
 
-🔗 *Confirm & Pay 20% Advance Online:*
+🔗 *Confirm & Pay ${advPercent}% Advance Online:*
 ${advancePayUrl}
 
 Helpline: ${brandPhone} | ${brand} Mobility`;
@@ -238,7 +250,7 @@ Helpline: ${brandPhone} | ${brand} Mobility`;
       const balance = data.balancePaid || Math.max(0, settled - advance);
 
       return `🧾 *${brand.toUpperCase()} - TRIP COMPLETED & TAX INVOICE*
-Invoice #: *INV-${bid}*
+Invoice #: *${bid}*
 Trip Status: *Completed & Settled*
 
 Route: ${pickup} ➔ ${drop}

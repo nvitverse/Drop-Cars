@@ -1,0 +1,92 @@
+name: Drop Cars CI
+
+# Originally written by Antigravity under backend/.github/ (GitHub only runs
+# workflows from the repo root). Moved here and adapted to the monorepo
+# layout: admin-panel/ folder name, a Postgres service (app.main creates
+# tables at import time), and `pytest tests` (plain `pytest` also collects
+# backend/scripts/test_expired_docs.py, which is a script, not a test).
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend smoke import + pytest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: drop-cars
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: drop-cars
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U drop-cars"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PASSWORD: ci-only-password
+      DISABLE_INTERNAL_SWEEPS: "1"
+      ADMIN_COMMESSION_ENV: "10"
+      VENDOR_COMMESSION_ENV: "10"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx pytest-asyncio
+      - name: Throwaway GCP credentials (app creates a Storage client at import)
+        run: |
+          openssl genrsa -out /tmp/ci_key.pem 2048
+          python - <<'EOF'
+          import json
+          key = open("/tmp/ci_key.pem").read()
+          json.dump({
+              "type": "service_account", "project_id": "ci-only", "private_key_id": "ci",
+              "private_key": key, "client_email": "ci@ci-only.iam.gserviceaccount.com",
+              "client_id": "0", "token_uri": "https://oauth2.googleapis.com/token",
+          }, open("/tmp/ci_gcp_creds.json", "w"))
+          EOF
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/ci_gcp_creds.json" >> "$GITHUB_ENV"
+      - name: Throwaway JWT secret + app schema
+        run: |
+          echo "JWT_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')" >> "$GITHUB_ENV"
+          # session.py sets search_path=drop-cars; the schema must exist
+          # before app.main runs create_all at import.
+          python -c "import psycopg2; c = psycopg2.connect(host='localhost', user='drop-cars', password='ci-only-password', dbname='drop-cars'); c.autocommit = True; c.cursor().execute('CREATE SCHEMA IF NOT EXISTS \"drop-cars\"')"
+      - name: Smoke import
+        run: python -c "import app.main; print('app.main imported OK')"
+      - name: Pytest
+        run: python -m pytest tests -q
+
+  admin-panel:
+    name: Admin panel tsc --noEmit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: admin-panel/package-lock.json
+      - name: Install dependencies
+        run: npm ci || npm install
+      - name: Type check
+        run: npx tsc --noEmit

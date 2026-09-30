@@ -41,6 +41,10 @@ import {
   PhoneCall,
   Eye,
   EyeOff,
+  ArrowLeftRight,
+  KeyRound,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react-native';
 import { apiService, resetUserPassword } from '@/services/api';
 import StatusBadge from '@/components/StatusBadge';
@@ -204,6 +208,61 @@ export default function FleetOwnerDetailScreen() {
       Alert.alert('Error', err?.message || 'Failed to update partner tier.');
     } finally {
       setSubmittingTier(false);
+    }
+  };
+
+  // Fleet Swap State (T5 / T6)
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
+  const [swapType, setSwapType] = useState<'DRIVER' | 'CAR'>('DRIVER');
+  const [swapTargetInput, setSwapTargetInput] = useState('');
+  const [swapStep, setSwapStep] = useState<'REQUEST' | 'OVERRIDE'>('REQUEST');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [swapSubmitting, setSwapSubmitting] = useState(false);
+
+  const handleOpenSwapModal = (type: 'DRIVER' | 'CAR') => {
+    setSwapType(type);
+    setSwapTargetInput('');
+    setSwapStep('REQUEST');
+    setOverrideReason('');
+    setSwapModalVisible(true);
+  };
+
+  // The OTP swap (/fleet-swap/request-swap, /verify-swap) is done by the
+  // fleet driver from the Driver App - those routes only accept a vehicle
+  // owner token. From the Admin App a transfer is always the audited admin
+  // override (/fleet-swap/admin-override), which the backend limits to the
+  // Owner role and logs with the admin's name and reason.
+  const handleInitiateSwap = () => {
+    if (!owner) return;
+    if (!swapTargetInput.trim()) {
+      Alert.alert('Required', swapType === 'DRIVER' ? 'Please enter the Driver ID' : 'Please enter the Car Number');
+      return;
+    }
+    setSwapStep('OVERRIDE');
+  };
+
+  const handleAdminOverride = async () => {
+    if (!owner) return;
+    if (!overrideReason.trim() || overrideReason.trim().length < 10) {
+      Alert.alert('Reason Required', 'Please provide a detailed reason (at least 10 characters) for admin override.');
+      return;
+    }
+    setSwapSubmitting(true);
+    try {
+      await apiService.adminOverrideSwap({
+        swapType,
+        driverId: swapType === 'DRIVER' ? swapTargetInput.trim() : undefined,
+        carNumber: swapType === 'CAR' ? swapTargetInput.trim() : undefined,
+        newOwnerId: owner.vehicle_owner_id,
+        reason: overrideReason.trim(),
+      });
+      showToast('Transfer completed and logged.', 'success');
+      setSwapModalVisible(false);
+      fetchDetails();
+    } catch (err: any) {
+      Alert.alert('Override Failed', err?.message || 'Admin override failed.');
+    } finally {
+      setSwapSubmitting(false);
     }
   };
 
@@ -1128,6 +1187,37 @@ export default function FleetOwnerDetailScreen() {
             })
           )}
         </Card>
+
+        {/* Fleet Transfer & Swap (T5 / T6) */}
+        <Card style={[styles.card, { borderColor: '#8B5CF640', borderWidth: 1.5 }]}>
+          <View style={styles.cardHeaderLeft}>
+            <ArrowLeftRight size={18} color="#8B5CF6" />
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Fleet Transfer & Swap</Text>
+          </View>
+          <Text style={{ fontSize: 13, color: themeColors.textSecondary, marginBottom: 12, lineHeight: 18 }}>
+            Transfer an existing Duty Driver or registered Car to {owner.full_name}'s fleet. Secure OTP verification and Owner-Admin overrides supported.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { flex: 1, backgroundColor: isDark ? '#8B5CF620' : '#F5F3FF', borderColor: '#8B5CF6', borderWidth: 1 }]}
+              onPress={() => handleOpenSwapModal('DRIVER')}
+              activeOpacity={0.8}
+            >
+              <UserCircle size={16} color="#8B5CF6" />
+              <Text style={[styles.secondaryButtonText, { color: '#8B5CF6', fontWeight: '700' }]}>Swap Driver</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { flex: 1, backgroundColor: isDark ? '#3B82F620' : '#EFF6FF', borderColor: '#3B82F6', borderWidth: 1 }]}
+              onPress={() => handleOpenSwapModal('CAR')}
+              activeOpacity={0.8}
+            >
+              <Car size={16} color="#3B82F6" />
+              <Text style={[styles.secondaryButtonText, { color: '#3B82F6', fontWeight: '700' }]}>Swap Car</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
         </>
         )}
       </ScrollView>
@@ -1221,6 +1311,109 @@ export default function FleetOwnerDetailScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal for Fleet Driver / Car Swap (T5 / T6) */}
+      <Modal
+        visible={swapModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSwapModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={styles.modalHeader}>
+              <ArrowLeftRight size={22} color="#8B5CF6" />
+              <Text style={[styles.modalTitle, { color: themeColors.text }]}>
+                {swapStep === 'REQUEST' ? `Transfer ${swapType === 'DRIVER' ? 'Driver' : 'Car'}` : 'Admin Override Swap'}
+              </Text>
+            </View>
+
+            {swapStep === 'REQUEST' && (
+              <>
+                <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
+                  Transfer {swapType === 'DRIVER' ? 'a driver' : 'a car'} to <Text style={{ fontWeight: '700', color: themeColors.text }}>{owner?.full_name}</Text>.
+                  OTP-based swaps are started by the fleet driver in the Driver App; from here the transfer is an admin override with a reason.
+                </Text>
+
+                <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>
+                  {swapType === 'DRIVER' ? 'Driver ID' : 'Car Plate Number (e.g. TN01AB1234)'} <Text style={{ color: themeColors.error }}>*</Text>
+                </Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]}
+                  placeholder={swapType === 'DRIVER' ? 'Enter Driver ID' : 'Enter Car Registration Number'}
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={swapTargetInput}
+                  onChangeText={setSwapTargetInput}
+                  autoCapitalize={swapType === 'CAR' ? 'characters' : 'none'}
+                />
+
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
+                    onPress={() => setSwapModalVisible(false)}
+                    disabled={swapSubmitting}
+                  >
+                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalConfirmBtn, { backgroundColor: '#8B5CF6' }, swapSubmitting && styles.buttonDisabled]}
+                    onPress={handleInitiateSwap}
+                    disabled={swapSubmitting}
+                  >
+                    {swapSubmitting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.modalConfirmText}>Continue</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {swapStep === 'OVERRIDE' && (
+              <>
+                <Text style={[styles.modalSubtitle, { color: themeColors.error }]}>
+                  ⚠️ Admin Override bypasses OTP verification. Requires Owner admin privileges and is permanently logged in the audit ledger.
+                </Text>
+
+                <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>Override Reason (min 10 chars) <Text style={{ color: themeColors.error }}>*</Text></Text>
+                <TextInput
+                  style={[styles.textAreaInput, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]}
+                  placeholder="Detailed justification for manual swap override..."
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={overrideReason}
+                  onChangeText={setOverrideReason}
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
+                    onPress={() => setSwapStep('REQUEST')}
+                    disabled={swapSubmitting}
+                  >
+                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalConfirmBtn, { backgroundColor: themeColors.error }, swapSubmitting && styles.buttonDisabled]}
+                    onPress={handleAdminOverride}
+                    disabled={swapSubmitting}
+                  >
+                    {swapSubmitting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.modalConfirmText}>Execute Override</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
