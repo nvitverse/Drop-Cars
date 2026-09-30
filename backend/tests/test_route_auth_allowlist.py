@@ -17,8 +17,15 @@ from fastapi.routing import APIRoute
 
 from app.main import app
 
-# Open on purpose: sign-in/up, password reset, public quotes and lookups,
-# token-in-URL links, webhooks/internal hooks that check their own secret.
+# Open on purpose - the only routes that answer without a login:
+#  * sign-in / sign-up / password reset (you can't log in before these),
+#  * reference lists the apps need on the signup screens (cities, car models,
+#    rental hours, geocode - rate limited), no private data,
+#  * links whose secret token IS the auth (trip review, driver trip link),
+#  * machine hooks that check their own secret (internal sweep / Cloud Tasks,
+#    website CRM lead key, WhatsApp webhook ack-only),
+#  * legacy SOS alert: the shipped customer app sends no token and an
+#    emergency must never fail closed.
 PUBLIC_BY_DESIGN = {
     "POST /api/admin/signin",
     "POST /api/users/cardriver/signin",
@@ -33,78 +40,28 @@ PUBLIC_BY_DESIGN = {
     "POST /api/users/forgot-password",
     "POST /api/users/email/request-reset-otp",
     "POST /api/users/email/reset-password",
-    "POST /api/customer/bookings/quote",
-    "POST /api/orders/oneway/quote",
-    "POST /api/orders/roundtrip/quote",
-    "POST /api/orders/multicity/quote",
-    "POST /api/orders/hourly/quote",
-    "GET /api/orders/rental_hrs_data",
-    "GET /api/orders/max-assignment-times",
     "GET /api/cities/public",
     "GET /api/cities/local-serviceable",
+    "GET /api/orders/rental_hrs_data",
+    "GET /api/users/cardetails/car-models/public",
     "GET /api/geocode/search",
     "GET /api/geocode/reverse",
-    "GET /api/users/cardetails/car-models/public",
     "GET /api/trip-review/{token}",
     "POST /api/trip-review/{token}",
     "GET /api/website/trip-link/{token}",
     "POST /api/website/trip-link/{token}/start",
     "POST /api/website/trip-link/{token}/location",
     "POST /api/website/trip-link/{token}/left",
-    "POST /api/ai/webhook/whatsapp",
     "POST /api/internal/sweep",
     "POST /api/internal/dispatch-expo-push",
-    # Shipped customer app sends no token; an SOS must never fail closed (B4).
+    "POST /api/crm/lead",
+    "POST /api/ai/webhook/whatsapp",
     "POST /api/sos/alert",
 }
 
-# Open today and should not be. Each one is a backlog item; remove the line
-# in the same PR that adds auth to the route.
-KNOWN_OPEN_TODO = {
-    # B1 - CRM
-    "GET /api/crm/leads",
-    "PATCH /api/crm/leads/{lead_id}",
-    "POST /api/crm/lead",
-    "POST /api/crm/leads/{lead_id}/convert",
-    "GET /api/crm/owner/financials",
-    "GET /api/crm/owner/settings",
-    "PUT /api/crm/owner/settings",
-    # B2 - order lists leak customer name/number
-    "GET /api/orders/all",
-    "GET /api/orders/pending-all",
-    # B5 - admin/settings/cost endpoints
-    "GET /api/admin/ai-automation-logs",
-    "GET /api/admin/ai-automation-logs/{log_id}",
-    "POST /api/admin/ai-automation-logs/seed-demo",
-    "GET /api/admin/assignment-priority-settings",
-    "GET /api/api/v1/assignment-priority-settings",
-    "GET /api/dropbid/settings",
-    "PUT /api/dropbid/settings",
-    "POST /api/orders/refresh-rental-hrs-data",
-    "POST /api/documents/verify-image",
-    "POST /api/documents/verify-face-match",
-    "POST /api/ai/chat-assistant",
-    # B6 - invoice PDFs by guessable id
-    "GET /api/bookings/{booking_id}/invoice-pdf",
-    "GET /api/customer/bookings/{booking_id}/invoice-pdf",
-    "GET /api/api/bookings/{booking_id}/invoice-pdf",
-    "GET /api/api/customer/bookings/{booking_id}/invoice-pdf",
-    # Not yet in BACKLOG.md - found by this test, need a B-item
-    "GET /api/booking-chat/threads",
-    "GET /api/booking-chat/orders/{order_id}",
-    "POST /api/booking-chat/orders/{order_id}",
-    "GET /api/carpool/journeys",
-    "GET /api/carpool/journeys/{journey_id}/requests",
-    "POST /api/carpool/journeys/{journey_id}/request",
-    "POST /api/driver/route-requests",
-    "GET /api/driver/route-requests/{driver_id}",
-    "DELETE /api/driver/route-requests/{request_id}",
-    "POST /api/orders/{order_id}/trigger-route-assign",
-    "PUT /api/orders/orders/{order_id}/advance-received",
-    "PUT /api/assignments/orders/{order_id}/advance-received",
-    "POST /api/profile-edit-requests/submit",
-    "GET /api/trip-review/link/{order_id}",
-}
+# Open today and should not be. Empty since the 2026-09-30 lockdown; a route
+# may only be added here together with a backlog id and the owner's OK.
+KNOWN_OPEN_TODO = set()
 
 STRICT_PREFIXES = ("/api/sos", "/api/fleet-swap")
 STRICT_EXCEPTIONS = {"POST /api/sos/alert"}
@@ -115,7 +72,7 @@ def _is_auth_dependency(call) -> bool:
     name = getattr(call, "__name__", "") or ""
     if module == "app.core.security" and name.startswith("get_current"):
         return True
-    return name == "require_website_key"
+    return name in ("require_website_key", "require_invoice_access")
 
 
 def _has_auth(dependant) -> bool:
@@ -175,3 +132,33 @@ def test_sos_stream_stays_post():
         for m in r.methods
     }
     assert methods == {"POST"}
+
+
+def test_locked_routes_reject_anonymous_callers():
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    for method, path in [
+        ("get", "/api/orders/all"),
+        ("get", "/api/orders/pending-all"),
+        ("get", "/api/crm/leads"),
+        ("get", "/api/crm/owner/settings"),
+        ("get", "/api/admin/ai-automation-logs"),
+        ("put", "/api/dropbid/settings"),
+        ("get", "/api/booking-chat/threads"),
+        ("get", "/api/carpool/journeys"),
+        ("get", "/api/customer/bookings/1/invoice-pdf"),
+        ("post", "/api/orders/oneway/quote"),
+    ]:
+        res = getattr(client, method)(path)
+        assert res.status_code in (401, 403, 422), f"{method.upper()} {path} -> {res.status_code}"
+        assert res.status_code != 422 or "detail" in res.json()
+
+
+def test_invoice_signed_link(monkeypatch):
+    from app.api.routes.tax_admin import invoice_link_signature
+
+    monkeypatch.setenv("WEBSITE_INTEGRATION_KEY", "k1")
+    sig = invoice_link_signature("C26093001")
+    assert sig and len(sig) == 64
+    assert invoice_link_signature("C26093002") != sig
