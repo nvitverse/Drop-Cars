@@ -6424,5 +6424,27 @@ def calculate_route_distance_and_toll(
     }
 
 
-
-
+@router.post("/admin/orders/{order_id}/notify")
+async def admin_notify_order(
+    order_id: int,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Re-send the new-booking alert for any open booking (the one automatic
+    push at posting time is easy to miss). Pings the accepted fleet driver
+    if there is one, otherwise re-broadcasts on the urgent channel. 60s
+    cooldown per booking - see crud/orders.py's notify_order_manually."""
+    from app.crud.orders import notify_order_manually
+    try:
+        result = await notify_order_manually(db, order_id, actor="admin")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    try:
+        from app.crud.admin_activity_log import log_admin_action
+        log_admin_action(
+            db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
+            action="BOOKING_DRIVERS_NOTIFIED", target_type="order", target_id=str(order_id),
+        )
+    except Exception:
+        pass
+    return result
