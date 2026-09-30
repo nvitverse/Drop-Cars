@@ -6,6 +6,7 @@ import { createAudioPlayer } from 'expo-audio';
 import { Platform, Alert } from 'react-native';
 import { maybeShowBubbleForNotification } from '@/services/bubble/bubbleOverlay';
 import { registerBackgroundNotificationTask } from '@/services/notifications/backgroundNotificationTask';
+import { syncIfPushNeedsSound } from '@/services/notifications/soundChannelSync';
 
 // Read the admin-configured sentence out loud on-device. Only fires from the
 // foreground listener below - the background task (backgroundNotificationTask.ts)
@@ -23,6 +24,8 @@ function speakIfConfigured(data: any) {
 // sound for this event) while the app is foreground. Fire-and-forget - a
 // short one-off sound, no need to track/release the player carefully.
 function playCustomSoundIfConfigured(data: any) {
+  // Already sent on this phone's own MP3 channel: Android plays it itself.
+  if (data?.sound_on_channel) return;
   const url = data?.custom_sound_url;
   if (typeof url === 'string' && url.trim()) {
     try {
@@ -218,6 +221,7 @@ export const setupNotificationListeners = () => {
     });
     clearRequestCache(); // something changed on the server (approval, assignment, ...) - lists must be fetched fresh
     playCustomSoundIfConfigured(notification.request.content.data);
+    syncIfPushNeedsSound(notification.request.content.data);
     speakIfConfigured(notification.request.content.data);
     // Opt-in floating bubble overlay - only actually shows anything when the
     // driver has enabled it and granted the overlay permission (checked

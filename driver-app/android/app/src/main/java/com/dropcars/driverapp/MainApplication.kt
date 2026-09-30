@@ -17,6 +17,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
 import com.dropcars.driverapp.bubble.BubbleOverlayPackage
+import com.dropcars.driverapp.soundchannels.SoundChannelsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -28,6 +29,7 @@ class MainApplication : Application(), ReactApplication {
             // Packages that cannot be autolinked yet can be added manually here, for example:
             // packages.add(MyReactNativePackage())
             packages.add(BubbleOverlayPackage())
+            packages.add(SoundChannelsPackage())
             return packages
           }
 

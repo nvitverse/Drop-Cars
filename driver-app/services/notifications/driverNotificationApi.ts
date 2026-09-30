@@ -1,4 +1,5 @@
 import axiosDriver from '@/app/api/axiosDriver';
+import { syncNotificationSounds } from './soundChannelSync';
 import { registerForPushNotificationsAsync } from './notificationService';
 
 export interface NotificationResponse {
@@ -55,6 +56,8 @@ export async function updateDriverNotificationPermissions(payload: {
       token: token
     });
     
+    if (token) syncNotificationSounds(axiosDriver, token).catch(() => {});
+
     console.log('✅ Driver notification settings updated:', {
       permission1: response.data.permission1,
       permission2: response.data.permission2,

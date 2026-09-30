@@ -2,6 +2,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { maybeShowBubbleForNotification } from '@/services/bubble/bubbleOverlay';
+import { syncIfPushNeedsSound } from '@/services/notifications/soundChannelSync';
 
 // Runs when a push notification arrives while the app is backgrounded or
 // fully closed - the ONLY way JS code executes in that state on Android.
@@ -22,6 +23,7 @@ TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => 
   // expo-notifications hands back { notification: <the Notification object> }
   const payloadData = (data as any)?.notification?.request?.content?.data ?? (data as any)?.data ?? {};
   await maybeShowBubbleForNotification(payloadData);
+  syncIfPushNeedsSound(payloadData);
 });
 
 // Call once at app startup (see App entry / notificationService.ts). Safe to
