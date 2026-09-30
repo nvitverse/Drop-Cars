@@ -1,14 +1,8 @@
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 
-from app.models.orders import Order
-from app.models.new_orders import NewOrder
-from app.models.ai_automation_log import AIAutomationLog
 from app.models.platform_setting import PlatformSetting
-from app.utils.assignment_priority_config import get_assignment_priority_config
 
 logger = logging.getLogger(__name__)
 
@@ -26,96 +20,56 @@ def get_unassigned_removal_timeout(db: Session) -> int:
 
 
 def auto_remove_unassigned_bookings(db: Session, custom_timeout_mins: int = None) -> Dict[str, Any]:
-    """
-    Driver Assignment Expiry & Penalty Feed Re-entry Engine:
-    - Scans for accepted bookings where driver/car details were NOT assigned within allowed time.
-    - Revokes allocation from driver and logs penalty.
-    - Returns booking back to open feed with Grace Window (5 mins for <=1h pickup, 30 mins for >1h pickup).
-    - Original driver can re-accept within grace window to avoid/waive penalty.
-    """
-    config = get_assignment_priority_config(db)
-    timeout_mins = custom_timeout_mins or config.get("assignment_default_mins", 30)
-    grace_under_1h = config.get("grace_under_1h_mins", 5)
-    grace_over_1h = config.get("grace_over_1h_mins", 30)
+    """Run the real deadline sweep on demand (admin "run now" button).
 
-    now = datetime.now(timezone.utc)
-    expired_count = 0
-    expired_order_ids: List[str] = []
+    This used to be a separate engine that filtered NewOrder.Driver_assigned /
+    Car_assigned - columns that do not exist - so it always hit its except
+    branch and reported success with 0. The production auto-removal is the
+    every-minute sweep in main.py (_run_assignment_sweep); this now runs the
+    same steps in the same order:
+      1. warn fleet drivers whose assign-by deadline is close,
+      2. remove assignments whose deadline passed (penalty, repost),
+      3. urgent re-push for unaccepted bookings near their deadline,
+      4. cancel unaccepted bookings past their deadline.
+    custom_timeout_mins is kept for API compatibility; deadlines are per
+    booking (OrderAssignment.expires_at / Order.acceptance_deadline).
+    """
+    import asyncio
+    from app.crud.order_assignments import (
+        send_assignment_deadline_warnings,
+        cancel_timed_out_pending_assignments,
+        send_urgent_booking_reminders,
+        cancel_expired_unaccepted_orders,
+    )
+
+    async def _run():
+        warned = await send_assignment_deadline_warnings(db)
+        removed = await cancel_timed_out_pending_assignments(db)
+        reminded = await send_urgent_booking_reminders(db)
+        expired = await cancel_expired_unaccepted_orders(db)
+        return warned, removed, reminded, expired
 
     try:
-        # Check NewOrders table for accepted orders without driver details assigned
-        pending_orders = db.query(NewOrder).filter(
-            or_(
-                NewOrder.trip_status == "ACCEPTED",
-                NewOrder.trip_status == "PENDING_ASSIGNMENT"
-            ),
-            or_(NewOrder.Driver_assigned == False, NewOrder.Car_assigned == False)
-        ).all()
+        asyncio.get_running_loop()
+        running = True
+    except RuntimeError:
+        running = False
+    if running:
+        # Called from inside an event loop: run in a worker thread with its own loop.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            warned, removed, reminded, expired = pool.submit(asyncio.run, _run()).result()
+    else:
+        warned, removed, reminded, expired = asyncio.run(_run())
 
-        for order in pending_orders:
-            # Check if assignment deadline has passed
-            acceptance_time = order.updated_at or order.created_at
-            if acceptance_time:
-                if acceptance_time.tzinfo is None:
-                    acceptance_time = acceptance_time.replace(tzinfo=timezone.utc)
-                elapsed_mins = (now - acceptance_time).total_seconds() / 60
-            else:
-                elapsed_mins = timeout_mins + 1
-
-            if elapsed_mins >= timeout_mins:
-                # Pickup proximity check for penalty grace period
-                pickup_time = order.start_date_time
-                if pickup_time:
-                    if pickup_time.tzinfo is None:
-                        pickup_time = pickup_time.replace(tzinfo=timezone.utc)
-                    mins_to_pickup = (pickup_time - now).total_seconds() / 60
-                else:
-                    mins_to_pickup = 120
-
-                grace_mins = grace_under_1h if mins_to_pickup <= 60 else grace_over_1h
-                grace_expiry = now + timedelta(minutes=grace_mins)
-
-                previous_driver_id = order.driver_id or getattr(order, 'allocated_driver_id', None)
-
-                # Reset status to open feed with penalty logged & grace timer
-                order.trip_status = "FEED_OPEN"
-                order.Driver_assigned = False
-                order.Car_assigned = False
-                order.penalty_applied = True
-                order.reaccept_grace_expiry = grace_expiry
-
-                order_id_str = str(order.order_id)
-                expired_order_ids.append(order_id_str)
-                expired_count += 1
-
-                # Log event in AI Automation Audit Trail
-                log_entry = AIAutomationLog(
-                    category="AUTO_DISPATCH",
-                    action_type="ASSIGNMENT_TIMED_OUT_PENALTY",
-                    entity_type="booking",
-                    entity_id=order_id_str,
-                    entity_name=f"Booking #{order_id_str}",
-                    summary=f"Assignment deadline expired after {timeout_mins}m. Booking returned to feed with {grace_mins}m grace window.",
-                    confidence_score=1.0,
-                    details_json={
-                        "order_id": order_id_str,
-                        "previous_driver_id": str(previous_driver_id) if previous_driver_id else None,
-                        "penalty_applied": True,
-                        "grace_window_minutes": grace_mins,
-                        "grace_expiry": grace_expiry.isoformat(),
-                        "mins_to_pickup": mins_to_pickup
-                    }
-                )
-                db.add(log_entry)
-
-        db.commit()
-    except Exception as e:
-        logger.error(f"Error handling assignment timeout & penalties: {e}")
-        db.rollback()
-
+    timeout_used = custom_timeout_mins or get_unassigned_removal_timeout(db)
     return {
         "success": True,
-        "timeout_minutes_used": timeout_mins,
-        "processed_count": expired_count,
-        "expired_order_ids": expired_order_ids
+        "timeout_minutes_used": timeout_used,
+        "processed_count": int(removed or 0) + int(expired or 0),
+        "deadline_warnings_sent": int(warned or 0),
+        "assignments_removed": int(removed or 0),
+        "urgent_reminders_sent": int(reminded or 0),
+        "unaccepted_cancelled": int(expired or 0),
+        "expired_order_ids": [],
     }

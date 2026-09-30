@@ -6432,8 +6432,8 @@ async def admin_notify_order(
 ):
     """Re-send the new-booking alert for any open booking (the one automatic
     push at posting time is easy to miss). Pings the accepted fleet driver
-    if there is one, otherwise re-broadcasts on the urgent channel. 60s
-    cooldown per booking - see crud/orders.py's notify_order_manually."""
+    if there is one, otherwise re-broadcasts on the urgent channel. No
+    cooldown - see crud/orders.py's notify_order_manually."""
     from app.crud.orders import notify_order_manually
     try:
         result = await notify_order_manually(db, order_id, actor="admin")

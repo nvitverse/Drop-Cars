@@ -146,6 +146,76 @@ def create_order_assignment(
     return db_assignment
 
 
+DEADLINE_WARNING_STAGES = ((1, 10), (2, 3))  # (stage, minutes left)
+
+
+async def send_assignment_deadline_warnings(db: Session) -> int:
+    """Alarm BEFORE auto-removal: a fleet driver accepted a booking but has
+    not assigned a driver and car yet. cancel_timed_out_pending_assignments
+    (below) removes it at expires_at with a penalty of at least ₹500, so warn
+    them at 10 minutes and again at 3 minutes left. Each stage is sent once
+    per assignment (deadline_warning_stage)."""
+    from app.models.notification import Notification
+    from app.crud.notification import _enqueue_expo_push, _is_muted
+    from app.utils.notification_settings import apply_notification_extras
+
+    now = datetime.utcnow()
+    horizon = now + timedelta(minutes=DEADLINE_WARNING_STAGES[0][1])
+    rows = (
+        db.query(OrderAssignment)
+        .filter(
+            OrderAssignment.assignment_status == AssignmentStatusEnum.PENDING,
+            OrderAssignment.driver_id.is_(None),
+            OrderAssignment.car_id.is_(None),
+            OrderAssignment.expires_at.isnot(None),
+            OrderAssignment.expires_at > now,
+            OrderAssignment.expires_at <= horizon,
+            OrderAssignment.deadline_warning_stage < DEADLINE_WARNING_STAGES[-1][0],
+        )
+        .all()
+    )
+    sent = 0
+    for a in rows:
+        try:
+            expires_at = a.expires_at.replace(tzinfo=None) if a.expires_at.tzinfo else a.expires_at
+            minutes_left = (expires_at - now).total_seconds() / 60
+            due = [stage for stage, mins in DEADLINE_WARNING_STAGES if minutes_left <= mins and stage > (a.deadline_warning_stage or 0)]
+            if not due:
+                continue
+            stage = max(due)
+            left = max(1, int(minutes_left))
+            title = f"⏰ {left} min left • Assign driver & car"
+            body = (
+                f"Booking #{a.order_id}: assign a driver and car within {left} min, "
+                f"otherwise it is removed from you and a penalty (min ₹500) applies."
+            )
+            tokens = [
+                n.token for n in db.query(Notification).filter(
+                    Notification.user == "vehicle_owner",
+                    Notification.sub == str(a.vehicle_owner_id),
+                ).all()
+                if n.token and not _is_muted(n)
+            ]
+            if tokens:
+                payloads = [
+                    apply_notification_extras(
+                        {"to": t, "title": title, "body": body, "priority": "high",
+                         "android": {"priority": "max"},
+                         "data": {"type": "ASSIGN_DEADLINE_WARNING", "order_id": a.order_id}},
+                        db, "assignment_deadline_warning",
+                    )
+                    for t in tokens
+                ]
+                _enqueue_expo_push(db, payloads)
+                sent += 1
+            a.deadline_warning_stage = stage
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Deadline warning failed for assignment {a.id}: {e}")
+    return sent
+
+
 async def cancel_timed_out_pending_assignments(db: Session) -> int:
     """Cancel PENDING assignments that exceeded order's max_time_to_assign_order and have no driver/car assigned.
     Also debits penalty amount from fleet owner's wallet and updates order status.
@@ -1700,7 +1770,8 @@ def get_posted_bookings_for_owner(db: Session, poster_owner_id: str, limit: int 
         # THEY read the codes out to the customer and the driver asks the
         # customer for them at start/end. Only meaningful once a driver+car
         # is assigned and while the trip is still open.
-        show_otps = bool(a and a.driver_id and a.car_id and not completed)
+        from app.crud.trip_otp import otps_visible
+        show_otps = bool(a and a.driver_id and a.car_id and not completed and otps_visible(o, a))
         results.append({
             "order_id": o.id,
             "trip_type": _v(o.trip_type),

@@ -50,8 +50,12 @@ def _run_startup_migrations():
     if _migrated:
         return
     import asyncio
-    from app.main import ensure_sos_alerts_and_swap_columns
-    asyncio.run(ensure_sos_alerts_and_swap_columns())
+    import inspect
+    from app.main import app
+    for handler in app.router.on_startup:
+        # Only the column/enum migrations; never the repeat_every sweep timers.
+        if handler.__name__.startswith("ensure_") and inspect.iscoroutinefunction(handler):
+            asyncio.run(handler())
     _migrated = True
 
 

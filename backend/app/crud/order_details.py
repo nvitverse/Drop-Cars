@@ -5,6 +5,9 @@ from typing import Optional, Dict, Any, List
 WEBSITE_PUBLIC_BASE_URL = os.getenv("WEBSITE_PUBLIC_BASE_URL", "https://dropcars.in")
 
 
+from app.crud.trip_otp import otps_visible as _otps_visible
+
+
 def _trip_link_url(token: Optional[str]) -> Optional[str]:
     """Shareable driver-trip web link (see /website/trip-link/{token}* in
     api/routes/website_bookings.py) - surfaced on order-detail responses so
@@ -216,7 +219,9 @@ def get_vehicle_owner_basic_info(db: Session, vehicle_owner_id: str) -> Optional
 def get_order_assignments(db: Session, order_id: int) -> list[OrderAssignmentDetail]:
     """Get all order assignments for an order"""
     assignments = db.query(OrderAssignment).filter(OrderAssignment.order_id == order_id).all()
-    
+    from app.crud.trip_otp import otps_visible
+    _order = db.query(Order).filter(Order.id == order_id).first()
+
     return [
         OrderAssignmentDetail(
             id=assignment.id,
@@ -232,8 +237,8 @@ def get_order_assignments(db: Session, order_id: int) -> list[OrderAssignmentDet
             created_at=assignment.created_at,
             held_amount=assignment.held_amount,
             assigned_by=assignment.assigned_by or "SELF",
-            start_trip_otp=assignment.start_trip_otp,
-            end_trip_otp=assignment.end_trip_otp,
+            start_trip_otp=assignment.start_trip_otp if otps_visible(_order, assignment) else None,
+            end_trip_otp=assignment.end_trip_otp if otps_visible(_order, assignment) else None,
             trip_link_url=_trip_link_url(assignment.trip_link_token),
         )
         for assignment in assignments
@@ -652,8 +657,8 @@ def get_all_admin_orders(db: Session, skip: int = 0, limit: int = 100, order_id:
             assigned_driver=assigned_driver,
             assigned_car=assigned_car,
             vehicle_owner=vehicle_owner,
-            start_otp=(latest_assignment.start_trip_otp if latest_assignment else None) or order.start_trip_otp,
-            end_otp=(latest_assignment.end_trip_otp if latest_assignment else None) or order.end_trip_otp
+            start_otp=((latest_assignment.start_trip_otp if latest_assignment else None) or order.start_trip_otp) if _otps_visible(order) else None,
+            end_otp=((latest_assignment.end_trip_otp if latest_assignment else None) or order.end_trip_otp) if _otps_visible(order) else None
         )
 
         order_responses.append(order_response)
@@ -758,6 +763,7 @@ def get_vendor_order_details(db: Session, order_id: int, vendor_id: str) -> Opti
     # open booking - so a vendor sees them right after posting, before any
     # driver accepts (reported 2026-09-30, booking #332 showed "----").
     start_otp = end_otp = None
+    from app.crud.trip_otp import otps_visible
     live = next((a for a in reversed(assignments) if str(getattr(a.assignment_status, "value", a.assignment_status)) != "CANCELLED" and a.start_trip_otp), None)
     if live:
         start_otp, end_otp = live.start_trip_otp, live.end_trip_otp
@@ -767,6 +773,8 @@ def get_vendor_order_details(db: Session, order_id: int, vendor_id: str) -> Opti
         db.commit()
     elif order.start_trip_otp:
         start_otp, end_otp = order.start_trip_otp, order.end_trip_otp
+    if not otps_visible(order, live):
+        start_otp = end_otp = None
 
     return VendorOrderDetailResponse(
         start_trip_otp=start_otp,
@@ -1030,8 +1038,8 @@ def get_vehicle_owner_orders_by_assignment_status(
             charge_items = order.charge_items,
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
-            start_trip_otp = assignment.start_trip_otp or f"{(int(order.id) * 37 + 1234) % 9000 + 1000:04d}",
-            end_trip_otp = assignment.end_trip_otp or f"{(int(order.id) * 53 + 4321) % 9000 + 1000:04d}",
+            start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
+            end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),
 
             # Pricing additions
@@ -1293,8 +1301,8 @@ def get_vehicle_owner_non_pending_orders(
             charge_items = order.charge_items,
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
-            start_trip_otp = assignment.start_trip_otp or f"{(int(order.id) * 37 + 1234) % 9000 + 1000:04d}",
-            end_trip_otp = assignment.end_trip_otp or f"{(int(order.id) * 53 + 4321) % 9000 + 1000:04d}",
+            start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
+            end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),
             # Pricing additions
             waiting_charge=waiting_charge_val,
