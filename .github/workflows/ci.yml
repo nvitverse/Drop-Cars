@@ -71,7 +71,7 @@ jobs:
       - name: Smoke import
         run: python -c "import app.main; print('app.main imported OK')"
       - name: Pytest
-        run: pytest tests -q
+        run: python -m pytest tests -q
 
   admin-panel:
     name: Admin panel tsc --noEmit
