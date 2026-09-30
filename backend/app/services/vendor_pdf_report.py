@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
 
 from app.models.orders import Order, Trip_status
-from app.models.vendor import Vendor
+from app.models.vendor import VendorCredentials as Vendor
 from app.models.vendor_details import VendorDetails
 
 logger = logging.getLogger(__name__)

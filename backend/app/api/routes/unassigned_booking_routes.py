@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 
 from app.database.session import get_db
+from app.core.security import get_current_admin
 from app.models.platform_setting import PlatformSetting
 from app.utils.unassigned_booking_expiry import (
     auto_remove_unassigned_bookings,
@@ -15,6 +16,7 @@ router = APIRouter(tags=["Unassigned Booking Auto-Removal"])
 @router.post("/admin/auto-remove-unassigned")
 def trigger_unassigned_auto_removal(
     timeout_minutes: Optional[int] = Query(None, description="Optional override timeout in minutes"),
+    current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Triggers 30-Minute Unassigned Booking Auto-Removal Engine."""
@@ -23,7 +25,7 @@ def trigger_unassigned_auto_removal(
 
 
 @router.get("/admin/settings/unassigned-timeout")
-def get_unassigned_timeout_setting(db: Session = Depends(get_db)):
+def get_unassigned_timeout_setting(current_admin=Depends(get_current_admin), db: Session = Depends(get_db)):
     """Fetch current Admin Unassigned Booking Removal Timeout (Default: 30 Mins)."""
     timeout_mins = get_unassigned_removal_timeout(db)
     return {"unassigned_removal_timeout_minutes": timeout_mins}
@@ -32,6 +34,7 @@ def get_unassigned_timeout_setting(db: Session = Depends(get_db)):
 @router.post("/admin/settings/unassigned-timeout")
 def update_unassigned_timeout_setting(
     payload: Dict[str, Any] = Body(...),
+    current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Update Admin Unassigned Booking Removal Timeout (e.g., 30, 45, 60 mins)."""
@@ -65,6 +68,7 @@ def update_unassigned_timeout_setting(
 def bump_order_driver_fare(
     order_id: str,
     payload: Dict[str, Any] = Body(...),
+    current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -92,14 +96,13 @@ def bump_order_driver_fare(
     if order.trip_status not in (Trip_status.PENDING,):
         raise HTTPException(status_code=400, detail=f"Fare can only be adjusted on pending orders. Current status: {order.trip_status}")
 
-    order.quote_rate_per_km = int(new_driver_fare)
-    db.commit()
-
-    return {
-        "success": True,
-        "order_id": order_id,
-        "new_driver_fare": new_driver_fare,
-        "reason": reason,
-        "message": f"Driver fare updated to ₹{new_driver_fare} successfully."
-    }
+    # Order has no driver_fare column and crud.orders.edit_order recomputes
+    # the fare from the per-km / allowance fields, so a single "new fare"
+    # number cannot be applied honestly. This used to set a non-existent
+    # attribute and report success while nothing was saved. No app calls
+    # this route; fare changes go through PATCH /admin/orders/{id}/edit-fare.
+    raise HTTPException(
+        status_code=410,
+        detail="Fare bump is not supported here. Use PATCH /api/admin/orders/{order_id}/edit-fare to change the booking's rate fields.",
+    )
 
