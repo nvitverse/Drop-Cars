@@ -26,3 +26,4 @@ full_backup_drop-cars.sql
 # Deployment logs
 deploy_output*.txt
 deploy_output.txt
+!tests/conftest.py
