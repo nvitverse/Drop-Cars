@@ -49,9 +49,29 @@ class SosResolveRequest(BaseModel):
 # -------------------------------------------------------------------------
 # Legacy Endpoint (Exact Contract Preserved)
 # -------------------------------------------------------------------------
+def _notify_staff_of_sos(db: Session, alert: SosAlert, role: str) -> None:
+    try:
+        from app.utils.notification_dispatch import broadcast_admin_emergency_push
+        broadcast_admin_emergency_push(
+            db,
+            title="🚨 SOS EMERGENCY DISTRESS SIGNAL",
+            body=f"SOS triggered by {role} for Trip #{alert.order_id or 'General'}. Immediate action required!",
+            data={"type": "SOS_ALERT", "alert_id": str(alert.id), "role": role}
+        )
+    except Exception as e:
+        logger.warning(f"Could not broadcast SOS push notification: {e}")
+
+
 @router.post("/alert")
-def create_sos_alert_legacy(payload: SosAlertCreateLegacy, db: Session = Depends(get_db)):
-    """Legacy endpoint for backward compatibility with existing clients."""
+@limiter.limit("10/minute")
+def create_sos_alert_legacy(request: Request, payload: SosAlertCreateLegacy, db: Session = Depends(get_db)):
+    """Legacy endpoint for backward compatibility with existing clients.
+
+    Stays open (no token) on purpose: the shipped customer app's Safety
+    screen calls it without an Authorization header, and an emergency must
+    never fail closed. It is rate limited, and customer_id here is whatever
+    the client sent, so staff should treat it as unverified.
+    """
     alert = SosAlert(
         customer_id=payload.customer_id,
         order_id=payload.order_id,
@@ -67,6 +87,8 @@ def create_sos_alert_legacy(payload: SosAlertCreateLegacy, db: Session = Depends
     db.add(alert)
     db.commit()
     db.refresh(alert)
+    _notify_staff_of_sos(db, alert, "CUSTOMER")
+    logger.critical(f"🚨 SOS EMERGENCY (legacy endpoint) Alert ID={alert.id}, Order={alert.order_id}")
     return {
         "status": "ok",
         "alert_id": alert.id,
@@ -110,9 +132,9 @@ def trigger_sos_alert(
     elif role == "VEHICLE_OWNER":
         owner = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == user_id).first()
         if owner:
-            d_phone = owner.mobile_number
-            d_name = "Fleet Owner"
-    else:
+            d_phone = owner.primary_number
+            d_name = "Fleet Driver"
+    elif role == "CUSTOMER":
         customer_id_str = str(user_id)
 
     # Enrich from active Order if order_id provided
@@ -158,6 +180,7 @@ def trigger_sos_alert(
         driver_id=driver_id_str,
         order_id=payload.order_id,
         triggered_by_role=role,
+        triggered_by_id=str(user_id),
         customer_phone=cust_phone,
         driver_phone=d_phone,
         driver_name=d_name,
@@ -175,16 +198,7 @@ def trigger_sos_alert(
     db.refresh(alert)
 
     # Real-time alert dispatch to on-duty staff
-    try:
-        from app.utils.notification_dispatch import broadcast_admin_emergency_push
-        broadcast_admin_emergency_push(
-            db,
-            title="🚨 SOS EMERGENCY DISTRESS SIGNAL",
-            body=f"SOS triggered by {role} for Trip #{payload.order_id or 'General'}. Immediate action required!",
-            data={"type": "SOS_ALERT", "alert_id": str(alert.id), "role": role}
-        )
-    except Exception as e:
-        logger.warning(f"Could not broadcast SOS push notification: {e}")
+    _notify_staff_of_sos(db, alert, role)
 
     logger.critical(
         f"🚨 SOS EMERGENCY TRIGGERED! Alert ID={alert.id}, Role={role}, User={user_id}, "
@@ -219,11 +233,14 @@ def stream_sos_location(
     user_id = str(current_auth.get("user_id"))
     role = current_auth.get("role", "CUSTOMER").upper()
 
-    is_creator = False
-    if role == "CUSTOMER" and alert.customer_id == user_id:
-        is_creator = True
-    elif role in ("DRIVER", "VEHICLE_OWNER") and (alert.driver_id == user_id or str(alert.customer_id) == user_id):
-        is_creator = True
+    if alert.triggered_by_id:
+        is_creator = alert.triggered_by_id == user_id and (alert.triggered_by_role or "").upper() == role
+    else:
+        # Rows created before triggered_by_id existed
+        is_creator = (
+            (role == "CUSTOMER" and alert.customer_id == user_id)
+            or (role == "DRIVER" and alert.driver_id == user_id)
+        )
 
     if not is_creator:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the alert creator can stream location.")

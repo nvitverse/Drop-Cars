@@ -9,7 +9,8 @@ class SosAlert(Base):
     customer_id = Column(String, nullable=True)
     driver_id = Column(String, nullable=True)
     order_id = Column(String, nullable=True)
-    triggered_by_role = Column(String, nullable=False, default="CUSTOMER")  # CUSTOMER, DRIVER, OWNER
+    triggered_by_role = Column(String, nullable=False, default="CUSTOMER")  # CUSTOMER, DRIVER, VEHICLE_OWNER, VENDOR, ADMIN
+    triggered_by_id = Column(String, nullable=True)  # account id from the token; null for legacy /sos/alert rows
     customer_phone = Column(String, nullable=True)
     driver_phone = Column(String, nullable=True)
     driver_name = Column(String, nullable=True)
