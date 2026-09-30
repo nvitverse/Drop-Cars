@@ -1306,6 +1306,7 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE admin ADD COLUMN IF NOT EXISTS on_duty_since TIMESTAMPTZ'))
         # Voice notes in both chat systems (booking_chat + support_messages).
         db.execute(text('ALTER TABLE booking_chat_messages ADD COLUMN IF NOT EXISTS voice_url VARCHAR'))
+        db.execute(text('ALTER TABLE booking_chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER'))
         db.execute(text('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS voice_url VARCHAR'))
         # Same gst_included/gst_amount pair as orders above, but on the two
         # other tables that also declared them on their models without ever

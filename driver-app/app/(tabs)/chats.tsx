@@ -59,6 +59,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/ThemeContext';
+import VoiceNote from '@/components/chat/VoiceNote';
+import ChatComposer from '@/components/chat/ChatComposer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import axiosDriver from '@/app/api/axiosDriver';
 import axiosInstance from '@/app/api/axiosInstance';
@@ -371,56 +373,6 @@ export function generateAiResponse(query: string): BotResponse {
   };
 }
 
-// A playable voice-note bubble - each message gets its own player instance
-// (expo-audio's hooks are per-source), so this stays a separate component
-// rather than something inlined in the FlatList renderItem.
-function VoiceMessageBubble({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
-  const player = useAudioPlayer(uri);
-  const status = useAudioPlayerStatus(player);
-
-  const toggle = () => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      if (status.didJustFinish || status.currentTime >= (status.duration || 0)) {
-        player.seekTo(0);
-      }
-      player.play();
-    }
-  };
-
-  const total = status.duration || 0;
-  const pos = Math.min(status.currentTime || 0, total);
-  const pct = total > 0 ? pos / total : 0;
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-
-  return (
-    <TouchableOpacity onPress={toggle} activeOpacity={0.75} style={voiceStyles.row}>
-      <View style={[voiceStyles.playBtn, { backgroundColor: mine ? 'rgba(255,255,255,0.25)' : tint }]}>
-        {status.playing ? (
-          <Pause size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
-        ) : (
-          <Play size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
-        )}
-      </View>
-      <View style={[voiceStyles.track, { backgroundColor: mine ? 'rgba(255,255,255,0.3)' : '#E2E8F0' }]}>
-        <View style={[voiceStyles.trackFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: mine ? '#FFFFFF' : tint }]} />
-      </View>
-      <Text style={[voiceStyles.time, { color: mine ? 'rgba(255,255,255,0.85)' : '#64748B' }]}>
-        {fmt(status.playing || pos > 0 ? pos : total)}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-const voiceStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 160, paddingVertical: 2 },
-  playBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  track: { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
-  trackFill: { height: '100%', borderRadius: 2 },
-  time: { fontSize: 10.5, fontFamily: 'Inter-Medium', minWidth: 32 },
-});
-
 export default function ChatsTabScreen() {
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
@@ -719,6 +671,13 @@ export default function ChatsTabScreen() {
 
   // Open Chat Thread
   const openChat = async (convo: ConversationItem) => {
+    // Booking chats have their own WhatsApp-style screen (reply menus on
+    // messages, hold-to-record voice, quoted replies).
+    if (convo.type === 'PASSENGER' && convo.order_id) {
+      activateConversation(convo.id);
+      router.push({ pathname: '/chat/[orderId]', params: { orderId: String(convo.order_id) } } as any);
+      return;
+    }
     setSelectedConversation(convo);
     setInputText('');
     setAwaitingTripPick(false);
@@ -873,6 +832,15 @@ export default function ChatsTabScreen() {
       await voiceRecorder.stop();
       const uri = voiceRecorder.uri;
       if (!uri) return;
+      await sendVoiceUri(uri);
+    } catch {
+      Alert.alert('Error', 'Could not send the voice note. Please try again.');
+    }
+  };
+
+  const sendVoiceUri = async (uri: string) => {
+    if (!selectedConversation) return;
+    try {
       setUploadingVoice(true);
       const formData = new FormData();
       formData.append('file', { uri, name: 'voice.m4a', type: 'audio/m4a' } as any);
@@ -1844,7 +1812,7 @@ export default function ChatsTabScreen() {
                           <Text style={styles.userBubbleTag}>⚡ DRIVER COMMAND</Text>
                         </View>
                         {item.voice_url ? (
-                          <VoiceMessageBubble uri={item.voice_url} mine tint="#FFFFFF" />
+                          <VoiceNote uri={item.voice_url} mine tint="#FFFFFF" />
                         ) : (
                           <Text style={styles.userBubbleText}>{item.text}</Text>
                         )}
@@ -1881,7 +1849,7 @@ export default function ChatsTabScreen() {
                         </Text>
                       )}
                       {item.voice_url ? (
-                        <VoiceMessageBubble uri={item.voice_url} mine={false} tint={colors.primary} />
+                        <VoiceNote uri={item.voice_url} mine={false} tint={colors.primary} />
                       ) : (
                         <Text style={[styles.messageText, { color: colors.text }]}>
                           {item.text}
@@ -1985,7 +1953,15 @@ export default function ChatsTabScreen() {
               </View>
             )}
 
-            {/* Futuristic Cyber Input Bar */}
+            {selectedConversation?.type === 'DISPATCH' ? (
+              <ChatComposer
+                colors={colors}
+                placeholder="Message Dispatch Desk"
+                onSendText={(t) => sendMessage(t)}
+                onSendVoice={(uri) => sendVoiceUri(uri)}
+              />
+            ) : (
+            /* Futuristic Cyber Input Bar */
             <View style={[styles.cyberInputContainer, { backgroundColor: isDarkMode ? '#080C16' : colors.surface, borderTopColor: colors.border }]}>
               <View style={[styles.cyberInputWrapper, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.35)' : '#CBD5E1' }]}>
                 <TextInput
@@ -1998,8 +1974,6 @@ export default function ChatsTabScreen() {
                   placeholder={
                     selectedConversation?.type === 'AI_BOT'
                       ? 'Ask Help Bot anything in Tamil / English (or type 1–9)...'
-                      : selectedConversation?.type === 'DISPATCH'
-                      ? 'Type a message to Dispatch Desk...'
                       : 'Type a message (no phone calls needed)...'
                   }
                   placeholderTextColor={colors.textSecondary}
@@ -2052,6 +2026,7 @@ export default function ChatsTabScreen() {
                 </Text>
               )}
             </View>
+            )}
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>

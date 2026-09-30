@@ -77,13 +77,49 @@ def _load(request: Request, db: Session, order_id: int):
     return _actor_for_order(role, caller, order, db), order
 
 
-def _msg_out(m: BookingChatMessage, me: str) -> dict:
-    return {
+def _msg_out(m: BookingChatMessage, me: str, by_id: Optional[dict] = None, options: Optional[list] = None) -> dict:
+    out = {
         "id": m.id, "side": m.sender_side, "mine": m.sender_side == me, "sender_name": m.sender_name,
         "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": m.voice_url,
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
+        "reply_to": None,
+        "reply_options": options or [],
     }
+    rid = getattr(m, "reply_to_id", None)
+    if rid:
+        q = (by_id or {}).get(rid)
+        if q is not None:
+            out["reply_to"] = {"id": q.id, "side": q.sender_side, "mine": q.sender_side == me, "kind": q.kind,
+                               "text": (q.text or "")[:160], "sender_name": q.sender_name}
+    return out
+
+
+def _other_party(db: Session, o: Order, a, side: str):
+    """(name, role, phone) of the person on the other end of this booking chat."""
+    other, other_role, other_phone = None, None, None
+    if side == "POSTER":
+        from app.models.car_driver import CarDriver
+        d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
+        other = d.full_name if d else "Driver"
+        other_role = "DRIVER"
+        other_phone = d.primary_number if d else None
+    elif o.vendor_id:
+        from app.models.vendor import VendorCredentials
+        v = db.query(VendorCredentials).filter(VendorCredentials.id == o.vendor_id).first()
+        other = f"Vendor #{v.reg_id}" if v and v.reg_id else "Vendor"
+        other_role = "VENDOR"
+        other_phone = v.primary_number if v else None
+    elif o.posted_by_vehicle_owner_id:
+        from app.models.vehicle_owner import VehicleOwnerCredentials
+        ow = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == o.posted_by_vehicle_owner_id).first()
+        other = f"Fleet Driver #{ow.reg_id}" if ow and ow.reg_id else "Fleet Driver"
+        other_role = "OWNER"
+        other_phone = ow.primary_number if ow else None
+    else:
+        other = "Drop Cars Admin"
+        other_role = "ADMIN"
+    return other, other_role, other_phone
 
 
 @router.get("/threads")
@@ -140,28 +176,7 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
         unread = db.query(func.count(BookingChatMessage.id)).filter(
             BookingChatMessage.order_id == o.id, BookingChatMessage.sender_side != side, BookingChatMessage.read_at.is_(None)
         ).scalar() or 0
-        other, other_role, other_phone = None, None, None
-        if side == "POSTER":
-            from app.models.car_driver import CarDriver
-            d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
-            other = d.full_name if d else "Driver"
-            other_role = "DRIVER"
-            other_phone = d.primary_number if d else None
-        elif o.vendor_id:
-            from app.models.vendor import VendorCredentials
-            v = db.query(VendorCredentials).filter(VendorCredentials.id == o.vendor_id).first()
-            other = f"Vendor #{v.reg_id}" if v and v.reg_id else "Vendor"
-            other_role = "VENDOR"
-            other_phone = v.primary_number if v else None
-        elif o.posted_by_vehicle_owner_id:
-            from app.models.vehicle_owner import VehicleOwnerCredentials
-            ow = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.id == o.posted_by_vehicle_owner_id).first()
-            other = f"Fleet Owner #{ow.reg_id}" if ow and ow.reg_id else "Fleet Owner"
-            other_role = "OWNER"
-            other_phone = ow.primary_number if ow else None
-        else:
-            other = "Drop Cars Admin"
-            other_role = "ADMIN"
+        other, other_role, other_phone = _other_party(db, o, a, side)
         out.append({
             "order_id": o.id, "title": chat.booking_title(o), "trip_type": chat._v(o.trip_type), "car_type": chat._v(o.car_type),
             "start_date_time": o.start_date_time.isoformat() if o.start_date_time else None,
@@ -192,14 +207,23 @@ def get_chat(order_id: int, request: Request, after_id: int = Query(0, ge=0), db
         if changed:
             db.commit()
     msgs = [m for m in all_msgs if m.id > after_id]
+    by_id = {m.id: m for m in all_msgs}
+    _opt_cache: dict = {}
     st = str(getattr(a.assignment_status, "value", a.assignment_status)) if a else None
     resp = {
         "order_id": order.id, "title": chat.booking_title(order), "trip_type": chat._v(order.trip_type), "car_type": chat._v(order.car_type),
         "start_date_time": order.start_date_time.isoformat() if order.start_date_time else None,
         "assignment_status": st, "my_side": actor.side, "read_only": actor.read_only or st == "COMPLETED",
-        "messages": [_msg_out(m, actor.side) for m in msgs],
+        **dict(zip(("other_party", "other_role", "other_phone"),
+                   _other_party(db, order, a, actor.side) if a and actor.side in ("POSTER", "DRIVER") else (None, None, None))),
+        "messages": [
+            _msg_out(m, actor.side, by_id, chat.reply_options(db, order, m, actor.side, st, _opt_cache))
+            for m in msgs
+        ],
         "quick_menu": chat.driver_menu(st) if actor.side == "DRIVER" else [],
         "suggestions": chat.poster_suggestions(db, order, chat.unanswered_driver_questions(all_msgs)) if actor.side == "POSTER" else [],
+        # Poster's "+" sheet: every booking detail, to send on demand.
+        "send_menu": (_opt_cache.get("all") or chat.poster_suggestions(db, order, list(chat.DRIVER_QUESTIONS.keys()))) if actor.side == "POSTER" and st != "COMPLETED" else [],
     }
     return resp
 
@@ -208,6 +232,7 @@ class SendPayload(BaseModel):
     text: Optional[str] = None
     quick_key: Optional[str] = None
     voice_url: Optional[str] = None
+    reply_to_id: Optional[int] = None
 
 
 @router.post("/upload-voice")
@@ -252,8 +277,14 @@ def send_message(order_id: int, payload: SendPayload, request: Request, db: Sess
     if len(text) > 1000:
         raise HTTPException(status_code=400, detail="Message is too long.")
 
+    reply_to = None
+    if payload.reply_to_id:
+        reply_to = db.query(BookingChatMessage).filter(
+            BookingChatMessage.id == payload.reply_to_id, BookingChatMessage.order_id == order.id
+        ).first()
     m = BookingChatMessage(order_id=order.id, sender_side=actor.side, sender_id=actor.ident, sender_name=actor.name,
-                           kind=kind, quick_key=key, text=text, voice_url=voice_url)
+                           kind=kind, quick_key=key, text=text, voice_url=voice_url,
+                           reply_to_id=reply_to.id if reply_to else None)
     db.add(m)
     # Poster deliberately sharing the customer number in chat = the same "show customer number" decision as the switch
     if actor.side == "POSTER" and key == "CUSTOMER_NUMBER":
@@ -261,4 +292,4 @@ def send_message(order_id: int, payload: SendPayload, request: Request, db: Sess
     db.commit()
     db.refresh(m)
     chat.notify_other_side(db, order, actor.side, text, a)
-    return _msg_out(m, actor.side)
+    return _msg_out(m, actor.side, {reply_to.id: reply_to} if reply_to else None)
