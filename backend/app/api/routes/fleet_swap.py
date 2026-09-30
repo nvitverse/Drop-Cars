@@ -2,7 +2,7 @@ import hashlib
 import logging
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from uuid import UUID
 
@@ -25,6 +25,18 @@ router = APIRouter(prefix="/fleet-swap", tags=["Fleet & Driver Swap"])
 
 MAX_OTP_ATTEMPTS = 5
 OTP_VALIDITY_MINUTES = 10
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _as_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """otp_expires_at is TIMESTAMPTZ now; rows written before the column was
+    converted may still come back naive - those were stored as UTC."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _hash_otp(otp: str, salt: str) -> str:
@@ -158,7 +170,7 @@ def request_driver_swap(
     otp_code = str(secrets.randbelow(900000) + 100000)
     salt = secrets.token_hex(16)
     otp_hash = _hash_otp(otp_code, salt)
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
+    expires_at = _utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
     swap_uuid = uuid.uuid4()
 
     audit_entry = FleetDriverSwapAudit(
@@ -187,13 +199,13 @@ def request_driver_swap(
             driver_id=str(driver.id),
             title="🚖 Fleet Transfer Request",
             body=f"A new fleet owner has requested to add you. Your verification OTP is: {otp_code}. Valid for {OTP_VALIDITY_MINUTES} mins.",
-            data={"type": "FLEEP_SWAP_OTP", "swap_id": str(swap_uuid)}
+            data={"type": "FLEET_SWAP_OTP", "swap_id": str(swap_uuid)}
         )
     except Exception as e:
         logger.warning(f"Failed to send push OTP to driver {driver.id}: {e}")
 
     logger.info(
-        f"Fleet swap initiated for Driver {driver.full_name} ({driver.primary_number}). "
+        f"Fleet swap initiated for driver {driver.id} ({_mask_phone(driver.primary_number)}). "
         f"Swap UUID={swap_uuid}, valid {OTP_VALIDITY_MINUTES}m."
     )
 
@@ -222,7 +234,10 @@ def request_car_swap(
     Generates a 6-digit secure OTP delivered directly to the car's current registered owner.
     """
     clean_num = payload.car_number.strip().upper().replace(" ", "")
-    new_o_uuid = UUID(current_owner_id)
+    try:
+        new_o_uuid = UUID(current_owner_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid session")
 
     car = db.query(CarDetails).filter(CarDetails.car_number == clean_num).first()
     if not car:
@@ -257,7 +272,7 @@ def request_car_swap(
     otp_code = str(secrets.randbelow(900000) + 100000)
     salt = secrets.token_hex(16)
     otp_hash = _hash_otp(otp_code, salt)
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
+    expires_at = _utcnow() + timedelta(minutes=OTP_VALIDITY_MINUTES)
     swap_uuid = uuid.uuid4()
 
     audit_entry = FleetDriverSwapAudit(
@@ -279,8 +294,24 @@ def request_car_swap(
     db.commit()
     db.refresh(audit_entry)
 
-    # Send notification/SMS to current owner
-    masked_phone = _mask_phone(current_owner.mobile_number if current_owner else None)
+    # Deliver the OTP to the car's CURRENT owner, who shares it with the
+    # requester only if they agree to the transfer. Never in the response.
+    try:
+        from app.utils.notification_dispatch import send_push_to_vehicle_owner
+        send_push_to_vehicle_owner(
+            db,
+            vehicle_owner_id=str(car.vehicle_owner_id),
+            title="🚖 Car Transfer Request",
+            body=(
+                f"Another fleet driver has requested to move {car.car_number} to their fleet. "
+                f"Share this OTP only if you agree: {otp_code}. Valid for {OTP_VALIDITY_MINUTES} mins."
+            ),
+            data={"type": "FLEET_SWAP_OTP", "swap_id": str(swap_uuid), "swap_type": "CAR"},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send car swap OTP push for {car.car_number}: {e}")
+
+    masked_phone = _mask_phone(current_owner.primary_number if current_owner else None)
     logger.info(f"Car swap requested for {car.car_number}. Swap UUID={swap_uuid}, OTP dispatched.")
 
     return {
@@ -297,7 +328,9 @@ def request_car_swap(
 # -------------------------------------------------------------------------
 @router.post("/verify-swap")
 @router.post("/verify-car-swap")
+@limiter.limit("10/minute")
 def verify_swap_otp(
+    request: Request,
     payload: SwapVerifyRequest,
     current_owner_id: str = Depends(get_current_vehicleOwner_id),
     db: Session = Depends(get_db)
@@ -327,7 +360,7 @@ def verify_swap_otp(
             detail="Swap request is locked due to too many failed attempts. Please request a new swap.",
         )
 
-    if audit.otp_expires_at and audit.otp_expires_at < datetime.utcnow():
+    if audit.otp_expires_at and _as_aware(audit.otp_expires_at) < _utcnow():
         audit.status = "EXPIRED"
         db.commit()
         raise HTTPException(status_code=400, detail="OTP has expired. Please initiate a new swap request.")
@@ -353,23 +386,33 @@ def verify_swap_otp(
             detail=f"Invalid OTP code. {remaining} attempt(s) remaining.",
         )
 
-    # Execute transfer based on swap_type
+    # Execute transfer based on swap_type. The safety checks from the request
+    # step are repeated here: a trip may have been assigned in the 10 minutes
+    # between request and verify.
     if audit.swap_type == "CAR":
         car = db.query(CarDetails).filter(CarDetails.id == audit.car_id).first()
         if not car:
             raise HTTPException(status_code=404, detail="Car record no longer exists")
+        if car.vehicle_owner_id != audit.old_owner_id:
+            raise HTTPException(status_code=409, detail="Car owner changed since this request. Please request a new swap.")
+        if has_active_trip_car(db, car.id):
+            raise HTTPException(status_code=400, detail="Swap blocked: Car is currently assigned to an active trip. Wait until completion.")
         car.vehicle_owner_id = audit.new_owner_id
         entity_name = car.car_number
     else:
         driver = db.query(CarDriver).filter(CarDriver.id == audit.driver_id).first()
         if not driver:
             raise HTTPException(status_code=404, detail="Driver record no longer exists")
+        if driver.vehicle_owner_id != audit.old_owner_id:
+            raise HTTPException(status_code=409, detail="Driver's fleet changed since this request. Please request a new swap.")
+        if has_active_trip_driver(db, driver.id):
+            raise HTTPException(status_code=400, detail="Swap blocked: Driver has an active assignment in progress. Complete all trips before transfer.")
         driver.vehicle_owner_id = audit.new_owner_id
         entity_name = driver.full_name
 
     audit.is_verified = True
     audit.status = "COMPLETED"
-    audit.completed_at = datetime.utcnow()
+    audit.completed_at = _utcnow()
 
     db.commit()
 
@@ -400,7 +443,7 @@ def get_pending_swap_for_driver(
         .filter(
             FleetDriverSwapAudit.driver_id == current_driver.id,
             FleetDriverSwapAudit.status == "PENDING_OTP",
-            FleetDriverSwapAudit.otp_expires_at > datetime.utcnow()
+            FleetDriverSwapAudit.otp_expires_at > _utcnow()
         )
         .order_by(FleetDriverSwapAudit.created_at.desc())
         .first()
@@ -412,8 +455,8 @@ def get_pending_swap_for_driver(
     return {
         "has_pending": True,
         "swap_id": str(pending.swap_uuid),
-        "new_owner_phone": _mask_phone(new_owner.mobile_number if new_owner else None),
-        "expires_at": pending.otp_expires_at.isoformat() if pending.otp_expires_at else None,
+        "new_owner_phone": _mask_phone(new_owner.primary_number if new_owner else None),
+        "expires_at": _as_aware(pending.otp_expires_at).isoformat() if pending.otp_expires_at else None,
     }
 
 
@@ -499,7 +542,7 @@ def admin_override_swap(
 
     logger.warning(
         f"ADMIN OVERRIDE SWAP: {payload.swap_type} '{entity_name}' transferred by {admin_name}. "
-        f"Reason: {payload.reason}"
+        f"Reason: {payload.reason.strip()[:200]}"
     )
 
     return {

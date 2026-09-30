@@ -18,7 +18,7 @@ class FleetDriverSwapAudit(Base):
     initiated_by = Column(String, nullable=False, default="OWNER")  # OWNER, DRIVER, ADMIN
     otp_hash = Column(String, nullable=True)  # Cryptographic hash of the OTP
     otp_salt = Column(String, nullable=True)
-    otp_expires_at = Column(TIMESTAMP, nullable=True)
+    otp_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     otp_attempts = Column(Integer, nullable=False, default=0)
     is_verified = Column(Boolean, nullable=False, default=False)
     admin_override = Column(Boolean, nullable=False, default=False)
