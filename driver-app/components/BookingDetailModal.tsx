@@ -89,6 +89,7 @@ export default function BookingDetailModal({
   const [cancelling, setCancelling] = useState(false);
   const [custVisibleOverride, setCustVisibleOverride] = useState<boolean | null>(null);
   const [custSwitchBusy, setCustSwitchBusy] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
   const [advanceInput, setAdvanceInput] = useState<string | null>(null);
   const [advanceSaving, setAdvanceSaving] = useState(false);
 
@@ -578,6 +579,32 @@ export default function BookingDetailModal({
                     />
                   </View>
                 </View>
+              )}
+
+              {/* Manual "Notify drivers" alarm for a booking you posted - the one automatic push at posting
+                  time is easy to miss. Backend enforces a 60s cooldown per booking. */}
+              {isPosted && !postedCancelled && postedStage < 4 && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F59E0B', borderRadius: 12, paddingVertical: 13, marginBottom: 12, opacity: notifyBusy ? 0.7 : 1 }}
+                  disabled={notifyBusy}
+                  activeOpacity={0.85}
+                  onPress={async () => {
+                    setNotifyBusy(true);
+                    try {
+                      const res = await axiosDriver.post(`/api/assignments/driver/posted-bookings/${activeData.order_id || activeData.id}/notify`, {});
+                      const count = res?.data?.detail?.count;
+                      Alert.alert('Drivers alerted', count ? `Alert sent to ${count} driver${count === 1 ? '' : 's'}.` : 'The alert was sent again.');
+                    } catch (e: any) {
+                      const d = e?.response?.data?.detail;
+                      Alert.alert('Could not notify', typeof d === 'string' ? d : 'Please try again.');
+                    } finally {
+                      setNotifyBusy(false);
+                    }
+                  }}
+                >
+                  {notifyBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14.5 }}>{notifyBusy ? 'Alerting drivers...' : '🔔 Notify drivers again'}</Text>
+                </TouchableOpacity>
               )}
 
               {/* After accepting: exactly what to collect from the customer (never shown before accept for all-inclusive) */}
