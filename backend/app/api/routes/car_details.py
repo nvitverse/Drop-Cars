@@ -1,4 +1,13 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from datetime import date as _date
+
+
+def _expiry_fields(expiry) -> dict:
+    """expiry_date + days_left for a car document (was referenced but never
+    defined, so the car documents endpoint crashed for any car with an RC)."""
+    if not expiry:
+        return {"expiry_date": None, "days_left": None}
+    return {"expiry_date": expiry.isoformat(), "days_left": (expiry - _date.today()).days}
 from sqlalchemy.orm import Session
 from app.schemas.car_details import CarDetailsForm, CarDetailsOut, CarDetailsSignupResponse
 from app.crud.car_details import create_car_details, update_car_images

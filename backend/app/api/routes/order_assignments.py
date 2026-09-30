@@ -1323,9 +1323,9 @@ async def driver_cancel_order_endpoint(
 
     return {
         "success": True,
-        "message": f"Booking #{order_id} cancelled. ₹{PENALTY_FEE} penalty debited from wallet.",
+        "message": f"Booking #{order_id} cancelled. ₹{penalty_fee} penalty debited from wallet.",
         "order_id": order_id,
-        "penalty_amount": PENALTY_FEE,
+        "penalty_amount": penalty_fee,
         "reason": payload.reason,
     }
 

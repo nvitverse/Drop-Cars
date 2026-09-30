@@ -48,7 +48,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest httpx pytest-asyncio
+          pip install pytest httpx pytest-asyncio pyflakes
       - name: Throwaway GCP credentials (app creates a Storage client at import)
         run: |
           openssl genrsa -out /tmp/ci_key.pem 2048
