@@ -110,7 +110,7 @@ Ippo irukkura `(tabs)/accounts` "Search all accounts" adhaiye base-a use pannala
 
 ## Gaps and decisions
 1. **SOS admin screen illa** (design section 6). Backend-la `/sos/alerts` irukku, aana admin app-la screen illa. Add pannanum (Home tile-ku thevai). Adhukku munnaadi backend endpoint-ku auth podanum (ARCHITECTURE_REVIEW.md, C4).
-2. **Rendu inbox (enquiries + crm)** onnaakkanum. Edhu master nu neenga sollanum.
+2. **Rendu inbox (enquiries + crm)** onnaakkanum. **MUDIVU: backend master.** Website DB (Hostinger) chinna buffer mattum, retry-oda backend-ku anuppum. Munnaadi backend CRM API-ku auth podanum.
 3. **Shared screens** (`ratings-analytics`, referral, `announcements`) rendu side-kkum sambandham. Naan oru idathula vechu, matra idathula link koduthirukken. Neenga marukkalaam.
 4. **Duty driver** = own-fleet driver thaanaa nu confirm pannunga.
 5. **Chat role tag**: backend messages-la customer/driver/vendor/duty tag irukkaanu nan verify pannala. Illana add pannanum.
