@@ -31,6 +31,9 @@ jobs:
     env:
       DB_HOST: localhost
       DB_PASSWORD: ci-only-password
+      DISABLE_INTERNAL_SWEEPS: "1"
+      ADMIN_COMMESSION_ENV: "10"
+      VENDOR_COMMESSION_ENV: "10"
     defaults:
       run:
         working-directory: backend
@@ -59,6 +62,12 @@ jobs:
           }, open("/tmp/ci_gcp_creds.json", "w"))
           EOF
           echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/ci_gcp_creds.json" >> "$GITHUB_ENV"
+      - name: Throwaway JWT secret + app schema
+        run: |
+          echo "JWT_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')" >> "$GITHUB_ENV"
+          # session.py sets search_path=drop-cars; the schema must exist
+          # before app.main runs create_all at import.
+          python -c "import psycopg2; c = psycopg2.connect(host='localhost', user='drop-cars', password='ci-only-password', dbname='drop-cars'); c.autocommit = True; c.cursor().execute('CREATE SCHEMA IF NOT EXISTS \"drop-cars\"')"
       - name: Smoke import
         run: python -c "import app.main; print('app.main imported OK')"
       - name: Pytest

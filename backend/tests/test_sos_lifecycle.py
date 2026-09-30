@@ -7,13 +7,8 @@ Unit and integration tests for SOS Emergency system (T4 / T8).
 """
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from app.main import app
-from app.database.session import Base, get_db
-from app.models.sos_alert import SosAlert
-from app.core.security import create_access_token
 
 
 def test_sos_router_paths():
@@ -29,42 +24,8 @@ def test_sos_router_paths():
     assert "/api/sos/{alert_id}/resolve" in routes
 
 
-def test_legacy_sos_alert_contract():
-    """Legacy endpoint /api/sos/alert should accept legacy schema and return alert details."""
-    from sqlalchemy.pool import StaticPool
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool
-    )
-    SosAlert.__table__.create(bind=engine, checkfirst=True)
-    TestingSession = sessionmaker(bind=engine)
-
-    def override_get_db():
-        db = TestingSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        client = TestClient(app)
-        payload = {
-            "customer_id": "cust_12345",
-            "order_id": "ORD-9999",
-            "emergency_contact": "9876543210",
-            "latitude": "13.0827",
-            "longitude": "80.2707",
-            "tracking_link": "https://dropcars.in/track/ORD-9999"
-        }
-        response = client.post("/api/sos/alert", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data.get("status") in ("ok", "success")
-        assert "alert_id" in data or "id" in data
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+# The legacy /api/sos/alert contract is exercised on real Postgres in
+# test_swap_sos_postgres.py (this file used to test it on in-memory SQLite).
 
 
 def test_unauthenticated_sos_endpoints_rejected():

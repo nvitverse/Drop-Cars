@@ -1,36 +1,45 @@
-import sys
-import os
-import uuid
-from datetime import datetime, timedelta, timezone
+"""
+Unassigned booking auto-removal runs against real Postgres (pg_session,
+rolled back afterwards). The old version wrapped the asserts in
+`except Exception`, which also swallowed AssertionError, so it could never
+fail.
+"""
+import logging
 
-# Add backend directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pytest
 
-from app.database.session import SessionLocal, Base, engine
-import app.models.car_driver
-import app.models.vendor
-import app.models.vehicle_owner
-import app.models.new_orders
-from app.models.new_orders import NewOrder
-from app.models.ai_automation_log import AIAutomationLog
 from app.utils.unassigned_booking_expiry import auto_remove_unassigned_bookings
 
 
-def test_unassigned_booking_auto_removal():
-    print("--- Running Test: 30-Minute Unassigned Booking Auto-Removal Engine ---")
-    try:
-        db = SessionLocal()
-        res = auto_remove_unassigned_bookings(db, custom_timeout_mins=30)
-        print(f"Auto-Removal Engine Result: {res}")
+def test_unassigned_booking_auto_removal_contract(pg_session):
+    res = auto_remove_unassigned_bookings(pg_session, custom_timeout_mins=30)
 
-        assert res["success"] is True
-        assert res["timeout_minutes_used"] == 30
-        assert isinstance(res["auto_removed_count"], int)
-        db.close()
-    except Exception as e:
-        print(f"Skipping live DB check (database offline or unreachable): {e}")
+    assert res["success"] is True
+    assert res["timeout_minutes_used"] == 30
+    assert isinstance(res["processed_count"], int)
+    assert isinstance(res["expired_order_ids"], list)
 
 
-if __name__ == "__main__":
-    test_unassigned_booking_auto_removal()
-    print("\n[SUCCESS] ALL UNASSIGNED BOOKING REMOVAL TESTS PASSED!")
+@pytest.mark.xfail(
+    strict=True,
+    reason="Pre-existing on main: the engine filters NewOrder.Driver_assigned / "
+    "Car_assigned, which do not exist, so it always hits its except branch and "
+    "returns success with 0. Needs its own backlog item; flip to pass when fixed.",
+)
+def test_unassigned_booking_auto_removal_query_runs(pg_session, caplog):
+    with caplog.at_level(logging.ERROR):
+        auto_remove_unassigned_bookings(pg_session, custom_timeout_mins=30)
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_unassigned_admin_routes_require_admin():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    assert client.post("/api/admin/auto-remove-unassigned").status_code in (401, 403)
+    assert client.get("/api/admin/settings/unassigned-timeout").status_code in (401, 403)
+    assert client.post(
+        "/api/admin/settings/unassigned-timeout", json={"unassigned_removal_timeout_minutes": 30}
+    ).status_code in (401, 403)
+    assert client.put("/api/orders/1/bump-fare", json={"new_driver_fare": 999}).status_code in (401, 403)
