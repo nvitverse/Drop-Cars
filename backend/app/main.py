@@ -235,8 +235,11 @@ async def ensure_sos_alerts_and_swap_columns() -> None:
     from sqlalchemy import text
     db = SessionLocal()
     statements = [
+        # Never wait on a busy table at boot - skip and retry next start.
+        "SET lock_timeout = '3s'",
         # SOS Alerts new columns
         "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS driver_id VARCHAR",
+        "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS triggered_by_id VARCHAR",
         "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS triggered_by_role VARCHAR NOT NULL DEFAULT 'CUSTOMER'",
         "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS customer_phone VARCHAR",
         "ALTER TABLE sos_alerts ADD COLUMN IF NOT EXISTS driver_phone VARCHAR",
@@ -251,6 +254,24 @@ async def ensure_sos_alerts_and_swap_columns() -> None:
         # Backfill defaults on existing rows
         "UPDATE sos_alerts SET updated_at = created_at WHERE updated_at IS NULL AND created_at IS NOT NULL",
         "UPDATE sos_alerts SET triggered_by_role = 'CUSTOMER' WHERE triggered_by_role IS NULL",
+        # fleet_driver_swap_audit already exists on prod from c92d94a (driver
+        # swaps only, plaintext otp_code). create_all never adds columns.
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS swap_uuid UUID",
+        "UPDATE fleet_driver_swap_audit SET swap_uuid = md5(random()::text || clock_timestamp()::text || id::text)::uuid WHERE swap_uuid IS NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_fleet_driver_swap_audit_swap_uuid ON fleet_driver_swap_audit (swap_uuid)",
+        "ALTER TABLE fleet_driver_swap_audit ALTER COLUMN swap_uuid SET NOT NULL",
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS swap_type VARCHAR NOT NULL DEFAULT 'DRIVER'",
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS car_id UUID",
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS car_number VARCHAR",
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS otp_hash VARCHAR",
+        "ALTER TABLE fleet_driver_swap_audit ADD COLUMN IF NOT EXISTS otp_salt VARCHAR",
+        "ALTER TABLE fleet_driver_swap_audit ALTER COLUMN driver_id DROP NOT NULL",
+        "CREATE INDEX IF NOT EXISTS ix_fleet_driver_swap_audit_car_id ON fleet_driver_swap_audit (car_id)",
+        "CREATE INDEX IF NOT EXISTS ix_fleet_driver_swap_audit_car_number ON fleet_driver_swap_audit (car_number)",
+        # Naive UTC -> TIMESTAMPTZ, only while the column is still naive.
+        """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'fleet_driver_swap_audit' AND column_name = 'otp_expires_at' AND data_type = 'timestamp without time zone') THEN ALTER TABLE fleet_driver_swap_audit ALTER COLUMN otp_expires_at TYPE TIMESTAMPTZ USING otp_expires_at AT TIME ZONE 'UTC'; END IF; END $$""",
+        # Pooled connection goes back to normal request use afterwards.
+        "RESET lock_timeout",
     ]
     for stmt in statements:
         try:
