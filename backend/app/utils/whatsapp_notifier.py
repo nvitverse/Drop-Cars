@@ -6,10 +6,30 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Configurable via environment variables (Meta WhatsApp Cloud API / Open-Source Gateway)
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "DEMO_PHONE_ID")
-WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "DEMO_ACCESS_TOKEN")
+# Meta WhatsApp Cloud API credentials. No placeholder defaults: when either
+# is missing nothing is sent and the result says so (success=False). On
+# Cloud Run (K_SERVICE is set) a missing config is logged as an ERROR at
+# import so it shows up in the service logs instead of failing silently.
+WHATSAPP_PHONE_NUMBER_ID = (os.getenv("WHATSAPP_PHONE_NUMBER_ID") or "").strip()
+WHATSAPP_ACCESS_TOKEN = (os.getenv("WHATSAPP_ACCESS_TOKEN") or "").strip()
 WHATSAPP_API_URL = f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+
+
+def whatsapp_configured() -> bool:
+    return bool(WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN) and not (
+        WHATSAPP_PHONE_NUMBER_ID.startswith("DEMO_") or WHATSAPP_ACCESS_TOKEN.startswith("DEMO_")
+    )
+
+
+def _mask(phone: str) -> str:
+    return f"******{phone[-4:]}" if len(phone) >= 4 else "******"
+
+
+if os.getenv("K_SERVICE") and not whatsapp_configured():
+    logger.error(
+        "WhatsApp is NOT configured in production: set WHATSAPP_PHONE_NUMBER_ID and "
+        "WHATSAPP_ACCESS_TOKEN. Automated WhatsApp messages will not be sent."
+    )
 
 
 def send_whatsapp_message(
@@ -41,25 +61,23 @@ def send_whatsapp_message(
         "Content-Type": "application/json"
     }
 
-    try:
-        # If active API keys exist, send via Meta Graph API; otherwise simulate zero-cost delivery log
-        if WHATSAPP_ACCESS_TOKEN != "DEMO_ACCESS_TOKEN":
-            response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=5)
-            res_data = response.json()
-            logger.info(f"[WHATSAPP SENT API] To: {clean_phone} - Status: {response.status_code}")
-            return {"success": True, "phone": clean_phone, "api_response": res_data}
-        else:
-            # Simulated zero-cost local WhatsApp automation log
-            logger.info(f"[WHATSAPP AUTOMATED MSG] To: {clean_phone} | Text:\n{message_text}")
-            return {
-                "success": True,
-                "simulated": True,
-                "phone": clean_phone,
-                "message": "Automated WhatsApp message delivered successfully via backend messaging pipeline."
-            }
+    if not whatsapp_configured():
+        logger.warning(f"[WHATSAPP NOT CONFIGURED] Not sent to {_mask(clean_phone)}")
+        return {
+            "success": False,
+            "simulated": True,
+            "phone": clean_phone,
+            "error": "WhatsApp is not configured (WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN).",
+        }
 
+    try:
+        response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=5)
+        res_data = response.json()
+        ok = 200 <= response.status_code < 300
+        logger.info(f"[WHATSAPP SENT API] To: {_mask(clean_phone)} - Status: {response.status_code}")
+        return {"success": ok, "phone": clean_phone, "api_response": res_data}
     except Exception as e:
-        logger.error(f"[WHATSAPP ERROR] Failed to send to {clean_phone}: {str(e)}")
+        logger.error(f"[WHATSAPP ERROR] Failed to send to {_mask(clean_phone)}: {str(e)}")
         return {"success": False, "phone": clean_phone, "error": str(e)}
 
 
