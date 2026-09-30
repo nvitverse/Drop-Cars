@@ -2659,6 +2659,76 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // --- SOS Emergency Management ---
+  async getActiveSosAlerts(): Promise<any[]> {
+    return this.makeRequest('/sos/active');
+  }
+
+  async getSosAlerts(status?: string, skip = 0, limit = 50): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (status) params.set('status_filter', status);
+    params.set('skip', String(skip));
+    params.set('limit', String(limit));
+    return this.makeRequest(`/sos/alerts?${params.toString()}`);
+  }
+
+  async acknowledgeSosAlert(id: number | string): Promise<any> {
+    return this.makeRequest(`/sos/${id}/acknowledge`, {
+      method: 'POST',
+    });
+  }
+
+  async resolveSosAlert(
+    id: number | string,
+    status: 'RESOLVED' | 'FALSE_ALARM' = 'RESOLVED',
+    resolutionNotes?: string
+  ): Promise<any> {
+    return this.makeRequest(`/sos/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ status, resolution_notes: resolutionNotes }),
+    });
+  }
+
+  // --- Fleet Driver & Car Swap ---
+  async requestDriverSwap(driverId: string, newOwnerId?: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/request-swap', {
+      method: 'POST',
+      body: JSON.stringify({ driver_id: driverId, new_owner_id: newOwnerId }),
+    });
+  }
+
+  async verifyDriverSwap(swapId: string, otp: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/verify-swap', {
+      method: 'POST',
+      body: JSON.stringify({ swap_id: swapId, otp }),
+    });
+  }
+
+  async requestCarSwap(carNumber: string, newOwnerId?: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/request-car-swap', {
+      method: 'POST',
+      body: JSON.stringify({ car_number: carNumber, new_owner_id: newOwnerId }),
+    });
+  }
+
+  async verifyCarSwap(swapId: string, otp: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/verify-car-swap', {
+      method: 'POST',
+      body: JSON.stringify({ swap_id: swapId, otp }),
+    });
+  }
+
+  async adminOverrideSwap(swapId: string, reason: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/admin-override', {
+      method: 'POST',
+      body: JSON.stringify({ swap_id: swapId, reason }),
+    });
+  }
+
+  async getCommissionRates(): Promise<any> {
+    return this.makeRequest('/admin/commission-rates');
+  }
 }
 export const apiService = new ApiService();
 

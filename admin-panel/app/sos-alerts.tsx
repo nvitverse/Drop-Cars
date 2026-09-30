@@ -71,9 +71,8 @@ export default function SosAlertsScreen() {
 
   const fetchAlerts = useCallback(async () => {
     try {
-      const filterParam = filter === 'ALL' ? '' : filter === 'ACTIVE' ? 'ACTIVE' : 'RESOLVED';
-      const endpoint = filterParam ? `/sos/alerts?status_filter=${filterParam}` : '/sos/alerts';
-      const res = await apiService.get<SosAlertItem[]>(endpoint);
+      const filterParam = filter === 'ALL' ? undefined : filter === 'ACTIVE' ? 'ACTIVE' : 'RESOLVED';
+      const res = await apiService.getSosAlerts(filterParam);
       if (Array.isArray(res)) {
         setAlerts(res);
       }
@@ -93,7 +92,7 @@ export default function SosAlertsScreen() {
 
   const handleAcknowledge = async (alertId: number) => {
     try {
-      await apiService.post(`/sos/${alertId}/acknowledge`, { acknowledged_by: 'Duty Operator' });
+      await apiService.acknowledgeSosAlert(alertId);
       Alert.alert('Acknowledged', 'SOS Emergency has been acknowledged. Emergency protocol active.');
       fetchAlerts();
     } catch (e: any) {
@@ -105,11 +104,11 @@ export default function SosAlertsScreen() {
     if (!selectedAlert) return;
     setSubmitting(true);
     try {
-      await apiService.post(`/sos/${selectedAlert.id}/resolve`, {
-        status: resolveStatus,
-        resolved_by: 'Duty Operator',
-        resolution_notes: resolveNotes || (resolveStatus === 'RESOLVED' ? 'Assistance provided and verified safe.' : 'Reported as false alarm.'),
-      });
+      await apiService.resolveSosAlert(
+        selectedAlert.id,
+        resolveStatus,
+        resolveNotes || (resolveStatus === 'RESOLVED' ? 'Assistance provided and verified safe.' : 'Reported as false alarm.')
+      );
       Alert.alert('Updated', `SOS marked as ${resolveStatus}`);
       setSelectedAlert(null);
       setResolveNotes('');
