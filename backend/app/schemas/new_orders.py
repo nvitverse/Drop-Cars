@@ -16,6 +16,21 @@ indian_phone_pattern = r'^[6-9]\d{9}$'
 customer_phone_pattern = r'^\+[1-9]\d{7,14}$'
 
 
+def normalize_customer_number(v):
+    """Accept the number however staff typed it - "+91 88384 85050",
+    "+91-8838485050", "8838485050" - and store it as +918838485050. The Admin
+    "Post booking" form sends the country code and the number separated by a
+    space, which the strict pattern used to reject."""
+    import re
+    if isinstance(v, str):
+        v = re.sub(r"[\s\-()]", "", v)
+        if len(v) == 10 and v.isdigit():
+            v = f"+91{v}"
+    if not isinstance(v, str) or not re.match(customer_phone_pattern, v):
+        raise ValueError('Invalid mobile number format. Include the country code, e.g. +919876543210')
+    return v
+
+
 class ChargeItem(BaseModel):
     label: str
     included: bool = False
@@ -55,10 +70,10 @@ class RentalOrderRequest(BaseModel):
     pick_near_city: List[str]
     start_date_time: datetime
     customer_name: str
-    customer_number: Annotated[str, Field(
-        pattern=customer_phone_pattern,
-        description="Customer mobile number must be a valid 10-digit Indian mobile number (starting with 6-9)"
-    )]
+    # Plain str: the format is checked (and spaces/dashes stripped) by
+    # validate_customer_number below. A Field(pattern=...) here ran first and
+    # rejected "+91 8838485050" before the validator could clean it.
+    customer_number: str
     
     package_hours: Dict[str, int] = Field(
         description='{"hours": <int>, "km_range": <int>}'
@@ -99,14 +114,7 @@ class RentalOrderRequest(BaseModel):
 
     @validator('customer_number')
     def validate_customer_number(cls, v):
-        import re
-        if v and isinstance(v, str) and not v.startswith('+'):
-            v_clean = v.strip()
-            if len(v_clean) == 10 and v_clean.isdigit():
-                v = f"+91{v_clean}"
-        if not re.match(customer_phone_pattern, v):
-            raise ValueError('Invalid mobile number format. Include the country code, e.g. +919876543210')
-        return v
+        return normalize_customer_number(v)
 
 
 class RentalFareBreakdown(BaseModel):
@@ -261,14 +269,7 @@ class OnewayQuoteRequest(BaseModel):
 
     @validator('customer_number')
     def validate_customer_number(cls, v):
-        import re
-        if v and isinstance(v, str) and not v.startswith('+'):
-            v_clean = v.strip()
-            if len(v_clean) == 10 and v_clean.isdigit():
-                v = f"+91{v_clean}"
-        if not re.match(customer_phone_pattern, v):
-            raise ValueError('Invalid mobile number format. Include the country code, e.g. +919876543210')
-        return v
+        return normalize_customer_number(v)
     max_time_to_assign_order: Optional[int] = Field(
         default=15,
         description="Maximum time in minutes to assign the order (default: 15 minutes)"
