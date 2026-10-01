@@ -180,13 +180,24 @@ def resolve_commission_class(*, fare_type, vendor_id=None, posted_by_vehicle_own
 
 def compute_split(commission_class: str, *, driver_fare: int = 0, base_fare: int = 0, extras: int = 0,
                   total_booking: int = 0, markup: int = 0, cc_total_pct: int = 10, cc_on: bool = True,
-                  fees: dict | None = None, gst_amount: int = 0, cc_min: int = 0) -> dict:
+                  fees: dict | None = None, gst_amount: int = 0, cc_min: int = 0, pct_override=None) -> dict:
     """Who gets what for one booking. Returns customer_total, driver_net, poster_share (poster_cc + extras / markup),
     platform_fee. driver_net + poster_share + platform_fee == customer_total, always."""
     fees = fees or {}
     fee_pct = fees.get("platform_share_pct", PLATFORM_FEE_PERCENT)
     fee_min = int(fees.get("platform_share_min", PLATFORM_FEE_MIN))
     ai_pct = fees.get("platform_all_inclusive_pct", PLATFORM_ALL_INCLUSIVE_PERCENT)
+    # Admin chose a commission % for THIS booking (orders.commission_percent): it replaces the
+    # percentage that applies to the booking's class - the commission on the km fare (Standard),
+    # the platform's share of the poster's markup (poster all-inclusive) or the platform's cut of
+    # the whole fare (platform all-inclusive).
+    if pct_override is not None:
+        if commission_class == CLASS_STANDARD:
+            cc_total_pct = pct_override
+        elif commission_class == CLASS_POSTER_ALL_INCLUSIVE:
+            fee_pct = pct_override
+        else:
+            ai_pct = pct_override
     if commission_class == CLASS_STANDARD:
         poster_cc = _pct_ceil(base_fare, cc_total_pct) if cc_on else 0
         # minimum commission (Outstation): the driver pays at least cc_min however short the fare (never more than
@@ -284,11 +295,13 @@ def estimate_split_for_order(db: Session, order) -> dict:
         rates = get_commission_rates(db, _cat, "STANDARD")
         return compute_split(cls, driver_fare=driver_fare, base_fare=min(base_fare, driver_fare) if base_fare else driver_fare,
                              extras=extras, cc_total_pct=rates["vendor"] + rates["admin"], cc_on=cc_on, fees=fees,
-                             cc_min=(0 if _cat == "LOCAL" else int(fees.get("commission_min", COMMISSION_MIN))))
+                             cc_min=(0 if _cat == "LOCAL" else int(fees.get("commission_min", COMMISSION_MIN))),
+                             pct_override=getattr(order, "commission_percent", None))
 
     total_booking = int(getattr(order, "total_booking_amount", 0) or 0) or est or cust
     markup = int(getattr(order, "extra_amount", 0) or 0)
-    return compute_split(cls, total_booking=total_booking, markup=markup, cc_on=cc_on, fees=fees_for_order(db, order.id, cls, fees))
+    return compute_split(cls, total_booking=total_booking, markup=markup, cc_on=cc_on, fees=fees_for_order(db, order.id, cls, fees),
+                         pct_override=getattr(order, "commission_percent", None))
 
 
 def vendor_earns_estimate(order, new_order) -> int:

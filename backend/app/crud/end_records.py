@@ -600,8 +600,9 @@ async def update_end_trip_record(
                     extras=max(0, closed_vendor_price - closed_driver_price),
                     cc_total_pct=_rates["vendor"] + _rates["admin"], cc_on=not commission_waived, fees=_fees,
                     cc_min=(0 if _cat == "LOCAL" else int(_fees.get("commission_min", 200))),
+                    pct_override=getattr(order, "commission_percent", None),
                 )
-                commision_amount = 0 if commission_waived else (_rates["vendor"] + _rates["admin"])
+                commision_amount = 0 if commission_waived else (getattr(order, "commission_percent", None) if getattr(order, "commission_percent", None) is not None else (_rates["vendor"] + _rates["admin"]))
                 closed_driver_price = _driver_fare
             else:
                 _total_booking = (
@@ -610,7 +611,8 @@ async def update_end_trip_record(
                     or 0
                 )
                 _markup = (getattr(order, "extra_amount", None) or getattr(new_order, "extra_amount", None) or 0) if _cls == CLASS_POSTER_ALL_INCLUSIVE else 0
-                _split = compute_split(_cls, total_booking=_total_booking, markup=_markup, cc_on=not commission_waived, fees=fees_for_order(db, order_id, _cls, get_fee_settings(db)))
+                _split = compute_split(_cls, total_booking=_total_booking, markup=_markup, cc_on=not commission_waived, fees=fees_for_order(db, order_id, _cls, get_fee_settings(db)),
+                                       pct_override=getattr(order, "commission_percent", None))
                 commision_amount = _split["fee_pct"]
                 closed_driver_price = _split["driver_net"]
             closed_vendor_price = _split["customer_total"]

@@ -589,6 +589,17 @@ export default function CreateBookingScreen() {
   // commission behavior; off skips admin_profit entirely at trip close
   // (see backend crud/end_records.py's update_end_trip_record).
   const [applyCommission, setApplyCommission] = useState(true);
+  // Commission % for THIS booking. Follows the platform rate (10% itemized, 15% local / all-inclusive)
+  // until the admin types a different number; only a typed value is sent.
+  const [commissionPct, setCommissionPct] = useState('10');
+  const [commissionTouched, setCommissionTouched] = useState(false);
+  const defaultCommissionPct = fareType === 'ALL_INCLUSIVE' || tripType === 'local' ? 15 : 10;
+  useEffect(() => {
+    if (!commissionTouched) setCommissionPct(String(defaultCommissionPct));
+  }, [defaultCommissionPct, commissionTouched]);
+  // Extras the admin added (Night allowance, Parking, Waiting, other). Only added ones show on the form.
+  const [showAddExtraModal, setShowAddExtraModal] = useState(false);
+  const hasWaitingCharge = customCharges.some((c) => c.name.trim().toLowerCase() === 'waiting');
 
   // Booking Configuration (km-based trip types only)
   const [liveUntilDate, setLiveUntilDate] = useState('');
@@ -672,7 +683,9 @@ export default function CreateBookingScreen() {
   // GST = 5% of the km fare (driver + vendor per-km rate x billable km): the
   // quoted km once there is a quote, the minimum billable km before that.
   const gstBillableKm = Number(fare?.total_km) > 0 ? Number(fare.total_km) : (hasMinKm ? Number(minKm) || 0 : 0);
-  const autoGst = Math.round(0.05 * gstBillableKm * ((Number(costPerKm) || 0) + (Number(extraCostPerKm) || 0)));
+  const autoGst = fareType === 'ALL_INCLUSIVE'
+    ? Math.round(0.05 * ((Number(driverAllowance) || 0) + (Number(extraAmount) || 0)))
+    : Math.round(0.05 * gstBillableKm * ((Number(costPerKm) || 0) + (Number(extraCostPerKm) || 0)));
   useEffect(() => {
     if (includeGst && !gstTouched) setGstAmount(String(autoGst));
   }, [includeGst, gstTouched, autoGst]);
@@ -1009,7 +1022,7 @@ export default function CreateBookingScreen() {
       advance_received: advanceReceived ? Number(advanceReceived) : undefined,
       total_booking_amount: fareType === 'ALL_INCLUSIVE' && totalBookingAmount ? Number(totalBookingAmount) : undefined,
       extra_amount: fareType === 'ALL_INCLUSIVE' ? (Number(extraAmount) || 0) : undefined,
-      waiting_hours_included: fareType === 'ALL_INCLUSIVE' && waitingHoursIncluded ? Number(waitingHoursIncluded) : undefined,
+      waiting_hours_included: fareType === 'ALL_INCLUSIVE' && hasWaitingCharge && waitingHoursIncluded ? Number(waitingHoursIncluded) : undefined,
       acceptance_deadline: toIsoDateTime(liveUntilDate, liveUntilTime),
       // "Allocate manually" goes to a fleet owner (wallet holder), not a duty
       // driver: the booking is created without a broadcast and handed over.
@@ -1027,6 +1040,7 @@ export default function CreateBookingScreen() {
       // "10% CC" toggle (2026-09-04) - always sent explicitly so an
       // unchecked toggle (false) actually reaches the backend.
       apply_commission: applyCommission,
+      commission_percent: applyCommission && commissionTouched && commissionPct.trim() !== '' ? Number(commissionPct) : undefined,
     };
   };
 
@@ -1125,6 +1139,10 @@ export default function CreateBookingScreen() {
   };
 
   const resetForm = () => {
+    setCommissionTouched(false);
+    setApplyCommission(true);
+    setCustomCharges([]);
+    setWaitingHoursIncluded('');
     setFare(null);
     setCreatedOrderId(null);
     setCustomerName('');
@@ -1860,17 +1878,27 @@ export default function CreateBookingScreen() {
                       />
                     </View>
 
-                    {/* Row 3: Waiting hours included */}
+                    {/* Row 3: GST 5% (of driver amount + vendor extra) */}
                     <View style={styles.priceCell}>
-                      <Text style={styles.priceLabel}>Waiting hours included</Text>
-                      <TextInput
-                        style={styles.priceInput}
-                        value={waitingHoursIncluded}
-                        onChangeText={setWaitingHoursIncluded}
-                        keyboardType="numeric"
-                        placeholder="e.g. 2"
-                        placeholderTextColor={colors.textMuted}
-                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                          onPress={toggleGst}
+                          accessibilityLabel="GST 5 percent"
+                        >
+                          <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: includeGst ? colors.primary : '#94A3B8', backgroundColor: includeGst ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                            {includeGst && <Check size={11} color="#FFFFFF" />}
+                          </View>
+                          <Text style={[styles.priceLabel, { marginBottom: 0 }]}>GST 5%</Text>
+                        </TouchableOpacity>
+                        {tip('GST 5%', 'Tick it and the amount fills itself: 5% of the driver amount + vendor extra. Type a different amount to override it.')}
+                        {includeGst && gstTouched && (
+                          <TouchableOpacity onPress={() => setGstTouched(false)} accessibilityLabel="Use the automatic GST amount">
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Auto</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <TextInput style={[styles.priceInput, !includeGst && { opacity: 0.5 }]} value={includeGst ? gstAmount : ''} onChangeText={editGst} keyboardType="numeric" placeholder="Auto 5%" placeholderTextColor={colors.textMuted} editable={includeGst} accessibilityLabel="GST amount" />
                     </View>
                   </View>
                 </View>
@@ -2013,79 +2041,75 @@ export default function CreateBookingScreen() {
                     </View>
                   </View>
 
-                  {/* Dynamic Inline Custom Charges List & + Add Custom Charge Button */}
-                  <View style={{ marginTop: 12 }}>
-                    {customCharges.map((item) => (
-                      <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, backgroundColor: themeColors.surface, padding: 8, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)));
-                          }}
-                        >
-                          <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#94A3B8', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                            {item.included && <Check size={12} color="#FFFFFF" />}
-                          </View>
-                        </TouchableOpacity>
-                        <TextInput
-                          style={[styles.priceInput, { flex: 1, height: 38, marginBottom: 0 }]}
-                          placeholder="Charge name (e.g. Parking / Waiting)"
-                          value={item.name}
-                          onChangeText={(text) => {
-                            setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)));
-                          }}
-                          placeholderTextColor={colors.textMuted}
-                        />
-                        <TextInput
-                          style={[styles.priceInput, { width: 90, height: 38, marginBottom: 0 }]}
-                          placeholder="Amount ₹"
-                          value={item.amount}
-                          onChangeText={(text) => {
-                            setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: text } : c)));
-                          }}
-                          keyboardType="numeric"
-                          placeholderTextColor={colors.textMuted}
-                        />
-                        <TouchableOpacity
-                          onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <X size={18} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-
-                    <TouchableOpacity
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                        paddingVertical: 8,
-                        paddingHorizontal: 14,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderStyle: 'dashed',
-                        borderColor: colors.primary,
-                      }}
-                      onPress={() => {
-                        setCustomCharges([
-                          ...customCharges,
-                          { id: String(Date.now()), name: '', amount: '0', included: true },
-                        ]);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Plus size={16} color={colors.primary} />
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
-                        Add custom charge
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
               )}
 
-              {/* 10% platform commission: one row */}
+              {/* Extras: same compact "+ Add" row as Special requests. Only what was added shows. */}
+              <View style={[styles.inlineField, { marginTop: 12, marginBottom: customCharges.length > 0 ? 10 : 0 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>Extras</Text>
+                  {tip('Extras', 'Charges outside the fare, like night allowance, parking or waiting. Tick one to say it is included in the fare; untick it when the customer pays it separately - it then shows under Exclusions in the quote. Only the extras you add appear here.')}
+                </View>
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: themeColors.primaryTint, borderColor: colors.primary }]}
+                  onPress={() => setShowAddExtraModal(true)}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Add extra"
+                >
+                  <Plus size={13} color={colors.primary} />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {customCharges.map((item) => (
+                <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, backgroundColor: themeColors.surface, padding: 8, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
+                  <TouchableOpacity
+                    onPress={() => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)))}
+                    accessibilityLabel={`${item.name || 'Extra'} included in fare`}
+                  >
+                    <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#94A3B8', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.included && <Check size={12} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={[styles.priceInput, { flex: 1, minWidth: 0, height: 38, marginBottom: 0 }]}
+                    placeholder="Extra name"
+                    value={item.name}
+                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)))}
+                    placeholderTextColor={colors.textMuted}
+                  />
+                  <TextInput
+                    style={[styles.priceInput, { width: 84, height: 38, marginBottom: 0 }]}
+                    placeholder="₹"
+                    value={item.amount}
+                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: stripLeadingZero(text) } : c)))}
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel={`Remove ${item.name || 'extra'}`}
+                  >
+                    <X size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {fareType === 'ALL_INCLUSIVE' && hasWaitingCharge && (
+                <View style={[styles.inlineField, { marginBottom: 8 }]}>
+                  <Text style={[styles.priceLabel, { marginBottom: 0, flex: 1 }]}>Waiting hours included</Text>
+                  <TextInput
+                    style={[styles.priceInput, { width: 96, textAlign: 'right' }]}
+                    value={waitingHoursIncluded}
+                    onChangeText={setWaitingHoursIncluded}
+                    keyboardType="numeric"
+                    placeholder="e.g. 2"
+                    placeholderTextColor={colors.textMuted}
+                    accessibilityLabel="Waiting hours included"
+                  />
+                </View>
+              )}
+
+              {/* Platform commission: one row, % can be changed for this booking */}
               <View style={[styles.inlineField, { marginTop: 12, marginBottom: 0, paddingTop: 12, borderTopWidth: 1, borderTopColor: themeColors.border }]}>
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
@@ -2094,7 +2118,7 @@ export default function CreateBookingScreen() {
                     else setApplyCommission(true);
                   }}
                   activeOpacity={0.8}
-                  accessibilityLabel="10% platform commission"
+                  accessibilityLabel="Platform commission"
                 >
                   <View style={{
                     width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
@@ -2104,21 +2128,37 @@ export default function CreateBookingScreen() {
                   }}>
                     {applyCommission && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
                   </View>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>10% platform commission</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>Commission</Text>
                 </TouchableOpacity>
                 {tip(
-                  '10% platform commission',
-                  'On: Drop Cars keeps 10% of the km fare when the trip completes.\n\nOff: this booking is commission-free. Turning it off asks you to confirm.',
+                  'Platform commission',
+                  'What Drop Cars keeps from this booking when the trip completes. It starts at the platform rate (10% itemized, 15% for local and all-inclusive); type another % to change it for this booking only.\n\nUntick it to waive the commission completely - you are asked to confirm.',
                 )}
-                <View style={{
-                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1,
-                  backgroundColor: applyCommission ? '#DCFCE7' : '#FEE2E2',
-                  borderColor: applyCommission ? '#86EFAC' : '#FCA5A5',
-                }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: applyCommission ? '#166534' : '#991B1B' }}>
-                    {applyCommission ? 'Active' : 'Waived'}
-                  </Text>
-                </View>
+                {applyCommission ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <TextInput
+                      style={[styles.priceInput, { width: 56, height: 36, paddingVertical: 4, textAlign: 'center' }]}
+                      value={commissionPct}
+                      onChangeText={(v) => {
+                        setCommissionTouched(true);
+                        const clean = v.replace(/[^0-9.]/g, '');
+                        setCommissionPct(Number(clean) > 100 ? '100' : clean);
+                      }}
+                      keyboardType="numeric"
+                      accessibilityLabel="Commission percent"
+                    />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>%</Text>
+                    {commissionTouched && (
+                      <TouchableOpacity onPress={() => setCommissionTouched(false)} accessibilityLabel="Use the platform rate">
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Reset</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#991B1B' }}>Waived</Text>
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -2302,7 +2342,8 @@ export default function CreateBookingScreen() {
           const drvTotal = Number(fare.driver_amount || fare.estimate_price || 0);
           const adv = parseFloat(advanceReceived) || 0;
           const baseKm = Number(fare.base_km_amount || 0);
-          const comm = applyCommission ? Math.round(baseKm * 0.10) : 0;
+          const commRate = (Number(commissionPct) || 0) / 100;
+          const comm = applyCommission ? Math.round(baseKm * commRate) : 0;
           const extraMarkup = Math.max(0, custTotal - drvTotal);
           const km = Number(fare.total_km || 0);
           const routeKm = Number(fare.remark_trip_min_km || 0);
@@ -2372,7 +2413,7 @@ export default function CreateBookingScreen() {
               {row('Customer / Vendor fare', money(custTotal), true)}
               {row('Platform / Admin earnings', money(comm + extraMarkup), true)}
               <Text style={[styles.quoteSub, { color: themeColors.textSecondary, marginTop: -2, marginBottom: 8 }]}>
-                10% commission {money(comm)}{extraMarkup > 0 ? ` + vendor extra ${money(extraMarkup)}` : ''}
+                {Math.round(commRate * 1000) / 10}% commission {money(comm)}{extraMarkup > 0 ? ` + vendor extra ${money(extraMarkup)}` : ''}
               </Text>
 
               {/* Inclusions / Exclusions: tap to open the full list */}
@@ -2715,7 +2756,7 @@ export default function CreateBookingScreen() {
             </Text>
 
             <Text style={{ fontSize: 13.5, color: themeColors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
-              Disabling this waives the 10% platform commission fee for this booking. Platform commission will <Text style={{ fontWeight: '800', color: colors.primary }}>NOT</Text> be collected at trip completion.
+              Disabling this waives the platform commission for this booking. Platform commission will <Text style={{ fontWeight: '800', color: colors.primary }}>NOT</Text> be collected at trip completion.
             </Text>
 
             <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
@@ -3553,6 +3594,48 @@ export default function CreateBookingScreen() {
         title={locationPickerTitle}
         initialValue={activeLocationIndex !== null ? (stops[activeLocationIndex] || '') : ''}
       />
+
+      {/* Add extra: tap an option to add it (tap again to remove). Only added ones appear on the form. */}
+      <Modal visible={showAddExtraModal} transparent animationType="fade" onRequestClose={() => setShowAddExtraModal(false)}>
+        <TouchableOpacity style={styles.dialogBackdrop} activeOpacity={1} onPress={() => setShowAddExtraModal(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.dialogCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text, marginBottom: 10 }}>Add extras</Text>
+            {['Night allowance', 'Parking', 'Waiting'].map((name) => {
+              const existing = customCharges.find((c) => c.name.trim().toLowerCase() === name.toLowerCase());
+              return (
+                <TouchableOpacity
+                  key={name}
+                  style={[styles.optTile, { flexBasis: 'auto', width: '100%', marginBottom: 8, borderColor: existing ? colors.primary : themeColors.border, backgroundColor: existing ? themeColors.primaryTint : themeColors.background }]}
+                  onPress={() => {
+                    if (existing) setCustomCharges(customCharges.filter((c) => c.id !== existing.id));
+                    else setCustomCharges([...customCharges, { id: `${Date.now()}-${name}`, name, amount: '0', included: true }]);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityLabel={`${existing ? 'Remove' : 'Add'} ${name}`}
+                >
+                  <Text style={[styles.optText, { flex: 1, color: existing ? colors.primary : themeColors.text }]}>{name}</Text>
+                  {existing && <Check size={15} color={colors.primary} strokeWidth={3} />}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.optTile, { flexBasis: 'auto', width: '100%', marginBottom: 12, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: themeColors.background }]}
+              onPress={() => {
+                setCustomCharges([...customCharges, { id: String(Date.now()), name: '', amount: '0', included: true }]);
+                setShowAddExtraModal(false);
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="Add other extras"
+            >
+              <Plus size={15} color={colors.primary} />
+              <Text style={[styles.optText, { color: colors.primary }]}>Other extras</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalSaveButton, { paddingVertical: 11 }]} onPress={() => setShowAddExtraModal(false)}>
+              <Text style={styles.modalSaveButtonText}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Explanation popup behind every (i) dot */}
       <Modal visible={!!helpTip} transparent animationType="fade" onRequestClose={() => setHelpTip(null)}>
