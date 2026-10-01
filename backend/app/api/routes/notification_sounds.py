@@ -11,9 +11,11 @@ Pushes to that phone are then sent on those channels (see
 utils/notification_settings.apply_device_sound_channels), so the MP3 plays
 even when the app is closed.
 """
+import mimetypes
+import re
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -36,6 +38,28 @@ def sound_manifest(
     if app and app not in _APPS:
         raise HTTPException(status_code=400, detail=f"app must be one of {', '.join(_APPS)}")
     return {"sounds": get_sound_manifest(db, app)}
+
+
+_SOUND_NAME = re.compile(r"^[A-Za-z0-9._-]{1,120}\.(mp3|mpeg|wav|m4a|ogg|aac)$", re.I)
+_SOUND_MAX_BYTES = 5 * 1024 * 1024
+
+
+@router.get("/file/{filename}")
+def sound_file(filename: str):
+    """The uploaded MP3 itself. Public on purpose: the phone downloads it to build its notification channel and the
+    storage bucket is private. Serves only files under notification_sounds/ with a plain audio file name."""
+    if not _SOUND_NAME.match(filename):
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        from app.utils.gcs import bucket
+        blob = bucket.blob(f"notification_sounds/{filename}")
+        data = blob.download_as_bytes()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Not found")
+    if len(data) > _SOUND_MAX_BYTES:
+        raise HTTPException(status_code=404, detail="Not found")
+    media = blob.content_type or mimetypes.guess_type(filename)[0] or "audio/mpeg"
+    return Response(content=data, media_type=media, headers={"Cache-Control": "public, max-age=86400"})
 
 
 class DeviceChannels(BaseModel):

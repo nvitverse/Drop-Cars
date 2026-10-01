@@ -11,6 +11,9 @@ from app.utils.notification_settings import (
 )
 
 URL = "https://storage.googleapis.com/test-bucket/notification_sounds/horn.mp3"
+# phones get the API-served address (the bucket is private) - the channel id is derived from it
+from app.utils.notification_settings import public_sound_url
+PHONE_URL = public_sound_url(URL)
 
 
 def test_every_event_key_used_in_code_is_in_the_catalogue():
@@ -40,12 +43,12 @@ def _owner_with_token(db, token):
 
 
 def test_device_channel_used_only_when_phone_has_it(pg_session):
-    pg_session.add(PlatformSetting(key="notif_sound_new_booking", value=URL))
+    pg_session.merge(PlatformSetting(key="notif_sound_new_booking", value=URL))  # merge: the startup hook may already have set the default
     pg_session.flush()
     has, hasnt = "ExponentPushToken[has-channel]", "ExponentPushToken[no-channel]"
     _owner_with_token(pg_session, has)
     _owner_with_token(pg_session, hasnt)
-    cid = custom_channel_id("new_booking", URL)
+    cid = custom_channel_id("new_booking", PHONE_URL)
     pg_session.query(Notification).filter(Notification.token == has).update({"sound_channels": {"new_booking": cid}})
     pg_session.flush()
 
@@ -56,11 +59,11 @@ def test_device_channel_used_only_when_phone_has_it(pg_session):
     assert payloads[1]["channelId"] == "dropcars-new-booking-v1"
     assert "sound_on_channel" not in payloads[1]["data"]
     # A new upload means a new channel id; the old channel is not used any more.
-    assert custom_channel_id("new_booking", URL + "?v2") != cid
+    assert custom_channel_id("new_booking", PHONE_URL + "?v2") != cid
 
 
 def test_manifest_and_device_report(client_with_db, pg_session):
-    pg_session.add(PlatformSetting(key="notif_sound_urgent_booking", value=URL))
+    pg_session.merge(PlatformSetting(key="notif_sound_urgent_booking", value=URL))
     token = "ExponentPushToken[report]"
     owner = _owner_with_token(pg_session, token)
     auth = {"Authorization": "Bearer " + create_access_token({"sub": str(owner.id), "user": "vehicle_owner", "token_version": 0})}
@@ -68,7 +71,7 @@ def test_manifest_and_device_report(client_with_db, pg_session):
     res = client_with_db.get("/api/notification-sounds?app=driver", headers=auth)
     assert res.status_code == 200, res.text
     sound = next(s for s in res.json()["sounds"] if s["event_key"] == "urgent_booking")
-    assert sound["channel_id"] == custom_channel_id("urgent_booking", URL)
+    assert sound["channel_id"] == custom_channel_id("urgent_booking", PHONE_URL)
 
     ok = client_with_db.post("/api/notification-sounds/device-channels", headers=auth,
                              json={"token": token, "channels": {"urgent_booking": sound["channel_id"], "bogus": "dcs-x"}})

@@ -895,6 +895,32 @@ async def ensure_profile_img_columns() -> None:
 
 
 @app.on_event("startup")
+async def ensure_default_booking_sound() -> None:
+    """The owner's own booking tone (uploaded to notification_sounds/ on 2026-10-01) is the starting value of the
+    "New booking" sound field in Admin > Notification settings. It only fills the field when it was NEVER set, so an
+    upload or a reset from the Admin App is never overwritten."""
+    import os
+    bucket_name = os.getenv("CREDENTIALS_BUCKET")
+    if not bucket_name:
+        return
+    from app.models.platform_setting import PlatformSetting
+    db = SessionLocal()
+    try:
+        key = "notif_sound_new_booking"
+        if not db.query(PlatformSetting).filter(PlatformSetting.key == key).first():
+            db.add(PlatformSetting(
+                key=key,
+                value=f"https://storage.googleapis.com/{bucket_name}/notification_sounds/drop-cars-booking-notification.mp3",
+            ))
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"default booking sound setup failed (continuing): {e}")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
 async def ensure_commission_waived_column() -> None:
     """Lightweight migration: the "10% CC" toggle column on orders (see
     api/routes/order_assignments.py's driver_create_booking_confirm and
