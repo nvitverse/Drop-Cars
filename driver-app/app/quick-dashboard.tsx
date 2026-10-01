@@ -52,6 +52,7 @@ import axiosInstance from '@/app/api/axiosInstance';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
 import CallButton from '@/components/CallButton';
+import CustomerNumberCountdown from '@/components/CustomerNumberCountdown';
 import { getBookingStatusLabel } from '@/utils/bookingStatus';
 import { formatBookingId, formatCarType as cleanFormatCarType } from '@/utils/format';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -1191,7 +1192,11 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
                     </View>
                     <View style={styles.detailRow}>
                       {/* Driver taps to call the customer directly */}
-                      <CallButton phoneNumber={order.customer_mobile} variant="inline" />
+                      {(order as any).customer_number_revealed === false && Number((order as any).customer_number_reveal_in_seconds) > 0 ? (
+                        <CustomerNumberCountdown seconds={Number((order as any).customer_number_reveal_in_seconds)} onUnlock={loadDriverData} />
+                      ) : (
+                        <CallButton phoneNumber={order.customer_mobile} variant="inline" />
+                      )}
                     </View>
 
                     {/* Vendor Information */}
