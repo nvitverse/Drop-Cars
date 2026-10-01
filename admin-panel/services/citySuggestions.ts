@@ -8,7 +8,7 @@
 //   5. Auto-persistence: Any resolved or chosen location is saved forever.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { rankPlaces } from './placeMatch';
+import { rankPlaces, scorePlace } from './placeMatch';
 import { apiService } from './api';
 
 export interface PlacePrediction {
@@ -721,6 +721,10 @@ export function scheduleAutoOnlineLookup(
 
       if (osmResults.status === 'fulfilled' && Array.isArray(osmResults.value)) {
         for (const osm of osmResults.value) {
+          // Nominatim pads its answer with look-alikes ("vedara" -> Pune, Hyderabad,
+          // Meerut ...). Keep only places whose name really matches what was typed,
+          // and never save the rest into the permanent place cache.
+          if (scorePlace(q, osm.description) === null) continue;
           if (!seen.has(osm.description.toLowerCase())) {
             foundList.push(osm);
             seen.add(osm.description.toLowerCase());

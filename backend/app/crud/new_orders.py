@@ -102,6 +102,31 @@ def apply_min_km_override(
     return new_fare
 
 
+def apply_exact_km_override(
+    fare: Dict[str, Any],
+    km: Optional[float],
+    cost_per_km: int,
+    extra_cost_per_km: int,
+) -> Dict[str, Any]:
+    """Admin typed the exact km to bill. Same arithmetic as
+    apply_distance_override; calculated_km keeps the real route km."""
+    if km is None or round(float(km)) == round(float(fare["total_km"])):
+        return fare
+    actual = float(fare.get("remark_trip_min_km") or fare["total_km"])
+    new_fare = apply_distance_override(fare, float(km), None, cost_per_km, extra_cost_per_km)
+    new_fare["calculated_km"] = actual
+    new_fare["remark_trip_min_km"] = 0
+    return new_fare
+
+
+def apply_admin_km(fare: Dict[str, Any], payload) -> Dict[str, Any]:
+    """Whatever km the admin set on the Post booking form: the exact km
+    (km_override) wins over the older minimum-km rule (min_km_override)."""
+    if getattr(payload, "km_override", None) is not None:
+        return apply_exact_km_override(fare, payload.km_override, payload.cost_per_km, payload.extra_cost_per_km)
+    return apply_min_km_override(fare, getattr(payload, "min_km_override", None), payload.cost_per_km, payload.extra_cost_per_km)
+
+
 def _origin_and_destination_from_index_map(index_map: Dict[str, str]) -> (str, str):
     # keys are numeric-like strings: '0', '1', ...
     sorted_keys = sorted(index_map.keys(), key=lambda k: int(k))

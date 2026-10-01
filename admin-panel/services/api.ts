@@ -874,6 +874,14 @@ class ApiService {
     return this.makeRequest(`/orders/${tripType}/quote`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
+  // Real route km for the stops on the Post booking form (no fare, no auth beyond admin).
+  async getRouteKm(tripType: string, pickupDropLocation: Record<string, string>): Promise<{ route_km: number; trip_time?: string }> {
+    return this.makeRequest('/admin/orders/route-km', {
+      method: 'POST',
+      body: JSON.stringify({ trip_type: tripType, pickup_drop_location: pickupDropLocation }),
+    });
+  }
+
   async confirmAdminBooking(tripType: 'oneway' | 'roundtrip' | 'multicity' | 'hourly', payload: any): Promise<any> {
     return this.makeRequest(`/admin/orders/${tripType}/confirm`, { method: 'POST', body: JSON.stringify(payload) });
   }
