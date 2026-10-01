@@ -191,6 +191,8 @@ app.include_router(workers_router.router, prefix="/api", tags=["Workers & Operat
 from app.api.routes import driver_tours as driver_tours_router
 app.include_router(driver_tours_router.router, tags=["Driver Tours & Running Ledger"])
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
+from app.api.routes import driver_tariff as driver_tariff_router
+app.include_router(driver_tariff_router.router, prefix="/api", tags=["Driver Tariff"])    # before admin.router (its catch-all /admin/{id})
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 from app.api.routes import system_health as _system_health_routes
 app.include_router(_system_health_routes.router, prefix="/api", tags=["SystemHealth"])
