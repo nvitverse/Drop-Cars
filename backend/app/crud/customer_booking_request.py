@@ -116,6 +116,33 @@ def split_website_bata(booked_bata, booked_extra_bata=0) -> tuple:
     return WEBSITE_DRIVER_BATA, extra + max(0, booked - WEBSITE_DRIVER_BATA)
 
 
+_TOTAL_PARTS = ("driver_allowance", "extra_driver_allowance", "permit_charges", "extra_permit_charges", "hill_charges", "toll_charges", "night_charges")
+_DRIVER_PARTS = ("driver_allowance", "permit_charges", "hill_charges", "toll_charges", "night_charges")
+
+
+def complete_admin_fare(request) -> None:
+    """Fill the admin_* fare fields nobody set from the quote, keep the ones that were set, and move the customer total (and the
+    driver amount) by what the changed fields add: total = km x (rate + extra rate) + allowances + charges, so a rate edited by
+    +1/km on 135 km is +135 on the total. Does nothing when the total itself was already edited (Edit fare sets everything)."""
+    if request.admin_total_amount is not None:
+        return
+    dist = request.quoted_trip_distance or 0
+    total_move = driver_move = 0
+    for name in ("cost_per_km", "extra_cost_per_km") + _TOTAL_PARTS:
+        adm, q = f"admin_{name}", f"quoted_{name}"
+        have, quoted = getattr(request, adm), getattr(request, q)
+        if have is None:
+            setattr(request, adm, quoted)
+            continue
+        diff = (have - (quoted or 0)) * (dist if name in ("cost_per_km", "extra_cost_per_km") else 1)
+        total_move += diff
+        if name == "cost_per_km" or name in _DRIVER_PARTS:
+            driver_move += diff
+    request.admin_total_amount = (request.quoted_total_amount or 0) + total_move
+    if request.admin_driver_amount is None:
+        request.admin_driver_amount = (request.quoted_driver_amount or 0) + driver_move
+
+
 def approve_customer_booking_request(db: Session, request: CustomerBookingRequest, decided_by: str) -> Order:
     """Turn a PENDING request into a real NewOrder + master Order (which itself
     fires the Telegram alert and vehicle-owner push fan-out - see
@@ -124,19 +151,10 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     however it needs to (this function commits internally as it creates rows)."""
     from app.api.routes.customer_bookings import _get_trip_type_enum
 
-    # If admin (or nobody, on auto-timeout) hasn't edited the fare, copy quoted fare to admin fare
-    if request.admin_total_amount is None:
-        request.admin_cost_per_km = request.quoted_cost_per_km
-        request.admin_driver_allowance = request.quoted_driver_allowance
-        request.admin_extra_driver_allowance = request.quoted_extra_driver_allowance
-        request.admin_permit_charges = request.quoted_permit_charges
-        request.admin_extra_permit_charges = request.quoted_extra_permit_charges
-        request.admin_hill_charges = request.quoted_hill_charges
-        request.admin_toll_charges = request.quoted_toll_charges
-        request.admin_extra_cost_per_km = request.quoted_extra_cost_per_km
-        request.admin_night_charges = request.quoted_night_charges
-        request.admin_total_amount = request.quoted_total_amount
-        request.admin_driver_amount = request.quoted_driver_amount
+    # Whatever the dispatcher / admin already set (per-km rate, GST ... through PATCH /website/bookings/{id}/rates or Edit fare) is KEPT;
+    # only the fields nobody touched are filled from the quote. (It used to overwrite them all with the quote whenever the total
+    # had not been edited, so a rate confirmed at 15/km was posted at the quoted 14/km.)
+    complete_admin_fare(request)
 
     # Auto-Posting Tariff Rules:
     # 1. Standard Per-KM trip:
