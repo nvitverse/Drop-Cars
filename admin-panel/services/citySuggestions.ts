@@ -21,8 +21,8 @@ export interface PlacePrediction {
   isSaved?: boolean;
 }
 
-const STORAGE_SAVED_LOCATIONS_KEY = 'dropcars_saved_locations_v2';
-const STORAGE_RECENT_SEARCHES_KEY = 'dropcars_recent_location_searches_v2';
+const STORAGE_SAVED_LOCATIONS_KEY = 'dropcars_saved_locations_v3';
+const STORAGE_RECENT_SEARCHES_KEY = 'dropcars_recent_location_searches_v3';
 
 export const MASTER_SOUTH_INDIAN_DESTINATIONS: string[] = [
   // Major Cities & Hubs - Tamil Nadu
@@ -641,7 +641,7 @@ async function searchOsmNominatim(query: string): Promise<PlacePrediction[]> {
 /** Online search for when the place isn't yet in local cache */
 export async function searchCityOnline(
   query: string
-): Promise<{ city: string; predictions?: PlacePrediction[]; already_existed: boolean }> {
+): Promise<{ city: string; predictions?: PlacePrediction[]; already_existed: boolean; found?: boolean }> {
   const q = query.trim();
   if (!q) return { city: '', already_existed: false };
 
@@ -651,9 +651,9 @@ export async function searchCityOnline(
       '/cities/lookup-online/admin',
       { method: 'POST', body: JSON.stringify({ query: q }) }
     );
-    if (res?.city) {
+    if (res?.city && scorePlace(q, res.city) !== null) {
       await saveLocationToCache(res.city);
-      return res;
+      return { ...res, found: true };
     }
   } catch {
     // Backend API lookup failed or offline
@@ -668,12 +668,13 @@ export async function searchCityOnline(
       city: best,
       predictions: osmResults,
       already_existed: false,
+      found: true,
     };
   }
 
   // 3. Fallback to capitalized entered text
   const cleanFallback = q.charAt(0).toUpperCase() + q.slice(1);
-  return { city: cleanFallback, already_existed: false };
+  return { city: cleanFallback, already_existed: false, found: false };
 }
 
 let autoLookupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -707,7 +708,7 @@ export function scheduleAutoOnlineLookup(
       const foundList: PlacePrediction[] = [];
       const seen = new Set<string>();
 
-      if (backendRes.status === 'fulfilled' && backendRes.value?.city) {
+      if (backendRes.status === 'fulfilled' && backendRes.value?.city && scorePlace(q, backendRes.value.city) !== null) {
         const c = backendRes.value.city;
         const parts = formatPlaceParts(c);
         foundList.push({
