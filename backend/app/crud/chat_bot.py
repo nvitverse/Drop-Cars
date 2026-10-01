@@ -299,7 +299,11 @@ def _assistant_reply(db: Session, conv: Conversation, trigger: ConversationMessa
         msg = _post(db, conv, "The assistant is switched off in platform settings.", trigger, "ADMIN", unavailable=True)
         return {"replied": True, "unavailable": "switched off", "message_id": msg.id}
     if not chat_llm.assistant_available():
-        msg = _post(db, conv, "The assistant is not set up yet: the server has no Anthropic key.", trigger, "ADMIN", unavailable=True)
+        fb = admin_assistant.rule_fallback(db, admin, trigger.text, str(conv.id))
+        if fb:
+            msg = _post(db, conv, fb["reply"], trigger, "ADMIN", proposals=fb["proposals"] or None, fallback="rules")
+            return {"replied": True, "fallback": "rules", "message_id": msg.id}
+        msg = _post(db, conv, "The assistant is not set up yet: the server has no Anthropic key. The Command Center's built-in commands still work.", trigger, "ADMIN", unavailable=True)
         return {"replied": True, "unavailable": "no key", "message_id": msg.id}
     if not chat_llm.within_limits(db, f"ADMIN:{admin.id}", per_user_setting="admin_assistant_daily_limit", per_user_default="300"):
         msg = _post(db, conv, "Daily assistant limit reached for your account. Try again tomorrow.", trigger, "ADMIN", unavailable=True)
@@ -308,11 +312,15 @@ def _assistant_reply(db: Session, conv: Conversation, trigger: ConversationMessa
                                                  ConversationMessage.id < trigger.id).order_by(ConversationMessage.id.desc()).limit(10).all())
     history = ai_llm._clean_history([
         {"role": "assistant" if m.sender_role == C.BOT else "user", "text": (m.text or "")[:600]} for m in reversed(rows)])
-    res = admin_assistant.run(db, admin, history, trigger.text)
+    res = admin_assistant.run(db, admin, history, trigger.text, str(conv.id))
     if "reply" not in res:
+        fb = admin_assistant.rule_fallback(db, admin, trigger.text, str(conv.id))
+        if fb:
+            msg = _post(db, conv, fb["reply"], trigger, "ADMIN", proposals=fb["proposals"] or None, fallback="rules")
+            return {"replied": True, "fallback": "rules", "message_id": msg.id}
         msg = _post(db, conv, "I could not reach the assistant just now. Please try again in a minute.", trigger, "ADMIN", unavailable=True)
         return {"replied": True, "unavailable": "error", "message_id": msg.id}
-    msg = _post(db, conv, res["reply"], trigger, "ADMIN", tools=res.get("tools") or None, model=res.get("model"))
+    msg = _post(db, conv, res["reply"], trigger, "ADMIN", tools=res.get("tools") or None, model=res.get("model"), proposals=res.get("proposals") or None)
     return {"replied": True, "tools": res.get("tools"), "message_id": msg.id}
 
 

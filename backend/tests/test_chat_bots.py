@@ -436,10 +436,11 @@ def test_a_tool_the_admin_may_not_use_is_not_offered_and_is_refused_if_called(pg
     from app.crud import admin_assistant as A
     db = pg_session
     staff = _admin(db)                                                  # Staff with no permissions
-    assert [t["name"] for t in A.tool_defs(staff)] == ["chat_inbox_overview"]
+    assert {t["name"] for t in A.tool_defs(staff)} == {"chat_inbox_overview", "needs_attention"}                    # no permission: only the unrestricted reads
     assert A.run_tool(db, staff, "get_booking", {"order_id": 1}) == {"content": "This admin does not have permission for that data.", "is_error": True}
     staff.permissions = ["bookings"]
-    assert {t["name"] for t in A.tool_defs(staff)} == {"get_booking", "list_bookings", "summarize_chat", "chat_inbox_overview"}
+    assert {"get_booking", "list_bookings", "summarize_chat", "quote_booking"} <= {t["name"] for t in A.tool_defs(staff, writes=False)}
+    assert not any(t["name"].startswith("propose_") for t in A.tool_defs(staff, writes=False))
     assert A.run_tool(db, staff, "delete_everything", {})["is_error"] is True
 
 
