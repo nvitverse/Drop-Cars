@@ -2883,80 +2883,56 @@ export default function CreateBookingScreen() {
           );
         })()}
 
-        {/* Broadcast To (admin-only broadcast targeting - Redesigned Premium Style) */}
+        {/* Broadcast To (admin-only broadcast targeting - Vertically Compact Segmented Bar) */}
         <View style={[styles.sectionCard, cardShell, { marginTop: 14 }, showNearCitySuggestions && { zIndex: 30, elevation: 30 }]}>
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 6,
-                borderWidth: 1.5,
-                borderColor: sendTo === 'ALL' ? colors.primary : themeColors.border,
-                backgroundColor: sendTo === 'ALL' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-              }}
-              onPress={() => setSendTo('ALL')}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'ALL' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                  <Globe size={14} color="#FFFFFF" />
-                </View>
-                {sendTo === 'ALL' && <CheckCircle2 size={16} color={colors.primary} />}
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>All Drivers Network</Text>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>All drivers & fleet owners</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 6,
-                borderWidth: 1.5,
-                borderColor: sendTo === 'NEAR_CITY' ? colors.primary : themeColors.border,
-                backgroundColor: sendTo === 'NEAR_CITY' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-              }}
-              onPress={() => setSendTo('NEAR_CITY')}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'NEAR_CITY' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                  <MapPin size={14} color="#FFFFFF" />
-                </View>
-                {sendTo === 'NEAR_CITY' && <CheckCircle2 size={16} color={colors.primary} />}
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>Near City Target</Text>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>Selected pickup hubs only</Text>
-            </TouchableOpacity>
+          <View style={[styles.inlineField, { marginBottom: 8 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>Broadcast Audience</Text>
+              {tip('Broadcast Audience', 'Choose who receives this booking notification: All Drivers in network, Near City hubs only, or allocate directly to a specific fleet owner.')}
+            </View>
           </View>
 
-          {/* Allocate manually - hand this booking directly to one driver
-              instead of broadcasting it (backend: send_to "DRIVER" +
-              target_driver_id, already supported end to end). */}
-          <TouchableOpacity
-            style={{
-              marginTop: 10,
-              padding: 12,
-              borderRadius: 6,
-              borderWidth: 1.5,
-              borderColor: sendTo === 'DRIVER' ? colors.primary : themeColors.border,
-              backgroundColor: sendTo === 'DRIVER' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-            }}
-            onPress={() => setSendTo(sendTo === 'DRIVER' ? 'ALL' : 'DRIVER')}
-            activeOpacity={0.8}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'DRIVER' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                <Send size={14} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>Allocate manually</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Give it directly to one fleet owner</Text>
-              </View>
-              {sendTo === 'DRIVER' && <CheckCircle2 size={16} color={colors.primary} />}
-            </View>
-          </TouchableOpacity>
+          {/* Compact 3-Segment Audience Selector */}
+          <View style={{ flexDirection: 'row', gap: 6, backgroundColor: isDark ? '#0F172A' : '#F1F5F9', padding: 4, borderRadius: 8, borderWidth: 1, borderColor: themeColors.border }}>
+            {[
+              { key: 'ALL', label: 'All Drivers', icon: Globe },
+              { key: 'NEAR_CITY', label: 'Near City', icon: MapPin },
+              { key: 'DRIVER', label: 'Allocate Direct', icon: Send },
+            ].map((item) => {
+              const isActive = sendTo === item.key;
+              const IconComp = item.icon;
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 4,
+                    borderRadius: 6,
+                    backgroundColor: isActive ? (isDark ? '#1E1B4B' : '#FFFFFF') : 'transparent',
+                    borderWidth: isActive ? 1.5 : 0,
+                    borderColor: isActive ? colors.primary : 'transparent',
+                    shadowColor: isActive ? '#000' : 'transparent',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isActive ? 0.08 : 0,
+                    shadowRadius: 2,
+                    elevation: isActive ? 2 : 0,
+                  }}
+                  onPress={() => setSendTo(item.key as any)}
+                  activeOpacity={0.8}
+                >
+                  <IconComp size={14} color={isActive ? colors.primary : themeColors.textSecondary} />
+                  <Text style={{ fontSize: 12, fontWeight: isActive ? '800' : '600', color: isActive ? colors.primary : themeColors.textSecondary }} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {sendTo === 'DRIVER' && (
             <View style={{ marginTop: 12 }}>

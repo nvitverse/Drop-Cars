@@ -2646,13 +2646,6 @@ export default function OrdersScreen() {
       <View style={{ backgroundColor: themeColors.background }}>
         {/* Search Bar & Actions */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, marginTop: 10, marginBottom: 10 }}>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, height: 42, borderRadius: 6 }}
-          onPress={() => router.push('/create-booking')}
-        >
-          <Plus size={16} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>New Booking</Text>
-        </TouchableOpacity>
         <View style={[styles.searchContainer, { flex: 1, marginHorizontal: 0, marginTop: 0, marginBottom: 0, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 }]}>
           <Search size={16} color={themeColors.textSecondary} />
           <TextInput
@@ -4042,6 +4035,33 @@ export default function OrdersScreen() {
       />
 
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
+      {/* Floating Round "+" FAB for New Booking (Consistent with Dashboard) */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => router.push('/create-booking')}
+        style={{
+          position: 'absolute',
+          bottom: 24,
+          right: 20,
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          backgroundColor: colors.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.25)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 6,
+          zIndex: 99,
+        }}
+        accessibilityLabel="Create New Booking"
+      >
+        <Plus size={24} color="#FFFFFF" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
