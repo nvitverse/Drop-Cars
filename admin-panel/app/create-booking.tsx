@@ -2134,6 +2134,39 @@ export default function CreateBookingScreen() {
             <>
               {fareType === 'ALL_INCLUSIVE' ? (
                 <View>
+                  {/* Km limit for All Inclusive: editable row with auto route km calculation */}
+                  {hasMinKm && (
+                    <View style={[styles.inlineField, { marginBottom: 12 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>
+                          Km limit{tripDays > 1 ? ` (${tripDays} days)` : ''}
+                        </Text>
+                        {tip(
+                          'Km limit',
+                          `The included km for this all-inclusive package.\n\n${routeKm != null ? `Route distance: ${Math.round(routeKm)} km.\n` : 'Fill both locations to load the route distance.\n'}Minimum coverage: ${defaultMinKm} km${tripType === 'oneway' ? ' (Oneway)' : tripDays > 1 ? ` (${tripDays} days x ${tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day : fareRules.multicity_min_km_per_day} km)` : ' per day'}.\n\nExtra km driven beyond this limit will be charged at the extra km rate below.`,
+                        )}
+                      </View>
+                      {minKmTouched && (
+                        <TouchableOpacity
+                          onPress={() => { setMinKmTouched(false); if (fare) setRequoteTick((n) => n + 1); }}
+                          accessibilityLabel="Reset km limit to the automatic value"
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>Reset</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TextInput
+                        style={[styles.priceInput, { width: 96, textAlign: 'right' }]}
+                        value={minKm}
+                        onChangeText={(v) => { setMinKmTouched(true); setMinKm(v.replace(/[^0-9]/g, '')); }}
+                        onBlur={() => { if (fare && minKmTouched) setRequoteTick((n) => n + 1); }}
+                        keyboardType="numeric"
+                        placeholder={String(autoKm)}
+                        placeholderTextColor={colors.textMuted}
+                        accessibilityLabel="Km limit"
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.priceGrid}>
                     {/* Row 1: Driver Share & Vendor Extra (Markup) */}
                     <View style={styles.priceCell}>
@@ -2191,7 +2224,37 @@ export default function CreateBookingScreen() {
                       />
                     </View>
 
-                    {/* Row 3: GST 5% (of driver amount + vendor extra) */}
+                    {/* Row 3: Extra km rate (Driver) & Extra km rate (Vendor) */}
+                    <View style={styles.priceCell}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Driver extra fare /km (₹)</Text>
+                        {tip('Driver extra fare /km', 'Rate paid to driver for each additional km driven beyond the included Km limit.')}
+                      </View>
+                      <TextInput
+                        style={styles.priceInput}
+                        value={costPerKm}
+                        onChangeText={setCostPerKm}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+                    <View style={styles.priceCell}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Vendor extra /km (₹)</Text>
+                        {tip('Vendor extra /km', 'Additional markup billed to customer per extra km beyond the included Km limit.')}
+                      </View>
+                      <TextInput
+                        style={styles.priceInput}
+                        value={extraCostPerKm}
+                        onChangeText={(v) => { touchedRates.current.extraKm = true; setExtraCostPerKm(v); }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+
+                    {/* Row 4: GST 5% (of driver amount + vendor extra) */}
                     <View style={styles.priceCell}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                         <TouchableOpacity
