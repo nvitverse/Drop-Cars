@@ -5,10 +5,10 @@ Ippo code-la edhuvum maatha padala. Idhu thaan plan. Neenga OK sonna piragu thaa
 Rule: **Enna sambandhamo, adhu adhukkulla thaan irukkanum. Fleet-ku sambandham na panam-um Fleet-kulla.**
 
 ## Bottom tabs
-`Home | Bookings | Chats | Fleet | More`
+`Home | Operations | Chats | Fleet | More`
 
-Bookings tab-kulla mela switch: `[ CRM | Operations ]` (rendu mattum).
-Default = Operations. Adhan mudhal card = **Live Bookings**, so bookings 1 tap-la kedaikkum.
+**DESIGN UPDATE 2026-10-01 (owner's decision):** bottom tab peyar **Operations**. Adhukkulla mela switch `[ Bookings | CRM ]` (rendu mattum). Munnaadhu "Bookings tab > [CRM | Operations]" nu irundhadhu, adhu maaritchu.
+Default segment = **Bookings** (mudhal card = **Live Bookings**), so bookings 1 tap-la kedaikkum.
 
 ---
 
@@ -34,9 +34,9 @@ Home-kulla irukkuradhu: `(tabs)/index` (dashboard), `(tabs)/tasks`, `profile`.
 
 ---
 
-## 2. BOOKINGS
+## 2. OPERATIONS tab (switch: Bookings | CRM)
 
-### Operations segment
+### Bookings segment (munnaadhu "Operations segment"; ellaa trip / dispatch / company tools idhukkulla)
 | Screen | Note |
 |---|---|
 | `(tabs)/orders` | Live Bookings (mudhal card) |
