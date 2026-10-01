@@ -1135,6 +1135,23 @@ if ($targetStatus !== 'confirmed') {
 
         $backendPhone = preg_replace('/[^\d]/', '', (string) $contactValue);
 
+        // The fare the customer saw and confirmed (already validated above by dropcars_validate_submitted_fare): the backend uses it as the
+        // booking's quote instead of recomputing one from its own rate card (booking #344: confirmed 15/km + toll + GST was posted at 14/km).
+        // Hourly packages have no per-km fare, so nothing is sent for them; the backend ignores a quote that does not make sense.
+        $quotedFare = null;
+        $qv = ($mappedKey !== '' && isset($fareBreakdown['vehicles'][$mappedKey]) && is_array($fareBreakdown['vehicles'][$mappedKey]))
+            ? $fareBreakdown['vehicles'][$mappedKey] : null;
+        if ($qv !== null && $backendTripType !== 'Hourly Rental' && !empty($qv['perKmRate']) && !empty($qv['effectiveBillableKm']) && (int) $finalFare > 0) {
+            $quotedFare = [
+                'per_km_rate' => (float) (!empty($qv['discountedRate']) ? $qv['discountedRate'] : $qv['perKmRate']),
+                'driver_bata' => (int) (isset($qv['driverBataTotal']) ? $qv['driverBataTotal'] : (isset($qv['driverBata']) ? $qv['driverBata'] : 0)),
+                'billable_km' => (float) $qv['effectiveBillableKm'],
+                'total_fare' => (int) $finalFare,
+                'include_taxes' => (bool) $includeTaxes,
+                'include_tolls' => (bool) $includeTolls,
+            ];
+        }
+
         if ($backendPhone !== '') {
             $backendResult = dropcars_backend_request('POST', '/api/website/bookings', [
                 'customer_name' => $customerNamePlain !== '' ? $customerNamePlain : 'Guest',
@@ -1160,6 +1177,7 @@ if ($targetStatus !== 'confirmed') {
                 // the payment was verified but never reached advance_received
                 // on the order the Driver/Vendor/Admin apps read.
                 'advance_amount' => !empty($bookingData['isUrgent']) ? (int) ($bookingData['advanceAmount'] ?? 0) : null,
+                'quoted_fare' => $quotedFare,
             ]);
 
             if ($backendResult['ok'] && is_array($backendResult['data'])) {

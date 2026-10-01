@@ -15,7 +15,8 @@ in app/crud/orders.py). Two differences from the app flow:
 """
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+import logging
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Header, status, File, Form, UploadFile, BackgroundTasks
@@ -28,6 +29,7 @@ from app.models.website_integration import WebsiteIntegration
 from app.crud.customer import find_or_create_guest_customer
 from app.crud.notification import send_push_notification_to_admin
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 WEBSITE_INTEGRATION_KEY = os.getenv("WEBSITE_INTEGRATION_KEY")
@@ -116,6 +118,10 @@ class WebsiteBookingCreate(BaseModel):
     # explicitly confirms it (website/admin panel/Admin App), never
     # auto-posts to the driver marketplace on the normal review timer.
     is_enquiry: bool = False
+    # The fare the customer saw and confirmed on the website (per-km rate, bata, billable km, total). When present and sensible it
+    # becomes the booking's quote instead of the backend's own rate card (see crud/website_quote.py). Kept loose (a plain dict): a
+    # malformed quote must never make the whole booking fail - it is ignored and the backend tariff is used.
+    quoted_fare: Optional[Dict[str, Any]] = None
 
     @field_validator("pickup_drop_location", mode="before")
     def locations_from_list(cls, v):
@@ -183,6 +189,19 @@ async def create_website_booking(
         fare, rates = _calculate_fare_internal(
             db, payload.pickup_drop_location, payload.trip_type, payload.car_type
         )
+        website_quote = None
+        if payload.quoted_fare:
+            from app.crud.website_quote import WebsiteQuotedFare, apply_website_quote
+            try:
+                website_quote = apply_website_quote(fare, WebsiteQuotedFare(**payload.quoted_fare))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("website quoted_fare ignored: %s", type(e).__name__)
+        if website_quote:
+            rates = {**rates, "cost_per_km": website_quote["cost_per_km"], "driver_allowance": website_quote["driver_allowance"],
+                     "extra_driver_allowance": 0, "permit_charges": 0, "extra_permit_charges": 0, "hill_charges": 0,
+                     "toll_charges": website_quote["toll_charges"], "extra_cost_per_km": 0, "night_charges": 0}
+            fare = {**fare, "total_amount": website_quote["total_amount"], "driver_amount": website_quote["driver_amount"],
+                    "total_km": website_quote["total_km"]}
 
         driver_referral_code = (payload.driver_referral_code or "").strip().upper() or None
         if driver_referral_code:
@@ -228,6 +247,8 @@ async def create_website_booking(
             rp_signature=payload.rp_signature,
             advance_amount=verified_advance_amount if payload.is_urgent else None,
             requires_manual_confirm=payload.is_enquiry,
+            gst_included=bool(website_quote and website_quote["gst_amount"]),
+            gst_amount=website_quote["gst_amount"] if website_quote else None,
         )
         db.add(booking)
         db.commit()
