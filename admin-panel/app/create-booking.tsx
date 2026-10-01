@@ -371,6 +371,7 @@ export default function CreateBookingScreen() {
   const [minKm, setMinKm] = useState('130');
   const [minKmTouched, setMinKmTouched] = useState(false);
   const [routeKm, setRouteKm] = useState<number | null>(null);
+  const [routeKmError, setRouteKmError] = useState<string | null>(null);
   const hasMinKm = tripType === 'oneway' || tripType === 'roundtrip' || tripType === 'multicity' || tripType === 'local';
   const defaultMinKm = tripType === 'oneway' ? fareRules.oneway_min_km
     : tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day * tripDays
@@ -384,6 +385,7 @@ export default function CreateBookingScreen() {
   // Fetch the real route km once every location is filled in.
   const routeKey = (tripType === 'roundtrip' || tripType === 'multicity' ? stops : [stops[0], stops[stops.length - 1]]).join('|');
   useEffect(() => {
+    setRouteKmError(null);
     if (!hasMinKm) { setRouteKm(null); return; }
     const places = tripType === 'roundtrip' || tripType === 'multicity' ? stops : [stops[0], stops[stops.length - 1]];
     if (places.length < 2 || places.some((p) => !p || !p.trim())) { setRouteKm(null); return; }
@@ -394,8 +396,13 @@ export default function CreateBookingScreen() {
         places.forEach((p, i) => { loc[String(i)] = p; });
         const res = await apiService.getRouteKm(tripType, loc);
         if (!cancelled) setRouteKm(Number(res?.route_km) || null);
-      } catch {
-        if (!cancelled) setRouteKm(null);
+      } catch (e: any) {
+        if (!cancelled) {
+          setRouteKm(null);
+          setRouteKmError(String(e?.message || '').includes('find') || String(e?.message || '').includes('Route') || String(e?.message || '').includes('distance')
+            ? 'Could not find a route for these places. Pick the nearest city and put the exact spot in Address / Maps link.'
+            : null);
+        }
       }
     }, 500);
     return () => { cancelled = true; clearTimeout(t); };
@@ -627,23 +634,27 @@ export default function CreateBookingScreen() {
   // never duty drivers: only a fleet owner has a wallet, and the commission
   // is held from it (or, on credit, debited at trip completion). Same target
   // as the Booking-card "Allocate manually" (/orders/{id}/manual-assign).
-  useEffect(() => {
-    if (sendTo !== 'DRIVER' || allocateTarget) return;
+  // Searches only when the Search button (or the keyboard's search key) is pressed,
+  // not on every keystroke - fewer requests to the server and database.
+  const [allocateSearched, setAllocateSearched] = useState(false);
+  const searchFleetOwners = async () => {
     const q = allocateQuery.trim();
-    if (q.length < 3) { setAllocateResults([]); return; }
-    const t = setTimeout(async () => {
-      setAllocateSearching(true);
-      try {
-        const { results } = await apiService.searchWalletTargets('vehicle_owner', q);
-        setAllocateResults(results || []);
-      } catch {
-        setAllocateResults([]);
-      } finally {
-        setAllocateSearching(false);
-      }
-    }, 350);
-    return () => clearTimeout(t);
-  }, [allocateQuery, sendTo, allocateTarget]);
+    if (q.length < 3) {
+      Alert.alert('Type more', 'Enter at least 3 characters of the fleet owner\'s name or phone.');
+      return;
+    }
+    setAllocateSearching(true);
+    setAllocateSearched(false);
+    try {
+      const { results } = await apiService.searchWalletTargets('vehicle_owner', q);
+      setAllocateResults(results || []);
+    } catch {
+      setAllocateResults([]);
+    } finally {
+      setAllocateSearching(false);
+      setAllocateSearched(true);
+    }
+  };
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [showNearCitySuggestions, setShowNearCitySuggestions] = useState(false);
 
@@ -1652,6 +1663,9 @@ export default function CreateBookingScreen() {
             </>
           )}
 
+          {!!routeKmError && (
+            <Text style={{ fontSize: 12, lineHeight: 17, color: colors.error, marginTop: 4 }}>{routeKmError}</Text>
+          )}
           <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 12 }]}>Pickup Schedule</Text>
           <DateTimeField
             dateLabel="Pickup Date"
@@ -2128,7 +2142,7 @@ export default function CreateBookingScreen() {
             placeholderTextColor={colors.textMuted}
           />
           {/* Quick preset suggestion chips */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
             {[
               '📞 Call before arrival',
               '✈️ Airport pickup / Flight',
@@ -2153,12 +2167,12 @@ export default function CreateBookingScreen() {
                   borderColor: pickupNotes.includes(preset) ? colors.primary : themeColors.border,
                 }}
               >
-                <Text style={{ fontSize: 11, fontWeight: '600', color: pickupNotes.includes(preset) ? colors.primary : themeColors.textSecondary }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: pickupNotes.includes(preset) ? colors.primary : themeColors.textSecondary }} numberOfLines={1}>
                   + {preset}
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
 
         {/* Special Requests & Priority – shown after Pickup Notes */}
@@ -2166,41 +2180,42 @@ export default function CreateBookingScreen() {
           <>
             {/* Special Requests */}
             <View style={[styles.sectionCard, cardShell]}>
-              <TouchableOpacity style={[styles.summaryCardTouchable, summaryShell]} onPress={() => setShowSpecialRequestsModal(true)} activeOpacity={0.8}>
-                <View style={styles.summaryCardLeft}>
-                  <View style={[styles.summaryIconCircle, badgeShell]}>
-                    <Sliders size={20} color={themeColors.primary} />
-                  </View>
-                  <View style={styles.summaryTextContent}>
-                    <Text style={[styles.summaryTitle, { color: themeColors.text }]}>
-                      {(() => {
-                        const reqs: string[] = [];
-                        if (requireCarMakeYear) reqs.push(`Year ${carMakeYear || '2020'}+`);
-                        if (carrierRequired) reqs.push('Carrier');
-                        if (nonCng) reqs.push('Non CNG');
-                        if (petFriendly) reqs.push('Pet Friendly');
-                        customSpecialRequests.filter((r) => r.included && r.name.trim()).forEach((r) => reqs.push(r.name.trim()));
-                        return reqs.length === 0 ? 'No Special Requests' : reqs.join(', ');
-                      })()}
-                    </Text>
-                    <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>
-                      {(() => {
-                        const stdCount = [requireCarMakeYear, carrierRequired, nonCng, petFriendly].filter(Boolean).length;
-                        const customCount = customSpecialRequests.filter((r) => r.included && r.name.trim()).length;
-                        const count = stdCount + customCount;
-                        return count === 0 ? 'Tap to select vehicle requirements' : `${count} active request${count > 1 ? 's' : ''}`;
-                      })()}
-                    </Text>
-                  </View>
+              <View style={[styles.inlineField, { marginBottom: (requireCarMakeYear || carrierRequired || nonCng || petFriendly) ? 10 : 0 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>Special requests</Text>
+                  {tip('Special requests', 'Vehicle needs the driver must meet, like a model year, carrier, non-CNG, pet friendly or anything custom. Only the ones you add appear here.')}
                 </View>
-                <View style={[styles.editPillButton, pillShell]}>
-                  <Text style={[styles.editPillText, { color: themeColors.primary }]}>Edit</Text>
-                  <ChevronRight size={14} color={themeColors.primary} />
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: themeColors.primaryTint, borderColor: colors.primary }]}
+                  onPress={() => setShowSpecialRequestsModal(true)}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Add special request"
+                >
+                  <Plus size={13} color={colors.primary} />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {(requireCarMakeYear || carrierRequired || nonCng || petFriendly) && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {([
+                    [requireCarMakeYear, `Year ${carMakeYear || '2020'}+`],
+                    [carrierRequired, 'Carrier'],
+                    [nonCng, 'Non CNG'],
+                    [petFriendly, 'Pet friendly'],
+                  ] as const).filter(([on]) => on).map(([, label]) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={[styles.chip, styles.chipActive, { paddingVertical: 5, paddingHorizontal: 10 }]}
+                      onPress={() => setShowSpecialRequestsModal(true)}
+                    >
+                      <Text style={[styles.chipText, styles.chipTextActive, { fontSize: 12 }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              </TouchableOpacity>
+              )}
 
               {/* Dynamic Inline Custom Special Requests List & + Add Custom Request Button */}
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: customSpecialRequests.length > 0 ? 10 : 0 }}>
                 {customSpecialRequests.map((item) => (
                   <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, backgroundColor: themeColors.surface, padding: 8, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
                     <TouchableOpacity
@@ -2240,33 +2255,6 @@ export default function CreateBookingScreen() {
                   </View>
                 ))}
 
-                <TouchableOpacity
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderStyle: 'dashed',
-                    borderColor: colors.primary,
-                  }}
-                  onPress={() => {
-                    setCustomSpecialRequests([
-                      ...customSpecialRequests,
-                      { id: String(Date.now()), name: '', allowance: '0', included: true },
-                    ]);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={16} color={colors.primary} />
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
-                    Add custom request
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -2528,23 +2516,31 @@ export default function CreateBookingScreen() {
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 10, height: 42 }}>
-                      <Search size={16} color={themeColors.textMuted} />
                       <TextInput
-                        style={{ flex: 1, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
+                        style={{ flex: 1, minWidth: 0, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
                         placeholder="Fleet owner name or phone"
                         placeholderTextColor={themeColors.textMuted}
                         value={allocateQuery}
-                        onChangeText={setAllocateQuery}
+                        onChangeText={(v) => { setAllocateQuery(v); setAllocateSearched(false); }}
+                        onSubmitEditing={searchFleetOwners}
+                        returnKeyType="search"
                         accessibilityLabel="Search fleet owner"
                       />
                     </View>
+                    <TouchableOpacity
+                      style={{ height: 42, width: 46, borderRadius: 6, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                      onPress={searchFleetOwners}
+                      disabled={allocateSearching}
+                      accessibilityLabel="Search fleet owners"
+                    >
+                      {allocateSearching ? <ActivityIndicator size="small" color="white" /> : <Search size={17} color="white" />}
+                    </TouchableOpacity>
                     {tip(
                       'Allocate manually',
                       'The booking goes straight to one fleet owner - it is not shown to other drivers. Only fleet owners can be picked, because the commission comes from their wallet; they choose the driver and car afterwards.\n\nIf the wallet is too low you are asked whether to allocate on credit. On credit, nothing is taken now and the commission is deducted when the trip completes, so the wallet can go below zero. A credit allocation is recorded with your name for the owner.',
                     )}
                   </View>
-                  {allocateSearching && <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 8 }} />}
-                  {!allocateSearching && allocateQuery.trim().length >= 3 && allocateResults.length === 0 && (
+                  {!allocateSearching && allocateSearched && allocateResults.length === 0 && (
                     <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>No fleet owner found. Try their phone number.</Text>
                   )}
                   {allocateResults.map((d) => (
