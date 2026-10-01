@@ -44,6 +44,13 @@ import {
   Building2,
   Layers,
   ChevronDown,
+  Navigation,
+  SlidersHorizontal,
+  Users,
+  Briefcase,
+  Zap,
+  Info,
+  CheckCircle,
 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -60,6 +67,7 @@ export interface BrandInfo {
   phone: string;
   primaryColor: string;
   tagline: string;
+  badge: string;
 }
 
 export const BRAND_CONFIGS: BrandInfo[] = [
@@ -70,6 +78,7 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     phone: '9043990439',
     primaryColor: '#0EA5E9',
     tagline: 'Standard & Premium Taxis',
+    badge: 'FLAGSHIP',
   },
   {
     id: 'arunachala',
@@ -77,7 +86,8 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     domain: 'arunachalatravels.in',
     phone: '9043990439',
     primaryColor: '#8B5CF6',
-    tagline: 'Tempo Traveller & Urbania Specialist',
+    tagline: 'Tempo Traveller & Force Urbania Specialist',
+    badge: 'BUS & TT',
   },
   {
     id: '24droptaxi',
@@ -86,6 +96,7 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     phone: '9043990439',
     primaryColor: '#3B82F6',
     tagline: 'One Way & Outstation Cabs',
+    badge: '24x7 ONE WAY',
   },
   {
     id: 'tatataxi',
@@ -94,6 +105,7 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     phone: '9043990439',
     primaryColor: '#F59E0B',
     tagline: 'Reliable Outstation Fleet',
+    badge: 'POPULAR',
   },
   {
     id: 'tatacalltaxi',
@@ -101,7 +113,8 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     domain: 'tatacalltaxi.in',
     phone: '9043990439',
     primaryColor: '#10B981',
-    tagline: '24x7 City & Outstation',
+    tagline: 'City & Outstation Cabs',
+    badge: 'LOCAL & DROP',
   },
   {
     id: 'yellowboard',
@@ -109,7 +122,8 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     domain: 'yellowboard.in',
     phone: '9043990439',
     primaryColor: '#EAB308',
-    tagline: 'Commercial Fleet',
+    tagline: 'Commercial Fleet Cabs',
+    badge: 'COMMERCIAL',
   },
   {
     id: 'mukiltravels',
@@ -118,6 +132,7 @@ export const BRAND_CONFIGS: BrandInfo[] = [
     phone: '9043990439',
     primaryColor: '#EC4899',
     tagline: 'Tour & Travel Packages',
+    badge: 'TOUR PACKAGES',
   },
 ];
 
@@ -132,7 +147,9 @@ export interface VehicleOption {
   minKmRoundtrip: number;
   driverBata: number;
   tag?: string;
+  tagColor?: string;
   color: string;
+  acType: string;
 }
 
 // Fleet for Drop Cars & Standard Taxi Brands
@@ -148,7 +165,9 @@ export const STANDARD_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 250,
     driverBata: 400,
     tag: 'POPULAR',
+    tagColor: '#3B82F6',
     color: '#3B82F6',
+    acType: 'AC Guaranteed',
   },
   {
     id: 'hatchback',
@@ -161,7 +180,9 @@ export const STANDARD_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 250,
     driverBata: 400,
     tag: 'BUDGET',
+    tagColor: '#10B981',
     color: '#10B981',
+    acType: 'AC Economy',
   },
   {
     id: 'suv',
@@ -174,7 +195,9 @@ export const STANDARD_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 500,
     tag: 'FAMILY',
+    tagColor: '#8B5CF6',
     color: '#8B5CF6',
+    acType: 'Dual AC',
   },
   {
     id: 'innova',
@@ -187,7 +210,9 @@ export const STANDARD_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 500,
     tag: 'COMFORT',
+    tagColor: '#F59E0B',
     color: '#F59E0B',
+    acType: 'Rear AC Vents',
   },
   {
     id: 'crysta',
@@ -200,7 +225,9 @@ export const STANDARD_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 600,
     tag: 'LUXURY',
+    tagColor: '#EC4899',
     color: '#EC4899',
+    acType: 'Automatic Climate Control',
   },
 ];
 
@@ -217,7 +244,9 @@ export const ARUNACHALA_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 250,
     driverBata: 600,
     tag: 'POPULAR',
+    tagColor: '#8B5CF6',
     color: '#8B5CF6',
+    acType: 'Roof AC + Pushback Seats',
   },
   {
     id: 'tt_18',
@@ -230,7 +259,9 @@ export const ARUNACHALA_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 700,
     tag: 'LARGE GROUP',
+    tagColor: '#6366F1',
     color: '#6366F1',
+    acType: 'High Roof Luxury AC',
   },
   {
     id: 'urbania_12',
@@ -243,7 +274,9 @@ export const ARUNACHALA_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 800,
     tag: 'LUXURY',
+    tagColor: '#EC4899',
     color: '#EC4899',
+    acType: 'Individual AC Vents + Ambient Lights',
   },
   {
     id: 'urbania_16',
@@ -256,7 +289,9 @@ export const ARUNACHALA_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 800,
     tag: 'PREMIUM',
+    tagColor: '#D946EF',
     color: '#D946EF',
+    acType: 'Luxury Air Suspension + AC',
   },
   {
     id: 'urbania_18',
@@ -269,7 +304,9 @@ export const ARUNACHALA_VEHICLES: VehicleOption[] = [
     minKmRoundtrip: 300,
     driverBata: 900,
     tag: 'VIP LUXURY',
+    tagColor: '#A855F7',
     color: '#A855F7',
+    acType: 'VIP First-Class Cabin AC',
   },
 ];
 
@@ -284,6 +321,15 @@ const POPULAR_CITIES = [
   'Tirunelveli',
   'Vellore',
   'Tirupati',
+];
+
+const QUICK_INSTRUCTION_TAGS = [
+  'Carrier Required',
+  'AC On Full Trip',
+  'Family with Kids',
+  'Urgent Pickup',
+  'Non-Smoking Driver',
+  'Luggage Space Extra',
 ];
 
 const DISTANCE_MATRIX: Record<string, Record<string, number>> = {
@@ -418,7 +464,8 @@ export default function QuoteEstimateScreen() {
   // Add to Leads Checkbox (checked by default as requested)
   const [addToLeads, setAddToLeads] = useState(true);
 
-  // Rate Overrides (Optional customization)
+  // Rate Overrides (Optional customization on active vehicle)
+  const [showRateOverride, setShowRateOverride] = useState(false);
   const [customRatePerKm, setCustomRatePerKm] = useState('');
   const [customDriverBata, setCustomDriverBata] = useState('');
 
@@ -452,7 +499,6 @@ export default function QuoteEstimateScreen() {
   const recalculateDistance = (pCity: string, dCity: string, currentStops: string[]) => {
     let base = getCityEstimatedDistance(pCity, dCity);
     if (currentStops.length > 0) {
-      // Add approx 60km per intermediate via stop if non-empty
       const validStops = currentStops.filter((s) => s.trim().length > 0);
       base += validStops.length * 60;
     }
@@ -488,6 +534,14 @@ export default function QuoteEstimateScreen() {
     const updated = [...stops];
     updated[idx] = text;
     setStops(updated);
+  };
+
+  const handleToggleNoteTag = (tag: string) => {
+    if (specialNotes.includes(tag)) {
+      setSpecialNotes(specialNotes.replace(tag, '').replace(/,\s*,/g, ',').trim());
+    } else {
+      setSpecialNotes(specialNotes ? `${specialNotes}, ${tag}` : tag);
+    }
   };
 
   // Calculate & Save
@@ -797,26 +851,26 @@ Thank you for choosing ${selectedBrand.name}!`;
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                   <View
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
+                      width: 42,
+                      height: 42,
+                      borderRadius: 21,
                       backgroundColor: selectedBrand.primaryColor + '20',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <Building2 size={20} color={selectedBrand.primaryColor} />
+                    <Building2 size={22} color={selectedBrand.primaryColor} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={{ fontSize: 15.5, fontWeight: '900', color: themeColors.text }}>
                         {selectedBrand.name}
                       </Text>
                       <View style={[styles.brandTagPill, { backgroundColor: selectedBrand.primaryColor }]}>
                         <Text style={styles.brandTagPillText}>{selectedBrand.domain}</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>
                       {selectedBrand.tagline}
                     </Text>
                   </View>
@@ -824,7 +878,7 @@ Thank you for choosing ${selectedBrand.name}!`;
 
                 <TouchableOpacity
                   onPress={() => setShowBrandPickerModal(true)}
-                  style={[styles.switchBrandBtn, { borderColor: selectedBrand.primaryColor }]}
+                  style={[styles.switchBrandBtn, { borderColor: selectedBrand.primaryColor, backgroundColor: selectedBrand.primaryColor + '10' }]}
                   activeOpacity={0.8}
                 >
                   <Text style={{ fontSize: 11.5, fontWeight: '800', color: selectedBrand.primaryColor }}>
@@ -838,7 +892,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 6, marginTop: 12, paddingTop: 6, borderTopWidth: 1, borderTopColor: themeColors.border }}
+                contentContainerStyle={{ gap: 6, marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: themeColors.border }}
               >
                 {BRAND_CONFIGS.map((b) => {
                   const isCur = selectedBrand.id === b.id;
@@ -866,9 +920,14 @@ Thank you for choosing ${selectedBrand.name}!`;
             {/* 1. Trip Type Selector (Brand-Adaptive) */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
-                  1. Select Trip Type
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.stepNumBadge, { backgroundColor: selectedBrand.primaryColor }]}>
+                    <Text style={styles.stepNumText}>1</Text>
+                  </View>
+                  <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                    Select Trip Type
+                  </Text>
+                </View>
                 {isArunachala && (
                   <View style={[styles.tagPill, { backgroundColor: '#8B5CF6' }]}>
                     <Text style={styles.tagPillText}>Tour / Bus / Van Rates</Text>
@@ -949,17 +1008,22 @@ Thank you for choosing ${selectedBrand.name}!`;
 
             {/* 2. Journey Route & Stops */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
-                  2. Journey Route & Schedule
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.stepNumBadge, { backgroundColor: selectedBrand.primaryColor }]}>
+                    <Text style={styles.stepNumText}>2</Text>
+                  </View>
+                  <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                    Journey Route & Schedule
+                  </Text>
+                </View>
                 <TouchableOpacity
                   onPress={handleAddStop}
-                  style={styles.addStopHeaderBtn}
+                  style={[styles.addStopHeaderBtn, { backgroundColor: isDark ? '#312E81' : '#EEF2FF' }]}
                   activeOpacity={0.7}
                 >
                   <Plus size={14} color={colors.primary} />
-                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.primary }}>
                     Add Stop
                   </Text>
                 </TouchableOpacity>
@@ -969,7 +1033,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               <View style={{ marginBottom: 12 }}>
                 <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Pickup City / Area *</Text>
                 <View style={[styles.inputWithAction, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                  <MapPin size={18} color="#10B981" style={{ marginRight: 8 }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8 }} />
                   <TextInput
                     style={[styles.inputField, { color: themeColors.text }]}
                     placeholder="e.g. Chennai Central"
@@ -982,7 +1046,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                       setLocationPickerTarget('pickup');
                       setShowLocationPicker(true);
                     }}
-                    style={styles.pickLocationBtn}
+                    style={[styles.pickLocationBtn, { backgroundColor: isDark ? '#312E81' : '#EEF2FF' }]}
                   >
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Search</Text>
                   </TouchableOpacity>
@@ -1001,7 +1065,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                     </TouchableOpacity>
                   </View>
                   <View style={[styles.inputWithAction, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: '#8B5CF6' }]}>
-                    <MapPin size={18} color="#8B5CF6" style={{ marginRight: 8 }} />
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6', marginRight: 8 }} />
                     <TextInput
                       style={[styles.inputField, { color: themeColors.text }]}
                       placeholder={`e.g. Intermediate Stop (e.g. Vellore)`}
@@ -1014,7 +1078,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                         setLocationPickerTarget(idx);
                         setShowLocationPicker(true);
                       }}
-                      style={styles.pickLocationBtn}
+                      style={[styles.pickLocationBtn, { backgroundColor: isDark ? '#3B0764' : '#F3E8FF' }]}
                     >
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#8B5CF6' }}>Search</Text>
                     </TouchableOpacity>
@@ -1026,7 +1090,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               <View style={{ marginBottom: 12 }}>
                 <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Destination / Drop City *</Text>
                 <View style={[styles.inputWithAction, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                  <MapPin size={18} color="#EF4444" style={{ marginRight: 8 }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 8 }} />
                   <TextInput
                     style={[styles.inputField, { color: themeColors.text }]}
                     placeholder="e.g. Madurai Mattuthavani"
@@ -1039,7 +1103,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                       setLocationPickerTarget('drop');
                       setShowLocationPicker(true);
                     }}
-                    style={styles.pickLocationBtn}
+                    style={[styles.pickLocationBtn, { backgroundColor: isDark ? '#312E81' : '#EEF2FF' }]}
                   >
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Search</Text>
                   </TouchableOpacity>
@@ -1049,7 +1113,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               {/* Quick Hubs */}
               <View style={{ marginTop: 2 }}>
                 <Text style={{ fontSize: 10.5, color: themeColors.textSecondary, marginBottom: 6 }}>
-                  Quick Hubs:
+                  Quick Regional Hubs:
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                   {POPULAR_CITIES.map((c) => (
@@ -1086,8 +1150,9 @@ Thank you for choosing ${selectedBrand.name}!`;
                   Estimated Distance (KM)
                 </Text>
                 <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
+                  <Navigation size={16} color={colors.primary} style={{ marginRight: 8 }} />
                   <TextInput
-                    style={[styles.inputField, { color: themeColors.text, fontWeight: '700' }]}
+                    style={[styles.inputField, { color: themeColors.text, fontWeight: '800' }]}
                     keyboardType="numeric"
                     placeholder="e.g. 460"
                     placeholderTextColor="#94A3B8"
@@ -1096,10 +1161,10 @@ Thank you for choosing ${selectedBrand.name}!`;
                   />
                   <TouchableOpacity
                     onPress={() => recalculateDistance(pickupCity, dropCity, stops)}
-                    style={{ paddingHorizontal: 10 }}
+                    style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, backgroundColor: isDark ? '#312E81' : '#EEF2FF' }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
-                      Auto-Calc
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary }}>
+                      Auto-Calc (~{getCityEstimatedDistance(pickupCity, dropCity)} km)
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1108,8 +1173,15 @@ Thank you for choosing ${selectedBrand.name}!`;
 
             {/* 3. Customer Contact Details */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>3. Customer Details</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.stepNumBadge, { backgroundColor: selectedBrand.primaryColor }]}>
+                    <Text style={styles.stepNumText}>3</Text>
+                  </View>
+                  <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                    Customer Details
+                  </Text>
+                </View>
                 <View style={[styles.tagPill, { backgroundColor: isDark ? '#1E293B' : '#E0F2FE' }]}>
                   <Text style={[styles.tagPillText, { color: colors.primary }]}>Lead & WhatsApp</Text>
                 </View>
@@ -1172,21 +1244,50 @@ Thank you for choosing ${selectedBrand.name}!`;
                     onChangeText={setSpecialNotes}
                   />
                 </View>
+
+                {/* Quick Instruction Tags */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
+                  {QUICK_INSTRUCTION_TAGS.map((t) => {
+                    const active = specialNotes.includes(t);
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        onPress={() => handleToggleNoteTag(t)}
+                        style={[
+                          styles.instructionChip,
+                          {
+                            backgroundColor: active ? selectedBrand.primaryColor + '20' : isDark ? '#1E293B' : '#F1F5F9',
+                            borderColor: active ? selectedBrand.primaryColor : themeColors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: active ? selectedBrand.primaryColor : themeColors.textSecondary }}>
+                          {active ? `✓ ${t}` : `+ ${t}`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
             </View>
 
-            {/* 4. Vehicle Category Selection (Brand-Adaptive) */}
+            {/* 4. Luxury Vehicle Category Selection (Brand-Adaptive) */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
-                  4. Vehicle Category ({selectedBrand.name})
-                </Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
-                  {vehicleList.length} Options
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.stepNumBadge, { backgroundColor: selectedBrand.primaryColor }]}>
+                    <Text style={styles.stepNumText}>4</Text>
+                  </View>
+                  <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                    Choose Vehicle Category
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: selectedBrand.primaryColor }}>
+                  {selectedBrand.name} Fleet ({vehicleList.length})
                 </Text>
               </View>
 
-              <View style={{ gap: 8, marginTop: 4 }}>
+              <View style={{ gap: 10 }}>
                 {vehicleList.map((v) => {
                   const isSelected = selectedVehicle.id === v.id;
                   return (
@@ -1198,47 +1299,127 @@ Thank you for choosing ${selectedBrand.name}!`;
                         setCustomDriverBata('');
                       }}
                       style={[
-                        styles.vehicleCard,
+                        styles.luxuryVehicleCard,
                         {
-                          backgroundColor: isSelected ? (isDark ? '#1E293B' : '#F0FDF4') : (isDark ? '#0F172A' : '#FFFFFF'),
+                          backgroundColor: isSelected ? (isDark ? '#064E3B20' : '#ECFDF5') : isDark ? '#0F172A' : '#FFFFFF',
                           borderColor: isSelected ? '#10B981' : themeColors.border,
                           borderWidth: isSelected ? 2 : 1,
                         },
                       ]}
-                      activeOpacity={0.8}
+                      activeOpacity={0.85}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View style={[styles.vehicleIconCircle, { backgroundColor: v.color + '20' }]}>
-                          <Car size={20} color={v.color} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={[styles.vehicleName, { color: themeColors.text }]}>{v.name}</Text>
-                            {v.tag && (
-                              <View style={[styles.tagPill, { backgroundColor: v.color }]}>
-                                <Text style={styles.tagPillText}>{v.tag}</Text>
-                              </View>
-                            )}
+                      {/* Top Header of vehicle card */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View style={[styles.vehicleIconCircle, { backgroundColor: v.color + '20' }]}>
+                            <Car size={22} color={v.color} />
                           </View>
-                          <Text style={[styles.vehicleModel, { color: themeColors.textSecondary }]}>{v.model}</Text>
-                          <Text style={[styles.vehicleSpecs, { color: themeColors.textSecondary }]}>
-                            {v.seats} · {v.luggage}
-                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text style={[styles.vehicleName, { color: themeColors.text }]}>{v.name}</Text>
+                              {v.tag && (
+                                <View style={[styles.tagPill, { backgroundColor: v.tagColor || v.color }]}>
+                                  <Text style={styles.tagPillText}>{v.tag}</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={[styles.vehicleModel, { color: themeColors.textSecondary }]}>
+                              {v.model}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Rate & Bata on Right */}
+                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: selectedBrand.primaryColor }}>
+                              ₹{v.ratePerKm}
+                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }}>
+                              /km
+                            </Text>
+                          </View>
+                          <View style={[styles.bataTag, { backgroundColor: isDark ? '#1E293B' : '#FEF3C7' }]}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#D97706' }}>
+                              Bata: ₹{v.driverBata}/day
+                            </Text>
+                          </View>
                         </View>
                       </View>
 
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: selectedBrand.primaryColor }}>
-                          ₹{v.ratePerKm}/km
-                        </Text>
-                        <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>
-                          Bata: ₹{v.driverBata}/day
-                        </Text>
+                      {/* Specs Row */}
+                      <View style={[styles.vehicleSpecsRow, { borderTopColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                        <View style={styles.specItem}>
+                          <Users size={12} color={themeColors.textSecondary} />
+                          <Text style={[styles.specText, { color: themeColors.textSecondary }]}>
+                            {v.seats}
+                          </Text>
+                        </View>
+                        <View style={styles.specItem}>
+                          <Briefcase size={12} color={themeColors.textSecondary} />
+                          <Text style={[styles.specText, { color: themeColors.textSecondary }]}>
+                            {v.luggage}
+                          </Text>
+                        </View>
+                        <View style={styles.specItem}>
+                          <Zap size={12} color="#10B981" />
+                          <Text style={[styles.specText, { color: '#10B981', fontWeight: '700' }]}>
+                            {v.acType}
+                          </Text>
+                        </View>
+
+                        {isSelected && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                            <CheckCircle2 size={16} color="#10B981" />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>Selected</Text>
+                          </View>
+                        )}
                       </View>
                     </TouchableOpacity>
                   );
                 })}
               </View>
+
+              {/* Optional Rate Override Toggle */}
+              <TouchableOpacity
+                onPress={() => setShowRateOverride(!showRateOverride)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: themeColors.border }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <SlidersHorizontal size={14} color={selectedBrand.primaryColor} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: selectedBrand.primaryColor }}>
+                    {showRateOverride ? 'Hide Custom Rate & Bata Overrides' : 'Customize Rate / Bata for this quote (Optional)'}
+                  </Text>
+                </View>
+                <ChevronDown size={14} color={selectedBrand.primaryColor} />
+              </TouchableOpacity>
+
+              {showRateOverride && (
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, padding: 10, borderRadius: 8, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderWidth: 1, borderColor: themeColors.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Custom Rate/KM (₹)</Text>
+                    <TextInput
+                      style={[styles.inputWrap, { color: themeColors.text, fontSize: 13, fontWeight: '700', backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }]}
+                      keyboardType="numeric"
+                      placeholder={`Default: ₹${selectedVehicle.ratePerKm}`}
+                      placeholderTextColor="#94A3B8"
+                      value={customRatePerKm}
+                      onChangeText={setCustomRatePerKm}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Custom Driver Bata (₹)</Text>
+                    <TextInput
+                      style={[styles.inputWrap, { color: themeColors.text, fontSize: 13, fontWeight: '700', backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }]}
+                      keyboardType="numeric"
+                      placeholder={`Default: ₹${selectedVehicle.driverBata}`}
+                      placeholderTextColor="#94A3B8"
+                      value={customDriverBata}
+                      onChangeText={setCustomDriverBata}
+                    />
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* ══════════════════════════════════════════════
@@ -1250,7 +1431,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               style={[
                 styles.addToLeadsBox,
                 {
-                  backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                  backgroundColor: addToLeads ? (isDark ? '#064E3B20' : '#ECFDF5') : isDark ? '#1E293B' : '#F8FAFC',
                   borderColor: addToLeads ? '#10B981' : themeColors.border,
                   borderWidth: addToLeads ? 1.5 : 1,
                 },
@@ -1265,7 +1446,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                   },
                 ]}
               >
-                {addToLeads && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+                {addToLeads && <Check size={14} color="#FFFFFF" strokeWidth={3.5} />}
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1288,7 +1469,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               style={[styles.primaryActionBtn, { backgroundColor: selectedBrand.primaryColor }]}
               activeOpacity={0.85}
             >
-              <Sparkles size={18} color="#FFFFFF" />
+              <Sparkles size={20} color="#FFFFFF" />
               <Text style={styles.primaryActionBtnText}>
                 Calculate & Generate Detailed Estimate
               </Text>
@@ -1314,7 +1495,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                   <CheckCircle2 size={20} color={addToLeads ? '#10B981' : selectedBrand.primaryColor} />
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 13.5,
                       fontWeight: '800',
                       color: addToLeads ? (isDark ? '#A7F3D0' : '#065F46') : themeColors.text,
                     }}
@@ -1330,7 +1511,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                   <Text style={{ fontSize: 11, color: isDark ? '#D1FAE5' : '#047857' }}>
                     Enquiry Reference Number:
                   </Text>
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: isDark ? '#FFFFFF' : '#064E3B', letterSpacing: 0.5 }}>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: isDark ? '#FFFFFF' : '#064E3B', letterSpacing: 0.5 }}>
                     {generatedRefId}
                   </Text>
                 </View>
@@ -1373,15 +1554,15 @@ Thank you for choosing ${selectedBrand.name}!`;
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selectedBrand.primaryColor + '20', alignItems: 'center', justifyContent: 'center' }}>
-                  <Car size={20} color={selectedBrand.primaryColor} />
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: selectedBrand.primaryColor + '20', alignItems: 'center', justifyContent: 'center' }}>
+                  <Car size={22} color={selectedBrand.primaryColor} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text }}>
                     {pickupCity} ➔ {dropCity}
                   </Text>
                   {stops.filter((s) => s.trim()).length > 0 && (
-                    <Text style={{ fontSize: 11.5, color: '#8B5CF6', marginTop: 2, fontWeight: '600' }}>
+                    <Text style={{ fontSize: 11.5, color: '#8B5CF6', marginTop: 2, fontWeight: '700' }}>
                       Via: {stops.filter((s) => s.trim()).join(' ➔ ')}
                     </Text>
                   )}
@@ -1423,7 +1604,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                     <Text style={{ fontSize: 12.5, color: themeColors.textSecondary }}>
                       Base Ride Fare ({calculationBreakdown.billableKm} km × ₹{calculationBreakdown.ratePerKm})
                     </Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>
                       ₹{calculationBreakdown.baseFare.toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -1432,7 +1613,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                     <Text style={{ fontSize: 12.5, color: themeColors.textSecondary }}>
                       Driver Allowance (Bata)
                     </Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>
                       ₹{calculationBreakdown.driverBata.toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -1442,7 +1623,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                       <Text style={{ fontSize: 12.5, color: themeColors.textSecondary }}>
                         Standard Toll Allowance
                       </Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>
                         ₹{calculationBreakdown.tollEstimate.toLocaleString('en-IN')}
                       </Text>
                     </View>
@@ -1454,7 +1635,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                     <Text style={{ fontSize: 15, fontWeight: '900', color: themeColors.text }}>
                       TOTAL ESTIMATED FARE
                     </Text>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: selectedBrand.primaryColor }}>
+                    <Text style={{ fontSize: 19, fontWeight: '900', color: selectedBrand.primaryColor }}>
                       ₹{calculationBreakdown.totalFare.toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -1464,7 +1645,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                       <Text style={{ fontSize: 12, fontWeight: '800', color: '#D97706' }}>
                         20% Online Confirmation Advance:
                       </Text>
-                      <Text style={{ fontSize: 13, fontWeight: '900', color: '#D97706' }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#D97706' }}>
                         ₹{calculationBreakdown.advanceAmount.toLocaleString('en-IN')}
                       </Text>
                     </View>
@@ -1472,7 +1653,7 @@ Thank you for choosing ${selectedBrand.name}!`;
                       <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
                         Balance Payable to Driver on Trip:
                       </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: themeColors.text }}>
                         ₹{calculationBreakdown.balancePayable.toLocaleString('en-IN')}
                       </Text>
                     </View>
@@ -1671,7 +1852,7 @@ Thank you for choosing ${selectedBrand.name}!`;
               padding: 20,
               borderWidth: 1,
               borderColor: themeColors.border,
-              ...shadows.modal,
+              ...shadows.card,
             }}
             onStartShouldSetResponder={() => true}
           >
@@ -1870,7 +2051,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   card: {
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     ...shadows.card,
@@ -1878,7 +2059,18 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 13.5,
     fontWeight: '800',
-    marginBottom: 10,
+  },
+  stepNumBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   brandTagPill: {
     paddingHorizontal: 6,
@@ -1895,7 +2087,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
   },
@@ -1913,15 +2105,15 @@ const styles = StyleSheet.create({
   tripTypeChip: {
     flex: 1,
     minWidth: 70,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 6,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tripTypeChipText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -1930,9 +2122,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: '#EEF2FF',
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   inputLabel: {
     fontSize: 11,
@@ -1943,60 +2134,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 10,
-    height: 40,
+    height: 42,
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 10,
-    height: 40,
+    height: 42,
   },
   inputField: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 13,
     paddingVertical: 0,
   },
   pickLocationBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
   hubChip: {
     paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  instructionChip: {
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
   },
-  vehicleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 10,
-    borderRadius: 8,
+  luxuryVehicleCard: {
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
   },
   vehicleIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   vehicleName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
   vehicleModel: {
-    fontSize: 11,
+    fontSize: 11.5,
     marginTop: 1,
   },
-  vehicleSpecs: {
-    fontSize: 10.5,
-    marginTop: 1,
+  vehicleSpecsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  specItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  specText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  bataTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
   },
   tagPill: {
     paddingHorizontal: 6,
@@ -2004,7 +2216,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   tagPillText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -2012,43 +2224,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
   },
   checkboxSquare: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 5,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 1,
   },
   addToLeadsTitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
   },
   addToLeadsSub: {
     fontSize: 11,
     marginTop: 2,
-    lineHeight: 15,
+    lineHeight: 16,
   },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 13,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     ...shadows.card,
   },
   primaryActionBtnText: {
-    fontSize: 13.5,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
     color: '#FFFFFF',
   },
   syncBanner: {
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     borderWidth: 1,
   },
@@ -2078,7 +2290,7 @@ const styles = StyleSheet.create({
   advanceHighlightBox: {
     marginTop: 6,
     padding: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
   },
   linkBox: {
@@ -2087,26 +2299,26 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
   },
   copyLinkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   whatsappActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   whatsappActionBtnText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -2125,7 +2337,7 @@ const styles = StyleSheet.create({
   },
   outlineBtn: {
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
