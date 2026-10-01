@@ -104,6 +104,18 @@ def get_assignment_window_minutes(db: Session, pickup_time, is_urgent: bool, acc
     return max(1, int(round(window)))
 
 
+WEBSITE_DRIVER_BATA = 300
+
+
+def split_website_bata(booked_bata, booked_extra_bata=0) -> tuple:
+    """Website bookings: whatever bata the customer was charged (e.g. 500 for
+    an SUV), the driver's bata is 300 and the rest goes to Vendor Extra Bata.
+    500 -> (300, 200); 300 -> (300, 0); 400 + 100 extra -> (300, 200)."""
+    booked = int(booked_bata or 0)
+    extra = int(booked_extra_bata or 0)
+    return WEBSITE_DRIVER_BATA, extra + max(0, booked - WEBSITE_DRIVER_BATA)
+
+
 def approve_customer_booking_request(db: Session, request: CustomerBookingRequest, decided_by: str) -> Order:
     """Turn a PENDING request into a real NewOrder + master Order (which itself
     fires the Telegram alert and vehicle-owner push fan-out - see
@@ -142,22 +154,27 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     if orig_cost_per_km and orig_cost_per_km > 0:
         posted_cost_per_km = max(1, orig_cost_per_km - 1)
         posted_extra_cost_per_km = 1
-        posted_driver_allowance = 300
-        excess_da = max(0, (orig_driver_allowance or 0) - 300)
-        posted_extra_driver_allowance = (orig_extra_driver_allowance or 0) + excess_da
+        posted_driver_allowance, posted_extra_driver_allowance = split_website_bata(
+            orig_driver_allowance, orig_extra_driver_allowance
+        )
         fare_type_str = "ITEMIZED"
-        
+
         dist = request.quoted_trip_distance or 0
+        # The driver's estimate: km fare + the driver's own 300 bata + charges.
+        # The bata above 300 (posted_extra_driver_allowance) is NOT the
+        # driver's - it used to be added here, so a 500-bata SUV booking still
+        # showed the driver 500.
         estimated_price_val = (
             (posted_cost_per_km * dist) +
             posted_driver_allowance +
-            posted_extra_driver_allowance +
             (_pick(request.admin_permit_charges, request.quoted_permit_charges) or 0) +
             (_pick(request.admin_hill_charges, request.quoted_hill_charges) or 0) +
             (_pick(request.admin_toll_charges, request.quoted_toll_charges) or 0) +
             (_pick(request.admin_night_charges, request.quoted_night_charges) or 0)
         )
-        vendor_price_val = orig_total_amount or estimated_price_val
+        vendor_price_val = orig_total_amount or (
+            estimated_price_val + posted_extra_driver_allowance + posted_extra_cost_per_km * dist
+        )
         platform_fee = 10
     else:
         posted_cost_per_km = 0

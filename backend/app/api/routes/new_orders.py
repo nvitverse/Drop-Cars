@@ -16,7 +16,7 @@ from app.schemas.new_orders import (
     FareBreakdown,NewOrderResponse,RecreateOrderRequest,
     OrderType,
 )
-from app.crud.new_orders import calculate_oneway_fare, calculate_multisegment_fare, create_oneway_order, get_pending_all_city_orders, get_orders_by_vendor_id, apply_distance_override, _origin_and_destination_from_index_map
+from app.crud.new_orders import calculate_oneway_fare, calculate_multisegment_fare, create_oneway_order, get_pending_all_city_orders, get_orders_by_vendor_id, apply_distance_override, apply_min_km_override, _origin_and_destination_from_index_map
 from app.crud.order_assignments import get_vendor_orders_with_assignments
 from app.schemas.order_assignments import OrderAssignmentWithOrderDetails
 from app.models.new_orders import OrderTypeEnum, CarTypeEnum
@@ -29,7 +29,7 @@ router = APIRouter()
 admin_commession_env = os.getenv("ADMIN_COMMESSION_ENV")
 
 @router.post("/oneway/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
-def oneway_quote(payload: OnewayQuoteRequest):
+def oneway_quote(payload: OnewayQuoteRequest, who=Depends(get_current_user_flexible)):
     try:
         fare = calculate_oneway_fare(
             payload.pickup_drop_location,
@@ -44,6 +44,8 @@ def oneway_quote(payload: OnewayQuoteRequest):
             payload.night_charges,
             payload.trip_type
         )
+        if who.get("role") == "ADMIN":
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
         return OnewayQuoteResponse(
             fare=FareBreakdown(**fare),
             echo=payload,
@@ -202,7 +204,7 @@ def oneway_confirm(
 
 
 @router.post("/roundtrip/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
-def roundtrip_quote(payload: RoundTripQuoteRequest):
+def roundtrip_quote(payload: RoundTripQuoteRequest, who=Depends(get_current_user_flexible)):
     try:
         fare = calculate_multisegment_fare(
             payload.pickup_drop_location,
@@ -219,6 +221,8 @@ def roundtrip_quote(payload: RoundTripQuoteRequest):
             start_date_time=payload.start_date_time,
             end_date_time=payload.end_date_time,
         )
+        if who.get("role") == "ADMIN":
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
         return OnewayQuoteResponse(
             fare=FareBreakdown(**fare),
             echo=payload,
@@ -354,7 +358,7 @@ def roundtrip_confirm(
 
 
 @router.post("/multicity/quote", response_model=OnewayQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
-def multicity_quote(payload: MulticityQuoteRequest):
+def multicity_quote(payload: MulticityQuoteRequest, who=Depends(get_current_user_flexible)):
     try:
         fare = calculate_multisegment_fare(
             payload.pickup_drop_location,
@@ -371,6 +375,8 @@ def multicity_quote(payload: MulticityQuoteRequest):
             start_date_time=payload.start_date_time,
             end_date_time=payload.end_date_time,
         )
+        if who.get("role") == "ADMIN":
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
         return OnewayQuoteResponse(
             fare=FareBreakdown(**fare),
             echo=payload,

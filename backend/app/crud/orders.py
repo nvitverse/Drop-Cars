@@ -60,7 +60,7 @@ def _stamp_commission_class(new_order):
     )
 
 
-def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, *, night_charges: int | None = None, acceptance_deadline: datetime | None = None) -> Order:
+def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, *, night_charges: int | None = None, acceptance_deadline: datetime | None = None, skip_broadcast: bool = False) -> Order:
     start_at = new_order.start_date_time
     if start_at is not None and start_at.tzinfo is None:
         start_at = start_at.replace(tzinfo=timezone.utc)
@@ -133,6 +133,11 @@ def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_a
             db.rollback()
             print(f"advance_received vendor wallet credit failed (booking still created): {e}")
 
+    # Admin "Allocate manually": the booking goes straight to one fleet owner,
+    # so no Telegram post and no new-booking push to the driver network.
+    if skip_broadcast:
+        return master
+
     locations = new_order.pickup_drop_location
     values = list(locations.values())
     route = " -> ".join(values)
@@ -177,7 +182,7 @@ def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_a
     return master
 
 
-def create_master_from_hourly(db: Session, hourly: HourlyRental, *, pick_near_city: list, trip_time : int, estimated_price: int, vendor_price:int, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, target_driver_id=None, fare_type: str = "ITEMIZED") -> Order:
+def create_master_from_hourly(db: Session, hourly: HourlyRental, *, pick_near_city: list, trip_time : int, estimated_price: int, vendor_price:int, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, target_driver_id=None, fare_type: str = "ITEMIZED", skip_broadcast: bool = False) -> Order:
     master = Order(
         source=OrderSourceEnum.HOURLY_RENTAL,
         source_order_id=hourly.id,
@@ -205,6 +210,8 @@ def create_master_from_hourly(db: Session, hourly: HourlyRental, *, pick_near_ci
     db.add(master)
     db.commit()
     db.refresh(master)
+    if skip_broadcast:
+        return master
     formatted = format_pickup_time_ist(hourly.start_date_time)
     try:
         send_trip_to_telegram_hourly_sync(

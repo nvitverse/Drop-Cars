@@ -1478,18 +1478,38 @@ from app.schemas.new_orders import OnewayConfirmRequest, RoundTripConfirmRequest
 
 class AdminOnewayConfirmRequest(OnewayConfirmRequest):
     vendor_id: Optional[UUID] = None
+    # "Allocate manually" (admin only): give the booking straight to this fleet
+    # owner instead of broadcasting it. allocate_on_credit lets a low wallet
+    # through - the commission is then debited at trip completion.
+    target_vehicle_owner_id: Optional[str] = None
+    allocate_on_credit: bool = False
 
 
 class AdminRoundTripConfirmRequest(RoundTripConfirmRequest):
     vendor_id: Optional[UUID] = None
+    # "Allocate manually" (admin only): give the booking straight to this fleet
+    # owner instead of broadcasting it. allocate_on_credit lets a low wallet
+    # through - the commission is then debited at trip completion.
+    target_vehicle_owner_id: Optional[str] = None
+    allocate_on_credit: bool = False
 
 
 class AdminMulticityConfirmRequest(MulticityConfirmRequest):
     vendor_id: Optional[UUID] = None
+    # "Allocate manually" (admin only): give the booking straight to this fleet
+    # owner instead of broadcasting it. allocate_on_credit lets a low wallet
+    # through - the commission is then debited at trip completion.
+    target_vehicle_owner_id: Optional[str] = None
+    allocate_on_credit: bool = False
 
 
 class AdminHourlyConfirmRequest(RentalOrderRequest):
     vendor_id: Optional[UUID] = None
+    # "Allocate manually" (admin only): give the booking straight to this fleet
+    # owner instead of broadcasting it. allocate_on_credit lets a low wallet
+    # through - the commission is then debited at trip completion.
+    target_vehicle_owner_id: Optional[str] = None
+    allocate_on_credit: bool = False
 
 
 def _admin_pick_near_city_and_driver(payload):
@@ -1503,6 +1523,54 @@ def _admin_pick_near_city_and_driver(payload):
         pick_near_city = ["ALL"]
     target_driver_id = payload.target_driver_id if payload.send_to == "DRIVER" else None
     return pick_near_city, target_driver_id
+
+
+def _admin_fleet_target(db, payload):
+    """Fleet owner the admin picked under "Allocate manually", or None."""
+    target = (getattr(payload, "target_vehicle_owner_id", None) or "").strip()
+    if not target:
+        return None
+    from app.crud.manual_allocation import find_fleet_owner
+    owner = find_fleet_owner(db, target)
+    if not owner:
+        raise HTTPException(status_code=404, detail="Fleet owner not found - search and pick the fleet owner again")
+    return owner
+
+
+def _admin_km_prices(payload, fare):
+    """(driver price, customer price) the booking will be created with - same
+    All-Inclusive override as create_oneway_order."""
+    if (payload.fare_type or "ITEMIZED") == "ALL_INCLUSIVE" and payload.total_booking_amount:
+        est = int(payload.total_booking_amount)
+        return est, est + int(payload.extra_amount or 0)
+    return fare["driver_amount"], fare["customer_amount"]
+
+
+def _admin_fleet_low_balance(db, fleet_owner, payload, estimated_price, vendor_price, cost_per_km=None, trip_distance=None):
+    """Checked BEFORE the booking is created, so a low wallet never leaves a
+    half-posted booking behind. Returns the INSUFFICIENT_BALANCE reply, or None
+    when the wallet covers the commission or the admin chose credit."""
+    if fleet_owner is None or payload.allocate_on_credit:
+        return None
+    from app.crud.manual_allocation import commission_hold, low_balance_response
+    from app.crud.wallet import get_owner_balance
+    required = commission_hold(estimated_price, vendor_price, cost_per_km, trip_distance)
+    balance = get_owner_balance(db, str(fleet_owner.vehicle_owner_id))
+    if balance < required:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=200, content=low_balance_response(fleet_owner, balance, required, True))
+    return None
+
+
+def _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin):
+    if fleet_owner is None:
+        return None
+    from app.models.orders import Order
+    from app.crud.manual_allocation import allocate_to_fleet_owner
+    order = db.query(Order).filter(Order.id == master_order_id).first()
+    return allocate_to_fleet_owner(
+        db, order, fleet_owner, on_credit=payload.allocate_on_credit, assigned_by="ADMIN", staff=current_admin,
+    )
 
 
 @router.post("/admin/orders/oneway/confirm", status_code=status.HTTP_201_CREATED)
@@ -1530,12 +1598,22 @@ def admin_oneway_confirm(
             payload.extra_cost_per_km, payload.night_charges, payload.trip_type,
         )
         distance_edited = False
+        if payload.min_km_override is not None:
+            from app.crud.new_orders import apply_min_km_override
+            _before_km = fare["total_km"]
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)
             distance_edited = True
 
+        fleet_owner = _admin_fleet_target(db, payload)
+        _est, _vend = _admin_km_prices(payload, fare)
+        low = _admin_fleet_low_balance(db, fleet_owner, payload, _est, _vend, payload.cost_per_km, fare["total_km"])
+        if low is not None:
+            return low
         new_order, master_order_id = create_oneway_order(
-            db, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum(payload.trip_type.value), car_type=CarTypeEnum(payload.car_type),
+            db, skip_broadcast=fleet_owner is not None, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum(payload.trip_type.value), car_type=CarTypeEnum(payload.car_type),
             location_links=payload.location_links, pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,
             customer_name=payload.customer_name, customer_number=payload.customer_number, cost_per_km=payload.cost_per_km,
             extra_cost_per_km=payload.extra_cost_per_km, driver_allowance=payload.driver_allowance, extra_driver_allowance=payload.extra_driver_allowance,
@@ -1554,6 +1632,7 @@ def admin_oneway_confirm(
             # update_end_trip_record for where this actually skips taking
             # admin_profit at trip close.
             commission_waived=not payload.apply_commission,
+            gst_amount=payload.gst_amount,
         )
         from app.crud.admin_activity_log import log_admin_action
         log_admin_action(
@@ -1561,7 +1640,8 @@ def admin_oneway_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": payload.trip_type.value, "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
-        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare}
+        allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
+        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
         raise
     except Exception as e:
@@ -1586,12 +1666,22 @@ def admin_roundtrip_confirm(
             start_date_time=payload.start_date_time, end_date_time=payload.end_date_time,
         )
         distance_edited = False
+        if payload.min_km_override is not None:
+            from app.crud.new_orders import apply_min_km_override
+            _before_km = fare["total_km"]
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)
             distance_edited = True
 
+        fleet_owner = _admin_fleet_target(db, payload)
+        _est, _vend = _admin_km_prices(payload, fare)
+        low = _admin_fleet_low_balance(db, fleet_owner, payload, _est, _vend, payload.cost_per_km, fare["total_km"])
+        if low is not None:
+            return low
         new_order, master_order_id = create_oneway_order(
-            db, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum.ROUND_TRIP, car_type=CarTypeEnum(payload.car_type),
+            db, skip_broadcast=fleet_owner is not None, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum.ROUND_TRIP, car_type=CarTypeEnum(payload.car_type),
             location_links=payload.location_links, pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,
             end_date_time=payload.end_date_time, customer_name=payload.customer_name, customer_number=payload.customer_number,
             cost_per_km=payload.cost_per_km, extra_cost_per_km=payload.extra_cost_per_km, driver_allowance=payload.driver_allowance,
@@ -1610,6 +1700,7 @@ def admin_roundtrip_confirm(
             # update_end_trip_record for where this actually skips taking
             # admin_profit at trip close.
             commission_waived=not payload.apply_commission,
+            gst_amount=payload.gst_amount,
         )
         from app.crud.admin_activity_log import log_admin_action
         log_admin_action(
@@ -1617,7 +1708,8 @@ def admin_roundtrip_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": "Round Trip", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
-        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare}
+        allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
+        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
         raise
     except Exception as e:
@@ -1642,12 +1734,22 @@ def admin_multicity_confirm(
             start_date_time=payload.start_date_time, end_date_time=payload.end_date_time,
         )
         distance_edited = False
+        if payload.min_km_override is not None:
+            from app.crud.new_orders import apply_min_km_override
+            _before_km = fare["total_km"]
+            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)
             distance_edited = True
 
+        fleet_owner = _admin_fleet_target(db, payload)
+        _est, _vend = _admin_km_prices(payload, fare)
+        low = _admin_fleet_low_balance(db, fleet_owner, payload, _est, _vend, payload.cost_per_km, fare["total_km"])
+        if low is not None:
+            return low
         new_order, master_order_id = create_oneway_order(
-            db, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum.MULTY_CITY, car_type=CarTypeEnum(payload.car_type),
+            db, skip_broadcast=fleet_owner is not None, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum.MULTY_CITY, car_type=CarTypeEnum(payload.car_type),
             location_links=payload.location_links, pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,
             end_date_time=payload.end_date_time, customer_name=payload.customer_name, customer_number=payload.customer_number,
             cost_per_km=payload.cost_per_km, extra_cost_per_km=payload.extra_cost_per_km, driver_allowance=payload.driver_allowance,
@@ -1666,6 +1768,7 @@ def admin_multicity_confirm(
             # update_end_trip_record for where this actually skips taking
             # admin_profit at trip close.
             commission_waived=not payload.apply_commission,
+            gst_amount=payload.gst_amount,
         )
         from app.crud.admin_activity_log import log_admin_action
         log_admin_action(
@@ -1673,7 +1776,8 @@ def admin_multicity_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": "Multi City", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
-        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare}
+        allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
+        return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
         raise
     except Exception as e:
@@ -1695,6 +1799,10 @@ async def admin_hourly_confirm(
             payload.package_hours, payload.cost_per_hour, payload.extra_cost_per_hour,
             payload.cost_for_addon_km, payload.extra_cost_for_addon_km,
         )
+        fleet_owner = _admin_fleet_target(db, payload)
+        low = _admin_fleet_low_balance(db, fleet_owner, payload, int(fare["estimate_price"]), int(fare["vendor_amount"]))
+        if low is not None:
+            return low
         order = create_hourly_order(
             db, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum.HOURLY_RENTAL, car_type=CarTypeEnum(payload.car_type),
             pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,
@@ -1708,7 +1816,7 @@ async def admin_hourly_confirm(
             trip_time=str(payload.package_hours.get("hours", 0)), estimated_price=int(fare["estimate_price"]),
             vendor_price=int(fare["vendor_amount"]), max_time_to_assign_order=payload.max_time_to_assign_order,
             toll_charge_update=payload.toll_charge_update, target_driver_id=payload.target_driver_id,
-            fare_type=payload.fare_type or "ITEMIZED",
+            fare_type=payload.fare_type or "ITEMIZED", skip_broadcast=fleet_owner is not None,
         )
         from app.crud.admin_activity_log import log_admin_action
         log_admin_action(
@@ -1716,7 +1824,9 @@ async def admin_hourly_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order.id), target_name=f"Booking #{master_order.id}",
             details={"trip_type": "Hourly Rental", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
+        allocation = _admin_allocate_new_booking(db, master_order.id, fleet_owner, payload, current_admin)
         return {
+            "allocation": allocation,
             "order_id": master_order.id, "trip_status": master_order.trip_status, "trip_type": master_order.trip_type,
             "vendor_price": master_order.vendor_price, "estimated_price": master_order.estimated_price, "trip_time": master_order.trip_time,
         }
