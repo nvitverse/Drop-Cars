@@ -274,6 +274,17 @@ export default function CustomerMenuScreen() {
             <ChevronRight color={palette.textMuted} size={16} />
           </TouchableOpacity>
 
+          <TouchableOpacity style={themeStyles.menuItem} onPress={() => router.push('/(customer)/chats' as any)}>
+            <View style={[themeStyles.iconBox, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+              <MessageSquare color="#6366F1" size={18} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={themeStyles.menuItemTitle}>Messages</Text>
+              <Text style={themeStyles.menuItemSub}>Chat with Drop Cars and your driver</Text>
+            </View>
+            <ChevronRight color={palette.textMuted} size={16} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={themeStyles.menuItem} onPress={handleWhatsAppSupport}>
             <View style={[themeStyles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
               <MessageSquare color="#10B981" size={18} />

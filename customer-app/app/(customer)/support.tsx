@@ -29,6 +29,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenShell, useScreenTheme } from '@/components/SafeArea';
 import axiosInstance from '../api/axiosInstance';
+import { useRouter } from 'expo-router';
 
 interface ChatMessage {
   id: string | number;
@@ -82,6 +83,7 @@ const INITIAL_QUICK_SUGGESTIONS = [
 
 export default function SupportScreen() {
   const { isDark } = useScreenTheme();
+  const router = useRouter();
 
   // Mode: 'AI_CHAT' | 'HELPLINE'
   const [activeMode, setActiveMode] = useState<'AI_CHAT' | 'HELPLINE'>('AI_CHAT');
@@ -190,6 +192,20 @@ export default function SupportScreen() {
 
   return (
     <ScreenShell title="24/7 Customer Care" subtitle="Instant AI Assistant • Live Helpline • FAQs">
+      {/* A real person: the Drop Cars team chat (replies arrive here and as a notification) */}
+      <TouchableOpacity
+        style={themeStyles.personCard}
+        onPress={() => router.push({ pathname: '/(customer)/chat-room', params: { support: '1', title: 'Drop Cars Support' } } as any)}
+        accessibilityLabel="Chat with the Drop Cars team"
+      >
+        <Headset size={20} color="#FFFFFF" />
+        <View style={{ flex: 1 }}>
+          <Text style={themeStyles.personTitle}>Chat with the Drop Cars team</Text>
+          <Text style={themeStyles.personSub}>A real person replies here</Text>
+        </View>
+        <MessageSquare size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+
       {/* SEGMENTED SWITCHER */}
       <View style={themeStyles.modeSwitcher}>
         <TouchableOpacity
@@ -379,6 +395,9 @@ export default function SupportScreen() {
 
 function getStyles(isDark: boolean) {
   return StyleSheet.create({
+    personCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#6366F1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12 },
+    personTitle: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800' },
+    personSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 1 },
     modeSwitcher: { flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#E2E8F0', borderRadius: 14, padding: 4, marginBottom: 14 },
     modeTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, borderRadius: 10 },
     modeTabActive: { backgroundColor: '#0EA5E9' },

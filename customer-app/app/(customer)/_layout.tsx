@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, useRouter, usePathname } from 'expo-router';
 import {
   Home,
@@ -23,6 +23,7 @@ import { useServiceMode } from '@/contexts/ServiceModeContext';
 import { useThemePreference } from '@/contexts/ThemePreferenceContext';
 import { getPalette } from '@/constants/theme';
 import { useTaxiFlow } from '@/contexts/TaxiFlowContext';
+import { registerCustomerPush } from '@/services/chat';
 
 export default function CustomerTabsLayout() {
   const systemColorScheme = useColorScheme();
@@ -32,6 +33,9 @@ export default function CustomerTabsLayout() {
   const { activeMode } = useServiceMode();
 
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 6);
+
+  // Store this phone's push token so chat replies and booking updates reach the customer (never stored before).
+  useEffect(() => { registerCustomerPush(); }, []);
 
   const isTaxiMode = activeMode === 'TAXI';
   const isCarpoolMode = activeMode === 'CARPOOL';
@@ -155,6 +159,8 @@ export default function CustomerTabsLayout() {
         />
 
         {/* B2B PORTAL SCREENS, WALLET, GIFT CARDS, SAFETY & SUBSCRIPTION PAGES */}
+        <Tabs.Screen name="chats" options={{ href: null }} />
+        <Tabs.Screen name="chat-room" options={{ href: null }} />
         <Tabs.Screen name="wallet" options={{ href: null }} />
         <Tabs.Screen name="gift-cards" options={{ href: null }} />
         <Tabs.Screen name="safety" options={{ href: null }} />

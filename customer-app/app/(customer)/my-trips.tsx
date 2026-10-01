@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Linking, ActivityIndicator, Platform, Alert, Modal } from 'react-native';
-import { ShieldCheck, PhoneCall, AlertCircle, Inbox, MapPin, RefreshCw, Star, CheckCircle2, IndianRupee, FileText, Download, X } from 'lucide-react-native';
+import { ShieldCheck, PhoneCall, AlertCircle, Inbox, MapPin, RefreshCw, Star, CheckCircle2, IndianRupee, FileText, Download, X, MessageCircle } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -291,6 +292,7 @@ function RideRow({
 
 function BookingCard({ booking, themeStyles, isDark, onPaid }: { booking: CustomerBooking; themeStyles: any; isDark: boolean; onPaid: () => void }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [paying, setPaying] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [showGstModal, setShowGstModal] = useState(false);
@@ -509,6 +511,17 @@ function BookingCard({ booking, themeStyles, isDark, onPaid }: { booking: Custom
           <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
             {paying ? 'Processing…' : `Pay ₹${fare.toLocaleString('en-IN')}`}
           </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {booking.linked_order_id && booking.status !== 'REJECTED' && bucketOf(booking) !== 'COMPLETED' ? (
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: '#6366F1', borderRadius: 10, paddingVertical: 9 }}
+          onPress={() => router.push({ pathname: '/(customer)/chat-room', params: { order: String(booking.linked_order_id), title: 'Your trip chat' } } as any)}
+          accessibilityLabel="Chat about this trip"
+        >
+          <MessageCircle color="#6366F1" size={15} />
+          <Text style={{ color: '#6366F1', fontSize: 13, fontWeight: '800' }}>Chat about this trip</Text>
         </TouchableOpacity>
       ) : null}
 
