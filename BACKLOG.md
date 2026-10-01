@@ -91,10 +91,10 @@ Before locking any route, grep `customer-app`, `driver-app`, `admin-panel`, `web
 | D6 | Google Sheets: restrict sharing (contains phone numbers); monthly row-count check. Ops task for the user. | TODO | - | - |
 
 ## E. Admin app navigation (navigation first, no screen rewrites)
-Layout (UPDATED 2026-10-01, owner's decision): `Home | Operations | Chats | Fleet | More`; the Operations tab has switch `[Bookings | CRM]` (default Bookings, first card Live Bookings). Older wording "Bookings tab > [CRM | Operations]" is obsolete. Full screen mapping in `NAVIGATION_PLAN.md`.
+Layout (UPDATED 2026-10-01, owner's decision): `Home | Operations | Chats | Fleet | More`; the Operations tab has switch `[CRM | Bookings]` (default CRM; Bookings segment's first card Live Bookings; Home tiles deep-link into the right segment). Older wording "Bookings tab > [CRM | Operations]" is obsolete. Full screen mapping in `NAVIGATION_PLAN.md`.
 | ID | Task | Status | Depends | Acceptance |
 |---|---|---|---|---|
-| E1 | Tab bar (rename Bookings tab to Operations) and the [Bookings | CRM] switch (`(tabs)/_layout.tsx`); keep permission keys via `canSee`. | TODO | - | 5 tabs, back-behaviour preserved. |
+| E1 | Tab bar (rename Bookings tab to Operations) and the [CRM | Bookings] switch (default CRM) (`(tabs)/_layout.tsx`); keep permission keys via `canSee`. | TODO | - | 5 tabs, back-behaviour preserved. |
 | E2 | Home tiles in priority order with counts and oldest-wait time: SOS (only when active) > leads on-time > approvals / unassigned / unread chats > fleet activation > wallet & payout / refunds / other requests. Use `/admin/dashboard/needs-attention` where it fits. | TODO | E1, D4, E7 | - |
 | E3 | Fleet tab: fleet owners, drivers, duty drivers (inside each fleet with its cars), vendors, cars, activation requests (documents, face audit, profile edits), wallet & payments (wallet, payouts, transfers, cash audit, billing, referral claims), quality, vacant cities, bulk search + bulk actions. | TODO | E1 | - |
 | E4 | CRM segment: leads/enquiries, customers, refunds, coupons, banners, analytics, website/brand, customer chat button. Move Customers and Ratings out of Fleet. | TODO | E1, D3 | - |

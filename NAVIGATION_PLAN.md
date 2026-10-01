@@ -7,8 +7,8 @@ Rule: **Enna sambandhamo, adhu adhukkulla thaan irukkanum. Fleet-ku sambandham n
 ## Bottom tabs
 `Home | Operations | Chats | Fleet | More`
 
-**DESIGN UPDATE 2026-10-01 (owner's decision):** bottom tab peyar **Operations**. Adhukkulla mela switch `[ Bookings | CRM ]` (rendu mattum). Munnaadhu "Bookings tab > [CRM | Operations]" nu irundhadhu, adhu maaritchu.
-Default segment = **Bookings** (mudhal card = **Live Bookings**), so bookings 1 tap-la kedaikkum.
+**DESIGN UPDATE 2026-10-01 (owner's decision):** bottom tab peyar **Operations**. Adhukkulla mela switch `[ CRM | Bookings ]` (rendu mattum, indha order-la). Munnaadhu "Bookings tab > [CRM | Operations]" nu irundhadhu, adhu maaritchu.
+**Default segment = CRM** (CRM thaan leads pesa, adhanaala main; Operations tab thirandha udane leads inbox theriyum). Bookings segment-ku oru switch tap. Home tiles direct-aa sariyaana segment-ku link aagum: leads tile -> CRM; booking approvals / unassigned tiles -> Bookings (Live Bookings = Bookings segment-oda mudhal card). Idhanaala dispatch slow aagaadhu.
 
 ---
 
@@ -34,7 +34,7 @@ Home-kulla irukkuradhu: `(tabs)/index` (dashboard), `(tabs)/tasks`, `profile`.
 
 ---
 
-## 2. OPERATIONS tab (switch: Bookings | CRM)
+## 2. OPERATIONS tab (switch: CRM | Bookings, default CRM)
 
 ### Bookings segment (munnaadhu "Operations segment"; ellaa trip / dispatch / company tools idhukkulla)
 | Screen | Note |
