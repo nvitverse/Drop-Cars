@@ -48,6 +48,16 @@ class Action:
 
 
 # ------------------------------------------------------------------ helpers
+async def _call(fn, **kwargs):
+    """Run an Admin App route function whether it is `async def` or a plain `def` (plain handlers run in the thread pool, so a slow
+    one - e-mail, Maps - never blocks the event loop; the blocking-handler cleanup turned most of them into plain defs)."""
+    import inspect
+    from starlette.concurrency import run_in_threadpool
+    if inspect.iscoroutinefunction(fn):
+        return await fn(**kwargs)
+    return await run_in_threadpool(lambda: fn(**kwargs))
+
+
 def _order(db: Session, order_id: Any):
     from app.models.orders import Order
     try:
@@ -84,7 +94,7 @@ def _prep_notify(db, admin, args):
 
 async def _run_notify(db, admin, args):
     from app.api.routes.admin import admin_notify_order
-    res = await admin_notify_order(order_id=args["order_id"], current_admin=admin, db=db)
+    res = await _call(admin_notify_order, order_id=args["order_id"], current_admin=admin, db=db)
     return {"message": f"Drivers notified again for booking #{args['order_id']}.", "data": {"result": res}}
 
 
@@ -101,7 +111,7 @@ async def _run_cancel(db, admin, args):
     from fastapi import HTTPException
     from app.api.routes.admin import AdminCancelOrderRequest, admin_cancel_order
     try:
-        res = await admin_cancel_order(order_id=args["order_id"], request=AdminCancelOrderRequest(reason=args["reason"]), db=db, current_admin=admin)
+        res = await _call(admin_cancel_order, order_id=args["order_id"], request=AdminCancelOrderRequest(reason=args["reason"]), db=db, current_admin=admin)
     except HTTPException as e:
         raise ProposalError(e.status_code, str(e.detail))
     return {"message": f"Booking #{args['order_id']} cancelled.", "data": {"result": res}}
@@ -135,7 +145,7 @@ def _prep_approve(db, admin, args):
 async def _run_approve(db, admin, args):
     from uuid import UUID
     from app.api.routes.admin import admin_approve_website_booking
-    res = await admin_approve_website_booking(id=UUID(args["request_id"]), current_admin=admin, db=db)
+    res = await _call(admin_approve_website_booking, id=UUID(args["request_id"]), current_admin=admin, db=db)
     return {"message": "Website booking approved.", "data": {"result": res}}
 
 
@@ -148,7 +158,7 @@ def _prep_reject(db, admin, args):
 async def _run_reject(db, admin, args):
     from uuid import UUID
     from app.api.routes.admin import AdminWebsiteBookingReject, admin_reject_website_booking
-    res = await admin_reject_website_booking(id=UUID(args["request_id"]), body=AdminWebsiteBookingReject(reason=args["reason"]), current_admin=admin, db=db)
+    res = await _call(admin_reject_website_booking, id=UUID(args["request_id"]), body=AdminWebsiteBookingReject(reason=args["reason"]), current_admin=admin, db=db)
     return {"message": "Website booking rejected.", "data": {"result": res}}
 
 
@@ -174,7 +184,7 @@ async def _run_assign(db, admin, args):
     from fastapi import HTTPException
     from app.api.routes.orders import ManualAssignRequest, manual_assign_order
     try:
-        res = await manual_assign_order(order_id=args["order_id"], payload=ManualAssignRequest(target_id=args["target"], force_credit=args["on_credit"]), db=db, current_admin=admin)
+        res = await _call(manual_assign_order, order_id=args["order_id"], payload=ManualAssignRequest(target_id=args["target"], force_credit=args["on_credit"]), db=db, current_admin=admin)
     except HTTPException as e:
         raise ProposalError(e.status_code, str(e.detail))
     return {"message": f"Booking #{args['order_id']} assigned.", "data": {"result": res}}
@@ -230,7 +240,7 @@ async def _run_create(db, admin, args):
     from fastapi import HTTPException
     from app.api.routes.admin import admin_oneway_confirm
     try:
-        res = admin_oneway_confirm(payload=_create_payload(args), db=db, current_admin=admin)
+        res = await _call(admin_oneway_confirm, payload=_create_payload(args), db=db, current_admin=admin)
     except HTTPException as e:
         raise ProposalError(e.status_code, str(e.detail))
     oid = res.get("order_id") if isinstance(res, dict) else None
