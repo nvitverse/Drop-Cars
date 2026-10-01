@@ -1174,6 +1174,12 @@ export default function CreateBookingScreen() {
           .filter((r) => r.included && r.name.trim())
           .map((r) => `${r.name.trim()}${Number(r.allowance) > 0 ? ` (+₹${r.allowance})` : ''}`);
         if (customReqs.length > 0) parts.push(`Special Requests: ${customReqs.join(', ')}`);
+        const spotExclusions = customCharges
+          .filter((c) => !c.included && c.name.trim())
+          .map((c) => `${c.name.trim()}${Number(c.amount) > 0 ? ` (₹${c.amount})` : ''}`);
+        if (spotExclusions.length > 0) {
+          parts.push(`[Driver to collect on spot: ${spotExclusions.join(', ')}]`);
+        }
         if (custPhoneRevealMode === 'instant' && customerPhone.trim()) {
           parts.push(`[Customer Mobile: ${customerCountryCode} ${customerPhone.trim()} - Instant Contact]`);
         }
@@ -2132,11 +2138,26 @@ export default function CreateBookingScreen() {
             </View>
           ) : (
             <>
-              {fareType === 'ALL_INCLUSIVE' ? (
+              {fareType === 'ALL_INCLUSIVE' ? (() => {
+                const totalKm = Number(minKm) || autoKm || 130;
+                const defTariffs = getDefaultsForCarType(carType, tripType);
+                const activeDriverRate = Number(costPerKm) || Number(defTariffs.cost_per_km) || 13;
+                const activeVendorExtraRate = Number(extraCostPerKm) || Number(defTariffs.extra_cost_per_km) || 0;
+                const activeDriverBata = (Number(driverAllowance) > 0 ? Number(driverAllowance) : Number(defTariffs.driver_allowance) || 300) * (tripDays > 1 ? tripDays : 1);
+                const activeVendorExtraBata = (Number(extraDriverAllowance) > 0 ? Number(extraDriverAllowance) : Number(defTariffs.extra_driver_allowance) || 100) * (tripDays > 1 ? tripDays : 1);
+                const extraPermit = includePermit ? Number(extraPermitCharges) || 0 : 0;
+                const inclPermit = includePermit ? Number(permitCharges) || 0 : 0;
+                const inclHill = includeHill ? Number(hillCharges) || 0 : 0;
+                const inclToll = includeToll ? Number(tollCharges) || 0 : 0;
+
+                const suggestedDriverFare = Math.round(totalKm * activeDriverRate + activeDriverBata + inclPermit + inclHill + inclToll);
+                const suggestedVendorMarkup = Math.round(totalKm * activeVendorExtraRate + activeVendorExtraBata + extraPermit);
+
+                return (
                 <View>
                   {/* Km limit for All Inclusive: editable row with auto route km calculation */}
                   {hasMinKm && (
-                    <View style={[styles.inlineField, { marginBottom: 12 }]}>
+                    <View style={[styles.inlineField, { marginBottom: 10 }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                         <Text style={[styles.priceLabel, { marginBottom: 0 }]}>
                           Km limit{tripDays > 1 ? ` (${tripDays} days)` : ''}
@@ -2166,6 +2187,25 @@ export default function CreateBookingScreen() {
                       />
                     </View>
                   )}
+
+                  {/* Standard Fare Calculation Suggestion Bar */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.primaryTint, borderWidth: 1, borderColor: colors.primary + '33', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 12 }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
+                        Standard suggestion: <Text style={{ fontWeight: '800', color: themeColors.text }}>₹{suggestedDriverFare.toLocaleString('en-IN')}</Text> (Driver) + <Text style={{ fontWeight: '800', color: colors.primary }}>₹{suggestedVendorMarkup.toLocaleString('en-IN')}</Text> (Markup)
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.primary, paddingHorizontal: 9, paddingVertical: 4.5, borderRadius: 4 }}
+                      onPress={() => {
+                        setDriverAllowance(String(suggestedDriverFare));
+                        setExtraAmount(String(suggestedVendorMarkup));
+                      }}
+                      accessibilityLabel="Apply suggested standard fare"
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Auto Fill</Text>
+                    </TouchableOpacity>
+                  </View>
 
                   <View style={styles.priceGrid}>
                     {/* Row 1: Driver Share & Vendor Extra (Markup) */}
@@ -2278,7 +2318,8 @@ export default function CreateBookingScreen() {
                     </View>
                   </View>
                 </View>
-              ) : (
+                );
+              })() : (
                 <View>
                   {/* Km limit: one editable row. Shows the real route km once the locations are filled. */}
                   {hasMinKm && (
@@ -2437,37 +2478,48 @@ export default function CreateBookingScreen() {
                 </TouchableOpacity>
               </View>
               {customCharges.map((item) => (
-                <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, backgroundColor: themeColors.surface, padding: 8, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
-                  <TouchableOpacity
-                    onPress={() => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)))}
-                    accessibilityLabel={`${item.name || 'Extra'} included in fare`}
-                  >
-                    <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#94A3B8', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                      {item.included && <Check size={12} color="#FFFFFF" />}
-                    </View>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={[styles.priceInput, { flex: 1, minWidth: 0, height: 38, marginBottom: 0 }]}
-                    placeholder="Extra name"
-                    value={item.name}
-                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)))}
-                    placeholderTextColor={colors.textMuted}
-                  />
-                  <TextInput
-                    style={[styles.priceInput, { width: 84, height: 38, marginBottom: 0 }]}
-                    placeholder="₹"
-                    value={item.amount}
-                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: stripLeadingZero(text) } : c)))}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel={`Remove ${item.name || 'extra'}`}
-                  >
-                    <X size={18} color="#EF4444" />
-                  </TouchableOpacity>
+                <View key={item.id} style={{ marginBottom: 8, backgroundColor: themeColors.surface, padding: 9, borderRadius: 6, borderWidth: 1, borderColor: item.included ? themeColors.border : '#F59E0B' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                      onPress={() => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)))}
+                      accessibilityLabel={`${item.name || 'Extra'} included in fare`}
+                    >
+                      <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#F59E0B', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.included && <Check size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: item.included ? colors.primary : '#D97706' }}>
+                        {item.included ? 'Included' : 'Excluded (Spot)'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.priceInput, { flex: 1, minWidth: 0, height: 36, marginBottom: 0 }]}
+                      placeholder="Extra / Exclusion name"
+                      value={item.name}
+                      onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)))}
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <TextInput
+                      style={[styles.priceInput, { width: 80, height: 36, marginBottom: 0 }]}
+                      placeholder="₹"
+                      value={item.amount}
+                      onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: stripLeadingZero(text) } : c)))}
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={`Remove ${item.name || 'extra'}`}
+                    >
+                      <X size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                  {!item.included && (
+                    <Text style={{ fontSize: 11, color: '#D97706', marginTop: 4, marginLeft: 24, fontWeight: '600' }}>
+                      Driver to collect on spot directly from customer
+                    </Text>
+                  )}
                 </View>
               ))}
               {fareType === 'ALL_INCLUSIVE' && hasWaitingCharge && (
@@ -3976,7 +4028,7 @@ export default function CreateBookingScreen() {
         <TouchableOpacity style={styles.dialogBackdrop} activeOpacity={1} onPress={() => setShowAddExtraModal(false)}>
           <TouchableOpacity activeOpacity={1} style={[styles.dialogCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text, marginBottom: 10 }}>Add extras</Text>
-            {['Night allowance', 'Parking', 'Waiting'].map((name) => {
+            {['Toll charges', 'Parking', 'State Permit', 'Night allowance', 'Waiting charges', 'Hill / Ghat charges'].map((name) => {
               const existing = customCharges.find((c) => c.name.trim().toLowerCase() === name.toLowerCase());
               return (
                 <TouchableOpacity
