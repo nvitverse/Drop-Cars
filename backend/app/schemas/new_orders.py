@@ -84,6 +84,10 @@ class RentalOrderRequest(BaseModel):
     cost_for_addon_km: int
     extra_cost_for_addon_km: int
 
+    # Admin "Post booking": when the driver may see the customer number.
+    # Neither set = the automatic rule. hours = that many hrs before pickup.
+    customer_phone_reveal_hours: Optional[float] = Field(default=None, ge=0, le=168)
+    customer_phone_reveal_at: Optional[datetime] = None
     pickup_notes: Optional[str] = None
     max_time_to_assign_order: Optional[int] = Field(
         default=15, 
@@ -261,6 +265,10 @@ class OnewayQuoteRequest(BaseModel):
     # Admin "Km limit" field: the exact km to bill for THIS booking (the route
     # km by default, edited by the admin). Admin callers only.
     km_override: Optional[float] = Field(default=None, ge=0, le=10000)
+    # Admin "Post booking": when the driver may see the customer number.
+    # Neither set = the automatic rule. hours = that many hrs before pickup.
+    customer_phone_reveal_hours: Optional[float] = Field(default=None, ge=0, le=168)
+    customer_phone_reveal_at: Optional[datetime] = None
     # GST amount the admin saw on the form (auto 5% of the km fare, or typed).
     # Saved with the booking when its GST charge item is ticked.
     gst_amount: Optional[int] = Field(default=None, ge=0)

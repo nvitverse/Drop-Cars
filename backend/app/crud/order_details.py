@@ -1,4 +1,5 @@
 import os
+from app.crud.order_assignments import customer_number_notice
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any, List
 
@@ -1049,6 +1050,7 @@ def get_vehicle_owner_orders_by_assignment_status(
             charge_items = order.charge_items,
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
+            customer_number_notice = customer_number_notice(db, order, assignment),
             start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
             end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),
@@ -1312,6 +1314,7 @@ def get_vehicle_owner_non_pending_orders(
             charge_items = order.charge_items,
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
+            customer_number_notice = customer_number_notice(db, order, assignment),
             start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
             end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),

@@ -1190,6 +1190,16 @@ export default function BookingCard({
           })()}
         </View>
 
+        {/* When the customer's number opens - so drivers know and don't call asking */}
+        {!!(booking as any).customer_number_notice && (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: `${colors.primary}12` }}>
+            <Lock size={13} color={colors.primary} style={{ marginTop: 1 }} />
+            <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, fontFamily: 'Inter-Medium', color: colors.text }}>
+              {(booking as any).customer_number_notice}
+            </Text>
+          </View>
+        )}
+
         {/* Special requirements badge */}
         {hasSpecialRequirements && (
           <View style={dynamicStyles.specialReqBadge}>

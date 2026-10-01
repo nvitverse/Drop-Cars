@@ -67,37 +67,48 @@ def _live_assignment(db: Session, order: Order):
     ).order_by(desc(OrderAssignment.created_at)).first()
 
 
-def compute_reveal_at(pickup_at, accepted_at, hours_before: float):
-    """Moment (UTC, naive) the driver may see the customer number.
+SHORT_NOTICE_WITHIN_MINUTES = 120
 
-    Advance booking (accepted before the normal window opens): pickup minus
-    `hours_before`, as always. Short notice (the window was already open when
-    the driver accepted): accepted_at + max(5 min, 10% of the time left)."""
+
+def compute_reveal_at(pickup_at, accepted_at, hours_before: float):
+    """Moment (UTC, naive) the driver may see the customer number (automatic rule).
+
+    Pickup more than 2 hrs away: `hours_before` (6) before pickup - or straight
+    away when that moment has already passed by the time the driver accepts.
+    Pickup within 2 hrs of acceptance (short notice): accepted_at + the longer
+    of 5 minutes or 10% of the time left, and the driver sees a countdown."""
     normal = pickup_at - timedelta(hours=hours_before)
     if accepted_at is None or accepted_at <= normal:
         return normal
     minutes_left = max(0.0, (pickup_at - accepted_at).total_seconds() / 60.0)
+    if minutes_left > SHORT_NOTICE_WITHIN_MINUTES:
+        return normal
     delay = max(float(SHORT_NOTICE_MIN_DELAY_MINUTES), minutes_left * SHORT_NOTICE_DELAY_PERCENT / 100.0)
     return accepted_at + timedelta(minutes=delay)
 
 
+def _naive_utc(dt):
+    if dt is not None and dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def customer_number_reveal_at(db: Session, order: Order, assignment=None):
     """UTC naive datetime the number unlocks, or None when it is visible
-    regardless of time (manual "Show customer number" / "On accept", or no
-    pickup time to gate against)."""
-    # Manual switch (vendor / poster / admin "On accept") overrides the time rules
+    regardless of time (manual "On accept", or no pickup time to gate against)."""
+    # Manual "On accept" (vendor / poster / admin) overrides everything
     if getattr(order, "data_visibility_vehicle_owner", False):
         return None
-    pickup_at = order.start_date_time
+    # Admin fixed a moment for this booking ("6 hrs before" / picked time)
+    fixed = _naive_utc(getattr(order, "customer_phone_reveal_at", None))
+    if fixed is not None:
+        return fixed
+    pickup_at = _naive_utc(order.start_date_time)
     if pickup_at is None:
         return None
-    if pickup_at.tzinfo is not None:
-        pickup_at = pickup_at.replace(tzinfo=None)
     if assignment is None:
         assignment = _live_assignment(db, order)
-    accepted_at = getattr(assignment, "created_at", None) if assignment is not None else None
-    if accepted_at is not None and accepted_at.tzinfo is not None:
-        accepted_at = accepted_at.replace(tzinfo=None)
+    accepted_at = _naive_utc(getattr(assignment, "created_at", None)) if assignment is not None else None
     return compute_reveal_at(pickup_at, accepted_at, _reveal_hours_before(db))
 
 
@@ -111,17 +122,54 @@ def is_customer_number_revealed(db: Session, order: Order, assignment=None) -> b
     return reveal_at is None or datetime.utcnow() >= reveal_at
 
 
+def customer_number_notice(db: Session, order: Order, assignment=None):
+    """One plain sentence for the Driver App: WHEN the customer number opens,
+    so drivers do not keep calling the office for it. None once it is open."""
+    from app.utils.timezone import format_pickup_time_ist
+
+    if getattr(order, "data_visibility_vehicle_owner", False):
+        return "Customer number is shown as soon as you accept."
+    pickup_at = _naive_utc(order.start_date_time)
+    if pickup_at is None:
+        return None
+    if assignment is None:
+        assignment = _live_assignment(db, order)
+    now = datetime.utcnow()
+
+    if assignment is not None:  # accepted: say when it opens (the app also shows a countdown)
+        at = customer_number_reveal_at(db, order, assignment)
+        if at is None or now >= at:
+            return None
+        return f"Customer number opens at {format_pickup_time_ist(at)}."
+
+    fixed = _naive_utc(getattr(order, "customer_phone_reveal_at", None))
+    if fixed is not None:
+        return f"Customer number is shown at {format_pickup_time_ist(fixed)}."
+
+    hours = _reveal_hours_before(db)
+    normal = pickup_at - timedelta(hours=hours)
+    if now < normal:
+        return f"Customer number is shown {int(hours)} hrs before pickup ({format_pickup_time_ist(normal)})."
+    minutes_left = max(0.0, (pickup_at - now).total_seconds() / 60.0)
+    if minutes_left > SHORT_NOTICE_WITHIN_MINUTES:
+        return "Customer number is shown as soon as you accept."
+    delay = max(float(SHORT_NOTICE_MIN_DELAY_MINUTES), minutes_left * SHORT_NOTICE_DELAY_PERCENT / 100.0)
+    return f"Pickup is soon: customer number is shown {int(round(delay))} min after you accept."
+
+
 def customer_number_reveal_info(db: Session, order: Order, assignment=None) -> dict:
-    """What the Driver App needs to draw the countdown: whether the number is
-    open, when it opens (ISO, UTC) and the seconds left."""
+    """What the Driver App needs to draw the countdown and the notice."""
     reveal_at = customer_number_reveal_at(db, order, assignment)
+    notice = customer_number_notice(db, order, assignment)
     if reveal_at is None:
-        return {"customer_number_revealed": True, "customer_number_reveal_at": None, "customer_number_reveal_in_seconds": 0}
+        return {"customer_number_revealed": True, "customer_number_reveal_at": None,
+                "customer_number_reveal_in_seconds": 0, "customer_number_notice": notice}
     left = int((reveal_at - datetime.utcnow()).total_seconds())
     return {
         "customer_number_revealed": left <= 0,
         "customer_number_reveal_at": reveal_at.isoformat() + "Z",
         "customer_number_reveal_in_seconds": max(0, left),
+        "customer_number_notice": notice,
     }
 
 
@@ -1041,6 +1089,7 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                         _split = None
 
                 pending_orders.append({
+                    "customer_number_notice": customer_number_notice(db, order),
                     "order_id": order.id,
                     "trip_status": order.trip_status,
                     # Order details
@@ -1095,6 +1144,7 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
                 from app.utils.commission import convenience_fee_amount
                 _hourly_conv = convenience_fee_amount(db)
                 pending_orders.append({
+                    "customer_number_notice": customer_number_notice(db, order),
                     "order_id": order.id,
                     "trip_status": order.trip_status,
                     # Order details

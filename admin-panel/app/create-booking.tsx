@@ -593,7 +593,7 @@ export default function CreateBookingScreen() {
   // Customer Number Visibility to Driver - set only inside the "Driver access
   // & timing" sheet (the copy that used to sit on the form was removed,
   // owner 2026-10-01). 'default' = the platform rule, 2 hrs before pickup.
-  const [custPhoneRevealMode, setCustPhoneRevealMode] = useState<'default' | 'instant' | '1h' | '4h' | 'custom'>('default');
+  const [custPhoneRevealMode, setCustPhoneRevealMode] = useState<'default' | 'instant' | '6h' | 'custom'>('default');
   const [custPhoneRevealDate, setCustPhoneRevealDate] = useState('');
   const [custPhoneRevealTime, setCustPhoneRevealTime] = useState('');
 
@@ -1009,7 +1009,9 @@ export default function CreateBookingScreen() {
       // Customer phone number visibility to driver
       data_visibility_vehicle_owner: custPhoneRevealMode === 'instant',
       is_urgent: custPhoneRevealMode === 'instant',
-      customer_phone_reveal_hours: custPhoneRevealMode === '1h' ? 1 : custPhoneRevealMode === '4h' ? 4 : custPhoneRevealMode === 'default' ? 2 : 0,
+      // Automatic = nothing sent: the platform rule decides (see the tip in the
+      // Driver access sheet). 6 hrs / custom are fixed for this booking.
+      customer_phone_reveal_hours: custPhoneRevealMode === '6h' ? 6 : undefined,
       customer_phone_reveal_at: custPhoneRevealMode === 'custom' ? toIsoDateTime(custPhoneRevealDate, custPhoneRevealTime) : undefined,
       // "10% CC" toggle (2026-09-04) - always sent explicitly so an
       // unchecked toggle (false) actually reaches the backend.
@@ -1054,7 +1056,8 @@ export default function CreateBookingScreen() {
       allocate_on_credit: sendTo === 'DRIVER' ? onCredit : undefined,
       data_visibility_vehicle_owner: custPhoneRevealMode === 'instant',
       is_urgent: custPhoneRevealMode === 'instant',
-      customer_phone_reveal_hours: custPhoneRevealMode === '1h' ? 1 : custPhoneRevealMode === '4h' ? 4 : custPhoneRevealMode === 'default' ? 2 : 0,
+      customer_phone_reveal_hours: custPhoneRevealMode === '6h' ? 6 : undefined,
+      customer_phone_reveal_at: custPhoneRevealMode === 'custom' ? toIsoDateTime(custPhoneRevealDate, custPhoneRevealTime) : undefined,
     };
   };
 
@@ -1193,10 +1196,9 @@ export default function CreateBookingScreen() {
   const isKmTrip = tripType !== 'hourly';
 
   const revealSummary = custPhoneRevealMode === 'instant' ? 'on accept'
-    : custPhoneRevealMode === '1h' ? '1 hr before pickup'
-    : custPhoneRevealMode === '4h' ? '4 hrs before pickup'
+    : custPhoneRevealMode === '6h' ? '6 hrs before pickup'
     : custPhoneRevealMode === 'custom' && custPhoneRevealTime ? `${custPhoneRevealDate} ${custPhoneRevealTime}`.trim()
-    : '2 hrs before pickup';
+    : 'automatic';
 
   // The small (i) dot: explanation opens on tap instead of sitting on the form.
   const tip = (title: string, text: string) => (
@@ -3389,15 +3391,14 @@ export default function CreateBookingScreen() {
                 <Text style={[styles.ruleTitle, { color: themeColors.text }]}>Customer number to driver</Text>
                 {tip(
                   'Customer number to driver',
-                  'When the assigned driver can see and call the customer.\n\nThe platform rule is 2 hours before pickup. "On accept" shows it the moment the driver accepts - use it for urgent trips.',
+                  'When the driver can see and call the customer. The driver app tells the driver this time before and after accepting, so they do not need to call you for it.\n\nAutomatic (default): pickup more than 2 hrs away - shown 6 hrs before pickup. Pickup within 2 hrs - shown 5 minutes (or 10% of the time left, whichever is longer) after the driver accepts, with a live countdown.\n\nOn accept: shown the moment the driver accepts.\n6 hrs before: fixed 6 hrs before pickup.\nPick date & time: the exact moment you choose.',
                 )}
               </View>
               <View style={styles.optGrid}>
                 {([
+                  ['default', 'Automatic'],
                   ['instant', 'On accept'],
-                  ['default', '2 hrs before'],
-                  ['1h', '1 hr before'],
-                  ['4h', '4 hrs before'],
+                  ['6h', '6 hrs before'],
                   ['custom', 'Pick date & time'],
                 ] as const).map(([mode, label]) => {
                   const active = custPhoneRevealMode === mode;

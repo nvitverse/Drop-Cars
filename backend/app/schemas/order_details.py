@@ -292,6 +292,7 @@ class VendorOrderDetailResponse(BaseModel):
 
 
 class VehicleOwnerOrderDetailResponse(BaseModel):
+    customer_number_notice: Optional[str] = None
     """Order details response for fleet owner - includes order and assignment information"""
     # Order basic information
     id: int
