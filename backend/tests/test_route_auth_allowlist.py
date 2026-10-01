@@ -27,6 +27,7 @@ from app.main import app
 #  * legacy SOS alert: the shipped customer app sends no token and an
 #    emergency must never fail closed.
 PUBLIC_BY_DESIGN = {
+    "GET /api/conversations/media/{folder}/{filename}",
     "GET /api/notification-sounds/file/{filename}",
     "POST /api/admin/signin",
     "POST /api/users/cardriver/signin",

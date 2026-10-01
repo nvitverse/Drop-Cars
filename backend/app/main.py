@@ -21,6 +21,7 @@ import app.models.vehicle_owner
 import app.models.vehicle_owner_details
 import app.models.booking_chat
 import app.models.support_message
+import app.models.conversation
 import app.models.trip_review
 import app.models.stale_document_file
 import app.models.car_details
@@ -211,6 +212,9 @@ from app.api.routes import chat as chat_router
 app.include_router(chat_router.router)
 from app.api.routes import booking_chat as booking_chat_router
 app.include_router(booking_chat_router.router, prefix="/api", tags=["Booking Chat"])
+from app.api.routes import conversations as conversations_router
+app.include_router(conversations_router.router, prefix="/api", tags=["Conversations"])
+app.include_router(conversations_router.media_router, prefix="/api", tags=["Conversations"])
 from app.api.routes import trip_reviews as trip_reviews_router
 app.include_router(trip_reviews_router.router, prefix="/api", tags=["Trip Review"])
 
@@ -1127,6 +1131,14 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"support chat purge failed (continuing): {_e}")
+            try:
+                from app.crud.conversations import purge_old_conversation_messages
+                _conv_purged = purge_old_conversation_messages(db)
+                if _conv_purged:
+                    print(f"Purged {_conv_purged} unified chat message(s) past their retention")
+            except Exception as _e:
+                db.rollback()
+                print(f"unified chat purge failed (continuing): {_e}")
         result = {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
         try:
             from app.utils import system_health as _sh
