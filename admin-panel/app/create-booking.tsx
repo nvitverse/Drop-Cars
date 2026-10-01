@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -188,6 +188,20 @@ export default function CreateBookingScreen() {
   // fewer hooks than during the previous render" the moment a booking was
   // successfully created (createdOrderId flips from null to a real id).
   const [showPageInfo, setShowPageInfo] = useState(false);
+  // Explanations live behind the small (i) dots, so the form itself stays
+  // short: tapping one opens this popup.
+  const [helpTip, setHelpTip] = useState<{ title: string; text: string } | null>(null);
+  // Quote review: which of the Inclusions / Exclusions lists is open.
+  const [openFareList, setOpenFareList] = useState<'incl' | 'excl' | null>(null);
+  // "Allocate manually" hit a low wallet: ask before allocating on credit.
+  const [creditPrompt, setCreditPrompt] = useState<{ wallet_balance: number; required_amount: number } | null>(null);
+  const [allocationResult, setAllocationResult] = useState<{ on_credit?: boolean; commission_amount?: number } | null>(null);
+  // Set when trip type / vehicle changes after a quote: the quote is redone
+  // with the new rates instead of being thrown away.
+  const [requoteTick, setRequoteTick] = useState(0);
+  const quoteRef = useRef<(silent?: boolean) => void>(() => {});
+  // Vendor-extra fields the admin typed by hand survive a trip type / vehicle change.
+  const touchedRates = useRef({ extraKm: false, extraBata: false });
 
   // Theme-aware shell styles reused across every card section below (kept
   // as plain objects, not StyleSheet.create, so they re-render with the
@@ -348,6 +362,23 @@ export default function CreateBookingScreen() {
   const [totalBookingAmount, setTotalBookingAmount] = useState('');
   const [extraAmount, setExtraAmount] = useState('0');
 
+  // Minimum billable km for THIS booking. Follows Settings > Fare Rules (130
+  // oneway, 250 per day for round trip / multi city) until the admin types
+  // a value; only a typed value is sent to the server.
+  const [fareRules, setFareRules] = useState({ oneway_min_km: 130, round_trip_min_km_per_day: 250, multicity_min_km_per_day: 250 });
+  const [minKm, setMinKm] = useState('130');
+  const [minKmTouched, setMinKmTouched] = useState(false);
+  const hasMinKm = tripType === 'oneway' || tripType === 'roundtrip' || tripType === 'multicity';
+  const defaultMinKm = tripType === 'oneway' ? fareRules.oneway_min_km
+    : tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day * tripDays
+    : tripType === 'multicity' ? fareRules.multicity_min_km_per_day * tripDays
+    : 0;
+  useEffect(() => {
+    if (!minKmTouched) setMinKm(String(defaultMinKm));
+  }, [defaultMinKm, minKmTouched]);
+  // GST follows 5% of the km fare until the admin types an amount.
+  const [gstTouched, setGstTouched] = useState(false);
+
   // Vehicle Default Tariffs Matrix
   // Vendor Extra Bata defaults (100; Crysta 200) were zeroed by mistake in the
   // 2026-09-29 rate update and restored 2026-10-01 - the per-km rates from that
@@ -390,9 +421,10 @@ export default function CreateBookingScreen() {
         extra_driver_allowance: '100',
       };
     }
-    // Sedan / Etios / Hatchback default
+    // Sedan / Etios / Hatchback default. Round trip posts at 13/km from this
+    // admin form (owner, 2026-10-01); multi city stays 14.
     return {
-      cost_per_km: isRound ? '14' : '15',
+      cost_per_km: currentTrip === 'roundtrip' ? '13' : isRound ? '14' : '15',
       extra_cost_per_km: '0',
       driver_allowance: '300',
       extra_driver_allowance: '100',
@@ -427,9 +459,9 @@ export default function CreateBookingScreen() {
     if (tripType !== 'hourly') {
       const defs = getDefaultsForCarType(carType, tripType);
       setCostPerKm(defs.cost_per_km);
-      setExtraCostPerKm(defs.extra_cost_per_km);
       setDriverAllowance(defs.driver_allowance);
-      setExtraDriverAllowance(defs.extra_driver_allowance);
+      if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
+      if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
     } else {
       if (!costPerHour || costPerHour === '0') setCostPerHour('250');
       if (!extraCostPerHour) setExtraCostPerHour('50');
@@ -534,25 +566,24 @@ export default function CreateBookingScreen() {
   const [priorityForPaid, setPriorityForPaid] = useState(true);
   const [priorityCutoffDate, setPriorityCutoffDate] = useState('');
   const [priorityCutoffTime, setPriorityCutoffTime] = useState('');
-  // Customer Number Visibility to Driver - shown inline in the form (not
-  // hidden behind Configure) as either Instant or an exact reveal time that
-  // auto-fills to pickup minus 2 hrs and follows the pickup time until staff
-  // edits it themselves (owner feedback 2026-09-30).
+  // Customer Number Visibility to Driver - set only inside the "Driver access
+  // & timing" sheet (the copy that used to sit on the form was removed,
+  // owner 2026-10-01). 'default' = the platform rule, 2 hrs before pickup.
   const [custPhoneRevealMode, setCustPhoneRevealMode] = useState<'default' | 'instant' | '1h' | '4h' | 'custom'>('default');
   const [custPhoneRevealDate, setCustPhoneRevealDate] = useState('');
   const [custPhoneRevealTime, setCustPhoneRevealTime] = useState('');
-  const [custPhoneRevealTouched, setCustPhoneRevealTouched] = useState(false);
 
-  useEffect(() => {
-    if (custPhoneRevealTouched || (custPhoneRevealMode !== 'default' && custPhoneRevealMode !== 'custom')) return;
+  // Picking "Custom" starts from the usual 2 hrs before pickup.
+  const chooseCustomReveal = () => {
+    setCustPhoneRevealMode('custom');
+    if (custPhoneRevealDate && custPhoneRevealTime) return;
     const pickup = new Date(`${startDate}T${startTime}:00`);
     if (isNaN(pickup.getTime())) return;
     const reveal = new Date(pickup.getTime() - 2 * 60 * 60 * 1000);
     const p = (n: number) => String(n).padStart(2, '0');
-    setCustPhoneRevealMode('custom');
     setCustPhoneRevealDate(`${reveal.getFullYear()}-${p(reveal.getMonth() + 1)}-${p(reveal.getDate())}`);
     setCustPhoneRevealTime(`${p(reveal.getHours())}:${p(reveal.getMinutes())}`);
-  }, [startDate, startTime, custPhoneRevealTouched, custPhoneRevealMode]);
+  };
 
   // Send To - who this booking is broadcast to (all trip types).
   // 'DRIVER' = "Allocate manually": give it directly to one fleet
@@ -563,16 +594,15 @@ export default function CreateBookingScreen() {
   const [nearCityInput, setNearCityInput] = useState('');
   const [allocateQuery, setAllocateQuery] = useState('');
   const [allocateSearching, setAllocateSearching] = useState(false);
-  const [allocateResults, setAllocateResults] = useState<Array<{ id: string; name: string; primary_number?: string | null; account_status: string }>>([]);
-  const [allocateTarget, setAllocateTarget] = useState<{ id: string; name: string; primary_number?: string | null; account_status: string } | null>(null);
+  type FleetTarget = { id: string; full_name: string; primary_number: string; wallet_balance: number; account_status: string };
+  const [allocateResults, setAllocateResults] = useState<FleetTarget[]>([]);
+  const [allocateTarget, setAllocateTarget] = useState<FleetTarget | null>(null);
 
-  // Live search-as-you-type for the "Allocate manually" driver picker -
-  // debounced so it doesn't fire on every keystroke. This searches actual
-  // CarDriver records (account_type "driver") by name or phone - the
-  // backend's target_driver_id on a new order is a foreign key to
-  // car_driver.id specifically, not a fleet-owner id (unlike the existing
-  // Booking-card "Allocate manually" for an already-posted order, which
-  // targets the fleet owner via /orders/{id}/manual-assign).
+  // Live search-as-you-type for the "Allocate manually" picker - debounced so
+  // it doesn't fire on every keystroke. Searches FLEET OWNERS (name or phone),
+  // never duty drivers: only a fleet owner has a wallet, and the commission
+  // is held from it (or, on credit, debited at trip completion). Same target
+  // as the Booking-card "Allocate manually" (/orders/{id}/manual-assign).
   useEffect(() => {
     if (sendTo !== 'DRIVER' || allocateTarget) return;
     const q = allocateQuery.trim();
@@ -580,8 +610,8 @@ export default function CreateBookingScreen() {
     const t = setTimeout(async () => {
       setAllocateSearching(true);
       try {
-        const { accounts } = await apiService.getAllAccounts(0, 20, 'driver', undefined, q);
-        setAllocateResults(accounts || []);
+        const { results } = await apiService.searchWalletTargets('vehicle_owner', q);
+        setAllocateResults(results || []);
       } catch {
         setAllocateResults([]);
       } finally {
@@ -601,7 +631,59 @@ export default function CreateBookingScreen() {
   useEffect(() => {
     apiService.getPublicCities().then(setCityOptions).catch(() => {});
     apiService.getLocalServiceableCities().then(setLocalServiceableCities).catch(() => {});
+    apiService.getFareRules().then((r) => { if (r) setFareRules((prev) => ({ ...prev, ...r })); }).catch(() => {});
   }, []);
+
+  // GST = 5% of the km fare (driver + vendor per-km rate x billable km): the
+  // quoted km once there is a quote, the minimum billable km before that.
+  const gstBillableKm = Number(fare?.total_km) > 0 ? Number(fare.total_km) : (hasMinKm ? Number(minKm) || 0 : 0);
+  const autoGst = Math.round(0.05 * gstBillableKm * ((Number(costPerKm) || 0) + (Number(extraCostPerKm) || 0)));
+  useEffect(() => {
+    if (includeGst && !gstTouched) setGstAmount(String(autoGst));
+  }, [includeGst, gstTouched, autoGst]);
+  const toggleGst = () => {
+    setGstTouched(false);
+    setIncludeGst((v) => !v);
+  };
+  const editGst = (v: string) => {
+    setGstTouched(true);
+    setGstAmount(stripLeadingZero(v));
+  };
+
+  // Switching trip type keeps everything already filled in and reshapes the
+  // stops: Chennai -> Madurai becomes Chennai -> Madurai -> Chennai for a
+  // round trip, and back again. It used to overwrite the drop with the pickup.
+  const changeTripType = (next: TripType) => {
+    if (next === tripType) return;
+    const pickup = stops[0] || '';
+    let places = stops.slice(1);
+    if (pickup && places.length > 0 && places[places.length - 1] === pickup) places = places.slice(0, -1);
+    places = places.filter(Boolean);
+    let nextStops: string[];
+    if (next === 'hourly') nextStops = stops; // hourly reads only the pickup; the rest is kept for switching back
+    else if (next === 'roundtrip') nextStops = [pickup, ...places, pickup];
+    else if (next === 'multicity') {
+      nextStops = [pickup, ...places];
+      while (nextStops.length < 3) nextStops.push('');
+    } else nextStops = [pickup, places[places.length - 1] || ''];
+    if (nextStops !== stops) {
+      const linkByPlace: Record<string, string> = {};
+      stops.forEach((s, i) => { if (s && locationLinks[String(i)]) linkByPlace[s] = locationLinks[String(i)]; });
+      const nextLinks: Record<string, string> = {};
+      nextStops.forEach((s, i) => { if (s && linkByPlace[s]) nextLinks[String(i)] = linkByPlace[s]; });
+      setStops(nextStops);
+      setLocationLinks(nextLinks);
+    }
+    setMinKmTouched(false);
+    setTripType(next);
+    if (fare) setRequoteTick((n) => n + 1);
+  };
+
+  const changeCarType = (next: string) => {
+    if (next === carType) return;
+    setCarType(next);
+    if (fare) setRequoteTick((n) => n + 1);
+  };
 
   const searchVendor = async () => {
     if (vendorQuery.trim().length < 3) {
@@ -789,11 +871,11 @@ export default function CreateBookingScreen() {
     }
     if (requireCarMakeYear && !carMakeYear) return 'Select the minimum car make year, or turn that requirement off';
     if (sendTo === 'NEAR_CITY' && nearCities.length === 0) return 'Add at least one city, or switch Send To back to All';
-    if (sendTo === 'DRIVER' && !allocateTarget) return 'Search and select the fleet owner/driver to allocate this booking to';
+    if (sendTo === 'DRIVER' && !allocateTarget) return 'Search and select the fleet owner to allocate this booking to';
     return null;
   };
 
-  const buildKmPayload = () => {
+  const buildKmPayload = (onCredit: boolean = false) => {
     const startIso = toIsoDateTime(startDate, startTime);
     const endIso = (tripType === 'roundtrip' || tripType === 'multicity') ? toIsoDateTime(endDate, endTime) : undefined;
     const tripTypeLabel = tripType === 'oneway' ? 'Oneway'
@@ -803,7 +885,7 @@ export default function CreateBookingScreen() {
     let cleanPhone = customerPhone.replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('91') && cleanPhone.length > 10) cleanPhone = cleanPhone.slice(2);
     else if (cleanPhone.startsWith('0') && cleanPhone.length > 10) cleanPhone = cleanPhone.slice(1);
-    const formattedPhone = `${customerCountryCode.trim()} ${cleanPhone.trim()}`;
+    const formattedPhone = `${customerCountryCode.trim()}${cleanPhone.trim()}`;
     return {
       vendor_id: selectedVendor?.id,
       trip_type: tripTypeLabel,
@@ -812,6 +894,8 @@ export default function CreateBookingScreen() {
       location_links: locationLinksEnabled ? locationLinks : undefined,
       start_date_time: startIso,
       end_date_time: endIso,
+      // Only a minimum the admin typed is sent; otherwise Fare Rules apply.
+      min_km_override: hasMinKm && minKmTouched && minKm.trim() !== '' ? (Number(minKm) || 0) : undefined,
       customer_name: customerName.trim(),
       customer_number: formattedPhone,
       cost_per_km: Number(costPerKm) || 0,
@@ -892,9 +976,12 @@ export default function CreateBookingScreen() {
       extra_amount: fareType === 'ALL_INCLUSIVE' ? (Number(extraAmount) || 0) : undefined,
       waiting_hours_included: fareType === 'ALL_INCLUSIVE' && waitingHoursIncluded ? Number(waitingHoursIncluded) : undefined,
       acceptance_deadline: toIsoDateTime(liveUntilDate, liveUntilTime),
-      send_to: sendTo,
+      // "Allocate manually" goes to a fleet owner (wallet holder), not a duty
+      // driver: the booking is created without a broadcast and handed over.
+      send_to: sendTo === 'DRIVER' ? 'ALL' : sendTo,
       near_city: sendTo === 'NEAR_CITY' ? nearCities : undefined,
-      target_driver_id: sendTo === 'DRIVER' ? allocateTarget?.id : undefined,
+      target_vehicle_owner_id: sendTo === 'DRIVER' ? allocateTarget?.id : undefined,
+      allocate_on_credit: sendTo === 'DRIVER' ? onCredit : undefined,
       // Customer phone number visibility to driver
       data_visibility_vehicle_owner: custPhoneRevealMode === 'instant',
       is_urgent: custPhoneRevealMode === 'instant',
@@ -906,12 +993,12 @@ export default function CreateBookingScreen() {
     };
   };
 
-  const buildHourlyPayload = () => {
+  const buildHourlyPayload = (onCredit: boolean = false) => {
     const startIso = toIsoDateTime(startDate, startTime);
     let cleanPhone = customerPhone.replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('91') && cleanPhone.length > 10) cleanPhone = cleanPhone.slice(2);
     else if (cleanPhone.startsWith('0') && cleanPhone.length > 10) cleanPhone = cleanPhone.slice(1);
-    const formattedPhone = `${customerCountryCode.trim()} ${cleanPhone.trim()}`;
+    const formattedPhone = `${customerCountryCode.trim()}${cleanPhone.trim()}`;
     return {
       vendor_id: selectedVendor?.id,
       trip_type: 'Hourly Rental',
@@ -939,36 +1026,58 @@ export default function CreateBookingScreen() {
         return parts.length > 0 ? parts.join(' | ') : undefined;
       })(),
       toll_charge_update: tollChargeUpdate,
+      target_vehicle_owner_id: sendTo === 'DRIVER' ? allocateTarget?.id : undefined,
+      allocate_on_credit: sendTo === 'DRIVER' ? onCredit : undefined,
       data_visibility_vehicle_owner: custPhoneRevealMode === 'instant',
       is_urgent: custPhoneRevealMode === 'instant',
       customer_phone_reveal_hours: custPhoneRevealMode === '1h' ? 1 : custPhoneRevealMode === '4h' ? 4 : custPhoneRevealMode === 'default' ? 2 : 0,
     };
   };
 
-  const handleGetQuote = async () => {
+  // silent = the automatic re-quote after a trip type / vehicle change: no
+  // popups, and the old quote stays on screen until the new one arrives.
+  const handleGetQuote = async (silent: boolean = false) => {
     const err = validateBeforeQuote();
     if (err) {
-      Alert.alert('Missing details', err);
+      if (silent) setFare(null);
+      else Alert.alert('Missing details', err);
       return;
     }
     setQuoting(true);
-    setFare(null);
+    if (!silent) setFare(null);
     try {
       const payload = tripType === 'hourly' ? buildHourlyPayload() : buildKmPayload();
       const res = await apiService.getBookingQuote(apiTripType(tripType), payload);
       setFare(res.fare);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to calculate fare');
+      if (silent) setFare(null);
+      else Alert.alert('Error', e?.message || 'Failed to calculate fare');
     } finally {
       setQuoting(false);
     }
   };
+  quoteRef.current = handleGetQuote;
 
-  const handleConfirm = async () => {
+  // Runs a moment after the change so the new default rates are in place.
+  useEffect(() => {
+    if (!requoteTick) return;
+    const t = setTimeout(() => quoteRef.current(true), 80);
+    return () => clearTimeout(t);
+  }, [requoteTick]);
+
+  const handleConfirm = async (onCredit: boolean = false) => {
     setConfirming(true);
     try {
-      const payload = tripType === 'hourly' ? buildHourlyPayload() : buildKmPayload();
+      const payload = tripType === 'hourly' ? buildHourlyPayload(onCredit) : buildKmPayload(onCredit);
       const res = await apiService.confirmAdminBooking(apiTripType(tripType), payload);
+      // Fleet owner's wallet cannot cover the commission: nothing was created.
+      // Ask whether to allocate on credit.
+      if (res?.status === 'INSUFFICIENT_BALANCE') {
+        setCreditPrompt({ wallet_balance: Number(res.wallet_balance) || 0, required_amount: Number(res.required_amount) || 0 });
+        return;
+      }
+      setCreditPrompt(null);
+      setAllocationResult(res?.allocation?.status === 'SUCCESS' ? res.allocation : null);
       setCreatedOrderId(res.order_id);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to confirm booking');
@@ -1005,9 +1114,16 @@ export default function CreateBookingScreen() {
     setCustPhoneRevealMode('default');
     setCustPhoneRevealDate('');
     setCustPhoneRevealTime('');
-    setCustPhoneRevealTouched(false);
     setSendTo('ALL');
     setNearCities([]);
+    setAllocateTarget(null);
+    setAllocateQuery('');
+    setAllocationResult(null);
+    setCreditPrompt(null);
+    setMinKmTouched(false);
+    setIncludeGst(false);
+    setGstTouched(false);
+    touchedRates.current = { extraKm: false, extraBata: false };
     setAdvanceReceived('');
     setFareType('STANDARD');
     setChargeItems([
@@ -1030,7 +1146,7 @@ export default function CreateBookingScreen() {
         <View style={styles.successBox}>
           <CheckCircle2 size={48} color={colors.success} />
           <Text style={styles.successTitle}>Booking Created</Text>
-          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.</Text>
+          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
 
           {customerPhone ? (
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: '#25D366', marginBottom: 10 }]} onPress={handleShareWhatsApp}>
@@ -1051,6 +1167,24 @@ export default function CreateBookingScreen() {
   }
 
   const isKmTrip = tripType !== 'hourly';
+
+  const revealSummary = custPhoneRevealMode === 'instant' ? 'on accept'
+    : custPhoneRevealMode === '1h' ? '1 hr before pickup'
+    : custPhoneRevealMode === '4h' ? '4 hrs before pickup'
+    : custPhoneRevealMode === 'custom' && custPhoneRevealTime ? `${custPhoneRevealDate} ${custPhoneRevealTime}`.trim()
+    : '2 hrs before pickup';
+
+  // The small (i) dot: explanation opens on tap instead of sitting on the form.
+  const tip = (title: string, text: string) => (
+    <TouchableOpacity
+      onPress={() => setHelpTip({ title, text })}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      accessibilityLabel={`About ${title}`}
+      style={[styles.tipDot, { borderColor: themeColors.primary + '55', backgroundColor: themeColors.primary + '14' }]}
+    >
+      <Info size={12} color={themeColors.primary} />
+    </TouchableOpacity>
+  );
 
   const handleGoBack = () => {
     try {
@@ -1189,44 +1323,46 @@ export default function CreateBookingScreen() {
           )}
         </View>
 
-        {/* 2. Trip Type */}
+        {/* 2. Trip type + vehicle: side by side; each takes its own row when
+            the screen is too narrow for two (flexWrap + minWidth). */}
         <View style={[styles.sectionCard, cardShell]}>
-          <TouchableOpacity style={[styles.summaryCardTouchable, summaryShell]} onPress={() => setShowTripTypePicker(true)} activeOpacity={0.8}>
-            <View style={styles.summaryCardLeft}>
-              <View style={[styles.summaryIconCircle, badgeShell]}>
-                <Route size={20} color={themeColors.primary} />
+          <View style={styles.pickRow}>
+            <TouchableOpacity
+              style={[styles.pickCell, summaryShell]}
+              onPress={() => setShowTripTypePicker(true)}
+              activeOpacity={0.8}
+              accessibilityLabel="Change trip type"
+            >
+              <View style={[styles.pickIcon, badgeShell]}>
+                <Route size={16} color={themeColors.primary} />
               </View>
-              <View style={styles.summaryTextContent}>
-                <Text style={[styles.summaryTitle, { color: themeColors.text }]}>{TRIP_TYPES.find((t) => t.value === tripType)?.label}</Text>
-                <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>{TRIP_TYPE_SUBTITLES[tripType]}</Text>
-              </View>
-            </View>
-            <View style={[styles.editPillButton, pillShell]}>
-              <Text style={[styles.editPillText, { color: themeColors.primary }]}>Change</Text>
-              <ChevronRight size={14} color={themeColors.primary} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* 4. Car & Vehicle Preferences */}
-        <View style={[styles.sectionCard, cardShell]}>
-          <TouchableOpacity style={[styles.summaryCardTouchable, summaryShell]} onPress={() => setShowCarTypePicker(true)} activeOpacity={0.8}>
-            <View style={styles.summaryCardLeft}>
-              <View style={[styles.summaryIconCircle, badgeShell]}>
-                <Car size={20} color={themeColors.primary} />
-              </View>
-              <View style={styles.summaryTextContent}>
-                <Text style={[styles.summaryTitle, { color: themeColors.text }]}>
-                  {CAR_TYPES.find((c) => c.value === carType)?.label || 'Select car type'}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.pickLabel, { color: themeColors.textSecondary }]}>Trip type</Text>
+                <Text style={[styles.pickValue, { color: themeColors.text }]} numberOfLines={1}>
+                  {TRIP_TYPES.find((t) => t.value === tripType)?.label}
                 </Text>
-                <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>Matched to backend fleet categories for driver assignment.</Text>
               </View>
-            </View>
-            <View style={[styles.editPillButton, pillShell]}>
-              <Text style={[styles.editPillText, { color: themeColors.primary }]}>Change</Text>
-              <ChevronRight size={14} color={themeColors.primary} />
-            </View>
-          </TouchableOpacity>
+              <ChevronDown size={16} color={themeColors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.pickCell, summaryShell]}
+              onPress={() => setShowCarTypePicker(true)}
+              activeOpacity={0.8}
+              accessibilityLabel="Change vehicle"
+            >
+              <View style={[styles.pickIcon, badgeShell]}>
+                <Car size={16} color={themeColors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.pickLabel, { color: themeColors.textSecondary }]}>Vehicle</Text>
+                <Text style={[styles.pickValue, { color: themeColors.text }]} numberOfLines={1}>
+                  {CAR_TYPES.find((c) => c.value === carType)?.label || 'Select vehicle'}
+                </Text>
+              </View>
+              <ChevronDown size={16} color={themeColors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 5. Locations & Schedule */}
@@ -1259,10 +1395,10 @@ export default function CreateBookingScreen() {
             </>
           ) : (
             <>
-              <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 0 }]}>{tripType === 'multicity' ? 'Stops' : 'Locations'}</Text>
-              {tripType === 'local' && (
-                <Text style={styles.hint}>Serviceable cities: {localServiceableCities.join(', ') || 'loading...'}</Text>
-              )}
+              <View style={styles.labelRow}>
+                <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 0, marginBottom: 0 }]}>{tripType === 'multicity' ? 'Stops' : 'Locations'}</Text>
+                {tripType === 'local' && tip('Local booking cities', `Local bookings can be posted only for these cities: ${localServiceableCities.join(', ') || 'none configured yet'}.`)}
+              </View>
               {stops.map((s, idx) => {
                 const label = idx === 0 ? 'Pickup Location' : idx === stops.length - 1 ? (tripType === 'roundtrip' ? 'Return to Pickup' : 'Drop Location') : `Stop ${idx}`;
                 const isItemDragging = draggingIndex === idx;
@@ -1490,7 +1626,7 @@ export default function CreateBookingScreen() {
             </>
           )}
 
-          <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary }]}>Pickup Schedule</Text>
+          <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 12 }]}>Pickup Schedule</Text>
           <DateTimeField
             dateLabel="Pickup Date"
             timeLabel="Pickup Time"
@@ -1502,7 +1638,13 @@ export default function CreateBookingScreen() {
 
           {(tripType === 'roundtrip' || tripType === 'multicity') && (
             <>
-              <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary }]}>{tripType === 'roundtrip' ? 'Return Schedule' : 'Drop Schedule'}</Text>
+              <View style={[styles.labelRow, { marginTop: 12 }]}>
+                <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 0, marginBottom: 0 }]}>{tripType === 'roundtrip' ? 'Return Schedule' : 'Drop Schedule'}</Text>
+                {tip(
+                  tripType === 'roundtrip' ? 'Return schedule' : 'Drop schedule',
+                  'Left empty, it is the pickup day at 9:30 PM. For a trip of more than one day, driver bata and the minimum km are counted per day.',
+                )}
+              </View>
               <DateTimeField
                 dateLabel={tripType === 'roundtrip' ? 'Return Date' : 'Drop Date'}
                 timeLabel={tripType === 'roundtrip' ? 'Return Time' : 'Drop Time'}
@@ -1513,7 +1655,6 @@ export default function CreateBookingScreen() {
                 datePlaceholder="Auto (pickup day)"
                 timePlaceholder="Auto (9:30 PM)"
               />
-              <Text style={styles.hint}>Default: pickup day, 9:30 PM. Multi-day trips scale per-day driver allowance & min km.</Text>
             </>
           )}
         </View>
@@ -1695,25 +1836,38 @@ export default function CreateBookingScreen() {
                 </View>
               ) : (
                 <View>
-                  {/* Trip Distance & Allowance Rule Banner */}
-                  <View style={{
-                    backgroundColor: isDark ? '#1E1B4B40' : '#EEF2FF',
-                    borderWidth: 1,
-                    borderColor: isDark ? '#4338CA60' : '#C7D2FE',
-                    borderRadius: 6,
-                    padding: 10,
-                    marginBottom: 12,
-                  }}>
-                    {tripType === 'oneway' ? (
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                        🛣️ Oneway Rule: Minimum 130 km billable coverage floor applied
-                      </Text>
-                    ) : (tripType === 'roundtrip' || tripType === 'multicity') ? (
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                        🗓️ {tripDays} Days Trip · Min coverage: {250 * tripDays} km (250 km/day) · Driver Bata: ₹{(Number(driverAllowance) || 0) * tripDays}
-                      </Text>
-                    ) : null}
-                  </View>
+                  {/* Minimum billable km: one editable row (was a fixed rule banner) */}
+                  {hasMinKm && (
+                    <View style={styles.inlineField}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>
+                          Min billable km{tripDays > 1 ? ` (${tripDays} days)` : ''}
+                        </Text>
+                        {tip(
+                          'Minimum billable km',
+                          `At least this many km are billed even when the route is shorter. If the route is longer, the real km is billed.\n\nDefault: ${fareRules.oneway_min_km} km for Oneway, ${fareRules.round_trip_min_km_per_day} km per day for Round Trip, ${fareRules.multicity_min_km_per_day} km per day for Multi City (Settings > Fare Rules).\n\nA value typed here applies to this booking only.`,
+                        )}
+                      </View>
+                      {minKmTouched && (
+                        <TouchableOpacity
+                          onPress={() => { setMinKmTouched(false); if (fare) setRequoteTick((n) => n + 1); }}
+                          accessibilityLabel="Reset minimum km to the default"
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>Reset</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TextInput
+                        style={[styles.priceInput, { width: 96, textAlign: 'right' }]}
+                        value={minKm}
+                        onChangeText={(v) => { setMinKmTouched(true); setMinKm(v.replace(/[^0-9]/g, '')); }}
+                        onBlur={() => { if (fare && minKmTouched) setRequoteTick((n) => n + 1); }}
+                        keyboardType="numeric"
+                        placeholder={String(defaultMinKm)}
+                        placeholderTextColor={colors.textMuted}
+                        accessibilityLabel="Minimum billable km"
+                      />
+                    </View>
+                  )}
 
                   {/* Standard Base Rates & Charges Grid */}
                   <View style={styles.priceGrid}>
@@ -1724,7 +1878,7 @@ export default function CreateBookingScreen() {
                     </View>
                     <View style={styles.priceCell}>
                       <Text style={styles.priceLabel}>Vendor extra /km</Text>
-                      <TextInput style={styles.priceInput} value={extraCostPerKm} onChangeText={setExtraCostPerKm} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} />
+                      <TextInput style={styles.priceInput} value={extraCostPerKm} onChangeText={(v) => { touchedRates.current.extraKm = true; setExtraCostPerKm(v); }} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} />
                     </View>
 
                     {/* Row 2: Driver Bata & Vendor Extra Bata */}
@@ -1738,7 +1892,7 @@ export default function CreateBookingScreen() {
                       <Text style={styles.priceLabel}>
                         Vendor Extra Bata {tripDays > 1 ? `(₹${extraDriverAllowance}/d × ${tripDays}d)` : '/day'}
                       </Text>
-                      <TextInput style={styles.priceInput} value={extraDriverAllowance} onChangeText={setExtraDriverAllowance} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} />
+                      <TextInput style={styles.priceInput} value={extraDriverAllowance} onChangeText={(v) => { touchedRates.current.extraBata = true; setExtraDriverAllowance(v); }} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} />
                     </View>
 
                     {/* Row 3: Permit charges & Hill charges */}
@@ -1770,16 +1924,28 @@ export default function CreateBookingScreen() {
 
                     {/* Row 4: GST 5% (KM Fare) & Toll charges */}
                     <View style={styles.priceCell}>
-                      <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}
-                        onPress={() => setIncludeGst(!includeGst)}
-                      >
-                        <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: includeGst ? '#0284C7' : '#94A3B8', backgroundColor: includeGst ? '#0284C7' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                          {includeGst && <Check size={11} color="#FFFFFF" />}
-                        </View>
-                        <Text style={styles.priceLabel}>GST 5% (KM Fare)</Text>
-                      </TouchableOpacity>
-                      <TextInput style={[styles.priceInput, !includeGst && { opacity: 0.5 }]} value={gstAmount} onChangeText={setGstAmount} keyboardType="numeric" placeholder="Auto 5%" placeholderTextColor={colors.textMuted} editable={includeGst} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                          onPress={toggleGst}
+                          accessibilityLabel="GST 5 percent on km fare"
+                        >
+                          <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: includeGst ? colors.primary : '#94A3B8', backgroundColor: includeGst ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                            {includeGst && <Check size={11} color="#FFFFFF" />}
+                          </View>
+                          <Text style={[styles.priceLabel, { marginBottom: 0 }]}>GST 5%</Text>
+                        </TouchableOpacity>
+                        {tip(
+                          'GST 5%',
+                          'Tick it and the amount fills itself: 5% of the km fare (per-km rate x billable km). Bata, toll, permit and hill charges are not counted.\n\nBefore the fare is calculated it uses the minimum billable km; after that, the quoted km. Type a different amount to override it.',
+                        )}
+                        {includeGst && gstTouched && (
+                          <TouchableOpacity onPress={() => setGstTouched(false)} accessibilityLabel="Use the automatic GST amount">
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Auto</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <TextInput style={[styles.priceInput, !includeGst && { opacity: 0.5 }]} value={includeGst ? gstAmount : ''} onChangeText={editGst} keyboardType="numeric" placeholder="Auto 5%" placeholderTextColor={colors.textMuted} editable={includeGst} accessibilityLabel="GST amount" />
                     </View>
 
                     <View style={styles.priceCell}>
@@ -1855,7 +2021,7 @@ export default function CreateBookingScreen() {
                         justifyContent: 'center',
                         gap: 6,
                         backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                        paddingVertical: 10,
+                        paddingVertical: 8,
                         paddingHorizontal: 14,
                         borderRadius: 6,
                         borderWidth: 1,
@@ -1872,82 +2038,47 @@ export default function CreateBookingScreen() {
                     >
                       <Plus size={16} color={colors.primary} />
                       <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
-                        + Add Custom Charge (e.g. Parking / Waiting)
+                        Add custom charge
                       </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
 
-              {/* 10% Platform Commission Checkbox Card (Vendor App Style) */}
-              <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#E2E8F0' }}>
+              {/* 10% platform commission: one row */}
+              <View style={[styles.inlineField, { marginTop: 12, marginBottom: 0, paddingTop: 12, borderTopWidth: 1, borderTopColor: themeColors.border }]}>
                 <TouchableOpacity
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: applyCommission
-                      ? (isDark ? '#1E1B4B' : '#F0F9FF')
-                      : (isDark ? '#1E293B' : '#FEF2F2'),
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 6,
-                    borderWidth: 1.5,
-                    borderColor: applyCommission
-                      ? (isDark ? '#6366F1' : '#0284C7')
-                      : (isDark ? '#EF4444' : '#FCA5A5'),
-                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
                   onPress={() => {
-                    if (applyCommission) {
-                      setShowWaiveCommissionModal(true);
-                    } else {
-                      setApplyCommission(true);
-                    }
+                    if (applyCommission) setShowWaiveCommissionModal(true);
+                    else setApplyCommission(true);
                   }}
                   activeOpacity={0.8}
+                  accessibilityLabel="10% platform commission"
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, paddingRight: 10 }}>
-                    {/* Interactive Checkbox Icon */}
-                    <View style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 6,
-                      borderWidth: 2,
-                      borderColor: applyCommission ? colors.primary : themeColors.textMuted,
-                      backgroundColor: applyCommission ? colors.primary : 'transparent',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      {applyCommission && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Percent size={14} color={applyCommission ? colors.primary : themeColors.textMuted} />
-                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: themeColors.text }}>
-                          10% Platform Commission (CC)
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 11.5, color: applyCommission ? (isDark ? '#93C5FD' : '#0369A1') : (isDark ? '#FCA5A5' : '#DC2626'), marginTop: 2, fontWeight: '600' }}>
-                        {applyCommission ? 'Active · 10% platform commission retained' : 'Waived · Commission-free booking'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Active / Waived Status Badge */}
                   <View style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 6,
-                    backgroundColor: applyCommission ? '#DCFCE7' : '#FEE2E2',
-                    borderWidth: 1,
-                    borderColor: applyCommission ? '#86EFAC' : '#FCA5A5',
+                    width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                    borderColor: applyCommission ? colors.primary : themeColors.textMuted,
+                    backgroundColor: applyCommission ? colors.primary : 'transparent',
+                    alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: applyCommission ? '#166534' : '#991B1B' }}>
-                      {applyCommission ? 'Active' : 'Waived'}
-                    </Text>
+                    {applyCommission && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
                   </View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>10% platform commission</Text>
                 </TouchableOpacity>
+                {tip(
+                  '10% platform commission',
+                  'On: Drop Cars keeps 10% of the km fare when the trip completes.\n\nOff: this booking is commission-free. Turning it off asks you to confirm.',
+                )}
+                <View style={{
+                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1,
+                  backgroundColor: applyCommission ? '#DCFCE7' : '#FEE2E2',
+                  borderColor: applyCommission ? '#86EFAC' : '#FCA5A5',
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: applyCommission ? '#166534' : '#991B1B' }}>
+                    {applyCommission ? 'Active' : 'Waived'}
+                  </Text>
+                </View>
               </View>
             </>
           )}
@@ -1959,12 +2090,8 @@ export default function CreateBookingScreen() {
             <View style={[styles.iconBadge, badgeShell]}>
               <StickyNote size={18} color={themeColors.primary} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Pickup Notes & Driver Instructions</Text>
-              <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 1 }}>
-                Prominently displayed to drivers on the booking card before accepting
-              </Text>
-            </View>
+            <Text style={[styles.sectionTitleInline, { color: themeColors.text }]}>Pickup notes</Text>
+            {tip('Pickup notes', 'Instructions for the driver. They are shown on the booking card before the driver accepts.')}
           </View>
           <TextInput
             style={[styles.input, { minHeight: 65, textAlignVertical: 'top', marginBottom: 8 }]}
@@ -2111,95 +2238,39 @@ export default function CreateBookingScreen() {
                 >
                   <Plus size={16} color={colors.primary} />
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
-                    + Add Custom Request (e.g. Baby Seat / English Driver)
+                    Add custom request
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Customer number to driver - inline, auto-filled, editable */}
-            <View style={[styles.sectionCard, cardShell]}>
-              <Text style={[styles.fieldLabel, { color: themeColors.text }]}>Show customer number to driver</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode === 'instant' && { backgroundColor: '#10B981', borderColor: '#059669' }]}
-                  onPress={() => setCustPhoneRevealMode('instant')}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === 'instant' && { color: '#FFFFFF', fontWeight: '800' }]}>⚡ Instant on accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode !== 'instant' && styles.chipActive]}
-                  onPress={() => { setCustPhoneRevealTouched(false); setCustPhoneRevealMode('custom'); }}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode !== 'instant' && styles.chipTextActive]}>Scheduled</Text>
-                </TouchableOpacity>
-              </View>
-              {custPhoneRevealMode !== 'instant' && (
-                <View style={{ marginTop: 8 }}>
-                  {custPhoneRevealMode === '1h' || custPhoneRevealMode === '4h' ? (
-                    <Text style={[styles.hint, { color: themeColors.textSecondary }]}>
-                      {custPhoneRevealMode === '1h' ? '1 hr' : '4 hrs'} before pickup (set in Configure)
-                    </Text>
-                  ) : (
-                    <>
-                      <DateTimeField
-                        dateLabel="Reveal date"
-                        timeLabel="Reveal time"
-                        dateValue={custPhoneRevealDate}
-                        timeValue={custPhoneRevealTime}
-                        onDateChange={(v) => { setCustPhoneRevealTouched(true); setCustPhoneRevealMode('custom'); setCustPhoneRevealDate(v); }}
-                        onTimeChange={(v) => { setCustPhoneRevealTouched(true); setCustPhoneRevealMode('custom'); setCustPhoneRevealTime(v); }}
-                      />
-                      <Text style={[styles.hint, { color: themeColors.textSecondary }]}>
-                        {custPhoneRevealTouched ? 'Custom time set.' : 'Auto-set to 2 hrs before pickup - follows the pickup time. Change it if needed.'}
-                      </Text>
-                    </>
-                  )}
-                </View>
-              )}
-            </View>
-
-            {/* Priority & Configurations */}
+            {/* Driver access & timing - who accepts first, when the driver sees
+                the customer number, how long the booking stays open. All three
+                are set inside the sheet; this row only shows the current choice. */}
             <View style={[styles.sectionCard, cardShell]}>
               <TouchableOpacity
                 style={[styles.summaryCardTouchable, summaryShell]}
                 onPress={() => setShowBookingConfigModal(true)}
                 activeOpacity={0.8}
+                accessibilityLabel="Driver access and timing"
               >
                 <View style={styles.summaryCardLeft}>
                   <View style={[styles.summaryIconCircle, badgeShell]}>
                     <Clock size={20} color={themeColors.primary} />
                   </View>
                   <View style={styles.summaryTextContent}>
-                    <Text style={[styles.summaryTitle, { color: themeColors.text }]}>
-                      {custPhoneRevealMode === 'instant'
-                        ? 'Customer Phone: ⚡ Instantly upon accept'
-                        : custPhoneRevealMode === '1h'
-                          ? 'Customer Phone: 1 hr before pickup'
-                          : custPhoneRevealMode === '4h'
-                            ? 'Customer Phone: 4 hrs before pickup'
-                            : custPhoneRevealMode === 'custom' && custPhoneRevealTime
-                              ? `Customer Phone: Reveal at ${custPhoneRevealDate || ''} ${custPhoneRevealTime}`
-                              : 'Customer Phone: 2 hrs before pickup (Default)'}
-                    </Text>
-                    <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>
-                      {(() => {
-                        const parts: string[] = [];
-                        if (priorityForPaid) {
-                          parts.push(priorityCutoffTime ? `⭐ Trusted First until ${priorityCutoffDate || ''} ${priorityCutoffTime}` : '⭐ Trusted Partners First');
-                        } else {
-                          parts.push('Open to Everyone');
-                        }
-                        if (liveUntilDate || liveUntilTime) parts.push(`Live until ${[liveUntilDate, liveUntilTime].filter(Boolean).join(' ')}`);
-                        else parts.push('Standard auto-cancel timer');
-                        parts.push('Tap to edit priority, visibility & timers');
-                        return parts.join(' · ');
-                      })()}
+                    <Text style={[styles.summaryTitle, { color: themeColors.text }]}>Driver access & timing</Text>
+                    <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]} numberOfLines={2}>
+                      {[
+                        priorityForPaid ? 'Trusted partners first' : 'Open to everyone',
+                        `Number: ${revealSummary}`,
+                        (liveUntilDate || liveUntilTime) ? `Open until ${[liveUntilDate, liveUntilTime].filter(Boolean).join(' ')}` : null,
+                      ].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                 </View>
                 <View style={[styles.editPillButton, pillShell]}>
-                  <Text style={[styles.editPillText, { color: themeColors.primary }]}>Configure</Text>
+                  <Text style={[styles.editPillText, { color: themeColors.primary }]}>Edit</Text>
                   <ChevronRight size={14} color={themeColors.primary} />
                 </View>
               </TouchableOpacity>
@@ -2207,113 +2278,148 @@ export default function CreateBookingScreen() {
           </>
         )}
 
-        {fare && (
-          <View style={{ marginTop: 18, gap: 12 }}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text, fontSize: 16, fontWeight: '800' }]}>
-              📊 Quote Review & Fare Breakdown
-            </Text>
+        {/* Quote review - one compact card, in the order the owner asked for:
+            driver fare, customer / vendor fare, platform earnings, the
+            Inclusions / Exclusions lists, and cash to collect last. Same type
+            sizes as the rest of the form. */}
+        {fare && (() => {
+          const money = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
+          const custTotal = Number(fare.customer_amount || fare.total_amount || fare.vendor_amount || 0);
+          const drvTotal = Number(fare.driver_amount || fare.estimate_price || 0);
+          const adv = parseFloat(advanceReceived) || 0;
+          const baseKm = Number(fare.base_km_amount || 0);
+          const comm = applyCommission ? Math.round(baseKm * 0.10) : 0;
+          const extraMarkup = Math.max(0, custTotal - drvTotal);
+          const km = Number(fare.total_km || 0);
+          const routeKm = Number(fare.remark_trip_min_km || 0);
 
-            {/* Cash to Collect from Customer Banner - shown only after quote calculation */}
-            {(() => {
-              const custTotal = Number(fare.customer_amount || fare.total_amount || 0);
-              const adv = parseFloat(advanceReceived) || 0;
-              const cashToCollect = Math.max(0, custTotal - adv);
-              return (
-                <View style={{
-                  backgroundColor: isDark ? '#1E293B' : '#EFF6FF',
-                  borderColor: '#3B82F6',
-                  borderWidth: 1.5,
-                  borderRadius: 6,
-                  padding: 14,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    💵 Cash to Collect from Customer
-                  </Text>
-                  <Text style={{ fontSize: 24, fontWeight: '900', color: '#1E40AF', marginTop: 4 }}>
-                    ₹{cashToCollect.toLocaleString('en-IN')}
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: '#3B82F6', marginTop: 2 }}>
-                    (Fare: ₹{custTotal.toLocaleString('en-IN')} - Advance Received: ₹{adv.toLocaleString('en-IN')})
-                  </Text>
-                </View>
-              );
-            })()}
+          // What the customer fare is made of, and what the customer pays on top.
+          const included: { label: string; amount?: number }[] = [];
+          const covered: { label: string; amount?: number }[] = [];
+          const excluded: string[] = [];
+          if (tripType === 'hourly') {
+            const pkg = HOURLY_PACKAGES[hourlyPackageIndex];
+            included.push({ label: `Package ${pkg.hours} hrs / ${pkg.km_range} km`, amount: custTotal });
+            excluded.push(`Extra km beyond ${pkg.km_range} km (₹${(Number(costForAddonKm) || 0) + (Number(extraCostForAddonKm) || 0)}/km)`);
+            excluded.push(`Extra hours beyond ${pkg.hours} hrs`);
+          } else if (fareType === 'ALL_INCLUSIVE') {
+            included.push({ label: 'All-inclusive fare', amount: custTotal });
+          } else {
+            included.push({ label: `Km fare (${km} km × ₹${Number(costPerKm) || 0})`, amount: baseKm });
+            const extraKmAmt = Math.round(km * (Number(extraCostPerKm) || 0));
+            if (extraKmAmt > 0) included.push({ label: `Vendor extra (${km} km × ₹${Number(extraCostPerKm) || 0})`, amount: extraKmAmt });
+            if (Number(fare.driver_allowance) > 0) included.push({ label: `Driver bata${tripDays > 1 ? ` (${tripDays} days)` : ''}`, amount: Number(fare.driver_allowance) });
+            if (Number(fare.extra_driver_allowance) > 0) included.push({ label: `Vendor extra bata${tripDays > 1 ? ` (${tripDays} days)` : ''}`, amount: Number(fare.extra_driver_allowance) });
+            if (!includePermit) excluded.push('State permit');
+            else if (Number(fare.permit_charges) > 0) included.push({ label: 'State permit', amount: Number(fare.permit_charges) });
+            if (Number(fare.extra_permit_charges) > 0) included.push({ label: 'Vendor extra margin', amount: Number(fare.extra_permit_charges) });
+            if (!includeHill) excluded.push('Hill / ghat charges');
+            else if (Number(fare.hill_charges) > 0) included.push({ label: 'Hill / ghat charges', amount: Number(fare.hill_charges) });
+            if (!includeToll) excluded.push('Toll (paid by the customer as charged)');
+            else if (Number(fare.toll_charges) > 0) included.push({ label: 'Toll', amount: Number(fare.toll_charges) });
+            if (Number(fare.night_charges) > 0) included.push({ label: 'Night charges', amount: Number(fare.night_charges) });
+            customCharges.forEach((c) => {
+              const name = (c.name || '').trim() || 'Custom charge';
+              if (c.included) covered.push({ label: name, amount: Number(c.amount) || undefined });
+              else excluded.push(name);
+            });
+            customSpecialRequests.filter((r) => r.included && r.name.trim()).forEach((r) => {
+              covered.push({ label: r.name.trim(), amount: Number(r.allowance) || undefined });
+            });
+            if (includeGst) covered.push({ label: 'GST 5% on km fare', amount: Number(gstAmount) || 0 });
+            else excluded.push('GST');
+          }
 
-            {/* Customer / Vendor Pricing Card */}
-            <View style={[styles.fareCard, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF', borderColor: '#3B82F6' }]}>
-              <Text style={[styles.fareTitle, { color: '#2563EB' }]}>💵 Customer / Vendor Pricing</Text>
-              <View style={styles.fareRow}>
-                <Text style={[styles.fareLabel, { color: themeColors.text }]}>Total Customer Fare</Text>
-                <Text style={[styles.fareValueEmphasis, { color: '#2563EB', fontSize: 18 }]}>
-                  ₹{Number(fare.customer_amount || fare.total_amount || 0).toLocaleString('en-IN')}
-                </Text>
-              </View>
-              {fare.total_km != null && (
-                <View style={styles.fareRow}>
-                  <Text style={[styles.fareLabel, { color: themeColors.textSecondary }]}>Distance & Est. Time</Text>
-                  <Text style={[styles.fareValue, { color: themeColors.text }]}>
-                    {tripType === 'oneway' && Number(fare.total_km) <= 130 ? '130 km (Min billable)' : `${fare.total_km} km`} · {fare.trip_time || 'N/A'}
-                  </Text>
-                </View>
-              )}
-              {tripType === 'roundtrip' && (
-                <View style={styles.fareRow}>
-                  <Text style={[styles.fareLabel, { color: themeColors.textSecondary }]}>Trip Duration & Min Km</Text>
-                  <Text style={[styles.fareValue, { color: colors.primary, fontWeight: '700' }]}>
-                    {tripDays} Day{tripDays > 1 ? 's' : ''} (Min {250 * tripDays} km)
-                  </Text>
-                </View>
-              )}
+          const row = (label: string, value: string, strong: boolean = false) => (
+            <View style={styles.quoteRow}>
+              <Text style={[styles.quoteLabel, { color: themeColors.text }]}>{label}</Text>
+              <Text style={[strong ? styles.quoteValueStrong : styles.quoteValue, { color: themeColors.text }]}>{value}</Text>
             </View>
-
-            {/* Driver Pricing Card */}
-            <View style={[styles.fareCard, { backgroundColor: isDark ? '#1E293B' : '#F5F3FF', borderColor: '#8B5CF6' }]}>
-              <Text style={[styles.fareTitle, { color: '#7C3AED' }]}>🚗 Driver Pricing</Text>
-              <View style={styles.fareRow}>
-                <Text style={[styles.fareLabel, { color: themeColors.text }]}>Est. Driver Net Amount</Text>
-                <Text style={[styles.fareValueEmphasis, { color: '#7C3AED', fontSize: 18 }]}>
-                  ₹{Number(fare.driver_amount || fare.estimate_price || 0).toLocaleString('en-IN')}
-                </Text>
-              </View>
-              {fare.driver_allowance != null && Number(fare.driver_allowance) > 0 && (
-                <View style={styles.fareRow}>
-                  <Text style={[styles.fareLabel, { color: themeColors.textSecondary }]}>Driver Allowance</Text>
-                  <Text style={[styles.fareValue, { color: themeColors.text }]}>₹{fare.driver_allowance}</Text>
-                </View>
-              )}
+          );
+          const listRow = (key: string, label: string, value?: string) => (
+            <View key={key} style={styles.quoteListRow}>
+              <Text style={[styles.quoteListText, { color: themeColors.textSecondary, flex: 1 }]}>{label}</Text>
+              {!!value && <Text style={[styles.quoteListText, { color: themeColors.text, fontWeight: '700' }]}>{value}</Text>}
             </View>
+          );
 
-            {/* Admin / Platform Earnings Card */}
-            {(() => {
-              const custTotal = Number(fare.customer_amount || fare.total_amount || 0);
-              const drvTotal = Number(fare.driver_amount || fare.estimate_price || 0);
-              const baseKm = Number(fare.base_km_amount || 0);
-              const comm = applyCommission ? Math.round(baseKm * 0.10) : 0;
-              const extraMarkup = Math.max(0, custTotal - drvTotal);
-              const totalEarnings = comm + extraMarkup;
-              return (
-                <View style={[styles.fareCard, { backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderColor: '#10B981' }]}>
-                  <Text style={[styles.fareTitle, { color: '#059669' }]}>📈 Platform / Admin Earnings</Text>
-                  <View style={styles.fareRow}>
-                    <Text style={[styles.fareLabel, { color: themeColors.text }]}>10% Commission</Text>
-                    <Text style={[styles.fareValue, { color: themeColors.text }]}>₹{comm}</Text>
-                  </View>
-                  {extraMarkup > 0 && (
-                    <View style={styles.fareRow}>
-                      <Text style={[styles.fareLabel, { color: themeColors.text }]}>Vendor Extra / Markup</Text>
-                      <Text style={[styles.fareValue, { color: themeColors.text }]}>₹{extraMarkup}</Text>
-                    </View>
+          return (
+            <View style={[styles.sectionCard, cardShell]}>
+              <View style={[styles.quoteRow, { marginBottom: 8 }]}>
+                <Text style={[styles.sectionTitleInline, { color: themeColors.text }]}>Quote</Text>
+                {fare.total_km != null && (
+                  <Text style={[styles.quoteSub, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                    {km} km{routeKm > 0 ? ` (route ${routeKm} km)` : ''}{fare.trip_time ? ` · ${fare.trip_time}` : ''}
+                  </Text>
+                )}
+              </View>
+
+              {row('Driver fare', money(drvTotal), true)}
+              {row('Customer / Vendor fare', money(custTotal), true)}
+              {row('Platform / Admin earnings', money(comm + extraMarkup), true)}
+              <Text style={[styles.quoteSub, { color: themeColors.textSecondary, marginTop: -2, marginBottom: 8 }]}>
+                10% commission {money(comm)}{extraMarkup > 0 ? ` + vendor extra ${money(extraMarkup)}` : ''}
+              </Text>
+
+              {/* Inclusions / Exclusions: tap to open the full list */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {([
+                  ['incl', `Inclusions (${included.length + covered.length})`],
+                  ['excl', `Exclusions (${excluded.length})`],
+                ] as const).map(([key, label]) => {
+                  const open = openFareList === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.quoteToggle, { borderColor: open ? colors.primary : themeColors.border, backgroundColor: open ? themeColors.primaryTint : themeColors.background }]}
+                      onPress={() => setOpenFareList(open ? null : key)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={label}
+                    >
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: open ? colors.primary : themeColors.text, flex: 1 }}>{label}</Text>
+                      {open ? <ChevronUp size={15} color={colors.primary} /> : <ChevronDown size={15} color={themeColors.textSecondary} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {openFareList === 'incl' && (
+                <View style={[styles.quoteList, { borderColor: themeColors.border }]}>
+                  {included.map((i, n) => listRow(`i${n}`, i.label, i.amount != null ? money(i.amount) : undefined))}
+                  {listRow('itotal', 'Customer fare', money(custTotal))}
+                  {covered.length > 0 && (
+                    <>
+                      <Text style={[styles.quoteSub, { color: themeColors.textSecondary, marginTop: 6, marginBottom: 2 }]}>Also covered by this fare</Text>
+                      {covered.map((i, n) => listRow(`c${n}`, i.label, i.amount != null ? money(i.amount) : undefined))}
+                    </>
                   )}
-                  <View style={[styles.fareRow, { borderTopWidth: 1, borderTopColor: '#A7F3D0', paddingTop: 6, marginTop: 4 }]}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>Total Admin Profit</Text>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#059669' }}>₹{totalEarnings}</Text>
-                  </View>
                 </View>
-              );
-            })()}
-          </View>
-        )}
+              )}
+              {openFareList === 'excl' && (
+                <View style={[styles.quoteList, { borderColor: themeColors.border }]}>
+                  {excluded.length === 0
+                    ? listRow('none', 'Nothing is excluded.')
+                    : (
+                      <>
+                        <Text style={[styles.quoteSub, { color: themeColors.textSecondary, marginBottom: 2 }]}>Not in the fare - the customer pays these extra</Text>
+                        {excluded.map((label, n) => listRow(`e${n}`, label))}
+                      </>
+                    )}
+                </View>
+              )}
+
+              {/* Cash to collect - last */}
+              <View style={[styles.cashBox, { backgroundColor: themeColors.primaryTint, borderColor: themeColors.border }]}>
+                <View style={styles.quoteRow}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>Cash to collect from customer</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary }}>{money(Math.max(0, custTotal - adv))}</Text>
+                </View>
+                <Text style={[styles.quoteSub, { color: themeColors.textSecondary, marginTop: 2 }]}>
+                  Fare {money(custTotal)} − Advance received {money(adv)}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Broadcast To (admin-only broadcast targeting - Redesigned Premium Style) */}
         <View style={[styles.sectionCard, cardShell, { marginTop: 14 }, showNearCitySuggestions && { zIndex: 30, elevation: 30 }]}>
@@ -2384,7 +2490,7 @@ export default function CreateBookingScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>Allocate manually</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Give it directly to one fleet driver</Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Give it directly to one fleet owner</Text>
               </View>
               {sendTo === 'DRIVER' && <CheckCircle2 size={16} color={colors.primary} />}
             </View>
@@ -2394,41 +2500,52 @@ export default function CreateBookingScreen() {
             <View style={{ marginTop: 12 }}>
               {!allocateTarget ? (
                 <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 10, height: 42 }}>
-                    <Search size={16} color={themeColors.textMuted} />
-                    <TextInput
-                      style={{ flex: 1, fontSize: 13, color: themeColors.text }}
-                      placeholder="Driver name or phone number"
-                      placeholderTextColor={themeColors.textMuted}
-                      value={allocateQuery}
-                      onChangeText={setAllocateQuery}
-                    />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 10, height: 42 }}>
+                      <Search size={16} color={themeColors.textMuted} />
+                      <TextInput
+                        style={{ flex: 1, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
+                        placeholder="Fleet owner name or phone"
+                        placeholderTextColor={themeColors.textMuted}
+                        value={allocateQuery}
+                        onChangeText={setAllocateQuery}
+                        accessibilityLabel="Search fleet owner"
+                      />
+                    </View>
+                    {tip(
+                      'Allocate manually',
+                      'The booking goes straight to one fleet owner - it is not shown to other drivers. Only fleet owners can be picked, because the commission comes from their wallet; they choose the driver and car afterwards.\n\nIf the wallet is too low you are asked whether to allocate on credit. On credit, nothing is taken now and the commission is deducted when the trip completes, so the wallet can go below zero. A credit allocation is recorded with your name for the owner.',
+                    )}
                   </View>
                   {allocateSearching && <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 8 }} />}
                   {!allocateSearching && allocateQuery.trim().length >= 3 && allocateResults.length === 0 && (
-                    <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8, fontStyle: 'italic' }}>No driver found. Keep typing, or try their phone number.</Text>
+                    <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>No fleet owner found. Try their phone number.</Text>
                   )}
                   {allocateResults.map((d) => (
                     <TouchableOpacity
                       key={d.id}
-                      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
                       onPress={() => { setAllocateTarget(d); setAllocateResults([]); setAllocateQuery(''); }}
                     >
-                      <View>
-                        <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>{d.name}</Text>
-                        {!!d.primary_number && <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>{d.primary_number}</Text>}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>{d.full_name}</Text>
+                        <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>{d.primary_number}</Text>
                       </View>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: d.account_status === 'active' ? colors.success : themeColors.textMuted, textTransform: 'capitalize' }}>{d.account_status}</Text>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: Number(d.wallet_balance) > 0 ? colors.success : colors.error }}>
+                        Wallet ₹{Number(d.wallet_balance || 0).toLocaleString('en-IN')}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </>
               ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderWidth: 1, borderColor: colors.primary, borderRadius: 6, padding: 12 }}>
-                  <View>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text }}>{allocateTarget.name}</Text>
-                    {!!allocateTarget.primary_number && <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2 }}>{allocateTarget.primary_number}</Text>}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderWidth: 1, borderColor: colors.primary, borderRadius: 6, padding: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }} numberOfLines={1}>{allocateTarget.full_name}</Text>
+                    <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2 }}>
+                      {allocateTarget.primary_number} · Wallet ₹{Number(allocateTarget.wallet_balance || 0).toLocaleString('en-IN')}
+                    </Text>
                   </View>
-                  <TouchableOpacity onPress={() => { setAllocateTarget(null); setAllocateQuery(''); }}>
+                  <TouchableOpacity onPress={() => { setAllocateTarget(null); setAllocateQuery(''); }} accessibilityLabel="Change fleet owner">
                     <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Change</Text>
                   </TouchableOpacity>
                 </View>
@@ -2438,50 +2555,26 @@ export default function CreateBookingScreen() {
 
           {sendTo === 'NEAR_CITY' && (
             <View style={{ marginTop: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: themeColors.textSecondary }}>
-                    Target Cities ({nearCities.length} selected):
-                  </Text>
-                  {nearCities.length > 0 && (
-                    <TouchableOpacity
-                      onPress={() => setNearCities([])}
-                      style={{
-                        backgroundColor: isDark ? '#7F1D1D35' : '#FEE2E2',
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: '#EF4444',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#EF4444' }}>
-                        Clear All
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                <Text style={{ flex: 1, minWidth: 110, fontSize: 12.5, fontWeight: '700', color: themeColors.textSecondary }}>
+                  Target cities ({nearCities.length})
+                </Text>
+                {nearCities.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setNearCities([])}
+                    style={[styles.smallBtn, { backgroundColor: isDark ? '#7F1D1D35' : '#FEE2E2', borderColor: '#EF4444' }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>Clear all</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   onPress={() => setShowTargetCityModal(true)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF',
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.primary,
-                  }}
+                  style={[styles.smallBtn, { backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderColor: colors.primary }]}
                   activeOpacity={0.8}
                 >
                   <Plus size={13} color={colors.primary} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                    + Add / Edit Cities
-                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Add / edit</Text>
                 </TouchableOpacity>
               </View>
 
@@ -2510,20 +2603,20 @@ export default function CreateBookingScreen() {
                   ))}
                 </View>
               ) : (
-                <Text style={{ fontSize: 12, color: colors.error, fontStyle: 'italic', marginTop: 2 }}>
-                  ⚠️ Please select at least one target city for Near City broadcast.
+                <Text style={{ fontSize: 12, color: colors.error, marginTop: 2 }}>
+                  Add at least one city.
                 </Text>
               )}
             </View>
           )}
         </View>
 
-        <TouchableOpacity style={[styles.primaryButton, quoting && { opacity: 0.6 }]} onPress={handleGetQuote} disabled={quoting}>
+        <TouchableOpacity style={[styles.primaryButton, quoting && { opacity: 0.6 }]} onPress={() => handleGetQuote()} disabled={quoting}>
           {quoting ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.primaryButtonText}>{fare ? 'Re-Calculate Fare' : 'Calculate Fare / Get Quote'}</Text>}
         </TouchableOpacity>
 
         {fare && (
-          <TouchableOpacity style={[styles.confirmButton, confirming && { opacity: 0.6 }]} onPress={handleConfirm} disabled={confirming}>
+          <TouchableOpacity style={[styles.confirmButton, confirming && { opacity: 0.6 }]} onPress={() => handleConfirm()} disabled={confirming}>
             {confirming ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.primaryButtonText}>Confirm & Post Booking</Text>}
           </TouchableOpacity>
         )}
@@ -2545,7 +2638,7 @@ export default function CreateBookingScreen() {
               ₹{Number(fare.customer_amount || fare.total_amount || 0).toLocaleString('en-IN')}
             </Text>
           </View>
-          <TouchableOpacity style={styles.stickyReviewBtn} onPress={handleConfirm} disabled={confirming}>
+          <TouchableOpacity style={styles.stickyReviewBtn} onPress={() => handleConfirm()} disabled={confirming}>
             <Text style={styles.primaryButtonText}>Confirm & Post</Text>
           </TouchableOpacity>
         </View>
@@ -2688,7 +2781,7 @@ export default function CreateBookingScreen() {
                   <TouchableOpacity
                     style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
                     onPress={() => {
-                      setCarType(cat.baseValue);
+                      changeCarType(cat.baseValue);
                       if (!cat.subTiers) setShowCarTypePicker(false);
                     }}
                     activeOpacity={0.8}
@@ -2733,7 +2826,7 @@ export default function CreateBookingScreen() {
                                 borderColor: isSubActive ? colors.primary : themeColors.border,
                               }}
                               onPress={() => {
-                                setCarType(sub.value);
+                                changeCarType(sub.value);
                                 setShowCarTypePicker(false);
                               }}
                               activeOpacity={0.8}
@@ -2900,7 +2993,7 @@ export default function CreateBookingScreen() {
             <View style={{ backgroundColor: themeColors.surface, padding: 14, borderRadius: 6, borderWidth: 1, borderColor: includeGst ? '#0284C7' : themeColors.border, marginBottom: 16 }}>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                onPress={() => setIncludeGst((v) => !v)}
+                onPress={toggleGst}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: includeGst ? '#0284C7' : '#94A3B8', backgroundColor: includeGst ? '#0284C7' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
@@ -2916,7 +3009,7 @@ export default function CreateBookingScreen() {
               {includeGst && (
                 <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: themeColors.border, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={{ fontSize: 12, color: themeColors.textSecondary, fontWeight: '600' }}>GST Amount (₹):</Text>
-                  <TextInput style={[styles.priceInput, { width: 140, height: 38 }]} placeholder="Auto (5%)" value={gstAmount} onChangeText={setGstAmount} keyboardType="numeric" placeholderTextColor={colors.textMuted} />
+                  <TextInput style={[styles.priceInput, { width: 140, height: 38 }]} placeholder="Auto (5%)" value={gstAmount} onChangeText={editGst} keyboardType="numeric" placeholderTextColor={colors.textMuted} />
                 </View>
               )}
             </View>
@@ -2963,8 +3056,7 @@ export default function CreateBookingScreen() {
                   key={t.value}
                   style={[styles.pickerModalOption, isActive && styles.pickerModalOptionActive]}
                   onPress={() => {
-                    setTripType(t.value);
-                    setFare(null);
+                    changeTripType(t.value);
                     setShowTripTypePicker(false);
                   }}
                 >
@@ -3138,7 +3230,7 @@ export default function CreateBookingScreen() {
               >
                 <Plus size={16} color={colors.primary} />
                 <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
-                  + Add Custom Request (e.g. Baby Seat / Roof Rack)
+                  Add custom request
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3204,197 +3296,155 @@ export default function CreateBookingScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Booking Configuration & Timers Modal */}
+      {/* Driver access & timing (was "Booking rules") */}
       <Modal
         visible={showBookingConfigModal}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowBookingConfigModal(false)}
       >
-        <SafeAreaView style={[styles.pickerModalContainer, { backgroundColor: themeColors.surface }]}>
-          <View style={[styles.pickerModalHeader, { borderBottomColor: themeColors.border }]}>
-            <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Booking rules</Text>
+        <SafeAreaView style={[styles.pickerModalContainer, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.pickerModalHeader, { borderBottomColor: themeColors.border, backgroundColor: themeColors.surface }]}>
+            <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Driver access & timing</Text>
             <TouchableOpacity onPress={() => setShowBookingConfigModal(false)} accessibilityLabel="Close">
               <X size={22} color={themeColors.textSecondary} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.pickerModalContent} showsVerticalScrollIndicator={false}>
-            {/* Trusted Partners Priority Section */}
-            <View style={{ marginBottom: 18, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-              <Text style={[styles.fieldLabel, { fontSize: 14, fontWeight: '700', color: themeColors.text, marginBottom: 4 }]}>
-                Trusted Partners Priority & Cutoff Timeline
-              </Text>
-              <Text style={[styles.hint, { marginBottom: 10, lineHeight: 17 }]}>
-                Controls whether Trusted Partners get exclusive priority to accept this booking before Standard Partners.
-              </Text>
-
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    !priorityForPaid && styles.chipActive,
-                  ]}
-                  onPress={() => setPriorityForPaid(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, !priorityForPaid && styles.chipTextActive]}>
-                    Open to Everyone
-                  </Text>
-                  {!priorityForPaid && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    priorityForPaid && styles.chipActive,
-                  ]}
-                  onPress={() => setPriorityForPaid(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, priorityForPaid && styles.chipTextActive]}>
-                    ⭐ Trusted Partners First
-                  </Text>
-                  {priorityForPaid && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
+          <ScrollView style={styles.pickerModalContent} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+            {/* 1. Who can accept first */}
+            <View style={[styles.ruleCard, cardShell]}>
+              <View style={styles.ruleHead}>
+                <View style={[styles.pickIcon, badgeShell]}>
+                  <UserCheck size={16} color={themeColors.primary} />
+                </View>
+                <Text style={[styles.ruleTitle, { color: themeColors.text }]}>Who can accept first</Text>
+                {tip(
+                  'Who can accept first',
+                  'Everyone: any driver can accept straight away.\n\nTrusted partners first: only Trusted Partners can accept until the cut-off; after that everyone can. Leave the cut-off on Auto and the server picks it from the pickup time.',
+                )}
               </View>
-
+              <View style={styles.optGrid}>
+                {([[false, 'Everyone'], [true, 'Trusted partners first']] as const).map(([value, label]) => {
+                  const active = priorityForPaid === value;
+                  return (
+                    <TouchableOpacity
+                      key={label}
+                      style={[styles.optTile, { borderColor: active ? colors.primary : themeColors.border, backgroundColor: active ? themeColors.primaryTint : themeColors.background }]}
+                      onPress={() => setPriorityForPaid(value)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={label}
+                    >
+                      <Text style={[styles.optText, { color: active ? colors.primary : themeColors.text }]}>{label}</Text>
+                      {active && <Check size={14} color={colors.primary} strokeWidth={3} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               {priorityForPaid && (
-                <View style={{ marginTop: 6 }}>
-                  <Text style={[styles.hint, { marginBottom: 8 }]}>
-                    Only Trusted Partners can accept until the cutoff below; Standard Partners after. Leave blank for server-computed default.
-                  </Text>
+                <View style={{ marginTop: 10 }}>
                   <DateTimeField
-                    dateLabel="Priority Cutoff Date"
-                    timeLabel="Priority Cutoff Time"
+                    dateLabel="Trusted-only until"
+                    timeLabel="Time"
                     dateValue={priorityCutoffDate}
                     timeValue={priorityCutoffTime}
                     onDateChange={setPriorityCutoffDate}
                     onTimeChange={setPriorityCutoffTime}
-                    datePlaceholder="Auto (YYYY-MM-DD)"
-                    timePlaceholder="Auto (HH:MM)"
+                    datePlaceholder="Auto"
+                    timePlaceholder="Auto"
                   />
                 </View>
               )}
             </View>
 
-            {/* Customer Number Visibility to Driver Section */}
-            <View style={{ marginBottom: 18, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-              <Text style={[styles.fieldLabel, { fontSize: 14, fontWeight: '700', color: themeColors.text, marginBottom: 4 }]}>
-                Customer Number Visibility to Driver
-              </Text>
-              <Text style={[styles.hint, { marginBottom: 10, lineHeight: 17 }]}>
-                Controls when the assigned driver is allowed to view and call the customer's phone number. Standard platform rule: <Text style={{ fontWeight: '700', color: themeColors.text }}>2 Hours before pickup</Text>.
-              </Text>
-
-              {/* Timing Options */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    custPhoneRevealMode === 'instant' && { backgroundColor: '#10B981', borderColor: '#059669' },
-                  ]}
-                  onPress={() => setCustPhoneRevealMode('instant')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === 'instant' && { color: '#FFFFFF', fontWeight: '800' }]}>
-                    ⚡ Instantly (Upon Accept)
-                  </Text>
-                  {custPhoneRevealMode === 'instant' && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode === 'default' && styles.chipActive]}
-                  onPress={() => setCustPhoneRevealMode('default')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === 'default' && styles.chipTextActive]}>
-                    🕒 2 hrs before (Default Rule)
-                  </Text>
-                  {custPhoneRevealMode === 'default' && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode === '1h' && styles.chipActive]}
-                  onPress={() => setCustPhoneRevealMode('1h')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === '1h' && styles.chipTextActive]}>
-                    ⏱️ 1 hr before
-                  </Text>
-                  {custPhoneRevealMode === '1h' && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode === '4h' && styles.chipActive]}
-                  onPress={() => setCustPhoneRevealMode('4h')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === '4h' && styles.chipTextActive]}>
-                    ⏱️ 4 hrs before
-                  </Text>
-                  {custPhoneRevealMode === '4h' && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.chip, custPhoneRevealMode === 'custom' && styles.chipActive]}
-                  onPress={() => setCustPhoneRevealMode('custom')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, custPhoneRevealMode === 'custom' && styles.chipTextActive]}>
-                    📅 Custom Date/Time
-                  </Text>
-                  {custPhoneRevealMode === 'custom' && <Check size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-                </TouchableOpacity>
-              </View>
-
-              {custPhoneRevealMode === 'instant' && (
-                <View style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#10B981', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 13, color: '#059669', fontWeight: '800' }}>
-                    ✓ Instant Reveal Enabled
-                  </Text>
-                  <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2, lineHeight: 16 }}>
-                    Customer number will be visible to the driver and call button unlocked immediately upon accepting the booking in the Driver App.
-                  </Text>
+            {/* 2. When the driver sees the customer number */}
+            <View style={[styles.ruleCard, cardShell]}>
+              <View style={styles.ruleHead}>
+                <View style={[styles.pickIcon, badgeShell]}>
+                  <Phone size={16} color={themeColors.primary} />
                 </View>
-              )}
-
+                <Text style={[styles.ruleTitle, { color: themeColors.text }]}>Customer number to driver</Text>
+                {tip(
+                  'Customer number to driver',
+                  'When the assigned driver can see and call the customer.\n\nThe platform rule is 2 hours before pickup. "On accept" shows it the moment the driver accepts - use it for urgent trips.',
+                )}
+              </View>
+              <View style={styles.optGrid}>
+                {([
+                  ['instant', 'On accept'],
+                  ['default', '2 hrs before'],
+                  ['1h', '1 hr before'],
+                  ['4h', '4 hrs before'],
+                  ['custom', 'Pick date & time'],
+                ] as const).map(([mode, label]) => {
+                  const active = custPhoneRevealMode === mode;
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[styles.optTile, { borderColor: active ? colors.primary : themeColors.border, backgroundColor: active ? themeColors.primaryTint : themeColors.background }]}
+                      onPress={() => (mode === 'custom' ? chooseCustomReveal() : setCustPhoneRevealMode(mode))}
+                      activeOpacity={0.8}
+                      accessibilityLabel={`Customer number: ${label}`}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.optText, { color: active ? colors.primary : themeColors.text }]}>{label}</Text>
+                        {mode === 'default' && <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Default</Text>}
+                      </View>
+                      {active && <Check size={14} color={colors.primary} strokeWidth={3} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               {custPhoneRevealMode === 'custom' && (
-                <View style={{ marginTop: 6 }}>
-                  <Text style={styles.fieldSubLabel}>Specify Exact Date & Time to Reveal Customer Number</Text>
+                <View style={{ marginTop: 10 }}>
                   <DateTimeField
-                    dateLabel="Reveal Date"
-                    timeLabel="Reveal Time"
+                    dateLabel="Show number on"
+                    timeLabel="Time"
                     dateValue={custPhoneRevealDate}
                     timeValue={custPhoneRevealTime}
-                    onDateChange={(v) => { setCustPhoneRevealTouched(true); setCustPhoneRevealDate(v); }}
-                    onTimeChange={(v) => { setCustPhoneRevealTouched(true); setCustPhoneRevealTime(v); }}
-                    datePlaceholder="Auto (YYYY-MM-DD)"
-                    timePlaceholder="Auto (HH:MM)"
+                    onDateChange={setCustPhoneRevealDate}
+                    onTimeChange={setCustPhoneRevealTime}
+                    datePlaceholder="Date"
+                    timePlaceholder="Time"
                   />
                 </View>
               )}
             </View>
 
-            <Text style={styles.fieldLabel}>Keep Booking Live Until (optional)</Text>
-            <Text style={[styles.hint, { marginBottom: 8 }]}>Auto-cancels if unaccepted by this time. Leave blank to use the automatic default: pickup time + 15 minutes.</Text>
-            <DateTimeField
-              dateLabel="Live Until Date"
-              timeLabel="Live Until Time"
-              dateValue={liveUntilDate}
-              timeValue={liveUntilTime}
-              onDateChange={setLiveUntilDate}
-              onTimeChange={setLiveUntilTime}
-              datePlaceholder="Auto"
-              timePlaceholder="Auto"
-            />
-
-            <TouchableOpacity
-              style={[styles.modalSaveButton, { marginTop: 24, marginBottom: 24 }]}
-              onPress={() => setShowBookingConfigModal(false)}
-            >
-              <Text style={styles.modalSaveButtonText}>Save Configuration</Text>
-            </TouchableOpacity>
+            {/* 3. How long the booking stays open */}
+            <View style={[styles.ruleCard, cardShell]}>
+              <View style={styles.ruleHead}>
+                <View style={[styles.pickIcon, badgeShell]}>
+                  <Clock size={16} color={themeColors.primary} />
+                </View>
+                <Text style={[styles.ruleTitle, { color: themeColors.text }]}>Keep booking open until</Text>
+                {tip(
+                  'Keep booking open until',
+                  'If nobody accepts by this time, the booking is cancelled automatically.\n\nLeft on Auto, that is the pickup time + 15 minutes.',
+                )}
+                {(!!liveUntilDate || !!liveUntilTime) && (
+                  <TouchableOpacity onPress={() => { setLiveUntilDate(''); setLiveUntilTime(''); }} accessibilityLabel="Back to automatic">
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Auto</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <DateTimeField
+                dateLabel="Date"
+                timeLabel="Time"
+                dateValue={liveUntilDate}
+                timeValue={liveUntilTime}
+                onDateChange={setLiveUntilDate}
+                onTimeChange={setLiveUntilTime}
+                datePlaceholder="Auto"
+                timePlaceholder="Auto"
+              />
+            </View>
           </ScrollView>
+
+          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: themeColors.border, backgroundColor: themeColors.surface }}>
+            <TouchableOpacity style={styles.modalSaveButton} onPress={() => setShowBookingConfigModal(false)}>
+              <Text style={styles.modalSaveButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
 
@@ -3483,6 +3533,50 @@ export default function CreateBookingScreen() {
         initialValue={activeLocationIndex !== null ? (stops[activeLocationIndex] || '') : ''}
       />
 
+      {/* Explanation popup behind every (i) dot */}
+      <Modal visible={!!helpTip} transparent animationType="fade" onRequestClose={() => setHelpTip(null)}>
+        <TouchableOpacity style={styles.dialogBackdrop} activeOpacity={1} onPress={() => setHelpTip(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.dialogCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text, marginBottom: 8 }}>{helpTip?.title}</Text>
+            <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.textSecondary }}>{helpTip?.text}</Text>
+            <TouchableOpacity style={[styles.modalSaveButton, { marginTop: 16, paddingVertical: 11 }]} onPress={() => setHelpTip(null)}>
+              <Text style={styles.modalSaveButtonText}>OK</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* "Allocate manually": the fleet owner's wallet is too low - offer credit */}
+      <Modal visible={!!creditPrompt} transparent animationType="fade" onRequestClose={() => setCreditPrompt(null)}>
+        <View style={styles.dialogBackdrop}>
+          <View style={[styles.dialogCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: themeColors.text, marginBottom: 8 }}>Wallet is low</Text>
+            <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.textSecondary }}>
+              {allocateTarget?.full_name || 'This fleet owner'} has ₹{(creditPrompt?.wallet_balance ?? 0).toLocaleString('en-IN')} in the wallet. This booking needs ₹{(creditPrompt?.required_amount ?? 0).toLocaleString('en-IN')} commission.
+            </Text>
+            <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.textSecondary, marginTop: 8 }}>
+              Allocate on credit: nothing is taken now. ₹{(creditPrompt?.required_amount ?? 0).toLocaleString('en-IN')} is deducted when the trip completes, so the wallet can go below zero. It is recorded with your name for the owner.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                style={[styles.modalSaveButton, { flex: 1, paddingVertical: 11, backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.border }]}
+                onPress={() => setCreditPrompt(null)}
+                disabled={confirming}
+              >
+                <Text style={[styles.modalSaveButtonText, { color: themeColors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveButton, { flex: 1.4, paddingVertical: 11 }, confirming && { opacity: 0.6 }]}
+                onPress={() => handleConfirm(true)}
+                disabled={confirming}
+              >
+                {confirming ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.modalSaveButtonText}>Allocate on credit</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Target City Selection Modal */}
       <Modal
         visible={showTargetCityModal}
@@ -3492,11 +3586,9 @@ export default function CreateBookingScreen() {
       >
         <SafeAreaView style={[styles.pickerModalContainer, { backgroundColor: themeColors.surface }]}>
           <View style={[styles.pickerModalHeader, { borderBottomColor: themeColors.border }]}>
-            <View>
-              <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Select Target Cities</Text>
-              <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2 }}>
-                {nearCities.length} cities selected for targeted broadcast
-              </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Target cities</Text>
+
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {nearCities.length > 0 && (
@@ -3522,21 +3614,19 @@ export default function CreateBookingScreen() {
           </View>
 
           <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <View style={[styles.searchRow, { marginBottom: 4 }]}>
-              <Search size={16} color={themeColors.textSecondary} style={{ marginLeft: 10 }} />
+            <View style={[styles.searchBox, { backgroundColor: themeColors.background, borderColor: themeColors.border }]}>
+              <Search size={16} color={themeColors.textSecondary} />
               <TextInput
-                style={[styles.searchInput, { backgroundColor: themeColors.background, color: themeColors.text }]}
-                placeholder="Search city (e.g. Chennai, Madurai, Coimbatore)..."
+                style={{ flex: 1, minWidth: 0, fontSize: 14, color: themeColors.text, paddingVertical: 0, outlineStyle: 'none' } as any}
+                placeholder="Search city"
                 value={targetCitySearch}
                 onChangeText={setTargetCitySearch}
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
+                accessibilityLabel="Search city"
               />
               {targetCitySearch.length > 0 && (
-                <TouchableOpacity
-                  style={{ justifyContent: 'center', paddingHorizontal: 8 }}
-                  onPress={() => setTargetCitySearch('')}
-                >
+                <TouchableOpacity onPress={() => setTargetCitySearch('')} accessibilityLabel="Clear search">
                   <X size={18} color={themeColors.textSecondary} />
                 </TouchableOpacity>
               )}
@@ -3544,29 +3634,27 @@ export default function CreateBookingScreen() {
           </View>
 
           <ScrollView style={styles.pickerModalContent} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
-            {/* Quick Popular Chips inside Modal */}
-            <Text style={[styles.fieldSubLabel, { marginTop: 4, marginBottom: 8 }]}>Popular Hubs</Text>
-            <View style={[styles.chipRow, { marginBottom: 16 }]}>
-              {['Chennai', 'Bengaluru', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Munnar', 'Ooty', 'Hosur', 'Pondicherry'].map((city) => {
-                const isSelected = nearCities.includes(city);
-                return (
-                  <TouchableOpacity
-                    key={city}
-                    style={[styles.chip, isSelected && styles.chipActive, { paddingVertical: 6, paddingHorizontal: 12 }]}
-                    onPress={() => {
-                      if (isSelected) removeNearCity(city);
-                      else addNearCity(city);
-                    }}
-                  >
-                    <Text style={[styles.chipText, isSelected && styles.chipTextActive, { fontSize: 12.5 }]}>
-                      {isSelected ? `✓ ${city}` : `+ ${city}`}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {/* Cities already added - on top; tap one to remove it */}
+            {nearCities.length > 0 && (
+              <>
+                <Text style={[styles.fieldSubLabel, { marginTop: 4, marginBottom: 8 }]}>Added ({nearCities.length}) - tap to remove</Text>
+                <View style={[styles.chipRow, { marginBottom: 16 }]}>
+                  {nearCities.map((city) => (
+                    <TouchableOpacity
+                      key={city}
+                      style={[styles.chip, styles.chipActive, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12 }]}
+                      onPress={() => removeNearCity(city)}
+                      accessibilityLabel={`Remove ${city}`}
+                    >
+                      <Text style={[styles.chipText, styles.chipTextActive, { fontSize: 12.5 }]}>{city}</Text>
+                      <X size={13} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
-            <Text style={[styles.fieldSubLabel, { marginBottom: 8 }]}>All Serviceable Cities ({cityOptions.length})</Text>
+            <Text style={[styles.fieldSubLabel, { marginBottom: 8 }]}>All cities ({cityOptions.length})</Text>
             {(() => {
               const q = targetCitySearch.trim().toLowerCase();
               const filtered = cityOptions.filter((c) => c.toLowerCase().includes(q));
@@ -3633,7 +3721,7 @@ export default function CreateBookingScreen() {
               onPress={() => setShowTargetCityModal(false)}
             >
               <Text style={styles.modalSaveButtonText}>
-                Done ({nearCities.length} {nearCities.length === 1 ? 'City' : 'Cities'} Selected)
+                Done ({nearCities.length} {nearCities.length === 1 ? 'city' : 'cities'})
               </Text>
             </TouchableOpacity>
           </View>
@@ -3717,15 +3805,61 @@ const styles = StyleSheet.create({
   // light/dark toggle (values captured here in StyleSheet.create are
   // frozen at module load and would not update otherwise).
   sectionCard: {
-    borderRadius: 8, padding: 18, marginTop: 14, borderWidth: 1,
+    borderRadius: 8, padding: 14, marginTop: 10, borderWidth: 1,
     shadowColor: '#0F172A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  // Compact form pieces (2026-10-01): side-by-side pickers, one-row fields,
+  // the (i) dot, option tiles and the quote card.
+  pickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  pickCell: {
+    flex: 1, minWidth: 150, flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  pickIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  pickLabel: { fontSize: 11, fontWeight: '600' },
+  pickValue: { fontSize: 14, fontWeight: '700', marginTop: 1 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  inlineField: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  tipDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  smallBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1,
+  },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, height: 44,
+  },
+  ruleCard: { borderRadius: 8, borderWidth: 1, padding: 14, marginBottom: 12 },
+  ruleHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  ruleTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
+  optGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  optTile: {
+    flexGrow: 1, flexBasis: '46%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  optText: { fontSize: 13, fontWeight: '700' },
+  quoteRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 },
+  quoteLabel: { fontSize: 13, fontWeight: '600', flex: 1 },
+  quoteValue: { fontSize: 13.5, fontWeight: '700' },
+  quoteValueStrong: { fontSize: 15, fontWeight: '800' },
+  quoteSub: { fontSize: 11.5 },
+  quoteToggle: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8,
+  },
+  quoteList: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8 },
+  quoteListRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
+  quoteListText: { fontSize: 12.5 },
+  cashBox: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 12 },
+  dialogBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  dialogCard: { width: '100%', maxWidth: 420, borderRadius: 10, borderWidth: 1, padding: 18 },
   iconBadge: {
     width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center',
     marginRight: 10, borderWidth: 1,
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  sectionTitleInline: { fontSize: 15, fontWeight: '700', marginRight: 6 },
   cardGroupLabel: { fontSize: 11.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 16, marginBottom: 8 },
   summaryCardTouchable: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

@@ -80,6 +80,28 @@ def apply_distance_override(
     return new_fare
 
 
+def apply_min_km_override(
+    fare: Dict[str, Any],
+    min_km: Optional[float],
+    cost_per_km: int,
+    extra_cost_per_km: int,
+) -> Dict[str, Any]:
+    """Admin edited this booking's minimum billable km. Billed km becomes
+    max(actual route km, min_km); only the km-driven amounts change (same
+    arithmetic as apply_distance_override). remark_trip_min_km keeps meaning
+    "actual km when a minimum was applied" (0 when billed on actual km)."""
+    if min_km is None:
+        return fare
+    actual = float(fare.get("remark_trip_min_km") or fare["total_km"])
+    billed = max(actual, float(min_km))
+    if round(billed) == round(float(fare["total_km"])):
+        return fare
+    new_fare = apply_distance_override(fare, billed, None, cost_per_km, extra_cost_per_km)
+    new_fare["calculated_km"] = actual
+    new_fare["remark_trip_min_km"] = actual if billed > actual else 0
+    return new_fare
+
+
 def _origin_and_destination_from_index_map(index_map: Dict[str, str]) -> (str, str):
     # keys are numeric-like strings: '0', '1', ...
     sorted_keys = sorted(index_map.keys(), key=lambda k: int(k))
@@ -362,6 +384,8 @@ def create_oneway_order(
     waiting_hours_included: int | None = None,
     commission_waived: bool = False,
     posted_by_vehicle_owner_id: str | None = None,
+    gst_amount: int | None = None,
+    skip_broadcast: bool = False,
 ) -> Tuple[NewOrder, int]:
     if priority_for_paid and priority_cutoff_at is None:
         priority_cutoff_at = _default_priority_cutoff(start_date_time)
@@ -380,8 +404,12 @@ def create_oneway_order(
         vendor_cal_price = int(total_booking_amount) + int(extra_amount)
 
     is_gst_included = False
+    gst_amount_value = None
     if charge_items and any(c.get('included') and 'gst' in str(c.get('label', '')).lower() for c in charge_items if isinstance(c, dict)):
         is_gst_included = True
+        gst_amount_value = int(gst_amount) if gst_amount else None
+        if gst_amount_value is None:
+            gst_amount_value = int(round(0.05 * float(trip_distance or 0) * (int(cost_per_km or 0) + int(extra_cost_per_km or 0))))
 
     new_order = NewOrder(
         vendor_id=vendor_id,
@@ -421,6 +449,7 @@ def create_oneway_order(
         fare_type = fare_type,
         charge_items = charge_items,
         gst_included = is_gst_included,
+        gst_amount = gst_amount_value,
         advance_received = advance_received,
         total_booking_amount = total_booking_amount,
         extra_amount = extra_amount,
@@ -432,7 +461,7 @@ def create_oneway_order(
     db.commit()
     db.refresh(new_order)
     # Also create/refresh master order row
-    master_order = create_master_from_new_order(db, new_order, max_time_to_assign_order, toll_charge_update, night_charges=night_charges, acceptance_deadline=acceptance_deadline)
+    master_order = create_master_from_new_order(db, new_order, max_time_to_assign_order, toll_charge_update, night_charges=night_charges, acceptance_deadline=acceptance_deadline, skip_broadcast=skip_broadcast)
 
     if is_gst_included:
         try:

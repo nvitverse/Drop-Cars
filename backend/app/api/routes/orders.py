@@ -462,157 +462,29 @@ async def manual_assign_order(
     If force_credit is True, proceeds with assignment and records a negative balance debit.
     """
     from app.models.orders import Order
-    from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
-    from app.models.vehicle_owner_details import VehicleOwnerDetails
-    from app.models.car_driver import CarDriver
-    from app.crud.wallet import get_owner_balance, debit_wallet, debit_wallet_allow_negative
-    from app.models.new_orders import NewOrder
+    from app.crud.manual_allocation import find_fleet_owner, allocate_to_fleet_owner
 
     target = payload.target_id.strip()
     if not target:
         raise HTTPException(status_code=400, detail="Please provide a target Fleet Owner or Driver ID")
 
-    # 1. Fetch order
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    # 2. Resolve target_id to vehicle_owner_id
-    vehicle_owner = db.query(VehicleOwnerDetails).filter(
-        (VehicleOwnerDetails.vehicle_owner_id == target) |
-        (VehicleOwnerDetails.primary_number == target) |
-        (VehicleOwnerDetails.vacant_driver_id == target)
-    ).first()
-
-    if not vehicle_owner:
-        driver = db.query(CarDriver).filter(
-            (CarDriver.id == target) |
-            (CarDriver.phone_number == target) |
-            (CarDriver.reg_id == target)
-        ).first()
-        if driver and driver.vehicle_owner_id:
-            vehicle_owner = db.query(VehicleOwnerDetails).filter(
-                VehicleOwnerDetails.vehicle_owner_id == str(driver.vehicle_owner_id)
-            ).first()
-
+    vehicle_owner = find_fleet_owner(db, target)
     if not vehicle_owner:
         raise HTTPException(
             status_code=404,
             detail=f"Fleet Owner or Driver with ID/Phone '{target}' not found."
         )
 
-    target_vo_id = str(vehicle_owner.vehicle_owner_id)
-
-    # 3. Calculate required commission hold amount
-    hold_amount = 0
-    if order.source == "NEW_ORDERS":
-        new_order_row = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
-        if new_order_row:
-            hold_amount = round(
-                (order.vendor_price - order.estimated_price)
-                + (((new_order_row.cost_per_km or 0) * (new_order_row.trip_distance or 0)) * 10 / 100)
-            )
-    else:
-        hold_amount = int((order.vendor_price or 0) - (order.estimated_price or 0))
-
-    if hold_amount < 0:
-        hold_amount = 0
-
-    # 4. Check wallet balance
-    current_balance = get_owner_balance(db, target_vo_id)
-    if current_balance < hold_amount and not payload.force_credit:
-        return {
-            "status": "INSUFFICIENT_BALANCE",
-            "requires_credit_approval": True,
-            "wallet_balance": current_balance,
-            "required_amount": hold_amount,
-            "target_vehicle_owner_id": target_vo_id,
-            "message": f"Driver wallet balance is low (₹{current_balance}). Required amount is ₹{hold_amount}."
-        }
-
-    # 5. Create or update OrderAssignment
-    # AssignmentStatusEnum has no ACCEPTED member (PENDING/ASSIGNED/CANCELLED/
-    # COMPLETED/DRIVING only). This is the same "claim it for this fleet
-    # owner" step as accept_order (create_order_assignment also starts at
-    # PENDING) - a specific driver+car still isn't known yet, so it's not
-    # ASSIGNED until the fleet owner later picks one via assign_car_driver.
-    # `assigned_by` records that this claim was forced by an admin rather
-    # than accepted by the fleet owner themselves, for the "Accepted" vs
-    # "Allocated" distinction in the UI.
-    assignment = db.query(OrderAssignment).filter(OrderAssignment.order_id == order_id).first()
-    if assignment:
-        assignment.vehicle_owner_id = target_vo_id
-        assignment.assignment_status = AssignmentStatusEnum.PENDING
-        assignment.assigned_by = "ADMIN"
-        assignment.held_amount = hold_amount
-    else:
-        assignment = OrderAssignment(
-            order_id=order_id,
-            vehicle_owner_id=target_vo_id,
-            assignment_status=AssignmentStatusEnum.PENDING,
-            assigned_by="ADMIN",
-            held_amount=hold_amount,
-            accepted_tier=getattr(vehicle_owner, "tier", "STANDARD"),
-        )
-        db.add(assignment)
-
-    # 6. Debit wallet
-    if hold_amount > 0:
-        if payload.force_credit:
-            debit_wallet_allow_negative(
-                db,
-                vehicle_owner_id=target_vo_id,
-                amount=hold_amount,
-                reference_id=str(order.id),
-                reference_type="TRIP_HOLD_MANUAL_CREDIT",
-                notes=f"Manual direct assignment credit debit for Booking ID {order.id}",
-            )
-        else:
-            debit_wallet(
-                db,
-                vehicle_owner_id=target_vo_id,
-                amount=hold_amount,
-                reference_id=str(order.id),
-                reference_type="TRIP_HOLD",
-                notes=f"Held (not final) for Booking ID {order.id} - refunded if it is cancelled; any unused part is returned when the trip completes",
-            )
-
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail=f"Booking #{order_id} has already been accepted/assigned to another fleet owner."
-        )
-
-    # 7. Push notification
-    try:
-        from app.models.notification import Notification
-        user_notif = db.query(Notification).filter(
-            Notification.user == "vehicle_owner",
-            Notification.sub == target_vo_id
-        ).first()
-        if user_notif and user_notif.token:
-            from app.crud.notification import _post_expo_payloads_sync
-            from app.utils.notification_settings import apply_notification_extras
-            _post_expo_payloads_sync([apply_notification_extras({
-                "to": user_notif.token,
-                "title": "Booking Directly Assigned!",
-                "body": f"Booking ID #{order_id} has been manually assigned to you by the vendor.",
-                "sound": "default",
-                "priority": "high",
-                "data": {"order_id": order_id},
-            }, db, "booking_directly_assigned")])
-    except Exception as e:
-        print(f"Failed to push manual assignment notification: {e}")
-
-    return {
-        "status": "SUCCESS",
-        "message": f"Booking ID #{order_id} successfully assigned to Fleet/Driver ID {target_vo_id}!",
-        "assignment_id": assignment.id,
-        "wallet_balance_after": get_owner_balance(db, target_vo_id)
-    }
+    # Allocation (wallet hold, or "on credit" when the wallet is too low - the
+    # commission is then debited at trip completion), the Owner-visible
+    # activity log entry and the pushes all live in crud/manual_allocation.py.
+    return allocate_to_fleet_owner(
+        db, order, vehicle_owner, on_credit=payload.force_credit, assigned_by="ADMIN", staff=current_admin,
+    )
 
 
 @router.post("/{order_id}/vendor-assign")
@@ -632,153 +504,32 @@ async def vendor_assign_order(
     "VENDOR" so the UI can show "Allocated" instead of "Accepted".
     """
     from app.models.orders import Order
-    from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
-    from app.models.vehicle_owner_details import VehicleOwnerDetails
-    from app.models.car_driver import CarDriver
-    from app.crud.wallet import get_owner_balance, debit_wallet, debit_wallet_allow_negative
-    from app.models.new_orders import NewOrder
+    from app.crud.manual_allocation import find_fleet_owner, allocate_to_fleet_owner
 
     target = payload.target_id.strip()
     if not target:
         raise HTTPException(status_code=400, detail="Please provide a target Fleet Owner or Driver ID")
 
-    # 1. Fetch order - must belong to this vendor
+    # Must belong to this vendor
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Booking not found")
     if str(order.vendor_id) != str(current_vendor.id):
         raise HTTPException(status_code=403, detail="This booking does not belong to you")
 
-    # 2. Resolve target_id to vehicle_owner_id (same lookup as manual_assign_order)
-    vehicle_owner = db.query(VehicleOwnerDetails).filter(
-        (VehicleOwnerDetails.vehicle_owner_id == target) |
-        (VehicleOwnerDetails.primary_number == target) |
-        (VehicleOwnerDetails.vacant_driver_id == target)
-    ).first()
-
-    if not vehicle_owner:
-        driver = db.query(CarDriver).filter(
-            (CarDriver.id == target) |
-            (CarDriver.phone_number == target) |
-            (CarDriver.reg_id == target)
-        ).first()
-        if driver and driver.vehicle_owner_id:
-            vehicle_owner = db.query(VehicleOwnerDetails).filter(
-                VehicleOwnerDetails.vehicle_owner_id == str(driver.vehicle_owner_id)
-            ).first()
-
+    vehicle_owner = find_fleet_owner(db, target)
     if not vehicle_owner:
         raise HTTPException(
             status_code=404,
             detail=f"Fleet Owner or Driver with ID/Phone '{target}' not found."
         )
 
-    target_vo_id = str(vehicle_owner.vehicle_owner_id)
-
-    # 3. Calculate required commission hold amount
-    hold_amount = 0
-    if order.source == "NEW_ORDERS":
-        new_order_row = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
-        if new_order_row:
-            hold_amount = round(
-                (order.vendor_price - order.estimated_price)
-                + (((new_order_row.cost_per_km or 0) * (new_order_row.trip_distance or 0)) * 10 / 100)
-            )
-    else:
-        hold_amount = int((order.vendor_price or 0) - (order.estimated_price or 0))
-
-    if hold_amount < 0:
-        hold_amount = 0
-
-    # 4. Check wallet balance
-    current_balance = get_owner_balance(db, target_vo_id)
-    if current_balance < hold_amount and not payload.force_credit:
-        return {
-            "status": "INSUFFICIENT_BALANCE",
-            "requires_credit_approval": True,
-            "wallet_balance": current_balance,
-            "required_amount": hold_amount,
-            "target_vehicle_owner_id": target_vo_id,
-            "message": f"Driver wallet balance is low (₹{current_balance}). Required amount is ₹{hold_amount}."
-        }
-
-    # 5. Create or update OrderAssignment - PENDING (claimed, driver+car not
-    # yet chosen - same as accept_order's create_order_assignment).
-    assignment = db.query(OrderAssignment).filter(OrderAssignment.order_id == order_id).first()
-    if assignment:
-        assignment.vehicle_owner_id = target_vo_id
-        assignment.assignment_status = AssignmentStatusEnum.PENDING
-        assignment.assigned_by = "VENDOR"
-        assignment.held_amount = hold_amount
-    else:
-        assignment = OrderAssignment(
-            order_id=order_id,
-            vehicle_owner_id=target_vo_id,
-            assignment_status=AssignmentStatusEnum.PENDING,
-            assigned_by="VENDOR",
-            held_amount=hold_amount,
-            accepted_tier=getattr(vehicle_owner, "tier", "STANDARD"),
-        )
-        db.add(assignment)
-
-    # 6. Debit wallet
-    if hold_amount > 0:
-        if payload.force_credit:
-            debit_wallet_allow_negative(
-                db,
-                vehicle_owner_id=target_vo_id,
-                amount=hold_amount,
-                reference_id=str(order.id),
-                reference_type="TRIP_HOLD_MANUAL_CREDIT",
-                notes=f"Vendor direct assignment credit debit for Booking ID {order.id}",
-            )
-        else:
-            debit_wallet(
-                db,
-                vehicle_owner_id=target_vo_id,
-                amount=hold_amount,
-                reference_id=str(order.id),
-                reference_type="TRIP_HOLD",
-                notes=f"Held (not final) for Booking ID {order.id} - refunded if it is cancelled; any unused part is returned when the trip completes",
-            )
-
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail=f"Booking #{order_id} has already been accepted/assigned to another fleet owner."
-        )
-
-    # 7. Push notification
-    try:
-        from app.models.notification import Notification
-        user_notif = db.query(Notification).filter(
-            Notification.user == "vehicle_owner",
-            Notification.sub == target_vo_id
-        ).first()
-        if user_notif and user_notif.token:
-            from app.crud.notification import _post_expo_payloads_sync
-            from app.utils.notification_settings import apply_notification_extras
-            _post_expo_payloads_sync([apply_notification_extras({
-                "to": user_notif.token,
-                "title": "Booking Directly Assigned!",
-                "body": f"Booking ID #{order_id} has been directly assigned to you by the vendor.",
-                "sound": "default",
-                "priority": "high",
-                "data": {"order_id": order_id},
-            }, db, "booking_directly_assigned")])
-    except Exception as e:
-        print(f"Failed to push vendor assignment notification: {e}")
-
-    return {
-        "status": "SUCCESS",
-        "message": f"Booking ID #{order_id} successfully assigned to {vehicle_owner.full_name}!",
-        "assignment_id": assignment.id,
-        "target_name": vehicle_owner.full_name,
-        "wallet_balance_after": get_owner_balance(db, target_vo_id)
-    }
+    # Credit allocation is admin-only: a vendor's force_credit is ignored, so a
+    # low wallet always comes back as INSUFFICIENT_BALANCE.
+    result = allocate_to_fleet_owner(db, order, vehicle_owner, on_credit=False, assigned_by="VENDOR")
+    if result.get("status") == "SUCCESS":
+        result["target_name"] = vehicle_owner.full_name
+    return result
 
 
 class AdminCancelOrderRequest(BaseModel):

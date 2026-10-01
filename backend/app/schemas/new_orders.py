@@ -254,6 +254,13 @@ class OnewayQuoteRequest(BaseModel):
     # Round Trip "return" date+time / Multi City "drop" date+time. Not used
     # by Oneway/Hourly. Defaults client-side to the start date at 9:30 PM.
     end_date_time: Optional[datetime] = None
+    # Admin "Post booking": the minimum billable km for THIS booking (default
+    # comes from Fare Rules: 130 oneway, 250/day round trip). Billed km =
+    # max(actual route km, this). Only honoured for admin callers.
+    min_km_override: Optional[float] = Field(default=None, ge=0, le=10000)
+    # GST amount the admin saw on the form (auto 5% of the km fare, or typed).
+    # Saved with the booking when its GST charge item is ticked.
+    gst_amount: Optional[int] = Field(default=None, ge=0)
     customer_name: str
     customer_number: str
     cost_per_km: Optional[int] = 0

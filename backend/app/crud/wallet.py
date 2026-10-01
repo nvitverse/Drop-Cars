@@ -75,7 +75,11 @@ def get_trip_hold(db: Session, order_id: int, vehicle_owner_id: str) -> int:
     hold = db.query(WalletLedger).filter(
         WalletLedger.vehicle_owner_id == vehicle_owner_id,
         WalletLedger.reference_id == str(order_id),
-        WalletLedger.reference_type == "TRIP_HOLD",
+        # TRIP_HOLD_MANUAL_CREDIT: the old "force credit" allocation debited
+        # the hold up front under this type. It was not counted here, so the
+        # commission was taken a second time at trip completion and never
+        # refunded on cancel. New credit allocations take nothing up front.
+        WalletLedger.reference_type.in_(["TRIP_HOLD", "TRIP_HOLD_MANUAL_CREDIT"]),
     ).first()
     if not hold:
         return 0
