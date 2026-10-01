@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -40,17 +40,88 @@ import {
   MessageCircle,
   QrCode,
   Receipt,
+  Plus,
+  Building2,
+  Layers,
+  ChevronDown,
 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import LocationPickerModal from '@/components/LocationPickerModal';
-import { colors } from '@/constants/theme';
-import { enquiriesApi } from '@/services/enquiriesApi';
+import DateTimeField from '@/components/DateTimeField';
+import { colors, shadows } from '@/constants/theme';
+import { enquiriesApi, WEBSITE_BRANDS } from '@/services/enquiriesApi';
 import { generateEstimationHtml, InvoiceData } from '@/utils/invoiceGenerator';
 
-type TripType = 'oneway' | 'roundtrip' | 'local' | 'multicity';
+export interface BrandInfo {
+  id: string;
+  name: string;
+  domain: string;
+  phone: string;
+  primaryColor: string;
+  tagline: string;
+}
 
-interface VehicleOption {
+export const BRAND_CONFIGS: BrandInfo[] = [
+  {
+    id: 'dropcars',
+    name: 'Drop Cars',
+    domain: 'dropcars.in',
+    phone: '9043990439',
+    primaryColor: '#0EA5E9',
+    tagline: 'Standard & Premium Taxis',
+  },
+  {
+    id: 'arunachala',
+    name: 'Arunachala Travels',
+    domain: 'arunachalatravels.in',
+    phone: '9043990439',
+    primaryColor: '#8B5CF6',
+    tagline: 'Tempo Traveller & Urbania Specialist',
+  },
+  {
+    id: '24droptaxi',
+    name: '24 Drop Taxi',
+    domain: '24drop-taxi.in',
+    phone: '9043990439',
+    primaryColor: '#3B82F6',
+    tagline: 'One Way & Outstation Cabs',
+  },
+  {
+    id: 'tatataxi',
+    name: 'Tata Taxi',
+    domain: 'tatataxi.in',
+    phone: '9043990439',
+    primaryColor: '#F59E0B',
+    tagline: 'Reliable Outstation Fleet',
+  },
+  {
+    id: 'tatacalltaxi',
+    name: 'Tata Call Taxi',
+    domain: 'tatacalltaxi.in',
+    phone: '9043990439',
+    primaryColor: '#10B981',
+    tagline: '24x7 City & Outstation',
+  },
+  {
+    id: 'yellowboard',
+    name: 'Yellow Board',
+    domain: 'yellowboard.in',
+    phone: '9043990439',
+    primaryColor: '#EAB308',
+    tagline: 'Commercial Fleet',
+  },
+  {
+    id: 'mukiltravels',
+    name: 'Mukil Travels',
+    domain: 'mukiltravels.in',
+    phone: '9043990439',
+    primaryColor: '#EC4899',
+    tagline: 'Tour & Travel Packages',
+  },
+];
+
+export interface VehicleOption {
   id: string;
   name: string;
   model: string;
@@ -64,7 +135,8 @@ interface VehicleOption {
   color: string;
 }
 
-const VEHICLES: VehicleOption[] = [
+// Fleet for Drop Cars & Standard Taxi Brands
+export const STANDARD_VEHICLES: VehicleOption[] = [
   {
     id: 'sedan',
     name: 'Sedan',
@@ -132,6 +204,75 @@ const VEHICLES: VehicleOption[] = [
   },
 ];
 
+// Fleet for Arunachala Travels (Tempo Traveller & Force Urbania specialist)
+export const ARUNACHALA_VEHICLES: VehicleOption[] = [
+  {
+    id: 'tt_12',
+    name: 'Tempo Traveller 12 Seater (TT 12)',
+    model: 'Force Tempo Traveller AC (12+1)',
+    seats: '12 + 1 Seats',
+    luggage: '8 Large Bags',
+    ratePerKm: 22,
+    minKmOneway: 250,
+    minKmRoundtrip: 250,
+    driverBata: 600,
+    tag: 'POPULAR',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'tt_18',
+    name: 'Tempo Traveller 18 Seater (TT 18)',
+    model: 'Force Tempo Traveller AC (18+1)',
+    seats: '18 + 1 Seats',
+    luggage: '12 Large Bags',
+    ratePerKm: 26,
+    minKmOneway: 300,
+    minKmRoundtrip: 300,
+    driverBata: 700,
+    tag: 'LARGE GROUP',
+    color: '#6366F1',
+  },
+  {
+    id: 'urbania_12',
+    name: 'Force Urbania (12 str)',
+    model: 'Next-Gen Luxury Urbania (12+1)',
+    seats: '12 + 1 Luxury Recliners',
+    luggage: '8 Bags',
+    ratePerKm: 30,
+    minKmOneway: 300,
+    minKmRoundtrip: 300,
+    driverBata: 800,
+    tag: 'LUXURY',
+    color: '#EC4899',
+  },
+  {
+    id: 'urbania_16',
+    name: 'Force Urbania (16 str)',
+    model: 'Next-Gen Luxury Urbania (16+1)',
+    seats: '16 + 1 Luxury Recliners',
+    luggage: '10 Bags',
+    ratePerKm: 34,
+    minKmOneway: 300,
+    minKmRoundtrip: 300,
+    driverBata: 800,
+    tag: 'PREMIUM',
+    color: '#D946EF',
+  },
+  {
+    id: 'urbania_18',
+    name: 'Force Urbania (18 str)',
+    model: 'Next-Gen VIP Urbania (18+1)',
+    seats: '18 + 1 Luxury Recliners',
+    luggage: '12 Bags',
+    ratePerKm: 38,
+    minKmOneway: 300,
+    minKmRoundtrip: 300,
+    driverBata: 900,
+    tag: 'VIP LUXURY',
+    color: '#A855F7',
+  },
+];
+
 const POPULAR_CITIES = [
   'Chennai',
   'Bangalore',
@@ -141,9 +282,10 @@ const POPULAR_CITIES = [
   'Salem',
   'Pondicherry',
   'Tirunelveli',
+  'Vellore',
+  'Tirupati',
 ];
 
-// Distance lookup table for key South India hub pairs
 const DISTANCE_MATRIX: Record<string, Record<string, number>> = {
   chennai: {
     bangalore: 350,
@@ -164,6 +306,7 @@ const DISTANCE_MATRIX: Record<string, Record<string, number>> = {
     salem: 205,
     trichy: 340,
     pondicherry: 310,
+    vellore: 215,
   },
   coimbatore: {
     chennai: 510,
@@ -203,12 +346,10 @@ function getCityEstimatedDistance(fromCity: string, toCity: string): number {
   if (DISTANCE_MATRIX[t] && DISTANCE_MATRIX[t][f]) {
     return DISTANCE_MATRIX[t][f];
   }
-  // Default regional estimate if both are non-empty
   if (f && t && f !== t) return 250;
   return 150;
 }
 
-// Generates reference Enquiry ID in format: E + YYMMDD + 2-digit serial/random (e.g. E26092202)
 function generateEnquiryRefId(): string {
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
@@ -225,16 +366,47 @@ export default function QuoteEstimateScreen() {
   // Step 1 = Form, Step 2 = Estimate Result
   const [currentStep, setCurrentStep] = useState<'form' | 'result'>('form');
 
-  // Form States
-  const [tripType, setTripType] = useState<TripType>('oneway');
+  // Brand Selector
+  const [selectedBrand, setSelectedBrand] = useState<BrandInfo>(BRAND_CONFIGS[0]);
+  const [showBrandPickerModal, setShowBrandPickerModal] = useState(false);
+
+  const isArunachala = selectedBrand.id === 'arunachala' || selectedBrand.domain.includes('arunachala');
+
+  // Trip Types
+  // Arunachala: Drop Trip (with stops), Round Trip, Local Rental
+  // Others: One Way, Round Trip, Local / Hourly, Multi City
+  const [tripType, setTripType] = useState<string>('oneway');
+
+  // Vehicles list based on brand
+  const vehicleList = isArunachala ? ARUNACHALA_VEHICLES : STANDARD_VEHICLES;
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleOption>(STANDARD_VEHICLES[0]);
+
+  // When brand changes, reset tripType & vehicle to brand defaults
+  useEffect(() => {
+    if (isArunachala) {
+      if (tripType === 'oneway' || tripType === 'multicity') {
+        setTripType('droptrip');
+      }
+      setSelectedVehicle(ARUNACHALA_VEHICLES[0]);
+    } else {
+      if (tripType === 'droptrip') {
+        setTripType('oneway');
+      }
+      setSelectedVehicle(STANDARD_VEHICLES[0]);
+    }
+  }, [selectedBrand.id]);
+
+  // Route & Stops
   const [pickupCity, setPickupCity] = useState('Chennai');
   const [dropCity, setDropCity] = useState('Madurai');
+  const [stops, setStops] = useState<string[]>([]);
+
+  // Date & Time
   const [travelDate, setTravelDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split('T')[0];
   });
-  const [travelTime, setTravelTime] = useState('09:00 AM');
-  const [selectedVehicle, setSelectedVehicle] = useState<VehicleOption>(VEHICLES[0]);
+  const [travelTime, setTravelTime] = useState('09:00');
   const [distanceKmInput, setDistanceKmInput] = useState('460');
 
   // Customer Contact
@@ -243,9 +415,16 @@ export default function QuoteEstimateScreen() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
 
+  // Add to Leads Checkbox (checked by default as requested)
+  const [addToLeads, setAddToLeads] = useState(true);
+
+  // Rate Overrides (Optional customization)
+  const [customRatePerKm, setCustomRatePerKm] = useState('');
+  const [customDriverBata, setCustomDriverBata] = useState('');
+
   // Location Picker Modal
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [locationPickerTarget, setLocationPickerTarget] = useState<'pickup' | 'drop'>('pickup');
+  const [locationPickerTarget, setLocationPickerTarget] = useState<'pickup' | 'drop' | number>('pickup');
 
   // Generated Estimate State
   const [generatedRefId, setGeneratedRefId] = useState('');
@@ -259,6 +438,8 @@ export default function QuoteEstimateScreen() {
     totalFare: number;
     advanceAmount: number;
     balancePayable: number;
+    billableKm: number;
+    ratePerKm: number;
   } | null>(null);
 
   // PDF & Share Modal State
@@ -267,17 +448,46 @@ export default function QuoteEstimateScreen() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
 
-  // Auto update distance when cities change
+  // Auto calculate estimated distance
+  const recalculateDistance = (pCity: string, dCity: string, currentStops: string[]) => {
+    let base = getCityEstimatedDistance(pCity, dCity);
+    if (currentStops.length > 0) {
+      // Add approx 60km per intermediate via stop if non-empty
+      const validStops = currentStops.filter((s) => s.trim().length > 0);
+      base += validStops.length * 60;
+    }
+    setDistanceKmInput(String(base));
+  };
+
   const handleSelectPickup = (city: string) => {
     setPickupCity(city);
-    const d = getCityEstimatedDistance(city, dropCity);
-    setDistanceKmInput(String(d));
+    recalculateDistance(city, dropCity, stops);
   };
 
   const handleSelectDrop = (city: string) => {
     setDropCity(city);
-    const d = getCityEstimatedDistance(pickupCity, city);
-    setDistanceKmInput(String(d));
+    recalculateDistance(pickupCity, city, stops);
+  };
+
+  const handleAddStop = () => {
+    if (stops.length >= 6) {
+      Alert.alert('Limit Reached', 'Maximum 6 intermediate stops allowed.');
+      return;
+    }
+    const updated = [...stops, ''];
+    setStops(updated);
+  };
+
+  const handleRemoveStop = (idx: number) => {
+    const updated = stops.filter((_, i) => i !== idx);
+    setStops(updated);
+    recalculateDistance(pickupCity, dropCity, updated);
+  };
+
+  const handleUpdateStop = (idx: number, text: string) => {
+    const updated = [...stops];
+    updated[idx] = text;
+    setStops(updated);
   };
 
   // Calculate & Save
@@ -290,23 +500,27 @@ export default function QuoteEstimateScreen() {
       Alert.alert('Drop Required', 'Please enter or select a destination drop city.');
       return;
     }
-    // Allow estimating fare without blocking if customer name is empty
+
     const effectiveCustomerName = customerName.trim() || 'Valued Customer';
     const cleanDigits = customerPhone.replace(/\D/g, '');
 
     const dist = parseInt(distanceKmInput || '0', 10) || getCityEstimatedDistance(pickupCity, dropCity);
-    const effectiveKm = tripType === 'roundtrip' ? dist * 2 : dist;
-    const minKm = tripType === 'roundtrip' ? selectedVehicle.minKmRoundtrip : selectedVehicle.minKmOneway;
+    const isRound = tripType === 'roundtrip';
+    const effectiveKm = isRound ? dist * 2 : dist;
+    const minKm = isRound ? selectedVehicle.minKmRoundtrip : selectedVehicle.minKmOneway;
     const billableKm = Math.max(effectiveKm, minKm);
 
-    const baseFare = billableKm * selectedVehicle.ratePerKm;
-    const driverBata = tripType === 'roundtrip' ? selectedVehicle.driverBata * 2 : selectedVehicle.driverBata;
-    
+    const effectiveRate = parseFloat(customRatePerKm) || selectedVehicle.ratePerKm;
+    const effectiveBata = parseFloat(customDriverBata) || selectedVehicle.driverBata;
+
+    const baseFare = billableKm * effectiveRate;
+    const driverBata = isRound ? effectiveBata * 2 : effectiveBata;
+
     // Toll estimation based on distance
     let tollEstimate = 0;
-    if (dist >= 350) tollEstimate = 550;
-    else if (dist >= 200) tollEstimate = 380;
-    else if (dist >= 100) tollEstimate = 220;
+    if (dist >= 350) tollEstimate = isRound ? 1100 : 550;
+    else if (dist >= 200) tollEstimate = isRound ? 760 : 380;
+    else if (dist >= 100) tollEstimate = isRound ? 440 : 220;
 
     const totalFare = baseFare + driverBata + tollEstimate;
     const advanceAmount = Math.round(totalFare * 0.20);
@@ -317,6 +531,8 @@ export default function QuoteEstimateScreen() {
 
     setCalculationBreakdown({
       distanceKm: dist,
+      billableKm,
+      ratePerKm: effectiveRate,
       baseFare,
       driverBata,
       tollEstimate,
@@ -325,23 +541,35 @@ export default function QuoteEstimateScreen() {
       balancePayable,
     });
 
-    // Automatically Sync/Preserve to Website CRM Enquiries if phone/name provided
-    if (cleanDigits.length >= 10 || customerName.trim()) {
+    // If "Add to leads" is checked, automatically sync/save to Website CRM Leads
+    if (addToLeads && (cleanDigits.length >= 10 || customerName.trim())) {
       setSyncingToWebsite(true);
       try {
+        const stopsNote = stops.filter((s) => s.trim()).length > 0 ? `Via Stops: ${stops.filter((s) => s.trim()).join(', ')}` : '';
+        const tripLabel =
+          tripType === 'droptrip'
+            ? 'Drop Trip (With Stops)'
+            : tripType === 'roundtrip'
+            ? 'Round Trip'
+            : tripType === 'local'
+            ? 'Local Rental'
+            : tripType === 'multicity'
+            ? 'Multi City'
+            : 'One Way';
+
         const res = await enquiriesApi.createLead({
           name: effectiveCustomerName,
           phone: cleanDigits.length >= 10 ? cleanDigits.slice(-10) : '9000000000',
           pickup: pickupCity.trim(),
           drop_location: dropCity.trim(),
-          trip_type: tripType === 'roundtrip' ? 'Round Trip' : tripType === 'local' ? 'Local / Hourly' : 'One Way',
+          trip_type: tripLabel,
           vehicle_type: selectedVehicle.name,
           travel_date: travelDate,
           travel_time: travelTime,
           fare_estimate: totalFare,
           advance_requested: advanceAmount,
-          notes: `[Ref: ${refId}] ${specialNotes ? specialNotes + ' | ' : ''}Auto-synced from Admin App Quote Builder`,
-          website: 'Drop Cars',
+          notes: `[Ref: ${refId}] ${stopsNote ? stopsNote + ' | ' : ''}${specialNotes ? specialNotes + ' | ' : ''}Quoted via ${selectedBrand.name}`,
+          website: selectedBrand.name,
         });
         if (res && res.id) {
           setSyncedEnquiryId(res.id);
@@ -357,27 +585,41 @@ export default function QuoteEstimateScreen() {
   };
 
   // Direct Online Confirmation Link
-  const confirmationUrl = `https://dropcars.in/confirm?ref=${generatedRefId}&phone=${encodeURIComponent(customerPhone)}`;
+  const confirmationUrl = `https://${selectedBrand.domain}/confirm?ref=${generatedRefId}&phone=${encodeURIComponent(customerPhone)}`;
 
   // Formatted WhatsApp Message
   const getWhatsAppMessage = () => {
     if (!calculationBreakdown) return '';
-    return `🚗 *DROP CARS - TRIP ESTIMATION & QUOTE*
+    const brandName = selectedBrand.name.toUpperCase();
+    const tripLabel =
+      tripType === 'droptrip'
+        ? 'Drop Trip'
+        : tripType === 'roundtrip'
+        ? 'Round Trip'
+        : tripType === 'local'
+        ? 'Local Rental / Hourly'
+        : tripType === 'multicity'
+        ? 'Multi City Trip'
+        : 'One Way Trip';
+
+    const stopsText = stops.filter((s) => s.trim()).length > 0 ? `\n• Via Stops: ${stops.filter((s) => s.trim()).join(' ➔ ')}` : '';
+
+    return `🚗 *${brandName} - TRIP ESTIMATION & QUOTE*
 Reference ID: *${generatedRefId}*
 Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
 
-Hello *${customerName || 'Valued Customer'}*, greetings from Drop Cars!
-Here is your requested taxi quotation:
+Hello *${customerName || 'Valued Customer'}*, greetings from *${selectedBrand.name}*!
+Here is your requested trip quotation:
 
-📍 *Journey Details:*
-• Route: ${pickupCity} ➔ ${dropCity}
-• Trip Type: ${tripType === 'roundtrip' ? 'Round Trip' : tripType === 'local' ? 'Local / Hourly' : 'One Way Trip'}
+📍 *Journey Route & Plan:*
+• Route: ${pickupCity} ➔ ${dropCity}${stopsText}
+• Trip Type: ${tripLabel}
 • Vehicle: ${selectedVehicle.name} (${selectedVehicle.model})
 • Travel Date: ${travelDate} at ${travelTime}
-• Estimated Distance: ~${calculationBreakdown.distanceKm} KM
+• Estimated Distance: ~${calculationBreakdown.distanceKm} KM (Billable: ${calculationBreakdown.billableKm} KM)
 
 💰 *Fare Breakdown:*
-• Base Ride Fare: ₹${calculationBreakdown.baseFare.toLocaleString('en-IN')}
+• Base Ride Fare (${calculationBreakdown.billableKm} km × ₹${calculationBreakdown.ratePerKm}): ₹${calculationBreakdown.baseFare.toLocaleString('en-IN')}
 • Driver Allowance (Bata): ₹${calculationBreakdown.driverBata.toLocaleString('en-IN')}
 ${calculationBreakdown.tollEstimate > 0 ? `• Standard Toll Allowance: ₹${calculationBreakdown.tollEstimate.toLocaleString('en-IN')}\n` : ''}----------------------------------------
 *TOTAL ESTIMATED FARE: ₹${calculationBreakdown.totalFare.toLocaleString('en-IN')}*
@@ -390,10 +632,10 @@ ${calculationBreakdown.tollEstimate > 0 ? `• Standard Toll Allowance: ₹${cal
 
 🔗 *Direct Confirmation & Advance Payment Link:*
 ${confirmationUrl}
-*(You can click the link above to view quotation & confirm online, or sign in with your phone number on our website)*
+*(Click the link above to view quotation & confirm online)*
 
-📞 24x7 Customer Support: 7200217986 | Drop Cars Mobility
-Thank you for choosing Drop Cars!`;
+📞 24x7 Support: ${selectedBrand.phone} | ${selectedBrand.name}
+Thank you for choosing ${selectedBrand.name}!`;
   };
 
   const handleShareWhatsApp = async () => {
@@ -427,7 +669,7 @@ Thank you for choosing Drop Cars!`;
     }
     setSendingEmail(true);
     try {
-      const subject = `Drop Cars Fare Estimation Ref #${generatedRefId} - ${pickupCity} to ${dropCity}`;
+      const subject = `${selectedBrand.name} Fare Estimation Ref #${generatedRefId} - ${pickupCity} to ${dropCity}`;
       const body = getWhatsAppMessage();
       const mailtoUrl = `mailto:${customerEmail.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
@@ -449,6 +691,8 @@ Thank you for choosing Drop Cars!`;
     if (!calculationBreakdown) return;
     const invData: InvoiceData = {
       invoiceNumber: generatedRefId,
+      brandName: selectedBrand.name,
+      brandPhone: selectedBrand.phone,
       customerName,
       customerPhone,
       customerEmail,
@@ -456,7 +700,14 @@ Thank you for choosing Drop Cars!`;
       dropLocation: dropCity,
       travelDate,
       vehicleType: selectedVehicle.name,
-      tripType: tripType === 'roundtrip' ? 'Round Trip' : 'One Way',
+      tripType:
+        tripType === 'droptrip'
+          ? 'Drop Trip'
+          : tripType === 'roundtrip'
+          ? 'Round Trip'
+          : tripType === 'local'
+          ? 'Local Rental'
+          : 'One Way',
       distanceKm: calculationBreakdown.distanceKm,
       baseFare: calculationBreakdown.baseFare,
       tollCharges: calculationBreakdown.tollEstimate,
@@ -513,7 +764,7 @@ Thank you for choosing Drop Cars!`;
               {currentStep === 'form' ? 'Trip Quotation & Estimate' : 'Quotation Generated'}
             </Text>
             <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>
-              {currentStep === 'form' ? 'Auto-syncs to Website CRM Enquiries' : `Ref: ${generatedRefId} · Ready to Share`}
+              {currentStep === 'form' ? `Branded for ${selectedBrand.name}` : `Ref: ${generatedRefId} · Ready to Share`}
             </Text>
           </View>
         </View>
@@ -530,49 +781,189 @@ Thank you for choosing Drop Cars!`;
              STEP 1: BOOKING & ESTIMATION INPUT FORM
              ══════════════════════════════════════════════ */
           <View style={{ gap: 14 }}>
-            {/* 1. Trip Type Selector */}
-            <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <Text style={[styles.cardTitle, { color: themeColors.text }]}>1. Select Trip Type</Text>
-              <View style={styles.tripTypeRow}>
-                {(
-                  [
-                    { id: 'oneway', label: 'One Way' },
-                    { id: 'roundtrip', label: 'Round Trip' },
-                    { id: 'local', label: 'Local / Hourly' },
-                    { id: 'multicity', label: 'Multi City' },
-                  ] as const
-                ).map((t) => {
-                  const active = tripType === t.id;
+            {/* 0. Brand Selection Header Card */}
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: themeColors.surface,
+                  borderColor: selectedBrand.primaryColor,
+                  borderWidth: 1.5,
+                  padding: 14,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: selectedBrand.primaryColor + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Building2 size={20} color={selectedBrand.primaryColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text }}>
+                        {selectedBrand.name}
+                      </Text>
+                      <View style={[styles.brandTagPill, { backgroundColor: selectedBrand.primaryColor }]}>
+                        <Text style={styles.brandTagPillText}>{selectedBrand.domain}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>
+                      {selectedBrand.tagline}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setShowBrandPickerModal(true)}
+                  style={[styles.switchBrandBtn, { borderColor: selectedBrand.primaryColor }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: selectedBrand.primaryColor }}>
+                    Change Brand
+                  </Text>
+                  <ChevronDown size={14} color={selectedBrand.primaryColor} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Quick Brand Switcher Horizontal Scroll */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6, marginTop: 12, paddingTop: 6, borderTopWidth: 1, borderTopColor: themeColors.border }}
+              >
+                {BRAND_CONFIGS.map((b) => {
+                  const isCur = selectedBrand.id === b.id;
                   return (
                     <TouchableOpacity
-                      key={t.id}
-                      onPress={() => setTripType(t.id)}
+                      key={b.id}
+                      onPress={() => setSelectedBrand(b)}
                       style={[
-                        styles.tripTypeChip,
+                        styles.quickBrandChip,
                         {
-                          backgroundColor: active ? colors.primary : isDark ? '#1E293B' : '#F1F5F9',
-                          borderColor: active ? colors.primary : themeColors.border,
+                          backgroundColor: isCur ? b.primaryColor : isDark ? '#1E293B' : '#F1F5F9',
+                          borderColor: isCur ? b.primaryColor : themeColors.border,
                         },
                       ]}
-                      activeOpacity={0.8}
                     >
-                      <Text
-                        style={[
-                          styles.tripTypeChipText,
-                          { color: active ? '#FFFFFF' : themeColors.text },
-                        ]}
-                      >
-                        {t.label}
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: isCur ? '#FFFFFF' : themeColors.text }}>
+                        {b.name}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
+              </ScrollView>
+            </View>
+
+            {/* 1. Trip Type Selector (Brand-Adaptive) */}
+            <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                  1. Select Trip Type
+                </Text>
+                {isArunachala && (
+                  <View style={[styles.tagPill, { backgroundColor: '#8B5CF6' }]}>
+                    <Text style={styles.tagPillText}>Tour / Bus / Van Rates</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.tripTypeRow}>
+                {isArunachala
+                  ? (
+                      [
+                        { id: 'droptrip', label: 'Drop Trip (With Stops)' },
+                        { id: 'roundtrip', label: 'Round Trip' },
+                        { id: 'local', label: 'Local Rental' },
+                      ] as const
+                    ).map((t) => {
+                      const active = tripType === t.id;
+                      return (
+                        <TouchableOpacity
+                          key={t.id}
+                          onPress={() => setTripType(t.id)}
+                          style={[
+                            styles.tripTypeChip,
+                            {
+                              backgroundColor: active ? selectedBrand.primaryColor : isDark ? '#1E293B' : '#F1F5F9',
+                              borderColor: active ? selectedBrand.primaryColor : themeColors.border,
+                              flex: t.id === 'droptrip' ? 1.4 : 1,
+                            },
+                          ]}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.tripTypeChipText,
+                              { color: active ? '#FFFFFF' : themeColors.text },
+                            ]}
+                          >
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  : (
+                      [
+                        { id: 'oneway', label: 'One Way' },
+                        { id: 'roundtrip', label: 'Round Trip' },
+                        { id: 'local', label: 'Local / Hourly' },
+                        { id: 'multicity', label: 'Multi City' },
+                      ] as const
+                    ).map((t) => {
+                      const active = tripType === t.id;
+                      return (
+                        <TouchableOpacity
+                          key={t.id}
+                          onPress={() => setTripType(t.id)}
+                          style={[
+                            styles.tripTypeChip,
+                            {
+                              backgroundColor: active ? selectedBrand.primaryColor : isDark ? '#1E293B' : '#F1F5F9',
+                              borderColor: active ? selectedBrand.primaryColor : themeColors.border,
+                            },
+                          ]}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.tripTypeChipText,
+                              { color: active ? '#FFFFFF' : themeColors.text },
+                            ]}
+                          >
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
               </View>
             </View>
 
-            {/* 2. Route & Location Details */}
+            {/* 2. Journey Route & Stops */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <Text style={[styles.cardTitle, { color: themeColors.text }]}>2. Journey Route</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                  2. Journey Route & Schedule
+                </Text>
+                <TouchableOpacity
+                  onPress={handleAddStop}
+                  style={styles.addStopHeaderBtn}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={14} color={colors.primary} />
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>
+                    Add Stop
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Pickup City */}
               <View style={{ marginBottom: 12 }}>
@@ -598,6 +989,39 @@ Thank you for choosing Drop Cars!`;
                 </View>
               </View>
 
+              {/* Intermediate Stops (Drop trip or multi-stops) */}
+              {stops.map((st, idx) => (
+                <View key={idx} style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={[styles.inputLabel, { color: '#8B5CF6', marginBottom: 0 }]}>
+                      Via Stop #{idx + 1}
+                    </Text>
+                    <TouchableOpacity onPress={() => handleRemoveStop(idx)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '700' }}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.inputWithAction, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: '#8B5CF6' }]}>
+                    <MapPin size={18} color="#8B5CF6" style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={[styles.inputField, { color: themeColors.text }]}
+                      placeholder={`e.g. Intermediate Stop (e.g. Vellore)`}
+                      placeholderTextColor="#94A3B8"
+                      value={st}
+                      onChangeText={(t) => handleUpdateStop(idx, t)}
+                    />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setLocationPickerTarget(idx);
+                        setShowLocationPicker(true);
+                      }}
+                      style={styles.pickLocationBtn}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#8B5CF6' }}>Search</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+
               {/* Drop City */}
               <View style={{ marginBottom: 12 }}>
                 <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Destination / Drop City *</Text>
@@ -622,7 +1046,7 @@ Thank you for choosing Drop Cars!`;
                 </View>
               </View>
 
-              {/* Quick Popular Cities */}
+              {/* Quick Hubs */}
               <View style={{ marginTop: 2 }}>
                 <Text style={{ fontSize: 10.5, color: themeColors.textSecondary, marginBottom: 6 }}>
                   Quick Hubs:
@@ -643,46 +1067,41 @@ Thank you for choosing Drop Cars!`;
                 </ScrollView>
               </View>
 
-              {/* Date, Time & Distance Row */}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                <View style={{ flex: 1.2 }}>
-                  <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Date (YYYY-MM-DD)</Text>
-                  <View style={[styles.smallInputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                    <Calendar size={15} color={colors.primary} style={{ marginRight: 6 }} />
-                    <TextInput
-                      style={[styles.inputField, { color: themeColors.text, fontSize: 12 }]}
-                      value={travelDate}
-                      onChangeText={setTravelDate}
-                      placeholder="2026-09-22"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
-                </View>
+              {/* Date & Time Picker Row */}
+              <View style={{ marginTop: 14 }}>
+                <DateTimeField
+                  dateLabel="Travel Date *"
+                  timeLabel="Pickup Time *"
+                  dateValue={travelDate}
+                  timeValue={travelTime}
+                  onDateChange={setTravelDate}
+                  onTimeChange={setTravelTime}
+                  minimumDate={new Date()}
+                />
+              </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Pickup Time</Text>
-                  <View style={[styles.smallInputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                    <Clock size={15} color="#8B5CF6" style={{ marginRight: 6 }} />
-                    <TextInput
-                      style={[styles.inputField, { color: themeColors.text, fontSize: 12 }]}
-                      value={travelTime}
-                      onChangeText={setTravelTime}
-                      placeholder="09:00 AM"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Dist (~KM)</Text>
-                  <View style={[styles.smallInputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                    <TextInput
-                      style={[styles.inputField, { color: themeColors.text, fontSize: 12, fontWeight: '700' }]}
-                      keyboardType="numeric"
-                      value={distanceKmInput}
-                      onChangeText={setDistanceKmInput}
-                    />
-                  </View>
+              {/* Estimated Distance Input */}
+              <View style={{ marginTop: 4 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
+                  Estimated Distance (KM)
+                </Text>
+                <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
+                  <TextInput
+                    style={[styles.inputField, { color: themeColors.text, fontWeight: '700' }]}
+                    keyboardType="numeric"
+                    placeholder="e.g. 460"
+                    placeholderTextColor="#94A3B8"
+                    value={distanceKmInput}
+                    onChangeText={setDistanceKmInput}
+                  />
+                  <TouchableOpacity
+                    onPress={() => recalculateDistance(pickupCity, dropCity, stops)}
+                    style={{ paddingHorizontal: 10 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
+                      Auto-Calc
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -692,7 +1111,7 @@ Thank you for choosing Drop Cars!`;
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>3. Customer Details</Text>
                 <View style={[styles.tagPill, { backgroundColor: isDark ? '#1E293B' : '#E0F2FE' }]}>
-                  <Text style={[styles.tagPillText, { color: colors.primary }]}>Quick Autofill / WhatsApp</Text>
+                  <Text style={[styles.tagPillText, { color: colors.primary }]}>Lead & WhatsApp</Text>
                 </View>
               </View>
 
@@ -747,7 +1166,7 @@ Thank you for choosing Drop Cars!`;
                   <FileText size={16} color={themeColors.textSecondary} style={{ marginRight: 8 }} />
                   <TextInput
                     style={[styles.inputField, { color: themeColors.text }]}
-                    placeholder="e.g. Need vehicle with carrier, AC on full trip"
+                    placeholder="e.g. Carrier required, AC continuous, etc."
                     placeholderTextColor="#94A3B8"
                     value={specialNotes}
                     onChangeText={setSpecialNotes}
@@ -756,16 +1175,28 @@ Thank you for choosing Drop Cars!`;
               </View>
             </View>
 
-            {/* 4. Vehicle Category Selection */}
+            {/* 4. Vehicle Category Selection (Brand-Adaptive) */}
             <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              <Text style={[styles.cardTitle, { color: themeColors.text }]}>4. Choose Vehicle Category</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                  4. Vehicle Category ({selectedBrand.name})
+                </Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                  {vehicleList.length} Options
+                </Text>
+              </View>
+
               <View style={{ gap: 8, marginTop: 4 }}>
-                {VEHICLES.map((v) => {
+                {vehicleList.map((v) => {
                   const isSelected = selectedVehicle.id === v.id;
                   return (
                     <TouchableOpacity
                       key={v.id}
-                      onPress={() => setSelectedVehicle(v)}
+                      onPress={() => {
+                        setSelectedVehicle(v);
+                        setCustomRatePerKm('');
+                        setCustomDriverBata('');
+                      }}
                       style={[
                         styles.vehicleCard,
                         {
@@ -797,11 +1228,11 @@ Thank you for choosing Drop Cars!`;
                       </View>
 
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: colors.primary }}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: selectedBrand.primaryColor }}>
                           ₹{v.ratePerKm}/km
                         </Text>
                         <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>
-                          Bata: ₹{v.driverBata}
+                          Bata: ₹{v.driverBata}/day
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -810,10 +1241,51 @@ Thank you for choosing Drop Cars!`;
               </View>
             </View>
 
+            {/* ══════════════════════════════════════════════
+               "ADD TO LEADS" CHECKBOX (Directly above Calculate button)
+               ══════════════════════════════════════════════ */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setAddToLeads(!addToLeads)}
+              style={[
+                styles.addToLeadsBox,
+                {
+                  backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                  borderColor: addToLeads ? '#10B981' : themeColors.border,
+                  borderWidth: addToLeads ? 1.5 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.checkboxSquare,
+                  {
+                    backgroundColor: addToLeads ? '#10B981' : 'transparent',
+                    borderColor: addToLeads ? '#10B981' : themeColors.border,
+                  },
+                ]}
+              >
+                {addToLeads && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.addToLeadsTitle, { color: themeColors.text }]}>
+                    Add to leads (Website CRM)
+                  </Text>
+                  <View style={[styles.tagPill, { backgroundColor: addToLeads ? '#10B981' : '#94A3B8' }]}>
+                    <Text style={styles.tagPillText}>{addToLeads ? 'AUTO-SYNC' : 'LOCAL ONLY'}</Text>
+                  </View>
+                </View>
+                <Text style={[styles.addToLeadsSub, { color: themeColors.textSecondary }]}>
+                  Automatically record this quotation as an active lead in Website CRM for sales follow-up
+                </Text>
+              </View>
+            </TouchableOpacity>
+
             {/* Calculate Button */}
             <TouchableOpacity
               onPress={handleGenerateEstimate}
-              style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+              style={[styles.primaryActionBtn, { backgroundColor: selectedBrand.primaryColor }]}
               activeOpacity={0.85}
             >
               <Sparkles size={18} color="#FFFFFF" />
@@ -832,16 +1304,22 @@ Thank you for choosing Drop Cars!`;
               style={[
                 styles.syncBanner,
                 {
-                  backgroundColor: isDark ? '#064E3B' : '#ECFDF5',
-                  borderColor: '#10B981',
+                  backgroundColor: addToLeads ? (isDark ? '#064E3B' : '#ECFDF5') : isDark ? '#1E293B' : '#F1F5F9',
+                  borderColor: addToLeads ? '#10B981' : themeColors.border,
                 },
               ]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={20} color="#10B981" />
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#A7F3D0' : '#065F46' }}>
-                    Quotation Auto-Saved to Website CRM
+                  <CheckCircle2 size={20} color={addToLeads ? '#10B981' : selectedBrand.primaryColor} />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '800',
+                      color: addToLeads ? (isDark ? '#A7F3D0' : '#065F46') : themeColors.text,
+                    }}
+                  >
+                    {addToLeads ? `Quotation Auto-Saved to ${selectedBrand.name} CRM` : 'Quotation Generated (Local Copy)'}
                   </Text>
                 </View>
                 {syncingToWebsite && <ActivityIndicator size="small" color="#10B981" />}
@@ -869,7 +1347,7 @@ Thank you for choosing Drop Cars!`;
               </View>
 
               <Text style={{ fontSize: 10.5, color: isDark ? '#A7F3D0' : '#047857', marginTop: 6, lineHeight: 15 }}>
-                💡 Customer can log in with their phone number ({customerPhone}) on the website to view this quotation in their recent searches.
+                💡 Branded for {selectedBrand.name} ({selectedBrand.domain}). Customer can view quotation online using reference.
               </Text>
             </View>
 
@@ -879,21 +1357,34 @@ Thank you for choosing Drop Cars!`;
                 <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
                   Journey Overview
                 </Text>
-                <View style={[styles.tagPill, { backgroundColor: colors.primary }]}>
+                <View style={[styles.tagPill, { backgroundColor: selectedBrand.primaryColor }]}>
                   <Text style={styles.tagPillText}>
-                    {tripType === 'roundtrip' ? 'Round Trip' : tripType === 'local' ? 'Local' : 'One Way'}
+                    {tripType === 'droptrip'
+                      ? 'Drop Trip'
+                      : tripType === 'roundtrip'
+                      ? 'Round Trip'
+                      : tripType === 'local'
+                      ? 'Local Rental'
+                      : tripType === 'multicity'
+                      ? 'Multi City'
+                      : 'One Way'}
                   </Text>
                 </View>
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
-                  <Car size={20} color={colors.primary} />
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selectedBrand.primaryColor + '20', alignItems: 'center', justifyContent: 'center' }}>
+                  <Car size={20} color={selectedBrand.primaryColor} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }}>
                     {pickupCity} ➔ {dropCity}
                   </Text>
+                  {stops.filter((s) => s.trim()).length > 0 && (
+                    <Text style={{ fontSize: 11.5, color: '#8B5CF6', marginTop: 2, fontWeight: '600' }}>
+                      Via: {stops.filter((s) => s.trim()).join(' ➔ ')}
+                    </Text>
+                  )}
                   <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 1 }}>
                     {travelDate} at {travelTime} · ~{calculationBreakdown?.distanceKm} KM
                   </Text>
@@ -904,19 +1395,19 @@ Thank you for choosing Drop Cars!`;
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Vehicle</Text>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }}>
-                    {selectedVehicle.name} ({selectedVehicle.seats})
+                    {selectedVehicle.name}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Brand</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: selectedBrand.primaryColor }}>
+                    {selectedBrand.name}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Customer</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }}>
-                    {customerName}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Contact</Text>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>
-                    {customerPhone}
+                    {customerName || 'Valued Guest'}
                   </Text>
                 </View>
               </View>
@@ -930,7 +1421,7 @@ Thank you for choosing Drop Cars!`;
                 <View style={{ gap: 8 }}>
                   <View style={styles.fareRow}>
                     <Text style={{ fontSize: 12.5, color: themeColors.textSecondary }}>
-                      Base Ride Fare ({calculationBreakdown.distanceKm} km × ₹{selectedVehicle.ratePerKm})
+                      Base Ride Fare ({calculationBreakdown.billableKm} km × ₹{calculationBreakdown.ratePerKm})
                     </Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>
                       ₹{calculationBreakdown.baseFare.toLocaleString('en-IN')}
@@ -963,7 +1454,7 @@ Thank you for choosing Drop Cars!`;
                     <Text style={{ fontSize: 15, fontWeight: '900', color: themeColors.text }}>
                       TOTAL ESTIMATED FARE
                     </Text>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: colors.primary }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: selectedBrand.primaryColor }}>
                       ₹{calculationBreakdown.totalFare.toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -1013,14 +1504,14 @@ Thank you for choosing Drop Cars!`;
                 </View>
 
                 <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
-                  Customer can scan using GPay / PhonePe / Paytm to instantly pay ₹{calculationBreakdown.advanceAmount} advance to confirm ride:
+                  Customer can scan using GPay / PhonePe / Paytm to instantly pay ₹{calculationBreakdown.advanceAmount} advance:
                 </Text>
 
                 <View style={{ alignItems: 'center', marginVertical: 6 }}>
                   <Image
                     source={{
                       uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                        `upi://pay?pa=7200217986-1@okbizaxis&pn=DropCars&am=${calculationBreakdown.advanceAmount}&cu=INR&tn=AdvanceRef_${generatedRefId}`
+                        `upi://pay?pa=7200217986-1@okbizaxis&pn=${encodeURIComponent(selectedBrand.name)}&am=${calculationBreakdown.advanceAmount}&cu=INR&tn=AdvanceRef_${generatedRefId}`
                       )}`,
                     }}
                     style={{ width: 160, height: 160, borderRadius: 8, backgroundColor: '#FFFFFF' }}
@@ -1031,7 +1522,7 @@ Thank you for choosing Drop Cars!`;
                 <TouchableOpacity
                   style={{ backgroundColor: isDark ? '#1E293B' : '#EEF2FF', paddingVertical: 8, borderRadius: 6, alignItems: 'center', borderColor: '#10B981', borderWidth: 1 }}
                   onPress={() => {
-                    const upiUri = `upi://pay?pa=7200217986-1@okbizaxis&pn=DropCars&am=${calculationBreakdown.advanceAmount}&cu=INR&tn=AdvanceRef_${generatedRefId}`;
+                    const upiUri = `upi://pay?pa=7200217986-1@okbizaxis&pn=${encodeURIComponent(selectedBrand.name)}&am=${calculationBreakdown.advanceAmount}&cu=INR&tn=AdvanceRef_${generatedRefId}`;
                     copyToClipboard(upiUri, false);
                     Alert.alert('UPI Link Copied', `Payment Link:\n${upiUri}`);
                   }}>
@@ -1049,15 +1540,15 @@ Thank you for choosing Drop Cars!`;
                 Share this link with customer for instant online review & booking confirmation:
               </Text>
               <View style={[styles.linkBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
-                <Text style={{ fontSize: 11, color: colors.primary, flex: 1 }} numberOfLines={1}>
+                <Text style={{ fontSize: 11, color: selectedBrand.primaryColor, flex: 1 }} numberOfLines={1}>
                   {confirmationUrl}
                 </Text>
                 <TouchableOpacity
                   onPress={() => copyToClipboard(confirmationUrl, false)}
                   style={styles.copyLinkBtn}
                 >
-                  {copiedLink ? <Check size={14} color="#10B981" /> : <Copy size={14} color={colors.primary} />}
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary }}>
+                  {copiedLink ? <Check size={14} color="#10B981" /> : <Copy size={14} color={selectedBrand.primaryColor} />}
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: selectedBrand.primaryColor }}>
                     {copiedLink ? 'Copied' : 'Copy'}
                   </Text>
                 </TouchableOpacity>
@@ -1076,7 +1567,7 @@ Thank you for choosing Drop Cars!`;
                 <View style={{ alignItems: 'flex-start' }}>
                   <Text style={styles.whatsappActionBtnText}>Share on WhatsApp</Text>
                   <Text style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.9)' }}>
-                    Sends formatted quotation & confirmation link to {customerPhone}
+                    Sends {selectedBrand.name} quote & confirmation link to {customerPhone || 'Customer'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1107,7 +1598,14 @@ Thank you for choosing Drop Cars!`;
                       drop: dropCity,
                       distance: String(calculationBreakdown?.distanceKm || distanceKmInput),
                       rate: String(selectedVehicle.ratePerKm),
-                      trip_type: tripType === 'roundtrip' ? 'Round Trip' : tripType === 'local' ? 'Local / Hourly' : 'One Way',
+                      trip_type:
+                        tripType === 'droptrip'
+                          ? 'Drop Trip'
+                          : tripType === 'roundtrip'
+                          ? 'Round Trip'
+                          : tripType === 'local'
+                          ? 'Local Rental'
+                          : 'One Way',
                       vehicle_type: selectedVehicle.name,
                       bata: String(calculationBreakdown?.driverBata || selectedVehicle.driverBata),
                       toll: String(calculationBreakdown?.tollEstimate || 0),
@@ -1140,9 +1638,9 @@ Thank you for choosing Drop Cars!`;
                     setCalculationBreakdown(null);
                     setCurrentStep('form');
                   }}
-                  style={[styles.outlineBtn, { borderColor: colors.primary, flex: 1, backgroundColor: isDark ? '#312E81' : '#EEF2FF' }]}
+                  style={[styles.outlineBtn, { borderColor: selectedBrand.primaryColor, flex: 1, backgroundColor: isDark ? '#312E81' : '#EEF2FF' }]}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: selectedBrand.primaryColor }}>
                     + New Quotation
                   </Text>
                 </TouchableOpacity>
@@ -1152,107 +1650,195 @@ Thank you for choosing Drop Cars!`;
         )}
       </ScrollView>
 
-      {/* ── Location Picker Modal ── */}
-      <LocationPickerModal
-        visible={showLocationPicker}
-        onClose={() => setShowLocationPicker(false)}
-        onLocationSelect={(loc) => {
-          if (locationPickerTarget === 'pickup') {
-            handleSelectPickup(loc);
-          } else {
-            handleSelectDrop(loc);
-          }
-          setShowLocationPicker(false);
-        }}
-        title={locationPickerTarget === 'pickup' ? 'Select Pickup City / Location' : 'Select Destination City / Location'}
-        initialValue={locationPickerTarget === 'pickup' ? pickupCity : dropCity}
-      />
-
-      {/* ── Share as PDF Modal (Email vs WhatsApp) ── */}
+      {/* ── Brand Picker Modal ── */}
       <Modal
-        visible={showSharePdfModal}
+        visible={showBrandPickerModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowSharePdfModal(false)}
+        onRequestClose={() => setShowBrandPickerModal(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
           activeOpacity={1}
-          onPress={() => setShowSharePdfModal(false)}
+          onPress={() => setShowBrandPickerModal(false)}
         >
-          <TouchableOpacity
-            style={[styles.shareModalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 400,
+              backgroundColor: themeColors.surface,
+              borderRadius: 12,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: themeColors.border,
+              ...shadows.modal,
+            }}
+            onStartShouldSetResponder={() => true}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Printer size={20} color={colors.primary} />
-                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Share Quotation / PDF</Text>
+                <Building2 size={20} color={colors.primary} />
+                <Text style={{ fontSize: 16, fontWeight: '800', color: themeColors.text }}>Select Website Brand</Text>
               </View>
-              <TouchableOpacity onPress={() => setShowSharePdfModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => setShowBrandPickerModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={20} color={themeColors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginBottom: 16 }}>
-              Select how you would like to dispatch the formal estimation document to {customerName || 'customer'}:
+            <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginBottom: 12 }}>
+              Quotation terms, fleet, vehicle rates, and branding will adjust according to your selection:
             </Text>
 
-            {/* Option 1: Send via Email (SMTP) */}
-            <TouchableOpacity
-              onPress={handleShareEmailSmtp}
-              style={[styles.shareOptionRow, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}
-              activeOpacity={0.85}
-              disabled={sendingEmail}
-            >
-              <View style={[styles.shareOptionIconWrap, { backgroundColor: '#EEF2FF' }]}>
-                <Mail size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: themeColors.text }]}>Share via Email</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>
-                  Sends branded HTML quotation & confirmation link to {customerEmail || '(Enter email)'}
+            <View style={{ gap: 8 }}>
+              {BRAND_CONFIGS.map((brand) => {
+                const isSelected = selectedBrand.id === brand.id;
+                return (
+                  <TouchableOpacity
+                    key={brand.id}
+                    onPress={() => {
+                      setSelectedBrand(brand);
+                      setShowBrandPickerModal(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: 12,
+                      borderRadius: 8,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? brand.primaryColor : themeColors.border,
+                      backgroundColor: isSelected ? (isDark ? '#1E293B' : '#F8FAFC') : 'transparent',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: brand.primaryColor + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Building2 size={18} color={brand.primaryColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }}>{brand.name}</Text>
+                        <View style={[styles.brandTagPill, { backgroundColor: brand.primaryColor }]}>
+                          <Text style={styles.brandTagPillText}>{brand.domain}</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>
+                        {brand.tagline}
+                      </Text>
+                    </View>
+                    {isSelected && <CheckCircle2 size={18} color={brand.primaryColor} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Location Picker Modal ── */}
+      <LocationPickerModal
+        visible={showLocationPicker}
+        title={
+          locationPickerTarget === 'pickup'
+            ? 'Select Pickup Location'
+            : locationPickerTarget === 'drop'
+            ? 'Select Destination Location'
+            : `Select Via Stop #${(locationPickerTarget as number) + 1}`
+        }
+        onClose={() => setShowLocationPicker(false)}
+        onLocationSelect={(loc: string) => {
+          if (locationPickerTarget === 'pickup') {
+            handleSelectPickup(loc);
+          } else if (locationPickerTarget === 'drop') {
+            handleSelectDrop(loc);
+          } else if (typeof locationPickerTarget === 'number') {
+            handleUpdateStop(locationPickerTarget, loc);
+          }
+          setShowLocationPicker(false);
+        }}
+        initialValue={
+          locationPickerTarget === 'pickup'
+            ? pickupCity
+            : locationPickerTarget === 'drop'
+            ? dropCity
+            : typeof locationPickerTarget === 'number'
+            ? stops[locationPickerTarget] || ''
+            : ''
+        }
+      />
+
+      {/* ── Share PDF & Email Modal ── */}
+      <Modal
+        visible={showSharePdfModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSharePdfModal(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setShowSharePdfModal(false)}
+        >
+          <View
+            style={[
+              styles.shareModalSheet,
+              { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Printer size={20} color={selectedBrand.primaryColor} />
+                <Text style={{ fontSize: 16, fontWeight: '800', color: themeColors.text }}>
+                  Export & Share Quotation
                 </Text>
               </View>
-              {sendingEmail ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Send size={16} color={colors.primary} />
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowSharePdfModal(false)}>
+                <X size={20} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-            {/* Option 2: Share via WhatsApp / PDF */}
-            <TouchableOpacity
-              onPress={() => {
-                setShowSharePdfModal(false);
-                handleOpenPrintablePdf();
-                setTimeout(() => {
-                  handleShareWhatsApp();
-                }, 600);
-              }}
-              style={[styles.shareOptionRow, { backgroundColor: isDark ? '#1E293B' : '#F0FDF4', borderColor: '#10B981', marginTop: 10 }]}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.shareOptionIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <MessageCircle size={20} color="#15803D" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: themeColors.text }]}>Share via WhatsApp</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>
-                  Opens printable PDF view and triggers WhatsApp message with direct confirmation link
-                </Text>
-              </View>
-              <ExternalLink size={16} color="#15803D" />
-            </TouchableOpacity>
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                onPress={handleOpenPrintablePdf}
+                style={[styles.shareModalActionBtn, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF', borderColor: selectedBrand.primaryColor }]}
+              >
+                <Printer size={20} color={selectedBrand.primaryColor} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>
+                    Print or Download PDF
+                  </Text>
+                  <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                    Generates official branded PDF invoice with terms & QR code
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={themeColors.textSecondary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setShowSharePdfModal(false)}
-              style={[styles.modalCancelBtn, { borderColor: themeColors.border, marginTop: 16 }]}
-            >
-              <Text style={{ fontSize: 12.5, fontWeight: '700', color: themeColors.textSecondary }}>Cancel</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleShareEmailSmtp}
+                style={[styles.shareModalActionBtn, { backgroundColor: isDark ? '#1E293B' : '#F0FDF4', borderColor: '#10B981' }]}
+              >
+                <Mail size={20} color="#10B981" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>
+                    Send via Email Client
+                  </Text>
+                  <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                    Pre-fills quote directly to {customerEmail || 'customer email'}
+                  </Text>
+                </View>
+                {sendingEmail ? <ActivityIndicator size="small" color="#10B981" /> : <ChevronRight size={18} color={themeColors.textSecondary} />}
+              </TouchableOpacity>
+            </View>
+          </View>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
@@ -1267,12 +1853,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
   },
   backBtn: {
-    padding: 4,
+    padding: 6,
+    borderRadius: 8,
   },
   headerTitle: {
     fontSize: 16,
@@ -1283,91 +1870,119 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   card: {
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 10,
     padding: 14,
+    borderWidth: 1,
+    ...shadows.card,
   },
   cardTitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginBottom: 10,
+  },
+  brandTagPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  brandTagPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  switchBrandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  quickBrandChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   tripTypeRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   tripTypeChip: {
     flex: 1,
+    minWidth: 70,
     paddingVertical: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 6,
     borderRadius: 6,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tripTypeChipText: {
     fontSize: 11.5,
-    fontWeight: '800',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  addStopHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: '#EEF2FF',
   },
   inputLabel: {
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 4,
   },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 6,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
   inputWithAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 6,
     borderWidth: 1,
-    paddingLeft: 10,
-    paddingRight: 6,
-    paddingVertical: 4,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    height: 40,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    height: 40,
   },
   inputField: {
     flex: 1,
-    fontSize: 13,
-    paddingVertical: 4,
+    fontSize: 12.5,
+    paddingVertical: 0,
   },
   pickLocationBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
     backgroundColor: '#EEF2FF',
   },
   hubChip: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-  },
-  smallInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 6,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
   },
   vehicleCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 10,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   vehicleIconCircle: {
     width: 38,
     height: 38,
-    borderRadius: 6,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1380,53 +1995,76 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   vehicleSpecs: {
-    fontSize: 10,
+    fontSize: 10.5,
     marginTop: 1,
   },
   tagPill: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   tagPillText: {
-    color: '#FFFFFF',
     fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  addToLeadsBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+  },
+  checkboxSquare: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  addToLeadsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  addToLeadsSub: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
   },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 8,
-    elevation: 3,
+    ...shadows.card,
   },
   primaryActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    color: '#FFFFFF',
   },
   syncBanner: {
     borderRadius: 8,
-    borderWidth: 1.5,
     padding: 12,
+    borderWidth: 1,
   },
   copyChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
   metaPillsRow: {
     flexDirection: 'row',
-    borderTopWidth: 1,
+    gap: 10,
     paddingTop: 10,
-    gap: 8,
+    borderTopWidth: 1,
   },
   fareRow: {
     flexDirection: 'row',
@@ -1438,104 +2076,73 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   advanceHighlightBox: {
+    marginTop: 6,
+    padding: 10,
     borderRadius: 6,
     borderWidth: 1,
-    padding: 10,
-    marginTop: 6,
   },
   linkBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    paddingLeft: 10,
-    paddingRight: 6,
-    paddingVertical: 6,
   },
   copyLinkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
   },
   whatsappActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 13,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    elevation: 3,
   },
   whatsappActionBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.3,
   },
   secondaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    borderRadius: 6,
-    borderWidth: 1.5,
+    paddingVertical: 11,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   secondaryActionBtnText: {
-    fontSize: 13.5,
-    fontWeight: '800',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   outlineBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 10,
     borderRadius: 6,
     borderWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
   },
-  shareModalCard: {
-    borderRadius: 8,
-    borderWidth: 1,
+  shareModalSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
     padding: 18,
-    elevation: 8,
+    paddingBottom: 30,
   },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  shareOptionRow: {
+  shareModalActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  shareOptionIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareOptionTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  modalCancelBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
   },
 });

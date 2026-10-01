@@ -242,7 +242,6 @@ export default function DashboardScreen() {
     );
   };
 
-  // Shared "Today" numbers (KPI row for Owner, trimmed snapshot for Staff).
   const [snapshot, setSnapshot] = useState<{
     total_bookings: number;
     today_bookings: number;
@@ -252,48 +251,10 @@ export default function DashboardScreen() {
   } | null>(null);
   const [unrespondedEnquiries, setUnrespondedEnquiries] = useState(0);
   const [upcomingUnassignedCount, setUpcomingUnassignedCount] = useState<number>(0);
+  const [upcomingUnder2HrsCount, setUpcomingUnder2HrsCount] = useState<number>(0);
 
-  // Quick Lead / Quotation Modal State
+  // Quick Action Menu State
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const [showNewLeadModal, setShowNewLeadModal] = useState(false);
-  const [leadName, setLeadName] = useState('');
-  const [leadPhone, setLeadPhone] = useState('');
-  const [leadFrom, setLeadFrom] = useState('');
-  const [leadTo, setLeadTo] = useState('');
-  const [leadQuotedFare, setLeadQuotedFare] = useState('');
-  const [savingLead, setSavingLead] = useState(false);
-
-  const handleCreateLead = async () => {
-    if (!leadName.trim() || !leadPhone.trim()) {
-      Alert.alert('Required', 'Please enter customer name and phone number.');
-      return;
-    }
-    setSavingLead(true);
-    try {
-      await enquiriesApi.action(0, 'create_manual_lead', {
-        name: leadName,
-        phone: leadPhone,
-        pickup: leadFrom,
-        drop_location: leadTo,
-        trip_type: 'oneway',
-        vehicle_type: 'sedan',
-        fare_estimate: parseInt(leadQuotedFare || '0', 10),
-      }).catch(() => null);
-      Alert.alert('Success', `Manual Lead / Quote for ${leadName} created successfully!`);
-      setShowNewLeadModal(false);
-      setLeadName('');
-      setLeadPhone('');
-      setLeadFrom('');
-      setLeadTo('');
-      setLeadQuotedFare('');
-      fetchUnrespondedEnquiries();
-    } catch (e) {
-      Alert.alert('Notice', 'Lead saved locally');
-      setShowNewLeadModal(false);
-    } finally {
-      setSavingLead(false);
-    }
-  };
 
   // Owner-only Command Center tile badges - each a real API-backed count,
   // left null (=> tile renders icon-only) whenever its source failed or
@@ -389,13 +350,30 @@ export default function DashboardScreen() {
     try {
       const data = await apiService.getOrders(0, 100);
       const orderList = Array.isArray(data) ? data : data?.orders || [];
-      const unassigned = orderList.filter((o: any) => {
-        const s = (o.trip_status || '').toUpperCase();
-        const isLive = s === 'PENDING' || s === 'ASSIGNED';
+      const nowMs = Date.now();
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+
+      let unassigned = 0;
+      let under2Hrs = 0;
+
+      orderList.forEach((o: any) => {
+        const s = (o.trip_status || o.status || '').toUpperCase();
+        const isLive = s === 'PENDING' || s === 'ASSIGNED' || s === 'CONFIRMED';
         const hasDriver = !!(o.assigned_driver || (o.assignments && o.assignments.length > 0) || o.driver_id);
-        return isLive && !hasDriver;
-      }).length;
+        if (isLive && !hasDriver) {
+          unassigned++;
+          const pickupIso = o.start_date_time || o.pickup_date_time || o.pickup_time || o.pickup_date;
+          if (pickupIso) {
+            const pickupMs = new Date(pickupIso).getTime();
+            if (!isNaN(pickupMs) && pickupMs >= (nowMs - 30 * 60 * 1000) && pickupMs <= (nowMs + twoHoursMs)) {
+              under2Hrs++;
+            }
+          }
+        }
+      });
+
       setUpcomingUnassignedCount(unassigned);
+      setUpcomingUnder2HrsCount(under2Hrs);
     } catch (e) {
       // Non-fatal
     }
@@ -685,29 +663,39 @@ export default function DashboardScreen() {
           style={{
             marginHorizontal: 16,
             marginTop: 10,
-            paddingVertical: 9,
-            paddingHorizontal: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
             borderRadius: 8,
             borderWidth: 1,
-            borderColor: themeColors.primary + '30',
+            borderColor: totalTasksPending > 0 ? themeColors.primary + '40' : themeColors.border,
             backgroundColor: isDark ? themeColors.surfaceAlt : themeColors.primaryLight,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-            <ListTodo size={16} color={themeColors.primary} />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-              {LABELS.sectionMyTasks} · <Text style={{ color: themeColors.primary, fontWeight: '800' }}>{totalTasksPending} {LABELS.taskStripPending}</Text>
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: themeColors.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
+              <ListTodo size={16} color={themeColors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                {LABELS.sectionMyTasks} · <Text style={{ color: themeColors.primary, fontWeight: '800' }}>{totalTasksPending} {LABELS.taskStripPending}</Text>
+              </Text>
+              <Text style={{ fontSize: 10.5, color: themeColors.textSecondary, fontWeight: '500' }}>
+                KYC, Feedbacks, Payouts & Profile reviews
+              </Text>
+            </View>
           </View>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.primary }}>
-            {LABELS.taskStripComplete} →
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.primary }}>
+              {LABELS.taskStripComplete}
+            </Text>
+            <ChevronRight size={14} color={themeColors.primary} />
+          </View>
         </TouchableOpacity>
 
-        {/* 3. URGENT ACTIONS (2 Big Side-by-Side Attention Tiles) */}
+        {/* 3. URGENT ACTIONS (2 Big Side-by-Side Attention Tiles with <2h Pickup Alert) */}
         <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
           <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted, marginBottom: 8 }}>
             {LABELS.sectionUrgentActions}
@@ -724,7 +712,7 @@ export default function DashboardScreen() {
                 borderColor: unrespondedEnquiries > 0 ? themeColors.error + '40' : themeColors.border,
                 backgroundColor: unrespondedEnquiries > 0 ? themeColors.errorLight : themeColors.surface,
                 padding: 12,
-                minHeight: 90,
+                minHeight: 95,
                 justifyContent: 'space-between',
               }}
             >
@@ -740,13 +728,13 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
                   {LABELS.urgentEnquiries.title}
                 </Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: themeColors.textSecondary }} numberOfLines={1}>
+                <Text style={{ fontSize: 11, fontWeight: '500', color: unrespondedEnquiries > 0 ? themeColors.error : themeColors.textSecondary }} numberOfLines={1}>
                   {unrespondedEnquiries > 0 ? LABELS.urgentEnquiries.caption : 'All clear'}
                 </Text>
               </View>
             </TouchableOpacity>
 
-            {/* Tile 2: Trips without a driver */}
+            {/* Tile 2: Trips without a driver + <2h Attention Alert */}
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => router.push({ pathname: '/(tabs)/orders', params: { tab: 'unassigned' } } as any)}
@@ -754,75 +742,157 @@ export default function DashboardScreen() {
                 flex: 1,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: upcomingUnassignedCount > 0 ? themeColors.primary + '40' : themeColors.border,
-                backgroundColor: upcomingUnassignedCount > 0 ? themeColors.primaryLight : themeColors.surface,
+                borderColor: upcomingUnder2HrsCount > 0 ? '#DC262680' : upcomingUnassignedCount > 0 ? themeColors.primary + '40' : themeColors.border,
+                backgroundColor: upcomingUnder2HrsCount > 0 ? (isDark ? '#450A0A30' : '#FEF2F2') : upcomingUnassignedCount > 0 ? themeColors.primaryLight : themeColors.surface,
                 padding: 12,
-                minHeight: 90,
+                minHeight: 95,
                 justifyContent: 'space-between',
               }}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: upcomingUnder2HrsCount > 0 ? '#DC2626' : upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
                   <Car size={16} color={upcomingUnassignedCount > 0 ? '#FFFFFF' : themeColors.textSecondary} />
                 </View>
-                <Text style={{ fontSize: 20, fontFamily: 'Inter-ExtraBold', fontWeight: '800', color: upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.text }}>
-                  {upcomingUnassignedCount}
-                </Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 20, fontFamily: 'Inter-ExtraBold', fontWeight: '800', color: upcomingUnder2HrsCount > 0 ? '#DC2626' : upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.text }}>
+                    {upcomingUnassignedCount}
+                  </Text>
+                  {upcomingUnder2HrsCount > 0 && (
+                    <View style={{ backgroundColor: '#DC2626', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}>⚡ {upcomingUnder2HrsCount} &lt; 2 Hrs</Text>
+                    </View>
+                  )}
+                </View>
               </View>
               <View>
                 <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
                   {LABELS.urgentTripsWithoutDriver.title}
                 </Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: themeColors.textSecondary }} numberOfLines={1}>
-                  {upcomingUnassignedCount > 0 ? LABELS.urgentTripsWithoutDriver.caption : 'All dispatched'}
+                <Text style={{ fontSize: 11, fontWeight: '600', color: upcomingUnder2HrsCount > 0 ? '#DC2626' : themeColors.textSecondary }} numberOfLines={1}>
+                  {upcomingUnder2HrsCount > 0 ? '⚠️ Immediate Driver Dispatch' : upcomingUnassignedCount > 0 ? LABELS.urgentTripsWithoutDriver.caption : 'All dispatched'}
                 </Text>
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 4. QUICK OPERATIONS Horizontal Dock */}
-        <View style={{ marginTop: 14 }}>
-          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted }}>
-              {LABELS.sectionQuickOperations}
-            </Text>
+        {/* 4. QUICK OPERATIONS (2x2 Fixed Vertical Grid - Zero Horizontal Scroll) */}
+        <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted, marginBottom: 8 }}>
+            {LABELS.sectionQuickOperations}
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            {/* Quick 1: New Booking */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push('/create-booking' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border,
+                padding: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4F46E515', alignItems: 'center', justifyContent: 'center' }}>
+                <Plus size={18} color="#4F46E5" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                  {LABELS.btnNewBooking}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Post trip / cab</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Quick 2: Live Fleet Map */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push('/live-map' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border,
+                padding: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0284C715', alignItems: 'center', justifyContent: 'center' }}>
+                <Map size={18} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                  {LABELS.btnLiveMap}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Live tracking</Text>
+              </View>
+            </TouchableOpacity>
           </View>
-          <ActionDock
-            items={[
-              {
-                id: 'new_booking',
-                label: LABELS.btnNewBooking,
-                icon: Plus,
-                isPrimary: true,
-                onPress: () => router.push('/create-booking' as any),
-              },
-              {
-                id: 'live_map',
-                label: LABELS.btnLiveMap,
-                icon: Map,
-                onPress: () => router.push('/live-map' as any),
-              },
-              {
-                id: 'add_enquiry',
-                label: LABELS.btnLeadQuote,
-                icon: MessageSquare,
-                onPress: () => setShowNewLeadModal(true),
-              },
-              {
-                id: 'gst_invoices',
-                label: LABELS.btnGstInvoices,
-                icon: Receipt,
-                onPress: () => router.push('/gst-invoices' as any),
-              },
-              {
-                id: 'urgent_bids',
-                label: LABELS.urgentBids.title,
-                icon: Siren,
-                onPress: () => router.push('/emergency-bids' as any),
-              },
-            ]}
-          />
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Quick 3: Lead / Quick Quote */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push('/quote-estimate' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border,
+                padding: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#05966915', alignItems: 'center', justifyContent: 'center' }}>
+                <MessageSquare size={18} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                  {LABELS.btnLeadQuote}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Instant quote</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Quick 4: GST Invoices */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push('/gst-invoices' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border,
+                padding: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}>
+                <Receipt size={18} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                  {LABELS.btnGstInvoices}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Billing & tax</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 5. Team & duty Banner */}
@@ -1042,11 +1112,11 @@ export default function DashboardScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {[
                 { label: 'New booking', icon: Plus, route: '/create-booking' },
-                { label: 'Fare quote', icon: Calculator, route: '/quote-estimate' },
-                { label: 'Add enquiry', icon: MessageSquare, action: () => { setShowFabMenu(false); setShowNewLeadModal(true); } },
+                { label: 'Quote & Leads', icon: Calculator, route: '/quote-estimate' },
                 { label: 'Live map', icon: Map, route: '/live-map' },
                 { label: 'GST invoices', icon: Receipt, route: '/gst-invoices' },
                 { label: 'Urgent bids', icon: Siren, route: '/emergency-bids' },
+                { label: 'Website Leads', icon: MessageSquare, route: '/enquiries' },
               ].map((item, idx) => (
                 <TouchableOpacity
                   key={item.label}
@@ -1063,9 +1133,7 @@ export default function DashboardScreen() {
                   }}
                   onPress={() => {
                     setShowFabMenu(false);
-                    if (item.action) {
-                      item.action();
-                    } else if (item.route) {
+                    if (item.route) {
                       router.push(item.route as any);
                     }
                   }}
@@ -1078,183 +1146,6 @@ export default function DashboardScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-
-
-      {/* New Manual Lead / Estimation Modal */}
-      <Modal
-        visible={showNewLeadModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowNewLeadModal(false)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
-          activeOpacity={1}
-          onPress={() => setShowNewLeadModal(false)}
-        >
-          <View
-            style={{
-              width: '100%',
-              maxWidth: 380,
-              backgroundColor: themeColors.surface,
-              borderRadius: 10,
-              padding: 20,
-              borderWidth: 1,
-              borderColor: themeColors.border,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.15,
-              shadowRadius: 12,
-              elevation: 5,
-            }}
-            onStartShouldSetResponder={() => true}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: themeColors.text }}>Create Manual Lead / Quote</Text>
-              <TouchableOpacity onPress={() => setShowNewLeadModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={20} color={themeColors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginBottom: 14 }}>
-              Quickly record customer phone/walk-in quotation
-            </Text>
-
-            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text, marginBottom: 4 }}>Customer Name *</Text>
-            <TextInput
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                borderRadius: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                fontSize: 13,
-                color: themeColors.text,
-                marginBottom: 10,
-              }}
-              placeholder="e.g. Anand Raj"
-              placeholderTextColor="#94A3B8"
-              value={leadName}
-              onChangeText={setLeadName}
-            />
-
-            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text, marginBottom: 4 }}>Phone Number *</Text>
-            <TextInput
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                borderRadius: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                fontSize: 13,
-                color: themeColors.text,
-                marginBottom: 10,
-              }}
-              keyboardType="phone-pad"
-              placeholder="e.g. 9876543210"
-              placeholderTextColor="#94A3B8"
-              value={leadPhone}
-              onChangeText={setLeadPhone}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text, marginBottom: 4 }}>Pickup City</Text>
-                <TextInput
-                  style={{
-                    backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
-                    borderWidth: 1,
-                    borderColor: themeColors.border,
-                    borderRadius: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    fontSize: 13,
-                    color: themeColors.text,
-                  }}
-                  placeholder="Chennai"
-                  placeholderTextColor="#94A3B8"
-                  value={leadFrom}
-                  onChangeText={setLeadFrom}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text, marginBottom: 4 }}>Drop City</Text>
-                <TextInput
-                  style={{
-                    backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
-                    borderWidth: 1,
-                    borderColor: themeColors.border,
-                    borderRadius: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    fontSize: 13,
-                    color: themeColors.text,
-                  }}
-                  placeholder="Madurai"
-                  placeholderTextColor="#94A3B8"
-                  value={leadTo}
-                  onChangeText={setLeadTo}
-                />
-              </View>
-            </View>
-
-            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text, marginBottom: 4 }}>Quoted Fare (₹)</Text>
-            <TextInput
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                borderRadius: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                fontSize: 13,
-                color: themeColors.text,
-                marginBottom: 16,
-              }}
-              keyboardType="numeric"
-              placeholder="e.g. 4500"
-              placeholderTextColor="#94A3B8"
-              value={leadQuotedFare}
-              onChangeText={setLeadQuotedFare}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  paddingVertical: 11,
-                  borderRadius: 6,
-                  backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onPress={() => setShowNewLeadModal(false)}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.textSecondary }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  flex: 1.4,
-                  paddingVertical: 11,
-                  borderRadius: 6,
-                  backgroundColor: colors.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: savingLead ? 0.6 : 1,
-                }}
-                onPress={handleCreateLead}
-                disabled={savingLead}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                  {savingLead ? 'Saving...' : 'Save Lead'}
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
