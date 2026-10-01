@@ -525,3 +525,15 @@ def test_a_customer_cannot_use_the_admin_assistant_through_a_support_chat(pg_ses
     out = _ask(client_with_db, who, cid)
     assert out["message"]["sender_role"] == "BOT"
     assert asked == []                                                # the tool-use model was never involved
+
+
+def test_daily_caps_are_shared_across_instances(pg_session):
+    """The counters live in the database: a second Cloud Run instance (empty memory) still sees the first one's usage."""
+    _set(pg_session, "chat_bot_daily_limit", "2")
+    assert chat_llm.within_limits(pg_session, "user:test:1") and chat_llm.within_limits(pg_session, "user:test:1")
+    chat_llm._counts.clear()
+    chat_llm._global[:] = ["", 0]                                  # another instance: nothing in memory
+    assert chat_llm.within_limits(pg_session, "user:test:1") is False
+    assert chat_llm.within_limits(pg_session, "user:test:2") is True
+    _set(pg_session, "chat_bot_global_daily_limit", "3")           # 3 uses so far today (2 + 1): the global cap is reached
+    assert chat_llm.within_limits(pg_session, "user:test:3") is False

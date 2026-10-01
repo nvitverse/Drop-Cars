@@ -14,7 +14,8 @@ and adds what chat needs:
         tool_choice is left on "auto": Sonnet 5.5 / Opus 5.5 reject forced tool_choice (any / tool) with HTTP 400
 
 Kill switches (platform settings, "0" turns off):  ai_bot_enabled (everything)  chat_bot_enabled  chat_bot_enabled_<scope>
-Caps (per instance, a cost guard rather than accounting):  chat_bot_daily_limit (per user, default 40),
+Caps (stored in the database, so they hold across every Cloud Run instance; if the database write fails the per-instance
+fallback below still applies):  chat_bot_daily_limit (per user, default 40),
 chat_bot_global_daily_limit (default 4000), admin_assistant_daily_limit (per admin, default 300)
 
 Env vars:  GEMINI_API_KEY / ANTHROPIC_API_KEY (as before)   ANTHROPIC_ASSISTANT_MODEL   ANTHROPIC_ROUTER_MODEL
@@ -54,10 +55,31 @@ def enabled(db: Session, scope: str) -> bool:
     return _on(s(db, "ai_bot_enabled", "1")) and _on(s(db, "chat_bot_enabled", "1")) and _on(s(db, f"chat_bot_enabled_{scope.lower()}", "1"))
 
 
+def _db_within_limits(db: Session, user_key: str, per_user: int, global_cap: int) -> Optional[bool]:
+    """True / False from the shared counters, None when the database cannot be used (the caller falls back to memory)."""
+    try:
+        from sqlalchemy import text
+        today = datetime.now(timezone.utc).date()
+        rows = {r[0]: r[1] for r in db.execute(text("SELECT key, count FROM bot_usage_counters WHERE day = :d AND key IN (:u, 'global')"), {"d": today, "u": user_key}).fetchall()}
+        if rows.get(user_key, 0) >= per_user or rows.get("global", 0) >= global_cap:
+            return False
+        for k in (user_key, "global"):
+            db.execute(text("INSERT INTO bot_usage_counters (key, day, count) VALUES (:k, :d, 1) ON CONFLICT (key, day) DO UPDATE SET count = bot_usage_counters.count + 1"), {"k": k, "d": today})
+        db.commit()
+        return True
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logger.warning("usage counters unavailable, using memory: %s", type(e).__name__)
+        return None
+
+
 def within_limits(db: Session, user_key: str, *, per_user_setting: str = "chat_bot_daily_limit", per_user_default: str = "40") -> bool:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     per_user = int(float(ai_llm._setting(db, per_user_setting, per_user_default)))
     global_cap = int(float(ai_llm._setting(db, "chat_bot_global_daily_limit", "4000")))
+    shared = _db_within_limits(db, user_key, per_user, global_cap)
+    if shared is not None:
+        return shared
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     day, n = _counts.get(user_key, (today, 0))
     if day != today:
         n = 0

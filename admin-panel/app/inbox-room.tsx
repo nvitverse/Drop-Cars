@@ -4,11 +4,12 @@ import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, Sty
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Bot, Check, CheckCheck, ShieldAlert } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { ArrowLeft, Bot, Check, CheckCheck, Paperclip, ShieldAlert } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
-import VoiceNote from '@/components/chat/VoiceNote';
-import ChatComposer from '@/components/chat/ChatComposer';
-import ProposalCard from '@/components/chat/ProposalCard';
+import InboxVoiceNote from '@/components/inbox/InboxVoiceNote';
+import InboxComposer from '@/components/inbox/InboxComposer';
+import ProposalCard from '@/components/inbox/ProposalCard';
 import { chatApi, InboxChatSummary, InboxMessage, roleLabel, timeLabel, transcribeVoice } from '@/services/chatApi';
 
 const POLL_MS = 4000;
@@ -125,6 +126,19 @@ export default function InboxRoomScreen() {
     }
   };
 
+  // Photos: picked with the document picker (already part of the app), uploaded, then sent as an image message.
+  const sendPhoto = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true, multiple: false });
+      if (picked.canceled || !picked.assets?.length) return;
+      const a = picked.assets[0];
+      const up = await chatApi.upload(a.uri, a.mimeType || 'image/jpeg');
+      merge([await chatApi.send(String(id), { image_url: up.url })]);
+    } catch (e: any) {
+      setError(e?.message || 'Photo not sent.');
+    }
+  };
+
   const renderItem = ({ item }: { item: InboxMessage }) => {
     const mine = item.mine;
     return (
@@ -138,7 +152,7 @@ export default function InboxRoomScreen() {
           ) : null}
           {item.image_url ? <Image source={{ uri: item.image_url }} style={s.photo} resizeMode="cover" /> : null}
           {item.voice_url ? (
-            <VoiceNote uri={item.voice_url} mine={mine} tint={mine ? '#fff' : c.primary} />
+            <InboxVoiceNote uri={item.voice_url} mine={mine} tint={mine ? '#fff' : c.primary} />
           ) : item.text ? (
             <Text style={[s.text, { color: mine ? (c.onPrimary || '#fff') : c.text }]}>{item.text}</Text>
           ) : null}
@@ -208,7 +222,17 @@ export default function InboxRoomScreen() {
         {chat && !chat.can_post ? (
           <Text style={[s.closed, { color: c.textMuted }]}>{chat.is_closed ? 'This chat is closed.' : 'You can read this chat but not reply to it.'}</Text>
         ) : (
-          <ChatComposer colors={c} placeholder="Type a message" onSendText={sendText} onSendVoice={(uri) => sendVoice(uri)} />
+          <InboxComposer
+            colors={c}
+            placeholder="Type a message"
+            onSendText={sendText}
+            onSendVoice={(uri) => sendVoice(uri)}
+            leftAccessory={chat?.type === 'ASSISTANT' ? undefined : (
+              <TouchableOpacity onPress={sendPhoto} hitSlop={8} accessibilityLabel="Send a photo" style={{ paddingHorizontal: 6 }}>
+                <Paperclip size={20} color={c.textMuted} />
+              </TouchableOpacity>
+            )}
+          />
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

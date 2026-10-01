@@ -10,6 +10,7 @@ from sqlalchemy import JSON, Column, Integer, String, Text, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database.session import Base
+from app.models.bot_usage import BotUsageCounter  # noqa: F401  (registers the table: main.py already imports this module)
 
 
 class AssistantProposal(Base):
