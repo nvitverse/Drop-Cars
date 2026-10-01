@@ -18,10 +18,8 @@ from app.models.customer_booking_request import CustomerBookingRequest
 
 
 def list_pending_website_bookings(db) -> list:
-    from app.crud.customer_booking_request import get_auto_approve_seconds
+    from app.crud.website_post_rules import describe_pending, any_staff_present, get_rules
 
-    normal_delay = get_auto_approve_seconds(db, is_urgent=False)
-    urgent_delay = get_auto_approve_seconds(db, is_urgent=True)
     requests = (
         db.query(CustomerBookingRequest)
         .filter(CustomerBookingRequest.status == "PENDING")
@@ -29,8 +27,9 @@ def list_pending_website_bookings(db) -> list:
         .order_by(CustomerBookingRequest.created_at.asc())
         .all()
     )
-    return [
-        {
+    out = []
+    for r, plan in describe_pending(db, requests):
+        out.append({
             "id": r.id,
             "customer_name": r.customer_name,
             "customer_number": r.customer_number,
@@ -42,10 +41,30 @@ def list_pending_website_bookings(db) -> list:
             "source": r.source,
             "created_at": r.created_at,
             "is_urgent": r.is_urgent,
-            "auto_post_at": r.created_at + timedelta(seconds=urgent_delay if r.is_urgent else normal_delay),
-        }
-        for r in requests
-    ]
+            # when it posts by itself, and why (None = waits for staff)
+            "auto_post_at": plan["deadline"],
+            "auto_post_tier": plan["tier"],
+            "auto_post_reason": plan["reason"],
+            "hold_until": r.hold_until,
+            "can_hold": plan["deadline"] is not None,
+        })
+    return out
+
+
+def bulk_approve_website_bookings(db, ids: list, decided_by: str) -> dict:
+    """Post exactly the selected bookings. One failing booking never stops the rest."""
+    approved, failed = [], []
+    for raw_id in ids:
+        try:
+            order = approve_website_booking(db, raw_id, decided_by=decided_by)
+            approved.append({"id": str(raw_id), "order_id": order.id})
+        except HTTPException as e:
+            db.rollback()
+            failed.append({"id": str(raw_id), "reason": e.detail})
+        except Exception as e:
+            db.rollback()
+            failed.append({"id": str(raw_id), "reason": str(e)})
+    return {"approved": approved, "failed": failed}
 
 
 def approve_website_booking(db, request_id, decided_by: str = "ADMIN"):

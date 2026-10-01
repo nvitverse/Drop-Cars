@@ -66,6 +66,11 @@ class CustomerBookingRequest(Base):
     # this is true.
     requires_manual_confirm = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    # Staff paused the auto-post of this booking until this moment (never past pickup - 2 hrs).
+    hold_until = Column(TIMESTAMP(timezone=True), nullable=True)
+    # Set once when the Owner was alerted that this booking has been waiting on staff too long.
+    escalated_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
     # Website customer-initiated cancel: short-lived OTP emailed to the
     # customer to prove it's really them before a cancel is honoured (a
     # booking ID alone isn't proof of identity - see

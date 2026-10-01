@@ -5255,6 +5255,7 @@ async def admin_get_website_booking_settings(
         PHONE_REVEAL_HOURS_BEFORE_KEY, DEFAULT_PHONE_REVEAL_HOURS_BEFORE,
     )
     return {
+        **_post_rule_settings(db),
         "auto_approve_seconds": get_auto_approve_seconds(db, is_urgent=False),
         "urgent_approve_seconds": get_auto_approve_seconds(db, is_urgent=True),
         "assignment_window_percent": int(get_platform_setting_value(db, ASSIGNMENT_WINDOW_PERCENT_KEY, str(DEFAULT_ASSIGNMENT_WINDOW_PERCENT))),
@@ -5265,7 +5266,38 @@ async def admin_get_website_booking_settings(
     }
 
 
+_POST_RULE_SETTINGS = {
+    # api name -> platform_settings key (crud/website_post_rules.py explains each)
+    "advance_post_hours": "website_advance_post_hours",
+    "staff_wait_until_hours": "website_staff_wait_until_hours",
+    "short_notice_hours": "website_short_notice_hours",
+    "off_duty_delay_seconds": "website_off_duty_delay_seconds",
+    "on_duty_short_delay_seconds": "website_on_duty_short_delay_seconds",
+    "off_duty_short_delay_seconds": "website_off_duty_short_delay_seconds",
+    "off_duty_urgent_delay_seconds": "website_off_duty_urgent_delay_seconds",
+    "owner_escalate_minutes": "website_owner_escalate_minutes",
+    "staff_presence_minutes": "staff_presence_minutes",
+    "staff_duty_max_hours": "staff_duty_max_hours",
+}
+
+
+def _post_rule_settings(db) -> dict:
+    from app.crud.website_post_rules import get_rules
+    rules = get_rules(db)
+    return {api: rules[key] for api, key in _POST_RULE_SETTINGS.items()}
+
+
 class WebsiteBookingSettingsUpdate(BaseModel):
+    advance_post_hours: Optional[float] = None
+    staff_wait_until_hours: Optional[float] = None
+    short_notice_hours: Optional[float] = None
+    off_duty_delay_seconds: Optional[float] = None
+    on_duty_short_delay_seconds: Optional[float] = None
+    off_duty_short_delay_seconds: Optional[float] = None
+    off_duty_urgent_delay_seconds: Optional[float] = None
+    owner_escalate_minutes: Optional[float] = None
+    staff_presence_minutes: Optional[float] = None
+    staff_duty_max_hours: Optional[float] = None
     auto_approve_seconds: Optional[int] = None
     urgent_approve_seconds: Optional[int] = None
     # Assignment window: how long a vendor has, after ACCEPTING, to actually
@@ -5303,6 +5335,13 @@ async def admin_update_website_booking_settings(
         PHONE_REVEAL_HOURS_BEFORE_KEY, DEFAULT_PHONE_REVEAL_HOURS_BEFORE,
         get_auto_approve_seconds,
     )
+    for _api, _key in _POST_RULE_SETTINGS.items():
+        _val = getattr(body, _api)
+        if _val is None:
+            continue
+        if _val < 0 or _val > 24 * 30 * 60:
+            raise HTTPException(status_code=400, detail=f"{_api} is out of range")
+        set_platform_setting_value(db, _key, str(_val))
     if body.auto_approve_seconds is not None:
         if body.auto_approve_seconds < 30:
             raise HTTPException(status_code=400, detail="auto_approve_seconds must be at least 30")
@@ -5332,6 +5371,7 @@ async def admin_update_website_booking_settings(
             raise HTTPException(status_code=400, detail="phone_reveal_hours_before_pickup cannot be negative")
         set_platform_setting_value(db, PHONE_REVEAL_HOURS_BEFORE_KEY, str(body.phone_reveal_hours_before_pickup))
     return {
+        **_post_rule_settings(db),
         "auto_approve_seconds": get_auto_approve_seconds(db, is_urgent=False),
         "urgent_approve_seconds": get_auto_approve_seconds(db, is_urgent=True),
         "assignment_window_percent": int(get_platform_setting_value(db, ASSIGNMENT_WINDOW_PERCENT_KEY, str(DEFAULT_ASSIGNMENT_WINDOW_PERCENT))),
@@ -6222,6 +6262,75 @@ async def admin_approve_website_booking(
     return {"status": "APPROVED", "order_id": master_order.id}
 
 
+class WebsiteBookingBulkApprove(BaseModel):
+    ids: List[UUID]
+
+
+@router.post("/admin/website-bookings/bulk-approve")
+async def admin_bulk_approve_website_bookings(
+    body: WebsiteBookingBulkApprove,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Post exactly the bookings the staff selected (the "select all" button just sends every id)."""
+    from app.crud.website_booking_approvals import bulk_approve_website_bookings
+    if not body.ids:
+        raise HTTPException(status_code=400, detail="Select at least one booking")
+    if len(body.ids) > 200:
+        raise HTTPException(status_code=400, detail="Select at most 200 bookings at a time")
+    result = bulk_approve_website_bookings(db, list(dict.fromkeys(body.ids)), decided_by=current_admin.username)
+    from app.crud.admin_activity_log import log_admin_action
+    log_admin_action(
+        db, admin_id=current_admin.id, admin_username=current_admin.username, admin_role=getattr(current_admin, 'role', None),
+        action="BULK_WEBSITE_BOOKINGS_APPROVED", target_type="customer_booking_request", target_id="BULK",
+        details={"approved_count": len(result["approved"]), "failed_count": len(result["failed"]),
+                 "order_ids": [a["order_id"] for a in result["approved"]]},
+    )
+    return {"status": "SUCCESS", "approved_count": len(result["approved"]), **result}
+
+
+class WebsiteBookingHold(BaseModel):
+    minutes: int = 30
+
+
+@router.post("/admin/website-bookings/{id}/hold")
+async def admin_hold_website_booking(
+    id: UUID,
+    body: WebsiteBookingHold,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Pause the auto-post of one booking while staff talk to the customer (max 120 min, never past pickup - 2 hrs)."""
+    from app.models.customer_booking_request import CustomerBookingRequest
+    from app.crud.website_post_rules import set_hold
+    request = db.query(CustomerBookingRequest).filter(CustomerBookingRequest.id == id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    until = set_hold(db, request, body.minutes)
+    from app.crud.admin_activity_log import log_admin_action
+    log_admin_action(
+        db, admin_id=current_admin.id, admin_username=current_admin.username, admin_role=getattr(current_admin, 'role', None),
+        action="WEBSITE_BOOKING_HELD", target_type="customer_booking_request", target_id=str(id),
+        target_name=request.customer_name, details={"hold_until": until.isoformat()},
+    )
+    return {"id": str(id), "hold_until": until}
+
+
+@router.post("/admin/website-bookings/{id}/release-hold")
+async def admin_release_website_booking_hold(
+    id: UUID,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models.customer_booking_request import CustomerBookingRequest
+    request = db.query(CustomerBookingRequest).filter(CustomerBookingRequest.id == id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    request.hold_until = None
+    db.commit()
+    return {"id": str(id), "hold_until": None}
+
+
 @router.post("/admin/website-bookings/approve-all")
 async def admin_approve_all_website_bookings(
     current_admin=Depends(get_current_admin),
@@ -6233,6 +6342,7 @@ async def admin_approve_all_website_bookings(
     pending_bookings = (
         db.query(CustomerBookingRequest)
         .filter(CustomerBookingRequest.status == "PENDING")
+        .filter(CustomerBookingRequest.requires_manual_confirm == False)  # noqa: E712 - enquiries are confirmed on their own
         .all()
     )
     
@@ -6873,7 +6983,9 @@ async def get_system_settings_endpoint(
     """Retrieve dynamic platform configuration settings."""
     from app.models.admin import Admin as _Admin
     result = get_all_system_settings(db)
-    result["staff_on_duty_count"] = db.query(_Admin).filter(_Admin.is_on_duty.is_(True)).count()
+    from app.crud.website_post_rules import staff_present_count
+    result["staff_on_duty_count"] = staff_present_count(db)
+    result["staff_switched_on_count"] = db.query(_Admin).filter(_Admin.is_on_duty.is_(True)).count()
     return result
 
 

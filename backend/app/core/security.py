@@ -407,7 +407,25 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    _touch_admin_presence(db, admin)
     return admin
+
+
+def _touch_admin_presence(db: Session, admin) -> None:
+    """Remember that this admin is using the app right now (at most once a minute). This is what makes the
+    "on duty" switch trustworthy: duty only counts while the app was used in the last few minutes."""
+    try:
+        from datetime import datetime, timedelta, timezone
+        from app.models.admin import Admin
+        now = datetime.now(timezone.utc)
+        seen = getattr(admin, "last_seen_at", None)
+        if seen is not None and seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        if seen is None or now - seen > timedelta(seconds=60):
+            db.query(Admin).filter(Admin.id == admin.id).update({Admin.last_seen_at: now}, synchronize_session=False)
+            db.commit()
+    except Exception:
+        db.rollback()
 
 
 def get_current_user_flexible(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> dict:
