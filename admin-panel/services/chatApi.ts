@@ -5,7 +5,7 @@ import { apiService } from '@/services/api';
 
 const BASE_URL = 'https://drop-cars-api-207918408785.asia-south2.run.app/api';
 
-export type ChatType = 'BOOKING' | 'SUPPORT' | 'STAFF' | 'DIRECT' | 'BROADCAST';
+export type ChatType = 'BOOKING' | 'SUPPORT' | 'STAFF' | 'DIRECT' | 'BROADCAST' | 'ASSISTANT';
 
 export interface InboxChat {
   id: string;
@@ -18,6 +18,7 @@ export interface InboxChat {
   is_closed: boolean;
   muted: boolean;
   member: boolean;
+  needs_human?: boolean;
   participants: { role: string; name: string | null }[];
 }
 
@@ -35,6 +36,8 @@ export interface InboxMessage {
   read: boolean;
   masked: boolean;
   notice?: string;
+  bot_pending?: boolean;
+  meta?: { bot?: boolean; tools?: string[]; handoff?: boolean; suggestions?: string[] } | null;
 }
 
 export interface InboxChatSummary {
@@ -47,6 +50,8 @@ export interface InboxChatSummary {
   participants: { role: string; name: string | null }[];
   number_revealed?: boolean;
   number_policy?: string | null;
+  bot_state?: 'ON' | 'OFF' | 'HANDOFF' | 'HUMAN';
+  needs_human?: boolean;
 }
 
 export interface StaffMember {
@@ -57,10 +62,11 @@ export interface StaffMember {
 }
 
 /** The filter chips on the inbox. A chat matches a chip by its type and by who is in it. */
-export type InboxFilter = 'ALL' | 'CUSTOMER' | 'FLEET_OWNER' | 'DRIVER' | 'DUTY_DRIVER' | 'VENDOR' | 'BOOKING' | 'STAFF';
+export type InboxFilter = 'ALL' | 'NEEDS_PERSON' | 'CUSTOMER' | 'FLEET_OWNER' | 'DRIVER' | 'DUTY_DRIVER' | 'VENDOR' | 'BOOKING' | 'STAFF';
 
 export const FILTERS: { key: InboxFilter; label: string }[] = [
   { key: 'ALL', label: 'All' },
+  { key: 'NEEDS_PERSON', label: 'Needs a person' },
   { key: 'CUSTOMER', label: 'Customer' },
   { key: 'FLEET_OWNER', label: 'Fleet owner' },
   { key: 'DRIVER', label: 'Driver' },
@@ -74,6 +80,7 @@ export const matchesFilter = (c: InboxChat, f: InboxFilter): boolean => {
   const has = (role: string) => c.participants.some((p) => p.role === role);
   switch (f) {
     case 'ALL': return true;
+    case 'NEEDS_PERSON': return !!c.needs_human;
     case 'CUSTOMER': return has('CUSTOMER');
     case 'FLEET_OWNER': return has('FLEET_OWNER');
     case 'DRIVER': return c.type === 'BOOKING' && has('DRIVER');
@@ -101,6 +108,10 @@ export const chatApi = {
   staffDirectory: () => call<StaffMember[]>('/staff/directory'),
   openStaffDirect: (withAdminId: string) => call<InboxChatSummary>('/staff', json({ with_admin_id: withAdminId })),
   openStaffGroup: (title: string, memberIds: string[]) => call<InboxChatSummary>('/staff', json({ title, member_ids: memberIds })),
+  openAssistant: () => call<InboxChatSummary>('/assistant', json({})),
+  /** Ask the assistant to answer MY latest message (the send reply said bot_pending). Can take a while: it may look things up. */
+  askBot: (id: string) => call<{ replied: boolean; handoff?: boolean; message?: InboxMessage | null; reason?: string }>(`/${id}/bot`, json({})),
+  setBot: (id: string, state: 'ON' | 'OFF') => call<{ bot_state: string }>(`/${id}/bot`, { method: 'PATCH', body: JSON.stringify({ state }) }),
   openBooking: (orderId: number) => call<InboxChatSummary>(`/booking/${orderId}`, json({})),
 
   /** Voice notes and photos: upload first, then send the returned url in a message. */

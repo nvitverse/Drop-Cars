@@ -4,7 +4,7 @@ import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, Sty
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Check, CheckCheck, ShieldAlert } from 'lucide-react-native';
+import { ArrowLeft, Bot, Check, CheckCheck, ShieldAlert } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import VoiceNote from '@/components/chat/VoiceNote';
 import ChatComposer from '@/components/chat/ChatComposer';
@@ -21,6 +21,7 @@ export default function InboxRoomScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [botBusy, setBotBusy] = useState(false);
   const listRef = useRef<FlatList<InboxMessage>>(null);
   const lastId = useRef(0);
 
@@ -68,6 +69,28 @@ export default function InboxRoomScreen() {
     if (messages.length) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
   }, [messages.length]);
 
+  // The assistant answers in a second step so my own message is never held up by it.
+  const callBot = async () => {
+    setBotBusy(true);
+    try {
+      const r = await chatApi.askBot(String(id));
+      if (r.message) merge([r.message]);
+      if (r.handoff) chatApi.get(String(id)).then(setChat).catch(() => {});
+    } catch { /* nothing to show: the chat itself is intact */ } finally {
+      setBotBusy(false);
+    }
+  };
+
+  const toggleBot = async () => {
+    if (!chat) return;
+    try {
+      await chatApi.setBot(chat.id, chat.bot_state === 'ON' ? 'OFF' : 'ON');
+      setChat(await chatApi.get(chat.id));
+    } catch (e: any) {
+      setError(e?.message || 'Could not change the assistant.');
+    }
+  };
+
   const sendText = async (text: string) => {
     const body = text.trim();
     if (!body) return;
@@ -76,6 +99,7 @@ export default function InboxRoomScreen() {
       const sent = await chatApi.send(String(id), { text: body });
       merge([sent]);
       if (sent.notice) setNotice(sent.notice);
+      if (sent.bot_pending) callBot();
     } catch (e: any) {
       setError(e?.message || 'Message not sent.');
     }
@@ -98,6 +122,7 @@ export default function InboxRoomScreen() {
           {!mine ? (
             <Text style={[s.sender, { color: c.primary }]}>
               {item.sender_name || roleLabel(item.sender_role)}{item.sender_name ? ` - ${roleLabel(item.sender_role)}` : ''}
+              {item.sender_role === 'BOT' && item.meta?.tools?.length ? `  (looked up: ${item.meta.tools.join(', ')})` : ''}
             </Text>
           ) : null}
           {item.image_url ? <Image source={{ uri: item.image_url }} style={s.photo} resizeMode="cover" /> : null}
@@ -137,6 +162,16 @@ export default function InboxRoomScreen() {
         </View>
       ) : null}
 
+      {chat && (chat.needs_human || ((chat.type === 'SUPPORT' || chat.type === 'BOOKING') && chat.bot_state && chat.bot_state !== 'ON')) ? (
+        <View style={[s.policy, { backgroundColor: chat.needs_human ? c.errorTint : c.surfaceAlt }]}>
+          <Bot size={14} color={chat.needs_human ? c.error : c.textMuted} />
+          <Text style={[s.policyText, { color: chat.needs_human ? c.error : c.textSecondary }]}>
+            {chat.needs_human ? 'The assistant handed this chat to a person. Reply to take it.' : 'Assistant is off in this chat.'}
+          </Text>
+          <TouchableOpacity onPress={toggleBot}><Text style={{ color: c.primary, fontWeight: '800', fontSize: 12 }}>Turn on</Text></TouchableOpacity>
+        </View>
+      ) : null}
+
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {loading ? (
           <View style={s.center}><ActivityIndicator color={c.primary} /></View>
@@ -151,6 +186,7 @@ export default function InboxRoomScreen() {
           />
         )}
         {error && messages.length ? <Text style={[s.notice, { color: c.error }]}>{error}</Text> : null}
+        {botBusy ? <Text style={[s.notice, { color: c.textMuted }]}>Assistant is working on it...</Text> : null}
         {notice ? <Text style={[s.notice, { color: c.warning }]}>{notice}</Text> : null}
         {chat && !chat.can_post ? (
           <Text style={[s.closed, { color: c.textMuted }]}>{chat.is_closed ? 'This chat is closed.' : 'You can read this chat but not reply to it.'}</Text>

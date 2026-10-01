@@ -9,7 +9,7 @@ import { ArrowLeft, Check, CheckCheck, Mic, Send, ShieldAlert } from 'lucide-rea
 import { getPalette } from '@/constants/theme';
 import { useScreenTheme } from '@/components/SafeArea';
 import {
-  ChatMessage, ChatSummary, getChat, getMessages, markRead, openBookingChat, openSupportChat, sendMessage, timeLabel,
+  askBot, ChatMessage, ChatSummary, getChat, getMessages, markRead, openBookingChat, openSupportChat, sendMessage, timeLabel,
 } from '@/services/chat';
 
 const POLL_MS = 4000;
@@ -28,6 +28,7 @@ export default function ChatRoomScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [botTyping, setBotTyping] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const lastId = useRef(0);
   const chatId = useRef<string | null>(null);
@@ -84,8 +85,18 @@ export default function ChatRoomScreen() {
     if (messages.length) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
   }, [messages.length]);
 
-  const send = async () => {
-    const body = text.trim();
+  // The assistant answers in a second step so my own message is never held up by it.
+  const callBot = async (id: string) => {
+    setBotTyping(true);
+    try {
+      const r = await askBot(id);
+      if (r.message) merge([r.message]);
+    } catch { /* the team still sees the chat; nothing to show */ } finally {
+      setBotTyping(false);
+    }
+  };
+
+  const post = async (body: string) => {
     if (!body || sending || !chatId.current) return;
     setSending(true);
     setNotice(null);
@@ -94,12 +105,17 @@ export default function ChatRoomScreen() {
       setText('');
       merge([sent]);
       if (sent.notice) setNotice(sent.notice);
+      if (sent.bot_pending && chatId.current) callBot(chatId.current);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Message not sent. Try again.');
     } finally {
       setSending(false);
     }
   };
+
+  const send = () => post(text.trim());
+  const last = messages[messages.length - 1];
+  const suggestions = last && last.sender_role === 'BOT' && !botTyping ? last.meta?.suggestions || [] : [];
 
   const title = params.title ? String(params.title) : chat?.title || 'Chat';
 
@@ -108,7 +124,7 @@ export default function ChatRoomScreen() {
     return (
       <View style={[s.row, mine ? s.rowMine : s.rowOther]}>
         <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleOther]}>
-          {!mine && item.sender_name ? <Text style={s.sender}>{item.sender_name}</Text> : null}
+          {!mine && item.sender_name ? <Text style={s.sender}>{item.sender_name}{item.sender_role === 'BOT' ? ' · AI' : ''}</Text> : null}
           {item.image_url ? <Image source={{ uri: item.image_url }} style={s.photo} resizeMode="cover" /> : null}
           {item.voice_url ? (
             <TouchableOpacity style={s.voice} onPress={() => Linking.openURL(item.voice_url as string)}>
@@ -166,7 +182,15 @@ export default function ChatRoomScreen() {
         />
       )}
 
+      {botTyping ? <Text style={s.notice}>Drop Cars Assistant is typing...</Text> : null}
       {notice ? <Text style={s.notice}>{notice}</Text> : null}
+      {suggestions.length ? (
+        <View style={s.chips}>
+          {suggestions.map((q) => (
+            <TouchableOpacity key={q} style={s.chip} onPress={() => post(q)}><Text style={s.chipText}>{q}</Text></TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
 
       {chat && !chat.can_post ? (
         <Text style={s.closed}>{chat.is_closed ? 'This chat is closed.' : 'You can only read this chat.'}</Text>
@@ -218,6 +242,9 @@ const styles = (p: ReturnType<typeof getPalette>, isDark: boolean) =>
     time: { fontSize: 10.5, color: p.textMuted },
     timeMine: { color: 'rgba(255,255,255,0.75)' },
     notice: { textAlign: 'center', fontSize: 11.5, color: '#B45309', paddingHorizontal: 14, paddingBottom: 4 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingBottom: 6 },
+    chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: p.primaryBrand, backgroundColor: p.surface },
+    chipText: { color: p.primaryBrand, fontSize: 12.5, fontWeight: '700' },
     closed: { textAlign: 'center', color: p.textMuted, padding: 14, fontSize: 13 },
     inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: p.divider, backgroundColor: p.surface },
     input: { flex: 1, maxHeight: 110, minHeight: 42, borderRadius: 20, borderWidth: 1, borderColor: p.border, paddingHorizontal: 14, paddingVertical: 9, fontSize: 14.5, color: p.textPrimary, backgroundColor: p.background },

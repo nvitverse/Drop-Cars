@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Car, Headset, Search, UserPlus, Users, X } from 'lucide-react-native';
+import { ArrowLeft, Bot, Car, Headset, Search, UserPlus, Users, X } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import {
   chatApi, FILTERS, InboxChat, InboxFilter, matchesFilter, StaffMember, timeLabel,
@@ -33,7 +33,7 @@ export default function InboxScreen() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      setItems(await chatApi.list('all'));
+      setItems((await chatApi.list('all')).filter((i) => i.type !== 'ASSISTANT'));
     } catch (e: any) {
       setError(e?.message || 'Could not load chats.');
     } finally {
@@ -66,6 +66,15 @@ export default function InboxScreen() {
   }, [items, filter, q]);
 
   const openRoom = (id: string, title: string) => router.push({ pathname: '/inbox-room', params: { id, title } } as any);
+
+  const openAssistant = async () => {
+    try {
+      const chat = await chatApi.openAssistant();
+      openRoom(chat.id, 'Assistant');
+    } catch (e: any) {
+      setError(e?.message || 'Could not open the assistant.');
+    }
+  };
 
   const openPicker = async () => {
     setPicker(true);
@@ -105,9 +114,14 @@ export default function InboxScreen() {
           <ArrowLeft size={22} color={c.text} />
         </TouchableOpacity>
         <Text style={[s.title, { color: c.text }]}>Inbox</Text>
-        <TouchableOpacity onPress={openPicker} hitSlop={10} accessibilityLabel="New team chat">
-          <UserPlus size={22} color={c.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 18 }}>
+          <TouchableOpacity onPress={openAssistant} hitSlop={10} accessibilityLabel="Ask the assistant">
+            <Bot size={22} color={c.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openPicker} hitSlop={10} accessibilityLabel="New team chat">
+            <UserPlus size={22} color={c.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[s.search, { backgroundColor: c.inputBg, borderColor: c.border }]}>
@@ -153,6 +167,7 @@ export default function InboxScreen() {
                   <Text style={[s.preview, { color: item.unread ? c.text : c.textSecondary, fontWeight: item.unread ? '700' : '400' }]} numberOfLines={1}>
                     {item.last_message || 'No messages yet'}
                   </Text>
+                  {item.needs_human ? <View style={[s.badge, { backgroundColor: c.error, paddingHorizontal: 8 }]}><Text style={s.badgeText}>Needs a person</Text></View> : null}
                   {item.unread > 0 ? <View style={[s.badge, { backgroundColor: c.primary }]}><Text style={s.badgeText}>{item.unread > 99 ? '99+' : item.unread}</Text></View> : null}
                 </View>
               </View>

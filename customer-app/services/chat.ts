@@ -33,6 +33,8 @@ export interface ChatMessage {
   read: boolean;
   masked: boolean;
   notice?: string;
+  bot_pending?: boolean;
+  meta?: { bot?: boolean; suggestions?: string[]; handoff?: boolean } | null;
 }
 
 export interface ChatSummary {
@@ -66,6 +68,10 @@ export const getMessages = async (id: string, afterId = 0): Promise<{ messages: 
 
 export const sendMessage = async (id: string, text: string): Promise<ChatMessage> =>
   (await axiosInstance.post(`/api/conversations/${id}/messages`, { text })).data;
+
+/** Asks the assistant to answer my latest message (only called when the send reply said bot_pending). */
+export const askBot = async (id: string): Promise<{ replied: boolean; handoff?: boolean; message?: ChatMessage | null }> =>
+  (await axiosInstance.post(`/api/conversations/${id}/bot`, null, { timeout: 45000 })).data;
 
 export const markRead = async (id: string, upTo?: number): Promise<void> => {
   await axiosInstance.post(`/api/conversations/${id}/read`, { up_to_id: upTo ?? null });
