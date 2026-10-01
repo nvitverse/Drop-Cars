@@ -17,6 +17,7 @@ from app.models.booking_chat import BookingChatMessage
 from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 from app.crud import booking_chat as chat
 from app.utils.gcs import upload_image_to_gcs
+from app.utils.chat_media import media_url
 
 router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"], dependencies=[Depends(get_current_user_flexible)])
 
@@ -24,6 +25,8 @@ router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"], dependencies=[
 class Actor:
     def __init__(self, side: str, ident: str, name: str, read_only: bool = False):
         self.side, self.ident, self.name, self.read_only = side, ident, name, read_only
+        self.role = None
+        self.principal_id = ident
 
 
 def _creds(request: Request) -> HTTPAuthorizationCredentials:
@@ -74,13 +77,17 @@ def _load(request: Request, db: Session, order_id: int):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Booking not found")
-    return _actor_for_order(role, caller, order, db), order
+    actor = _actor_for_order(role, caller, order, db)
+    actor.role = role                                   # VENDOR | OWNER | DRIVER | ADMIN (used by the unified-chat bridge)
+    # the account id the unified chat knows this person by (the older code keys a fleet owner by its details row)
+    actor.principal_id = str(caller.id) if role in ("VENDOR", "DRIVER", "ADMIN") else str(getattr(caller, "vehicle_owner_id", None) or caller.id)
+    return actor, order
 
 
 def _msg_out(m: BookingChatMessage, me: str, by_id: Optional[dict] = None, options: Optional[list] = None) -> dict:
     out = {
         "id": m.id, "side": m.sender_side, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": m.voice_url,
+        "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": media_url(m.voice_url),
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
         "reply_to": None,
@@ -292,4 +299,7 @@ def send_message(order_id: int, payload: SendPayload, request: Request, db: Sess
     db.commit()
     db.refresh(m)
     chat.notify_other_side(db, order, actor.side, text, a)
+    # same message into the unified chat, so customers / admins on the newer apps see it too (never fails this request)
+    from app.crud import chat_bridge
+    chat_bridge.legacy_booking_to_new(db, order, m, getattr(actor, "role", "OWNER"), str(actor.principal_id), actor.name)
     return _msg_out(m, actor.side, {reply_to.id: reply_to} if reply_to else None)

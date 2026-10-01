@@ -2,6 +2,7 @@
 Admin - a real two-way thread (not a fire-and-forget ticket), plus the
 driver-facing "who do I call right now" lookup. A booking-specific question
 goes through booking_chat.py's per-order thread instead."""
+from app.utils.chat_media import media_url
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
@@ -115,7 +116,7 @@ def _notify_driver_owner_of_admin_reply(db: Session, thread_key: str, text: str)
 def _msg_out(m: SupportMessage, me: str) -> dict:
     return {
         "id": m.id, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "text": m.text, "voice_url": m.voice_url, "created_at": m.created_at.isoformat() if m.created_at else None,
+        "text": m.text, "voice_url": media_url(m.voice_url), "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
     }
 
@@ -230,6 +231,8 @@ async def send_support_message(payload: SupportMessagePayload, request: Request,
     db.add(m)
     db.commit()
     db.refresh(m)
+    from app.crud import chat_bridge
+    chat_bridge.legacy_support_to_new(db, m)
 
     # Best-effort email nudge so a real person notices quickly even before
     # opening the Admin App - never blocks/fails the chat message itself.
@@ -424,5 +427,7 @@ async def reply_to_support_thread(thread_key: str, payload: SupportMessagePayloa
     db.add(m)
     db.commit()
     db.refresh(m)
+    from app.crud import chat_bridge
+    chat_bridge.legacy_support_to_new(db, m, admin_id=str(current_admin.id))
     _notify_driver_owner_of_admin_reply(db, thread_key, m.text)
     return _msg_out(m, "ADMIN")
