@@ -22,6 +22,7 @@ import {
   Percent, StickyNote, Check, Info, Phone, ArrowUpDown, Globe, AlertCircle, GripVertical, ChevronUp,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
+import { enquiriesApi, WebsiteEnquiry } from '@/services/enquiriesApi';
 import { colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -191,6 +192,14 @@ export default function CreateBookingScreen() {
   // Explanations live behind the small (i) dots, so the form itself stays
   // short: tapping one opens this popup.
   const [helpTip, setHelpTip] = useState<{ title: string; text: string } | null>(null);
+  // "From lead or booking": pick a website lead / booking, the form fills itself, and
+  // posting marks that lead confirmed. The search runs only when the button is pressed.
+  const [linkQuery, setLinkQuery] = useState('');
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkResults, setLinkResults] = useState<WebsiteEnquiry[] | null>(null);
+  const [linkedLead, setLinkedLead] = useState<WebsiteEnquiry | null>(null);
+  const [leadConfirmed, setLeadConfirmed] = useState<'ok' | 'fail' | null>(null);
+  const pendingLeadRates = useRef<{ cpk?: number; ecpk?: number } | null>(null);
   // Quote review: which of the Inclusions / Exclusions lists is open.
   const [openFareList, setOpenFareList] = useState<'incl' | 'excl' | null>(null);
   // "Allocate manually" hit a low wallet: ask before allocating on credit.
@@ -493,6 +502,12 @@ export default function CreateBookingScreen() {
       setDriverAllowance(defs.driver_allowance);
       if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
       if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
+      const lr = pendingLeadRates.current;
+      if (lr) {
+        if (lr.cpk) setCostPerKm(String(lr.cpk));
+        if (lr.ecpk !== undefined && !isNaN(lr.ecpk)) setExtraCostPerKm(String(lr.ecpk));
+        pendingLeadRates.current = null;
+      }
     } else {
       if (!costPerHour || costPerHour === '0') setCostPerHour('250');
       if (!extraCostPerHour) setExtraCostPerHour('50');
@@ -696,6 +711,73 @@ export default function CreateBookingScreen() {
   const editGst = (v: string) => {
     setGstTouched(true);
     setGstAmount(stripLeadingZero(v));
+  };
+
+  const searchLeads = async () => {
+    const q = linkQuery.trim();
+    if (q.length < 3) {
+      Alert.alert('Type more', 'Enter at least 3 characters of the booking ID, name, phone or place.');
+      return;
+    }
+    setLinkSearching(true);
+    try {
+      const open = await enquiriesApi.list({ tab: 'not_responded', search: q });
+      let rows = open.enquiries || [];
+      // already-confirmed bookings live in the other tab
+      if (rows.length === 0) rows = (await enquiriesApi.list({ tab: 'responded', search: q })).enquiries || [];
+      setLinkResults(rows.slice(0, 6));
+    } catch (e: any) {
+      Alert.alert('Search failed', e?.message || 'Could not reach the enquiries service');
+      setLinkResults([]);
+    } finally {
+      setLinkSearching(false);
+    }
+  };
+
+  const applyLead = (e: WebsiteEnquiry) => {
+    const pickup = (e.pickup || '').trim();
+    const drop = (e.drop_location || '').trim();
+    const trip = String(e.trip_type || '').toLowerCase();
+    const nextTrip: TripType = trip.includes('round') ? 'roundtrip' : trip.includes('multi') ? 'multicity' : trip.includes('hour') ? 'hourly' : trip.includes('local') ? 'local' : 'oneway';
+    const v = String(e.vehicle_type || '').toLowerCase();
+    const nextCar = v.includes('crysta') ? 'INNOVA_CRYSTA' : v.includes('innova') ? 'INNOVA' : v.includes('suv') ? 'SUV' : v.includes('etios') ? 'ETIOS_4_PLUS_1' : v.includes('hatch') ? 'HATCHBACK' : 'SEDAN_4_PLUS_1';
+
+    setCustomerName((e.name || '').trim());
+    const digits = String(e.phone || '').replace(/[^0-9]/g, '');
+    setCustomerCountryCode('+91');
+    setCustomerPhone(digits.length > 10 ? digits.slice(-10) : digits);
+
+    setStops(nextTrip === 'roundtrip' ? [pickup, drop, pickup] : nextTrip === 'multicity' ? [pickup, drop, ''] : nextTrip === 'hourly' ? [pickup] : [pickup, drop]);
+    setLocationLinks({});
+    setMinKmTouched(false);
+    setFare(null);
+    setTripType(nextTrip);
+    setCarType(nextCar);
+
+    const d = String(e.travel_date || '').match(/^(\d{4}-\d{2}-\d{2})/);
+    if (d) setStartDate(d[1]);
+    const t = String(e.travel_time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (t) {
+      let h = Number(t[1]);
+      const ap = (t[3] || '').toUpperCase();
+      if (ap === 'PM' && h < 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      setStartTime(`${String(h).padStart(2, '0')}:${t[2]}`);
+    }
+    if (e.dispatcher_notes) setPickupNotes(String(e.dispatcher_notes));
+
+    // Driver rates the dispatcher already set on the lead win over the vehicle defaults
+    const cpk = Number(e.cost_per_km) || undefined;
+    const ecpk = e.extra_cost_per_km != null && e.extra_cost_per_km !== undefined ? Number(e.extra_cost_per_km) : undefined;
+    pendingLeadRates.current = { cpk, ecpk };
+    if (cpk) setCostPerKm(String(cpk));
+    if (ecpk !== undefined && !isNaN(ecpk)) { touchedRates.current.extraKm = true; setExtraCostPerKm(String(ecpk)); }
+    if (e.include_gst) { setGstTouched(false); setIncludeGst(true); }
+
+    setLinkedLead(e);
+    setLinkResults(null);
+    setLinkQuery('');
+    setLeadConfirmed(null);
   };
 
   // Switching trip type keeps everything already filled in and reshapes the
@@ -1131,6 +1213,15 @@ export default function CreateBookingScreen() {
       setCreditPrompt(null);
       setAllocationResult(res?.allocation?.status === 'SUCCESS' ? res.allocation : null);
       setCreatedOrderId(res.order_id);
+      // Booking is posted: the linked lead becomes Confirmed automatically
+      if (linkedLead && String(linkedLead.status || '').toLowerCase() !== 'confirmed') {
+        try {
+          await enquiriesApi.action(linkedLead.id, 'confirm');
+          setLeadConfirmed('ok');
+        } catch {
+          setLeadConfirmed('fail');
+        }
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to confirm booking');
     } finally {
@@ -1139,6 +1230,11 @@ export default function CreateBookingScreen() {
   };
 
   const resetForm = () => {
+    setLinkedLead(null);
+    setLinkResults(null);
+    setLinkQuery('');
+    setLeadConfirmed(null);
+    pendingLeadRates.current = null;
     setCommissionTouched(false);
     setApplyCommission(true);
     setCustomCharges([]);
@@ -1202,7 +1298,7 @@ export default function CreateBookingScreen() {
         <View style={styles.successBox}>
           <CheckCircle2 size={48} color={colors.success} />
           <Text style={styles.successTitle}>Booking Created</Text>
-          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
+          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{leadConfirmed === 'ok' ? ' The lead is now marked Confirmed.' : leadConfirmed === 'fail' ? ' The lead could not be marked Confirmed - do it from Enquiries.' : ''}{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
 
           {customerPhone ? (
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: '#25D366', marginBottom: 10 }]} onPress={handleShareWhatsApp}>
@@ -1307,6 +1403,79 @@ export default function CreateBookingScreen() {
       />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: fare ? 100 : 60 }} keyboardShouldPersistTaps="handled">
+        {/* 0. From lead or booking: pick one and the form fills itself */}
+        <View style={[styles.sectionCard, cardShell, { marginTop: 0 }]}>
+          <View style={[styles.inlineField, { marginBottom: linkedLead || linkResults ? 10 : 0 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>From lead or booking</Text>
+              {tip('From lead or booking', 'Type a booking ID, name, phone or place and press Search. Pick the lead and the form fills itself: customer, route, vehicle, date, time and the rates already set on the lead.\n\nWhen you post the booking, that lead is marked Confirmed automatically.')}
+            </View>
+          </View>
+          {linkedLead ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: themeColors.primaryTint, borderWidth: 1, borderColor: colors.primary, borderRadius: 6, padding: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: themeColors.text }} numberOfLines={1}>
+                  {linkedLead.name || 'Customer'}{linkedLead.booking_id ? ` · ${linkedLead.booking_id}` : ''}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                  {[linkedLead.pickup, linkedLead.drop_location].filter(Boolean).join(' → ')}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: colors.primary, marginTop: 2, fontWeight: '700' }}>
+                  {String(linkedLead.status || '').toLowerCase() === 'confirmed' ? 'Already confirmed' : 'Will be marked Confirmed when you post'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setLinkedLead(null)} accessibilityLabel="Unlink lead">
+                <X size={18} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 10, height: 42 }}>
+                  <TextInput
+                    style={{ flex: 1, minWidth: 0, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
+                    placeholder="Booking ID, name or phone"
+                    placeholderTextColor={themeColors.textMuted}
+                    value={linkQuery}
+                    onChangeText={(v) => { setLinkQuery(v); setLinkResults(null); }}
+                    onSubmitEditing={searchLeads}
+                    returnKeyType="search"
+                    autoCapitalize="characters"
+                    accessibilityLabel="Search lead or booking"
+                  />
+                </View>
+                <TouchableOpacity
+                  style={{ height: 42, width: 46, borderRadius: 6, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                  onPress={searchLeads}
+                  disabled={linkSearching}
+                  accessibilityLabel="Search leads"
+                >
+                  {linkSearching ? <ActivityIndicator size="small" color="white" /> : <Search size={17} color="white" />}
+                </TouchableOpacity>
+              </View>
+              {linkResults && linkResults.length === 0 && (
+                <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>No lead or booking found. Check the ID or try the phone number.</Text>
+              )}
+              {(linkResults || []).map((r) => (
+                <TouchableOpacity
+                  key={r.id}
+                  style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
+                  onPress={() => applyLead(r)}
+                  accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                    <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>{r.name || 'Customer'} · {r.phone || ''}</Text>
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: String(r.status || '').toLowerCase() === 'confirmed' ? colors.success : colors.primary }}>{r.booking_id || `#${r.id}`}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                    {[r.pickup, r.drop_location].filter(Boolean).join(' → ')} · {[r.vehicle_type, r.trip_type].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </View>
+
         {/* 1. Vendor Assignment (optional, admin-only) */}
         <View style={[styles.sectionCard, cardShell]}>
           {selectedVendor ? (
