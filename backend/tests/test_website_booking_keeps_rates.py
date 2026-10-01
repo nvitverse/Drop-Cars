@@ -295,3 +295,9 @@ def test_website_permit_reaches_the_order_and_the_driver_tariff_splits_it(pg_ses
     assert (o.permit_charges, o.extra_permit_charges) == (400, 100)               # customer 500, driver 400 for Pondicherry, 100 to the extras
     assert (o.cost_per_km, o.extra_cost_per_km, o.driver_allowance, o.extra_driver_allowance) == (15, 0, 300, 100)
     assert o.toll_charges == 270 and o.gst_amount == 121 and o.vendor_price == 3316
+
+
+def test_a_star_place_means_any_destination():
+    cfg = DT.validate({"permits": [{"label": "Sedan permit", "keywords": ["*"], "vehicles": ["SEDAN_4_PLUS_1"], "driver": 400}]})
+    out = DT.split_fare(cfg, car_type="SEDAN_4_PLUS_1", pickup_drop_location={"0": "Chennai", "1": "Madurai"}, customer_km_rate=15, customer_bata=400, customer_permit=500)
+    assert (out["permit_charges"], out["extra_permit_charges"]) == (400, 100)

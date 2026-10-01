@@ -12,7 +12,7 @@ Nothing is ever taken from the driver below what the tariff says, and the driver
 Stored as ONE platform setting (`driver_tariff`, JSON), edited from Admin App > Tariffs > Driver:
   vehicles  {car_type: {km_rate, bata}}   km_rate blank = the same as the customer's rate (extra 0); bata default 300
   permits   [{label, keywords, vehicles, driver}]   first matching rule wins. A rule matches when the vehicle is listed (or "*") and
-            any stop AFTER the pickup contains one of the keywords (e.g. Pondicherry / Puducherry). No rule = the driver gets the
+            any stop AFTER the pickup contains one of the keywords (e.g. Pondicherry / Puducherry); the keyword * means any place. No rule = the driver gets the
             customer's permit amount (extra 0).
 """
 import json
@@ -118,7 +118,7 @@ def _stops_after_pickup(pickup_drop_location: Any) -> str:
 def permit_rule_for(cfg: Dict[str, Any], car_type: str, pickup_drop_location: Any) -> Optional[Dict[str, Any]]:
     stops = _stops_after_pickup(pickup_drop_location)
     for r in cfg.get("permits") or []:
-        if ("*" in r["vehicles"] or car_type in r["vehicles"]) and any(k in stops for k in r["keywords"]):
+        if ("*" in r["vehicles"] or car_type in r["vehicles"]) and ("*" in r["keywords"] or any(k in stops for k in r["keywords"])):
             return r
     return None
 
