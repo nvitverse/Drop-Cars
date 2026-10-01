@@ -213,6 +213,14 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     trip_type_enum = _get_trip_type_enum(request.trip_type)
     car_type_enum = CarTypeEnum(request.car_type)
 
+    # The same booking rules every other way of posting gets (crud/new_orders.create_oneway_order):
+    #  - Trusted Partner priority: the booking is reserved for them until the cutoff (midpoint to pickup, never later than 2 h before pickup,
+    #    held over the night). Website bookings were posted WITHOUT a cutoff, so nothing was ever reserved.
+    #  - urgent when the customer asked for it OR the pickup is within the hour (that is what shows the customer number straight away
+    #    and shortens the reassignment window)
+    from app.crud.new_orders import _default_priority_cutoff, is_urgent_pickup
+    is_urgent_booking = bool(request.is_urgent) or is_urgent_pickup(request.start_date_time)
+
     new_order = NewOrder(
         vendor_id=None,  # Vendor-less platform booking
         trip_type=trip_type_enum,
@@ -237,7 +245,11 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         pick_near_city=["ALL"],
         estimated_price=estimated_price_val,
         vendor_price=vendor_price_val,
-        is_urgent=request.is_urgent,
+        is_urgent=is_urgent_booking,
+        priority_for_paid=True,
+        priority_cutoff_at=_default_priority_cutoff(request.start_date_time),
+        distance_edited=False,
+        calculated_trip_distance=request.quoted_trip_distance,
         advance_received=request.advance_amount,
         fare_type=fare_type_str,
         charge_items=([{"label": "GST Included", "included": True}] if getattr(request, 'gst_included', False) else None),
@@ -250,7 +262,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     db.commit()
     db.refresh(new_order)
 
-    assign_minutes = get_assignment_window_minutes(db, request.start_date_time, request.is_urgent)
+    assign_minutes = get_assignment_window_minutes(db, request.start_date_time, is_urgent_booking)
     master_order = create_master_from_new_order(
         db,
         new_order=new_order,
