@@ -50,3 +50,11 @@ env/
 
 # Test caches
 .pytest_cache/
+
+# AI evaluation: raw model outputs and anything private. Training data and model files must NEVER be committed (public repo).
+backend/ai_eval/results/
+backend/ai_eval/private/
+*.gguf
+*.safetensors
+lora/
+training_data/
