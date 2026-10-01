@@ -3495,59 +3495,68 @@ export default function OrdersScreen() {
       </Modal>
 
       {/* View OTP Modal */}
-      <Modal
-        visible={!!otpModalOrder}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOtpModalOrder(null)}
-      >
-        <TouchableOpacity style={styles.epModalOverlay} activeOpacity={1} onPress={() => setOtpModalOrder(null)}>
-          <View style={[styles.epModalCard, { alignItems: 'center' }]} onStartShouldSetResponder={() => true}>
-            <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <Key size={26} color="#8B5CF6" />
-            </View>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: themeColors.text, marginBottom: 4 }}>Trip Security OTP</Text>
-            <Text style={{ fontSize: 13, color: themeColors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
-              Booking #{otpModalOrder?.id}
-            </Text>
+      {(() => {
+        // Preserve current order info during fade-out animation to prevent flicker
+        const activeOrder = otpModalOrder || (selectedOrder ? selectedOrder : null);
+        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || (activeOrder?.id ? String(activeOrder.id).padStart(4, '0').slice(-4) : '0000');
+        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '9152';
 
-            <View style={{ flexDirection: 'row', gap: 16, width: '100%', marginBottom: 20 }}>
-              <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>START OTP</Text>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: colors.primary, letterSpacing: 4 }}>
-                  {otpModalOrder?.id ? String(otpModalOrder.id).padStart(4, '0').slice(-4) : '4829'}
+        return (
+          <Modal
+            visible={!!otpModalOrder}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setOtpModalOrder(null)}
+          >
+            <TouchableOpacity style={styles.epModalOverlay} activeOpacity={1} onPress={() => setOtpModalOrder(null)}>
+              <View style={[styles.epModalCard, { alignItems: 'center' }]} onStartShouldSetResponder={() => true}>
+                <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Key size={26} color="#8B5CF6" />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: themeColors.text, marginBottom: 4 }}>Trip Security OTP</Text>
+                <Text style={{ fontSize: 13, color: themeColors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
+                  Booking #{activeOrder?.id || ''}
                 </Text>
-              </View>
 
-              <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>END OTP</Text>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: '#10B981', letterSpacing: 4 }}>
-                  9152
-                </Text>
-              </View>
-            </View>
+                <View style={{ flexDirection: 'row', gap: 16, width: '100%', marginBottom: 20 }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>START OTP</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: colors.primary, letterSpacing: 4 }}>
+                      {startOtp}
+                    </Text>
+                  </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: '#25D366', paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                onPress={() => {
-                  const msg = `*Drop Cars Trip OTP*\nBooking #${otpModalOrder?.id}\nRoute: ${getLocationString(otpModalOrder?.pickup_drop_location)}\n🔑 *Start OTP*: ${otpModalOrder?.id ? String(otpModalOrder.id).padStart(4, '0').slice(-4) : '4829'}\n🔑 *End OTP*: 9152`;
-                  Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
-                }}
-              >
-                <Share2 size={16} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Share OTP via WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
-                onPress={() => setOtpModalOrder(null)}
-              >
-                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 14 }}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>END OTP</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#10B981', letterSpacing: 4 }}>
+                      {endOtp}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#25D366', paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    onPress={() => {
+                      const msg = `*Drop Cars Trip OTP*\nBooking #${activeOrder?.id}\nRoute: ${getLocationString(activeOrder?.pickup_drop_location)}\n🔑 *Start OTP*: ${startOtp}\n🔑 *End OTP*: ${endOtp}`;
+                      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Share2 size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Share OTP via WhatsApp</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
+                    onPress={() => setOtpModalOrder(null)}
+                  >
+                    <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        );
+      })()}
 
       {/* Allocate Booking Manually Modal - for still-PENDING bookings only.
           Search a real fleet driver/driver by name or phone, pick them, and
