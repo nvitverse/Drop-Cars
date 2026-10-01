@@ -159,7 +159,7 @@ def new_support_to_legacy(db: Session, conv: Conversation, msg: ConversationMess
         owner = next((p for p in C.participants_of(db, conv.id) if p.role in LEGACY_SUPPORT_ROLE), None)
         if owner is None:
             return
-        is_admin = msg.sender_role in C.ADMIN_ROLES
+        is_admin = msg.sender_role in C.ADMIN_ROLES or msg.sender_role == C.BOT      # the assistant speaks for Drop Cars
         voice = next((x.url for x in _attachments(db, msg) if x.kind == "VOICE"), None)
         row = SupportMessage(
             thread_key=legacy_key_for(db, owner.role, owner.principal_id), thread_role=LEGACY_SUPPORT_ROLE[owner.role],

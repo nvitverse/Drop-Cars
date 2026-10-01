@@ -25,7 +25,7 @@ from app.models.conversation import (
 
 logger = logging.getLogger(__name__)
 
-TYPES = ("BOOKING", "SUPPORT", "STAFF", "DIRECT", "BROADCAST")
+TYPES = ("BOOKING", "SUPPORT", "STAFF", "DIRECT", "BROADCAST", "ASSISTANT")
 CUSTOMER, DRIVER, FLEET_OWNER, VENDOR, STAFF, DIRECTOR, BOT = "CUSTOMER", "DRIVER", "FLEET_OWNER", "VENDOR", "STAFF", "DIRECTOR", "BOT"
 HUMAN_ROLES = (CUSTOMER, DRIVER, FLEET_OWNER, VENDOR, STAFF, DIRECTOR)
 ADMIN_ROLES = (STAFF, DIRECTOR)
@@ -34,7 +34,7 @@ MASKED_SENDERS = (CUSTOMER, DRIVER, FLEET_OWNER, VENDOR)
 OVERSIGHT_TYPES = ("BOOKING", "SUPPORT", "BROADCAST")
 
 # How long messages are kept, per conversation type (days). Editable: platform setting chat_retention_days_<type>.
-RETENTION_DEFAULT_DAYS = {"BOOKING": 10, "SUPPORT": 90, "STAFF": 365, "DIRECT": 365, "BROADCAST": 30}
+RETENTION_DEFAULT_DAYS = {"BOOKING": 10, "SUPPORT": 90, "STAFF": 365, "DIRECT": 365, "BROADCAST": 30, "ASSISTANT": 30}
 
 MAX_TEXT = 2000
 
@@ -272,7 +272,7 @@ def may_read(db: Session, conv: Conversation, actor: Actor) -> bool:
     if actor.is_admin:
         if conv.type in OVERSIGHT_TYPES:
             return True
-        return actor.is_director          # internal chats: members and the director only
+        return actor.is_director and conv.type in ("STAFF", "DIRECT")     # internal chats: members and the director only (an admin's assistant chat is private to that admin)
     return is_booking_party(db, conv, actor)
 
 
@@ -508,7 +508,7 @@ def list_for_actor(db: Session, actor: Actor, type_: Optional[str] = None, q: Op
             "id": str(c.id), "type": c.type, "title": title_for(c, actor, parts), "order_id": c.order_id,
             "last_message": c.last_message_preview, "last_at": c.last_message_at.isoformat() if c.last_message_at else None,
             "unread": int(unread.get(c.id, 0)), "is_closed": bool(c.is_closed), "muted": muted,
-            "member": me is not None,
+            "member": me is not None, "needs_human": bool((c.meta or {}).get("needs_human")),
             "participants": [{"role": p.role, "name": p.display_name} for p in parts if p.role != BOT and p is not me][:6],
         })
     return out

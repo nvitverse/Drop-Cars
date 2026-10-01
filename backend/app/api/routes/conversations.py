@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user_flexible
+from app.crud import chat_bot
 from app.crud import chat_bridge as bridge
 from app.crud import conversations as C
 from app.database.session import get_db
@@ -64,6 +65,7 @@ def _summary(db: Session, conv: Conversation, actor: C.Actor) -> dict:
         "id": str(conv.id), "type": conv.type, "title": C.title_for(conv, actor, parts), "order_id": conv.order_id,
         "is_closed": bool(conv.is_closed), "can_post": C.may_post(db, conv, actor),
         "participants": [{"role": p.role, "name": p.display_name} for p in parts if p.role != C.BOT],
+        "bot_state": chat_bot.bot_state(conv), "needs_human": bool((conv.meta or {}).get("needs_human")),
     }
     if conv.type == "BOOKING":
         order = _order_of(db, conv)
@@ -138,6 +140,17 @@ def open_booking_chat(order_id: int, who: dict = Depends(get_current_user_flexib
     if not actor.is_admin and not any(r == actor.role and p == actor.principal_id for r, p, _ in parties):
         raise HTTPException(status_code=403, detail="You are not part of this booking's chat.")
     conv = C.get_or_create_booking_conversation(db, order)
+    db.commit()
+    return _summary(db, conv, actor)
+
+
+@router.post("/assistant")
+def open_assistant_chat(who: dict = Depends(get_current_user_flexible), db: Session = Depends(get_db)):
+    """The admin's private assistant chat (read-only lookups). Only that admin can open or read it."""
+    actor = _actor(db, who)
+    if not actor.is_admin:
+        raise HTTPException(status_code=403, detail="The assistant is for the Drop Cars team")
+    conv = chat_bot.get_or_create_assistant_conversation(db, actor)
     db.commit()
     return _summary(db, conv, actor)
 
@@ -257,6 +270,7 @@ def send_message(conversation_id: str, body: MessagePayload, who: dict = Depends
     if not text and not attachments:
         raise HTTPException(status_code=400, detail="Message can't be empty.")
     C.join_if_needed(db, conv, actor)            # an admin replying to a booking / support chat joins it
+    chat_bot.on_human_reply(db, conv, actor)     # a person has taken over: the support bot goes quiet
     try:
         msg = C.add_message(
             db, conv, sender_role=actor.role, sender_id=actor.principal_id, sender_name=C.staff_label(actor), text=text, kind=kind,
@@ -280,7 +294,34 @@ def send_message(conversation_id: str, body: MessagePayload, who: dict = Depends
     result = out[0] if out else {"id": msg.id}
     if msg.masked:
         result["notice"] = NUMBER_NOTICE
+    result["bot_pending"] = chat_bot.will_reply(db, conv, msg)       # the app then calls POST /{id}/bot
     return result
+
+
+@router.post("/{conversation_id}/bot")
+def ask_bot(conversation_id: str, who: dict = Depends(get_current_user_flexible), db: Session = Depends(get_db)):
+    """Let the assistant answer MY latest message (support chat, an @drop call in a booking chat, or my assistant chat).
+    Answered once per message; the reply shows up in the chat like any other message."""
+    actor, conv = _load(db, who, conversation_id, write=True)
+    res = chat_bot.reply_to_latest(db, conv, actor)
+    if res.get("message_id"):
+        out = C.messages_page(db, conv, actor, after_id=int(res["message_id"]) - 1, limit=1)
+        res["message"] = out[0] if out else None
+    return res
+
+
+class BotStatePayload(BaseModel):
+    state: str = Field(..., pattern="^(ON|OFF)$")
+
+
+@router.patch("/{conversation_id}/bot")
+def set_bot_state(conversation_id: str, body: BotStatePayload, who: dict = Depends(get_current_user_flexible), db: Session = Depends(get_db)):
+    """Team members only: switch the assistant back ON in a support chat after handling it, or OFF."""
+    actor, conv = _load(db, who, conversation_id)
+    if not actor.is_admin or conv.type not in ("SUPPORT", "BOOKING"):
+        raise HTTPException(status_code=403, detail="Only the Drop Cars team can change this")
+    chat_bot.set_state(db, conv, body.state)
+    return {"bot_state": chat_bot.bot_state(conv)}
 
 
 class ReadPayload(BaseModel):
