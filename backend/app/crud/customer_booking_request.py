@@ -156,42 +156,46 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     # had not been edited, so a rate confirmed at 15/km was posted at the quoted 14/km.)
     complete_admin_fare(request)
 
-    # Auto-Posting Tariff Rules:
-    # 1. Standard Per-KM trip:
-    #    - Base cost_per_km = original tariff - 1 (1 rs less per km)
-    #    - Extra cost_per_km = 1
-    #    - Driver allowance = ALWAYS 300
-    #    - Extra driver allowance = excess driver allowance over 300 + extra driver allowance
-    # 2. All-Inclusive trip:
-    #    - 15% platform profit margin (driver payout = 85% of customer price)
+    # Auto-posting: the booking is posted with the DRIVER fare; whatever is left of the customer's price goes to the "extra" fields
+    # (crud/driver_tariff.py, edited in Admin App > Tariffs > Driver):
+    #    per km  driver rate | extra = customer rate - driver rate        (default: driver = customer rate, extra 0)
+    #    bata    driver bata (300) | extra = customer bata - driver bata
+    #    permit  driver permit by vehicle + destination | extra = customer permit - driver permit
+    # All-inclusive trips keep the 85 / 15 split below.
     orig_cost_per_km = request.admin_cost_per_km if request.admin_cost_per_km is not None else request.quoted_cost_per_km
     orig_driver_allowance = request.admin_driver_allowance if request.admin_driver_allowance is not None else request.quoted_driver_allowance
     orig_extra_driver_allowance = request.admin_extra_driver_allowance if request.admin_extra_driver_allowance is not None else request.quoted_extra_driver_allowance
     orig_total_amount = request.admin_total_amount if request.admin_total_amount is not None else request.quoted_total_amount
 
     if orig_cost_per_km and orig_cost_per_km > 0:
-        posted_cost_per_km = max(1, orig_cost_per_km - 1)
-        posted_extra_cost_per_km = 1
-        posted_driver_allowance, posted_extra_driver_allowance = split_website_bata(
-            orig_driver_allowance, orig_extra_driver_allowance
+        from app.crud import driver_tariff
+        customer_extra_km = _pick(request.admin_extra_cost_per_km, request.quoted_extra_cost_per_km) or 0
+        customer_permit = (_pick(request.admin_permit_charges, request.quoted_permit_charges) or 0) + (_pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges) or 0)
+        split = driver_tariff.split_fare(
+            driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
+            customer_km_rate=int(orig_cost_per_km) + int(customer_extra_km), customer_bata=int(orig_driver_allowance or 0) + int(orig_extra_driver_allowance or 0),
+            customer_permit=int(customer_permit),
         )
+        posted_cost_per_km = split["cost_per_km"]
+        posted_extra_cost_per_km = split["extra_cost_per_km"]
+        posted_driver_allowance = split["driver_allowance"]
+        posted_extra_driver_allowance = split["extra_driver_allowance"]
+        posted_permit_charges = split["permit_charges"]
+        posted_extra_permit_charges = split["extra_permit_charges"]
         fare_type_str = "ITEMIZED"
 
         dist = request.quoted_trip_distance or 0
-        # The driver's estimate: km fare + the driver's own 300 bata + charges.
-        # The bata above 300 (posted_extra_driver_allowance) is NOT the
-        # driver's - it used to be added here, so a 500-bata SUV booking still
-        # showed the driver 500.
+        # The driver's estimate: his km fare + his own bata + his permit + charges. The extras (vendor extra km / bata / permit) are NOT his.
         estimated_price_val = (
             (posted_cost_per_km * dist) +
             posted_driver_allowance +
-            (_pick(request.admin_permit_charges, request.quoted_permit_charges) or 0) +
+            posted_permit_charges +
             (_pick(request.admin_hill_charges, request.quoted_hill_charges) or 0) +
             (_pick(request.admin_toll_charges, request.quoted_toll_charges) or 0) +
             (_pick(request.admin_night_charges, request.quoted_night_charges) or 0)
         )
         vendor_price_val = orig_total_amount or (
-            estimated_price_val + posted_extra_driver_allowance + posted_extra_cost_per_km * dist
+            estimated_price_val + posted_extra_driver_allowance + posted_extra_permit_charges + posted_extra_cost_per_km * dist
         )
         platform_fee = 10
     else:
@@ -199,6 +203,8 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         posted_extra_cost_per_km = 0
         posted_driver_allowance = 300
         posted_extra_driver_allowance = 0
+        posted_permit_charges = _pick(request.admin_permit_charges, request.quoted_permit_charges)
+        posted_extra_permit_charges = _pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges)
         fare_type_str = "ALL_INCLUSIVE"
         vendor_price_val = orig_total_amount
         estimated_price_val = int(round((orig_total_amount or 0) * 0.85)) if orig_total_amount else (_pick(request.admin_driver_amount, request.quoted_driver_amount) or 0)
@@ -219,8 +225,8 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         extra_cost_per_km=posted_extra_cost_per_km,
         driver_allowance=posted_driver_allowance,
         extra_driver_allowance=posted_extra_driver_allowance,
-        permit_charges=_pick(request.admin_permit_charges, request.quoted_permit_charges),
-        extra_permit_charges=_pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges),
+        permit_charges=posted_permit_charges,
+        extra_permit_charges=posted_extra_permit_charges,
         hill_charges=_pick(request.admin_hill_charges, request.quoted_hill_charges),
         toll_charges=_pick(request.admin_toll_charges, request.quoted_toll_charges),
         pickup_notes="",

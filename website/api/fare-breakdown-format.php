@@ -522,3 +522,65 @@ function dropcars_fare_breakdown_telegram_html(array $fb, string $selectedVehicl
 
     return "\n<b>📏 Distance &amp; fare detail</b>\n<pre>" . $pre . '</pre>';
 }
+
+/**
+ * The toll and the state entry tax (= the customer's PERMIT) the website adds to an INCLUSIVE fare, as plain numbers for the backend
+ * (confirm_booking.php -> quoted_fare). Same rules as the breakdown rows above: tolls = live / override amount, else 2 per km; state entry tax =
+ * per distinct border crossed (Sedan 500, SUV 1000, Innova / Crysta 1500, 2000 for Innova / Crysta over the Andhra border), or the override.
+ * Returns zeros for whatever the fare does not include.
+ *
+ * @param array<string, mixed> $fb  whole fareBreakdown JSON (top-level overrides)
+ * @param array<string, mixed> $v   the selected vehicle's row
+ * @return array{toll:int, permit:int}
+ */
+function dropcars_fare_breakdown_included_extras(array $fb, array $v, string $vk, bool $includeTolls, bool $includeTaxes): array
+{
+    $vk = strtoupper($vk);
+    foreach (['overrideTaxAmount', 'overrideTaxCount', 'borderTransitions', 'actualRouteKm', 'actualRouteKmTotal'] as $k) {
+        if (!isset($v[$k]) && isset($fb[$k])) {
+            $v[$k] = $fb[$k];
+        }
+    }
+    if (!isset($v['liveToll']) && isset($fb['overrideTollAmount'])) {
+        $v['liveToll'] = $fb['overrideTollAmount'];
+    }
+
+    $toll = 0;
+    if ($includeTolls) {
+        $dist = isset($v['actualRouteKm']) || isset($v['actualRouteKmTotal']) ? (float) (isset($v['actualRouteKm']) ? $v['actualRouteKm'] : $v['actualRouteKmTotal']) : 0;
+        $toll = (int) round($dist * 2.0);
+        if (isset($v['liveToll']) && $v['liveToll'] !== '' && is_numeric($v['liveToll'])) {
+            $toll = max(0, (int) $v['liveToll']);
+        }
+    }
+
+    $permit = 0;
+    if ($includeTaxes) {
+        $taxRate = 500;
+        if ($vk === 'SUV') $taxRate = 1000;
+        if ($vk === 'INNOVA' || $vk === 'CRYSTA') $taxRate = 1500;
+        if (isset($v['overrideTaxAmount'])) {
+            $taxRate = (int) $v['overrideTaxAmount'];
+        }
+        if (isset($v['overrideTaxCount'])) {
+            $permit = (int) $v['overrideTaxCount'] * $taxRate;
+        } else {
+            $borders = isset($v['borderTransitions']) && is_array($v['borderTransitions']) ? $v['borderTransitions'] : [];
+            $seen = [];
+            foreach ($borders as $b) {
+                $from = strtolower(trim((string) (isset($b['from']) ? $b['from'] : '')));
+                $to = strtolower(trim((string) (isset($b['to']) ? $b['to'] : '')));
+                if ($from === '' || $to === '' || $from === $to) continue;
+                $key = ($from < $to) ? ($from . '::' . $to) : ($to . '::' . $from);
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+                if (($vk === 'INNOVA' || $vk === 'CRYSTA') && !empty($b['andhraBorder']) && !isset($v['overrideTaxAmount'])) {
+                    $permit += 2000;
+                } else {
+                    $permit += $taxRate;
+                }
+            }
+        }
+    }
+    return ['toll' => $toll, 'permit' => $permit];
+}

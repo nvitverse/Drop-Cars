@@ -198,7 +198,7 @@ async def create_website_booking(
                 logger.warning("website quoted_fare ignored: %s", type(e).__name__)
         if website_quote:
             rates = {**rates, "cost_per_km": website_quote["cost_per_km"], "driver_allowance": website_quote["driver_allowance"],
-                     "extra_driver_allowance": 0, "permit_charges": 0, "extra_permit_charges": 0, "hill_charges": 0,
+                     "extra_driver_allowance": 0, "permit_charges": website_quote["permit_charges"], "extra_permit_charges": 0, "hill_charges": 0,
                      "toll_charges": website_quote["toll_charges"], "extra_cost_per_km": 0, "night_charges": 0}
             fare = {**fare, "total_amount": website_quote["total_amount"], "driver_amount": website_quote["driver_amount"],
                     "total_km": website_quote["total_km"]}

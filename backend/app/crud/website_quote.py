@@ -30,6 +30,9 @@ class WebsiteQuotedFare(BaseModel):
     total_fare: int = Field(gt=0, le=2000000)
     include_taxes: bool = False
     include_tolls: bool = False
+    # What the website itself added for tolls and the state entry tax (= the customer's PERMIT). Optional: older websites send only the total.
+    toll_amount: Optional[int] = Field(default=None, ge=0, le=100000)
+    permit_amount: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
 def apply_website_quote(backend_fare: Dict[str, Any], quote: Optional[WebsiteQuotedFare]) -> Optional[Dict[str, Any]]:
@@ -46,19 +49,23 @@ def apply_website_quote(backend_fare: Dict[str, Any], quote: Optional[WebsiteQuo
         return None
 
     km_charge = int(round(quote.per_km_rate * quote.billable_km))
-    residual = quote.total_fare - km_charge - quote.driver_bata
-    gst = toll = 0
+    toll = quote.toll_amount or 0
+    permit = quote.permit_amount or 0
+    residual = quote.total_fare - km_charge - quote.driver_bata - toll - permit
+    gst = 0
     if residual > 0:
-        if quote.include_taxes:
-            gst = min(residual, int(round((km_charge + quote.driver_bata) * GST_RATE)))
-        toll = residual - gst
+        known_parts = quote.toll_amount is not None or quote.permit_amount is not None
+        if quote.include_taxes or known_parts:
+            gst = min(residual, int(round((km_charge + quote.driver_bata) * GST_RATE)))      # the website adds 5% of the base estimate
+        toll += residual - gst                                                                  # anything else it added (parking ...) rides with toll
     cost_per_km = int(round(quote.per_km_rate))
     return {
         "cost_per_km": cost_per_km,
         "driver_allowance": quote.driver_bata,
         "toll_charges": toll,
+        "permit_charges": permit,
         "gst_amount": gst or None,
         "total_amount": quote.total_fare,
-        "driver_amount": int(round(quote.per_km_rate * quote.billable_km)) + quote.driver_bata + toll,
+        "driver_amount": km_charge + quote.driver_bata + toll + permit,
         "total_km": quote.billable_km,
     }

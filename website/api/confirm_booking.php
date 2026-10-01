@@ -1150,6 +1150,10 @@ if ($targetStatus !== 'confirmed') {
                 'include_taxes' => (bool) $includeTaxes,
                 'include_tolls' => (bool) $includeTolls,
             ];
+            // toll + state entry tax (the customer's permit) separately, so the backend can pay the driver his own permit amount
+            $quotedExtras = dropcars_fare_breakdown_included_extras($fareBreakdown, $qv, $mappedKey, (bool) $includeTolls, (bool) $includeTaxes);
+            $quotedFare['toll_amount'] = $quotedExtras['toll'];
+            $quotedFare['permit_amount'] = $quotedExtras['permit'];
         }
 
         if ($backendPhone !== '') {
