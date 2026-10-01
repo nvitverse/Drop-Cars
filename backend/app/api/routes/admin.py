@@ -1562,6 +1562,24 @@ def _admin_fleet_low_balance(db, fleet_owner, payload, estimated_price, vendor_p
     return None
 
 
+def _admin_apply_reveal(db, master_order_id, payload):
+    """Store the moment the admin chose for the driver to see the customer
+    number ("6 hrs before" / picked date & time). Nothing chosen = automatic."""
+    at = getattr(payload, "customer_phone_reveal_at", None)
+    hours = getattr(payload, "customer_phone_reveal_hours", None)
+    if at is None and hours is None:
+        return
+    from datetime import timedelta
+    from app.models.orders import Order
+    order = db.query(Order).filter(Order.id == master_order_id).first()
+    if order is None:
+        return
+    if at is None:
+        at = order.start_date_time - timedelta(hours=float(hours))
+    order.customer_phone_reveal_at = at
+    db.commit()
+
+
 def _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin):
     if fleet_owner is None:
         return None
@@ -1669,6 +1687,7 @@ def admin_oneway_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": payload.trip_type.value, "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
+        _admin_apply_reveal(db, master_order_id, payload)
         allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
         return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
@@ -1737,6 +1756,7 @@ def admin_roundtrip_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": "Round Trip", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
+        _admin_apply_reveal(db, master_order_id, payload)
         allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
         return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
@@ -1805,6 +1825,7 @@ def admin_multicity_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order_id), target_name=f"Booking #{master_order_id}",
             details={"trip_type": "Multi City", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
+        _admin_apply_reveal(db, master_order_id, payload)
         allocation = _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, current_admin)
         return {"order_id": master_order_id, "trip_status": new_order.trip_status, "trip_type": new_order.trip_type, "fare": fare, "allocation": allocation}
     except HTTPException:
@@ -1853,6 +1874,7 @@ async def admin_hourly_confirm(
             action="BOOKING_CREATED", target_type="order", target_id=str(master_order.id), target_name=f"Booking #{master_order.id}",
             details={"trip_type": "Hourly Rental", "vendor_id": str(payload.vendor_id) if payload.vendor_id else "none"},
         )
+        _admin_apply_reveal(db, master_order.id, payload)
         allocation = _admin_allocate_new_booking(db, master_order.id, fleet_owner, payload, current_admin)
         return {
             "allocation": allocation,

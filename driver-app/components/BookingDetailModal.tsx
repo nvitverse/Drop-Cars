@@ -730,6 +730,12 @@ export default function BookingDetailModal({
                   </View>
                 </View>
 
+                {!!activeData.customer_number_notice && (
+                  <Text style={{ fontSize: 12, lineHeight: 17, fontFamily: 'Inter-Medium', color: colors.textSecondary, marginBottom: 6 }}>
+                    {activeData.customer_number_notice}
+                  </Text>
+                )}
+
                 {/* This modal is only ever shown to the fleet owner viewing
                     their own order book, or a trusted driver viewing a
                     booking they posted themselves (see viewerRole doc

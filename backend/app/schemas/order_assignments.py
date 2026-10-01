@@ -86,6 +86,7 @@ class OrderAssignmentWithOrderDetails(BaseModel):
         from_attributes = True
         
 class BaseResponce_pending_orders(BaseModel):
+    customer_number_notice: Optional[str] = None
     order_id: int
     trip_status: str
     trip_type: str
@@ -182,6 +183,11 @@ class EndTripResponse(BaseModel):
     # vehicle_owner_amount: int
 
 class DriverOrderListResponse(BaseModel):
+    # When the customer number opens (see crud/order_assignments.py)
+    customer_number_revealed: Optional[bool] = None
+    customer_number_reveal_at: Optional[str] = None
+    customer_number_reveal_in_seconds: Optional[int] = None
+    customer_number_notice: Optional[str] = None
     id: int
     order_id: int
     assignment_status: AssignmentStatusEnum

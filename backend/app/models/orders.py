@@ -106,6 +106,9 @@ class Order(Base):
 
     # Visibility approval by vendor: whether fleet owners can see customer info
     data_visibility_vehicle_owner = Column(Boolean, nullable=False, server_default='false')
+    # Admin chose a fixed moment for the driver to see the customer number
+    # ("6 hrs before" / a picked date & time). Null = the automatic rule.
+    customer_phone_reveal_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Closing amounts (set when order is completed)
     closed_vendor_price = Column(Integer, nullable=True)
