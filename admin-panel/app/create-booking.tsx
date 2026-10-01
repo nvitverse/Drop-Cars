@@ -193,10 +193,12 @@ export default function CreateBookingScreen() {
   // short: tapping one opens this popup.
   const [helpTip, setHelpTip] = useState<{ title: string; text: string } | null>(null);
   // "From lead or booking": pick a website lead / booking, the form fills itself, and
-  // posting marks that lead confirmed. The search runs only when the button is pressed.
+  // posting marks that lead confirmed.
   const [linkQuery, setLinkQuery] = useState('');
   const [linkSearching, setLinkSearching] = useState(false);
   const [linkResults, setLinkResults] = useState<WebsiteEnquiry[] | null>(null);
+  const [showLeadPickerModal, setShowLeadPickerModal] = useState(false);
+  const [leadTabFilter, setLeadTabFilter] = useState<'ALL' | 'OPEN' | 'CONFIRMED' | 'ORDER'>('ALL');
   const [linkedLead, setLinkedLead] = useState<WebsiteEnquiry | null>(null);
   const [leadConfirmed, setLeadConfirmed] = useState<'ok' | 'fail' | null>(null);
   const pendingLeadRates = useRef<{ cpk?: number; ecpk?: number } | null>(null);
@@ -790,23 +792,24 @@ export default function CreateBookingScreen() {
     };
   };
 
-  const searchLeads = async () => {
-    const q = linkQuery.trim();
-    if (q.length < 2) {
-      Alert.alert('Type more', 'Enter at least 2 characters of the booking ID, name, phone or place.');
-      return;
+  const searchLeads = async (customQ?: string) => {
+    const q = (typeof customQ === 'string' ? customQ : linkQuery).trim();
+    if (q.length < 1) {
+      // Empty search: load recent leads
     }
     setLinkSearching(true);
     try {
       // 1. Search website enquiries (both tabs in parallel)
       const [openRes, respRes, ordersRes] = await Promise.allSettled([
-        enquiriesApi.list({ tab: 'not_responded', search: q }),
-        enquiriesApi.list({ tab: 'responded', search: q }),
+        enquiriesApi.list({ tab: 'not_responded', search: q || undefined, page: 1 }),
+        enquiriesApi.list({ tab: 'responded', search: q || undefined, page: 1 }),
         apiService.getOrders(0, 100, 'newest').catch(() => ({ orders: [] })),
       ]);
 
-      const openRows: WebsiteEnquiry[] = openRes.status === 'fulfilled' ? (openRes.value?.enquiries || []) : [];
-      const respRows: WebsiteEnquiry[] = respRes.status === 'fulfilled' ? (respRes.value?.enquiries || []) : [];
+      const openRows: WebsiteEnquiry[] = (openRes.status === 'fulfilled' ? (openRes.value?.enquiries || []) : [])
+        .map((e) => ({ ...e, lead_stage: 'not_responded' }));
+      const respRows: WebsiteEnquiry[] = (respRes.status === 'fulfilled' ? (respRes.value?.enquiries || []) : [])
+        .map((e) => ({ ...e, lead_stage: 'responded' }));
 
       // 2. Search backend orders
       const ordersList: any[] = ordersRes.status === 'fulfilled' ? ((ordersRes.value as any)?.orders || []) : [];
@@ -816,6 +819,7 @@ export default function CreateBookingScreen() {
       const matchedOrders: WebsiteEnquiry[] = ordersList
         .filter((o: any) => {
           if (!o || !o.id) return false;
+          if (!q) return true;
           const idStr = String(o.id).toLowerCase();
           const bIdStr = String(o.booking_id || '').toLowerCase();
           const nameStr = String(o.customer_name || '').toLowerCase();
@@ -855,7 +859,8 @@ export default function CreateBookingScreen() {
         }
       }
 
-      setLinkResults(combined.slice(0, 10));
+      setLinkResults(combined);
+      setShowLeadPickerModal(true);
     } catch (e: any) {
       Alert.alert('Search failed', e?.message || 'Could not reach the enquiries service');
       setLinkResults([]);
@@ -905,8 +910,8 @@ export default function CreateBookingScreen() {
     if (e.include_gst) { setGstTouched(false); setIncludeGst(true); }
 
     setLinkedLead(e);
+    setShowLeadPickerModal(false);
     setLinkResults(null);
-    setLinkQuery('');
     setLeadConfirmed(null);
   };
 
@@ -1541,10 +1546,10 @@ export default function CreateBookingScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: fare ? 100 : 60 }} keyboardShouldPersistTaps="handled">
         {/* 0. From lead or booking: pick one and the form fills itself */}
         <View style={[styles.sectionCard, cardShell, { marginTop: 0 }]}>
-          <View style={[styles.inlineField, { marginBottom: linkedLead || linkResults ? 10 : 0 }]}>
+          <View style={[styles.inlineField, { marginBottom: linkedLead ? 10 : 0 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>From lead or booking</Text>
-              {tip('From lead or booking', 'Type a booking ID, name, phone or place and press Search. Pick the lead and the form fills itself: customer, route, vehicle, date, time and the rates already set on the lead.\n\nWhen you post the booking, that lead is marked Confirmed automatically.')}
+              {tip('From lead or booking', 'Search any booking ID, name, phone or location. Pick a lead from the dedicated picker sheet and the entire form auto-fills.\n\nPosting this booking automatically marks that lead Confirmed.')}
             </View>
           </View>
           {linkedLead ? (
@@ -1565,64 +1570,38 @@ export default function CreateBookingScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 10, height: 42 }}>
-                  <TextInput
-                    style={{ flex: 1, minWidth: 0, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
-                    placeholder="Booking ID, name or phone"
-                    placeholderTextColor={themeColors.textMuted}
-                    value={linkQuery}
-                    onChangeText={(v) => { setLinkQuery(v); setLinkResults(null); }}
-                    onSubmitEditing={searchLeads}
-                    returnKeyType="search"
-                    autoCapitalize="characters"
-                    accessibilityLabel="Search lead or booking"
-                  />
-                </View>
-                <TouchableOpacity
-                  style={{ height: 42, width: 46, borderRadius: 6, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
-                  onPress={searchLeads}
-                  disabled={linkSearching}
-                  accessibilityLabel="Search leads"
-                >
-                  {linkSearching ? <ActivityIndicator size="small" color="white" /> : <Search size={17} color="white" />}
-                </TouchableOpacity>
-              </View>
-              {linkResults && linkResults.length === 0 && (
-                <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>No lead or booking found. Check the ID or try the phone number.</Text>
-              )}
-              {(linkResults || []).map((r) => {
-                const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed' || String(r.lead_stage || '') === 'order';
-                const dispVehicle = r.vehicle_type ? r.vehicle_type.replace(/_/g, ' ') : 'Sedan';
-                const dispTrip = r.trip_type ? r.trip_type.replace(/_/g, ' ') : 'Oneway';
-                return (
-                  <TouchableOpacity
-                    key={`${r.id}-${r.booking_id || ''}`}
-                    style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
-                    onPress={() => applyLead(r)}
-                    accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                        {r.name || 'Customer'}{r.phone ? ` · ${r.phone}` : ''}
-                      </Text>
-                      <View style={{ backgroundColor: isConfirmed ? colors.success + '18' : colors.primary + '18', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 5 }}>
-                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: isConfirmed ? colors.success : colors.primary }}>
-                          {r.booking_id || `#${r.id}`}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12.5, color: themeColors.text, fontWeight: '600', marginTop: 3 }} numberOfLines={1}>
-                      {[r.pickup, r.drop_location].filter(Boolean).join(' → ')}
-                    </Text>
-                    <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-                      {[dispVehicle, dispTrip].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}{r.travel_time ? ` ${r.travel_time}` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 12, height: 42 }}
+                onPress={() => searchLeads()}
+                activeOpacity={0.8}
+              >
+                <Search size={15} color={themeColors.textMuted} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, minWidth: 0, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
+                  placeholder="Booking ID (e.g. 0101, E2610), name, phone..."
+                  placeholderTextColor={themeColors.textMuted}
+                  value={linkQuery}
+                  onChangeText={setLinkQuery}
+                  onSubmitEditing={() => searchLeads()}
+                  returnKeyType="search"
+                  accessibilityLabel="Search lead or booking"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ height: 42, paddingHorizontal: 14, borderRadius: 6, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onPress={() => searchLeads()}
+                disabled={linkSearching}
+                accessibilityLabel="Search leads"
+              >
+                {linkSearching ? <ActivityIndicator size="small" color="white" /> : (
+                  <>
+                    <Search size={16} color="white" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>Search</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -4063,6 +4042,186 @@ export default function CreateBookingScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Dedicated Lead & Booking Picker Sheet Modal */}
+      <Modal
+        visible={showLeadPickerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLeadPickerModal(false)}
+      >
+        <SafeAreaView style={[styles.pickerModalContainer, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.pickerModalHeader, { borderBottomColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Route size={20} color={colors.primary} />
+              <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Select Lead or Booking</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowLeadPickerModal(false)} accessibilityLabel="Close">
+              <X size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Input Bar */}
+          <View style={{ padding: 14, paddingBottom: 10, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F3F4F6', borderRadius: 8, borderWidth: 1, borderColor: themeColors.border, paddingHorizontal: 12, height: 42 }}>
+              <Search size={16} color={themeColors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={{ flex: 1, fontSize: 13.5, color: themeColors.text, outlineStyle: 'none' } as any}
+                placeholder="Search booking ID (e.g. 0101, E2610), name, phone, city..."
+                placeholderTextColor={themeColors.textMuted}
+                value={linkQuery}
+                onChangeText={(v) => {
+                  setLinkQuery(v);
+                  searchLeads(v);
+                }}
+                onSubmitEditing={() => searchLeads()}
+                returnKeyType="search"
+                autoFocus
+                accessibilityLabel="Filter leads or bookings"
+              />
+              {linkQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setLinkQuery(''); searchLeads(''); }} style={{ padding: 4 }}>
+                  <X size={16} color={themeColors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filter Tabs: All, Open Leads, Confirmed, Orders */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              {[
+                { key: 'ALL', label: 'All' },
+                { key: 'OPEN', label: 'Open Leads' },
+                { key: 'CONFIRMED', label: 'Confirmed' },
+                { key: 'ORDER', label: 'Orders' },
+              ].map((tab) => {
+                const isActive = leadTabFilter === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={{
+                      paddingVertical: 5,
+                      paddingHorizontal: 11,
+                      borderRadius: 20,
+                      backgroundColor: isActive ? colors.primary : (isDark ? '#1E293B' : '#E5E7EB'),
+                    }}
+                    onPress={() => setLeadTabFilter(tab.key as any)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: isActive ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Results List */}
+          <ScrollView style={styles.pickerModalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
+            {linkSearching && (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>Searching leads and bookings...</Text>
+              </View>
+            )}
+
+            {!linkSearching && (() => {
+              const allRows = linkResults || [];
+              const filtered = allRows.filter((r) => {
+                if (leadTabFilter === 'ALL') return true;
+                const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed';
+                const isOrder = String(r.lead_stage || '') === 'order';
+                if (leadTabFilter === 'OPEN') return !isConfirmed && !isOrder;
+                if (leadTabFilter === 'CONFIRMED') return isConfirmed && !isOrder;
+                if (leadTabFilter === 'ORDER') return isOrder;
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <View style={{ paddingVertical: 36, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>No results found</Text>
+                    <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                      Try searching with different digits, names, or phone numbers.
+                    </Text>
+                  </View>
+                );
+              }
+
+              return (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 10 }}>
+                    Found {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+                  </Text>
+                  {filtered.map((r) => {
+                    const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed';
+                    const isOrder = String(r.lead_stage || '') === 'order';
+                    const badgeBg = isOrder ? '#6366F118' : isConfirmed ? colors.success + '18' : colors.primary + '18';
+                    const badgeColor = isOrder ? '#4F46E5' : isConfirmed ? colors.success : colors.primary;
+                    const badgeLabel = isOrder ? 'Order' : isConfirmed ? 'Confirmed' : 'Open Lead';
+                    const dispVehicle = r.vehicle_type ? r.vehicle_type.replace(/_/g, ' ') : 'Sedan';
+                    const dispTrip = r.trip_type ? r.trip_type.replace(/_/g, ' ') : 'Oneway';
+
+                    return (
+                      <TouchableOpacity
+                        key={`${r.id}-${r.booking_id || ''}-${r.lead_stage || ''}`}
+                        style={{
+                          backgroundColor: themeColors.surface,
+                          borderWidth: 1,
+                          borderColor: themeColors.border,
+                          borderRadius: 8,
+                          padding: 12,
+                          marginBottom: 10,
+                        }}
+                        onPress={() => applyLead(r)}
+                        activeOpacity={0.75}
+                        accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }} numberOfLines={1}>
+                              {r.name || 'Customer'}
+                            </Text>
+                            {r.phone ? (
+                              <Text style={{ fontSize: 12, color: themeColors.textSecondary }} numberOfLines={1}>
+                                · {r.phone}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ backgroundColor: badgeBg, paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 10.5, fontWeight: '800', color: badgeColor }}>
+                                {badgeLabel}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                              {r.booking_id || `#${r.id}`}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text, marginTop: 6 }} numberOfLines={2}>
+                          {[r.pickup, r.drop_location].filter(Boolean).join(' → ')}
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: themeColors.border }}>
+                          <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
+                            {[dispVehicle, dispTrip].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}{r.travel_time ? ` ${r.travel_time}` : ''}
+                          </Text>
+                          {r.fare_estimate ? (
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                              ₹{Number(r.fare_estimate).toLocaleString('en-IN')}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       {/* Explanation popup behind every (i) dot */}
