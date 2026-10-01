@@ -102,7 +102,39 @@ def get_selected_cities_vehicle_owner(
         Notification.sub == vehicle_owner_id
     ).first()
     selected = set((notif.selected_city or [])) if notif else set()
-    return {city: (city in selected) for city in cities}
+    out = {city: (city in selected) for city in cities}
+    # the app still lists the old spellings - show them as selected when their canonical city is
+    for old_name, canonical in CITY_ALIASES.items():
+        if old_name not in out and canonical in out:
+            out[old_name] = out[canonical]
+    return out
+
+
+# Names the Driver App still sends that are spelled differently in the master list.
+CITY_ALIASES = {"Pondicherry": "Puducherry", "Pondy": "Puducherry"}
+# The Driver App lets a driver pick at most 5 cities by hand. Anything longer is the "All cities" tick, which the app
+# sends as ITS OWN built-in list (about 158 names, a few of them spelled differently from the master list of ~380).
+MAX_MANUAL_CITIES = 5
+
+
+def normalize_selected_cities(payload, master) -> List[str]:
+    """What to store for a driver's city choice.
+
+    Unknown names are dropped instead of rejecting the whole choice (one outdated name used to make every save fail
+    with 400, so nobody's cities were ever saved and city-based booking alerts silently stopped), old spellings are
+    mapped, and an "All cities" tick is stored as the full current master list so the driver also gets cities added later."""
+    master_list = list(master)
+    master_set = set(master_list)
+    cleaned: List[str] = []
+    for c in payload:
+        if not isinstance(c, str):
+            continue
+        c = CITY_ALIASES.get(c.strip(), c.strip())
+        if c in master_set and c not in cleaned:
+            cleaned.append(c)
+    if len(cleaned) > MAX_MANUAL_CITIES:
+        return master_list
+    return cleaned
 
 
 class SelectedCitiesPayload(Dict[str, List[str]]):
@@ -116,11 +148,8 @@ def update_selected_cities_vehicle_owner(
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
 ):
-    # Basic validation: ensure all entries are strings and exist in the master list
-    cities = set(get_cities())
-    invalid = [c for c in payload if not isinstance(c, str) or c not in cities]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid city names: {invalid}")
+    # Unknown names are dropped (not rejected) and "All cities" is stored as the whole master list
+    payload = normalize_selected_cities(payload, get_cities())
 
     notif = db.query(Notification).filter(
         Notification.user == "vehicle_owner",
