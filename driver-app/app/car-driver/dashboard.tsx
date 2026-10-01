@@ -23,6 +23,7 @@ import { useCarDriver } from '@/contexts/CarDriverContext';
 import { getDriverAssignedOrders } from '@/services/driver/carDriverService';
 import ProfilePhotoReminder from '@/components/ProfilePhotoReminder';
 import OverlayPermissionPrompt from '@/components/OverlayPermissionPrompt';
+import CustomerNumberCountdown from '@/components/CustomerNumberCountdown';
 import {
   User,
   Phone,
@@ -1592,6 +1593,8 @@ export default function CarDriverDashboardScreen({ embedded = false }: { embedde
                         {booking.customer_phone}
                       </Text>
                     </TouchableOpacity>
+                  ) : booking.raw?.customer_number_revealed === false && Number(booking.raw?.customer_number_reveal_in_seconds) > 0 ? (
+                    <CustomerNumberCountdown seconds={Number(booking.raw.customer_number_reveal_in_seconds)} onUnlock={fetchBookings} />
                   ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Lock color={colors.textSecondary} size={12} />

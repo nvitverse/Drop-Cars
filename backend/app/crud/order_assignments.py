@@ -39,57 +39,103 @@ def collect_fields_for_order(db: Session, order: Order) -> dict:
     }
 
 
-def is_customer_number_revealed(db: Session, order: Order) -> bool:
+# Short-notice bookings: when the normal reveal window is already open by the
+# time a driver accepts (e.g. pickup is only 2 minutes away), the number is not
+# shown instantly. It appears after the LONGER of 5 minutes or 10% of the time
+# left to pickup, counted from the moment of acceptance, and the driver sees a
+# live countdown. Owner rule, 2026-10-01.
+SHORT_NOTICE_MIN_DELAY_MINUTES = 5
+SHORT_NOTICE_DELAY_PERCENT = 10
+
+
+def _reveal_hours_before(db: Session) -> float:
+    from app.crud.customer_booking_request import (
+        get_platform_setting_value, PHONE_REVEAL_HOURS_BEFORE_KEY, DEFAULT_PHONE_REVEAL_HOURS_BEFORE,
+    )
+    try:
+        return float(get_platform_setting_value(
+            db, PHONE_REVEAL_HOURS_BEFORE_KEY, str(DEFAULT_PHONE_REVEAL_HOURS_BEFORE)
+        ))
+    except (TypeError, ValueError):
+        return float(DEFAULT_PHONE_REVEAL_HOURS_BEFORE)
+
+
+def _live_assignment(db: Session, order: Order):
+    return db.query(OrderAssignment).filter(
+        OrderAssignment.order_id == order.id,
+        OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
+    ).order_by(desc(OrderAssignment.created_at)).first()
+
+
+def compute_reveal_at(pickup_at, accepted_at, hours_before: float):
+    """Moment (UTC, naive) the driver may see the customer number.
+
+    Advance booking (accepted before the normal window opens): pickup minus
+    `hours_before`, as always. Short notice (the window was already open when
+    the driver accepted): accepted_at + max(5 min, 10% of the time left)."""
+    normal = pickup_at - timedelta(hours=hours_before)
+    if accepted_at is None or accepted_at <= normal:
+        return normal
+    minutes_left = max(0.0, (pickup_at - accepted_at).total_seconds() / 60.0)
+    delay = max(float(SHORT_NOTICE_MIN_DELAY_MINUTES), minutes_left * SHORT_NOTICE_DELAY_PERCENT / 100.0)
+    return accepted_at + timedelta(minutes=delay)
+
+
+def customer_number_reveal_at(db: Session, order: Order, assignment=None):
+    """UTC naive datetime the number unlocks, or None when it is visible
+    regardless of time (manual "Show customer number" / "On accept", or no
+    pickup time to gate against)."""
+    # Manual switch (vendor / poster / admin "On accept") overrides the time rules
+    if getattr(order, "data_visibility_vehicle_owner", False):
+        return None
+    pickup_at = order.start_date_time
+    if pickup_at is None:
+        return None
+    if pickup_at.tzinfo is not None:
+        pickup_at = pickup_at.replace(tzinfo=None)
+    if assignment is None:
+        assignment = _live_assignment(db, order)
+    accepted_at = getattr(assignment, "created_at", None) if assignment is not None else None
+    if accepted_at is not None and accepted_at.tzinfo is not None:
+        accepted_at = accepted_at.replace(tzinfo=None)
+    return compute_reveal_at(pickup_at, accepted_at, _reveal_hours_before(db))
+
+
+def is_customer_number_revealed(db: Session, order: Order, assignment=None) -> bool:
     """Whether the assigned driver can currently see the real customer
     number (see get_masked_customer_number below for the reveal rule).
     Shared with the cancel/refund flow - once the driver has the customer's
     real number, they can coordinate the trip off-platform, so a refund
     past that point would reward exactly that bypass."""
-    if getattr(order, "is_urgent", False):
-        return True
-    # Manual "Show customer number" switch (vendor / poster / admin) overrides the time window
-    if getattr(order, "data_visibility_vehicle_owner", False):
-        return True
-
-    from app.crud.customer_booking_request import (
-        get_platform_setting_value, PHONE_REVEAL_HOURS_BEFORE_KEY, DEFAULT_PHONE_REVEAL_HOURS_BEFORE,
-    )
-    pickup_at = order.start_date_time
-    if pickup_at is None:
-        return True  # no pickup time to gate against - fail open, matches get_masked_customer_number
-    if pickup_at.tzinfo is not None:
-        pickup_at = pickup_at.replace(tzinfo=None)
-
-    try:
-        hours_before = float(get_platform_setting_value(
-            db, PHONE_REVEAL_HOURS_BEFORE_KEY, str(DEFAULT_PHONE_REVEAL_HOURS_BEFORE)
-        ))
-    except (TypeError, ValueError):
-        hours_before = DEFAULT_PHONE_REVEAL_HOURS_BEFORE
-
-    reveal_at = pickup_at - timedelta(hours=hours_before)
-    return datetime.utcnow() >= reveal_at
+    reveal_at = customer_number_reveal_at(db, order, assignment)
+    return reveal_at is None or datetime.utcnow() >= reveal_at
 
 
-def get_masked_customer_number(db: Session, order: Order) -> str:
-    """Customer's phone number, hidden from the assigned driver until
-    phone_reveal_hours_before_pickup hours before pickup (default 6, admin-
-    editable) - previously shown the instant a driver/car was assigned, no
-    matter how far in advance that was. Urgent bookings always reveal it
-    immediately, since there's no meaningful advance window to protect."""
-    if is_customer_number_revealed(db, order):
+def customer_number_reveal_info(db: Session, order: Order, assignment=None) -> dict:
+    """What the Driver App needs to draw the countdown: whether the number is
+    open, when it opens (ISO, UTC) and the seconds left."""
+    reveal_at = customer_number_reveal_at(db, order, assignment)
+    if reveal_at is None:
+        return {"customer_number_revealed": True, "customer_number_reveal_at": None, "customer_number_reveal_in_seconds": 0}
+    left = int((reveal_at - datetime.utcnow()).total_seconds())
+    return {
+        "customer_number_revealed": left <= 0,
+        "customer_number_reveal_at": reveal_at.isoformat() + "Z",
+        "customer_number_reveal_in_seconds": max(0, left),
+    }
+
+
+def get_masked_customer_number(db: Session, order: Order, assignment=None) -> str:
+    """Customer's phone number, hidden from the assigned driver until it
+    unlocks (see customer_number_reveal_at). Older app versions only show this
+    text; newer ones draw a live countdown from customer_number_reveal_in_seconds."""
+    reveal_at = customer_number_reveal_at(db, order, assignment)
+    if reveal_at is None or datetime.utcnow() >= reveal_at:
         return order.customer_number
-
-    from app.crud.customer_booking_request import (
-        get_platform_setting_value, PHONE_REVEAL_HOURS_BEFORE_KEY, DEFAULT_PHONE_REVEAL_HOURS_BEFORE,
-    )
-    try:
-        hours_before = float(get_platform_setting_value(
-            db, PHONE_REVEAL_HOURS_BEFORE_KEY, str(DEFAULT_PHONE_REVEAL_HOURS_BEFORE)
-        ))
-    except (TypeError, ValueError):
-        hours_before = DEFAULT_PHONE_REVEAL_HOURS_BEFORE
-    return f"Available {int(hours_before)}h before pickup"
+    left = int((reveal_at - datetime.utcnow()).total_seconds())
+    if left < 6 * 3600:
+        return f"Available in {left // 60}:{left % 60:02d}"
+    return f"Available {int(_reveal_hours_before(db))}h before pickup"
 
 
 from sqlalchemy.exc import IntegrityError
@@ -1222,7 +1268,8 @@ def get_driver_assigned_orders(db: Session, driver_id: str) -> List[dict]:
                 # get_masked_customer_number's docstring (urgent bookings
                 # always reveal immediately). The driver can still reach the
                 # customer via the vendor's number below in the meantime.
-                "customer_number": get_masked_customer_number(db, order),
+                "customer_number": get_masked_customer_number(db, order, assignment),
+                **customer_number_reveal_info(db, order, assignment),
                 "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else "Self-Sourced Booking (No Vendor)",
                 "vendor_primary_number" : vendor_detail_show.primary_number if vendor_detail_show else None,
                 "vendor_secondary_number" : vendor_detail_show.secondary_number if vendor_detail_show else None,
