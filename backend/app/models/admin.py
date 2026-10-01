@@ -28,6 +28,9 @@ class Admin(Base):
     # (GET /api/support/on-duty-contact) instead of a hardcoded placeholder.
     is_on_duty = Column(Boolean, nullable=False, default=False, server_default="false")
     on_duty_since = Column(TIMESTAMP(timezone=True), nullable=True)
+    # Last time this admin used the Admin App (any authenticated call). "On duty" only counts while this
+    # is recent, so a forgotten duty switch cannot hold bookings back (crud/website_post_rules.py).
+    last_seen_at = Column(TIMESTAMP(timezone=True), nullable=True)
     
     # Admin balance tracking
     balance = Column(Integer, nullable=False, default=0)

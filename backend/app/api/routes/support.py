@@ -297,15 +297,20 @@ async def get_on_duty_contact(db: Session = Depends(get_db)):
     "on duty" most recently, so drivers get a real, currently-reachable
     number instead of a hardcoded placeholder. Falls back to any Owner-role
     admin if no one has toggled on duty."""
-    admin = (
+    from app.crud.website_post_rules import get_rules, is_admin_effectively_on_duty
+    rules = get_rules(db)
+    on_duty = (
         db.query(Admin).filter(Admin.is_on_duty.is_(True))
-        .order_by(Admin.on_duty_since.desc()).first()
+        .order_by(Admin.on_duty_since.desc()).all()
     )
+    # only someone who is really there (app used in the last few minutes) is shown as reachable
+    admin = next((a for a in on_duty if is_admin_effectively_on_duty(a, rules=rules)), None)
+    reachable = admin is not None
     if not admin:
         admin = db.query(Admin).filter(Admin.role == "Owner").order_by(Admin.created_at.asc()).first()
     if not admin or not admin.phone:
         return {"available": False, "name": None, "phone": None}
-    return {"available": bool(admin.is_on_duty), "name": admin.username, "phone": admin.phone}
+    return {"available": reachable, "name": admin.username, "phone": admin.phone}
 
 
 class OnDutyPayload(BaseModel):
@@ -314,18 +319,50 @@ class OnDutyPayload(BaseModel):
 
 @router.get("/admin/on-duty")
 async def get_my_on_duty(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
-    """Get current admin's on-duty status."""
-    return {"is_on_duty": bool(current_admin.is_on_duty), "username": current_admin.username, "role": current_admin.role}
+    """Get current admin's on-duty status. `effective` is what the booking rules use: the switch is ON, the app
+    was used in the last few minutes and the shift is under the maximum length."""
+    from datetime import timedelta
+    from app.crud.website_post_rules import get_rules, is_admin_effectively_on_duty
+    rules = get_rules(db)
+    since = current_admin.on_duty_since
+    return {
+        "is_on_duty": bool(current_admin.is_on_duty),
+        "effective": is_admin_effectively_on_duty(current_admin, rules=rules),
+        "on_duty_since": since,
+        "shift_ends_at": (since + timedelta(hours=rules["staff_duty_max_hours"])) if (current_admin.is_on_duty and since) else None,
+        "username": current_admin.username,
+        "role": current_admin.role,
+    }
 
 
 @router.patch("/admin/on-duty")
 async def set_my_on_duty(payload: OnDutyPayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Admin App > Settings self-toggle."""
+    now = datetime.now(timezone.utc)
     current_admin.is_on_duty = payload.on_duty
-    current_admin.on_duty_since = datetime.now(timezone.utc) if payload.on_duty else current_admin.on_duty_since
+    if payload.on_duty:
+        current_admin.on_duty_since = now
+        current_admin.last_seen_at = now
     db.add(current_admin)
     db.commit()
     return {"is_on_duty": current_admin.is_on_duty}
+
+
+@router.post("/admin/on-duty/heartbeat")
+async def admin_duty_heartbeat(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """The Admin App can ping this while it is open (e.g. every minute). Any authenticated call already counts as
+    presence; this is the cheapest one and tells the app whether it really counts as on duty."""
+    from datetime import timedelta
+    from app.crud.website_post_rules import get_rules, is_admin_effectively_on_duty
+    now = datetime.now(timezone.utc)
+    current_admin.last_seen_at = now
+    db.add(current_admin)
+    db.commit()
+    rules = get_rules(db)
+    since = current_admin.on_duty_since
+    expired = bool(current_admin.is_on_duty and since and (since.replace(tzinfo=since.tzinfo or timezone.utc) < now - timedelta(hours=rules["staff_duty_max_hours"])))
+    return {"is_on_duty": bool(current_admin.is_on_duty), "effective": is_admin_effectively_on_duty(current_admin, now, rules),
+            "shift_expired": expired}
 
 
 @router.get("/admin/threads")

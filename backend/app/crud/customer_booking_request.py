@@ -280,60 +280,51 @@ def get_website_post_mode(db: Session) -> str:
 
 
 def any_staff_on_duty(db: Session) -> bool:
-    from app.models.admin import Admin
-    return db.query(Admin.id).filter(Admin.is_on_duty.is_(True)).first() is not None
+    """Someone is really on duty: switch ON and the Admin App used in the last few minutes (see website_post_rules)."""
+    from app.crud.website_post_rules import any_staff_present
+    return any_staff_present(db)
 
 
 async def auto_approve_expired_booking_requests(db: Session) -> int:
-    """Sweep: auto-approve any PENDING request whose approval window has
-    elapsed, so a website booking is never stuck waiting on a slow/missed
-    admin approval forever. Called from app/main.py's existing sweep timer.
+    """Sweep (every minute, Cloud Scheduler): post every pending website booking whose own deadline has come.
 
-    Normal and urgent requests have DIFFERENT review windows, so each row's
-    own cutoff is computed from its own is_urgent flag rather than one
-    blanket filter."""
-    # Admin choice (Admin App > System Config): MANUAL never auto-posts; AUTO_IF_NO_STAFF only auto-posts while nobody
-    # on the staff is on duty (whoever is on duty handles the bookings by hand).
+    The deadline depends on how close the pickup is and whether staff is really on duty - see
+    crud/website_post_rules.py for the rule. MANUAL mode never auto-posts."""
+    from app.crud import website_post_rules as pr
+
     mode = get_website_post_mode(db)
     if mode == "MANUAL":
         return 0
-    if mode == "AUTO_IF_NO_STAFF" and any_staff_on_duty(db):
-        # staff is handling bookings by hand right now - look again in 5 minutes in case they go off duty
-        try:
-            if db.query(CustomerBookingRequest.id).filter(CustomerBookingRequest.status == "PENDING",
-                                                          CustomerBookingRequest.requires_manual_confirm == False).first():  # noqa: E712
-                from app.crud.notification import schedule_internal_sweep
-                schedule_internal_sweep(300)
-        except Exception:
-            pass
-        return 0
 
     now = datetime.now(timezone.utc)
-    normal_delay = get_auto_approve_seconds(db, is_urgent=False)
-    urgent_delay = get_auto_approve_seconds(db, is_urgent=True)
-    # Cheapest possible cutoff (the shorter, urgent one) narrows the DB scan;
-    # the exact per-row check still happens in Python below.
-    coarse_cutoff = now - timedelta(seconds=min(normal_delay, urgent_delay))
+    rules = pr.get_rules(db)
+    pr.expire_stale_duty(db, now, rules)
+    staff_on = pr.any_staff_present(db, now, rules)
+    normal_s = get_auto_approve_seconds(db, is_urgent=False)
+    urgent_s = get_auto_approve_seconds(db, is_urgent=True)
 
     pending = (
         db.query(CustomerBookingRequest)
         .filter(CustomerBookingRequest.status == "PENDING")
-        .filter(CustomerBookingRequest.created_at <= coarse_cutoff)
         .filter(CustomerBookingRequest.requires_manual_confirm == False)  # noqa: E712 - soft leads never auto-post
         .all()
     )
     count = 0
     for request in pending:
-        delay = urgent_delay if request.is_urgent else normal_delay
-        created_at = request.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-        if created_at > now - timedelta(seconds=delay):
-            continue  # this specific request's own window hasn't elapsed yet
+        plan = pr.compute_post_plan(request, now=now, staff_on=staff_on, rules=rules, mode=mode,
+                                    normal_seconds=normal_s, urgent_seconds=urgent_s)
+        deadline = plan["deadline"]
+        if deadline is not None and now >= deadline:
+            try:
+                approve_customer_booking_request(db, request, decided_by="AUTO_TIMEOUT")
+                count += 1
+            except Exception as e:
+                db.rollback()
+                print(f"Auto-approve failed for booking request {request.id} (continuing): {e}")
+            continue
         try:
-            approve_customer_booking_request(db, request, decided_by="AUTO_TIMEOUT")
-            count += 1
+            pr.maybe_escalate(db, request, plan, now=now, rules=rules, staff_on=staff_on)
         except Exception as e:
             db.rollback()
-            print(f"Auto-approve failed for booking request {request.id} (continuing): {e}")
+            print(f"Owner escalation failed for booking request {request.id} (continuing): {e}")
     return count

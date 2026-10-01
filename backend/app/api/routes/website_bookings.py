@@ -238,23 +238,38 @@ async def create_website_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to create website booking: {str(e)}")
 
     delay_seconds = get_auto_approve_seconds(db, is_urgent=payload.is_urgent)
+    from datetime import timezone as _tz
     from app.crud.customer_booking_request import get_website_post_mode
+    from app.crud import website_post_rules as post_rules
     post_mode = get_website_post_mode(db)
-    auto_post_at = None if (post_mode == "MANUAL" or payload.is_enquiry) else booking.created_at + timedelta(seconds=delay_seconds)
-    minutes = max(1, delay_seconds // 60)
-    if auto_post_at is not None:
-        # wake the service at the right moment - an idle instance would never run the in-process timer
+    _now = datetime.now(_tz.utc)
+    _rules = post_rules.get_rules(db)
+    _plan = post_rules.compute_post_plan(
+        booking, now=_now, staff_on=post_rules.any_staff_present(db, _now, _rules), rules=_rules, mode=post_mode,
+        normal_seconds=get_auto_approve_seconds(db, is_urgent=False), urgent_seconds=get_auto_approve_seconds(db, is_urgent=True),
+    )
+    auto_post_at = None if payload.is_enquiry else _plan["deadline"]
+    seconds_left = max(5, int((auto_post_at - _now).total_seconds())) if auto_post_at is not None else 0
+    minutes = max(1, seconds_left // 60)
+    if auto_post_at is not None and seconds_left <= 3600:
+        # wake the service at the right moment (the one-minute Cloud Scheduler sweep covers anything later)
         from app.crud.notification import schedule_internal_sweep
-        schedule_internal_sweep(delay_seconds + 5)
+        schedule_internal_sweep(seconds_left + 5)
 
     try:
         urgency_prefix = "URGENT: " if payload.is_urgent else ""
+        if post_mode == "MANUAL":
+            when = "Waiting for your approval (auto-post is off)."
+        elif auto_post_at is None:
+            when = "Staff on duty will handle it."
+        elif seconds_left > 3600:
+            when = f"{_plan['reason']}."
+        else:
+            when = f"Auto-posts in {minutes} min if not reviewed."
         await send_push_notification_to_admin(
             db,
             title=f"{urgency_prefix}New website booking needs approval",
-            message=f"{payload.customer_name} - {payload.pickup_drop_location.get('0', '')} -> {list(payload.pickup_drop_location.values())[-1]}. " + (
-                "Waiting for your approval (auto-post is off)." if post_mode == "MANUAL" else
-                (f"Auto-posts in {minutes} min if no staff is on duty." if post_mode == "AUTO_IF_NO_STAFF" else f"Auto-posts in {minutes} min if not reviewed.")),
+            message=f"{payload.customer_name} - {payload.pickup_drop_location.get('0', '')} -> {list(payload.pickup_drop_location.values())[-1]}. " + when,
         )
     except Exception as e:
         print(f"Failed to alert admin of new website booking: {e}")
