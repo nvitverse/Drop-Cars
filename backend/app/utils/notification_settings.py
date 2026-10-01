@@ -327,6 +327,21 @@ AVAILABLE_SOUNDS = [
 ]
 
 
+import os as _os
+import re as _re
+
+# The bucket is private, so a phone cannot download a storage.googleapis.com URL (403) - the uploaded MP3 never
+# reached any device. Sounds are served by the API instead (GET /api/notification-sounds/file/<name>, public, only
+# the notification_sounds/ folder).
+PUBLIC_API_BASE = _os.getenv("PUBLIC_API_BASE", "https://drop-cars-api-207918408785.asia-south2.run.app").rstrip("/")
+_STORAGE_SOUND_URL = _re.compile(r"^https://storage\.googleapis\.com/[^/]+/notification_sounds/([A-Za-z0-9._-]+)$")
+
+
+def public_sound_url(value: str) -> str:
+    m = _STORAGE_SOUND_URL.match(value or "")
+    return f"{PUBLIC_API_BASE}/api/notification-sounds/file/{m.group(1)}" if m else value
+
+
 def _keys(event_key: str):
     return f"notif_sound_{event_key}", f"notif_text_{event_key}"
 
@@ -337,7 +352,7 @@ def get_notification_setting(db: Session, event_key: str) -> dict:
     rows = db.query(PlatformSetting).filter(PlatformSetting.key.in_([sound_key, text_key])).all()
     values = {row.key: row.value for row in rows}
     return {
-        "sound": values.get(sound_key, defaults["sound"]),
+        "sound": public_sound_url(values.get(sound_key, defaults["sound"])),
         "speak_text": values.get(text_key, defaults["speak_text"]),
         # Not admin-editable (unlike sound/speak_text) - it's tied to how the
         # app registered its Android channel, not a content choice.

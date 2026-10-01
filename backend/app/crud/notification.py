@@ -347,13 +347,18 @@ def _is_muted(row: "Notification") -> bool:
 
 
 def get_users_with_permission1(db: Session, city_list: List[str]):
+    """Who gets a booking alert for these cities (name kept - many callers).
+
+    Owner's rule (2026-10-01): a driver who picked cities gets the bookings of THOSE cities; a driver who picked
+    none gets every booking; and nobody is left out because of an account / permission flag - everyone with a push
+    token is in the audience (a temporary mute still silences them). `permission1` used to be required, but it is
+    False by default for rows created by the city picker, so drivers silently fell out of every alert."""
     if not city_list:
         return []
-    
-    # Get all fleet owners with permission1
+
     vehicle_owners = db.query(Notification).filter(
         Notification.user == "vehicle_owner",
-        Notification.permission1 == True
+        Notification.token.isnot(None),
     ).all()
 
     if "ALL" in city_list:
@@ -401,7 +406,8 @@ def get_users_with_permission1(db: Session, city_list: List[str]):
             and user.selected_city
             and len(set(user.selected_city) & _master) >= _all_threshold
         )
-        if is_vacant_match or is_notif_city_match or is_all_cities:
+        no_city_choice = not user.selected_city   # never picked cities = wants everything
+        if is_vacant_match or is_notif_city_match or is_all_cities or no_city_choice:
             filtered_users.append(user)
 
     return filtered_users
