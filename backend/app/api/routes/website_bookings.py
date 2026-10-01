@@ -67,7 +67,7 @@ class CreatePaymentOrderRequest(BaseModel):
 
 
 @router.post("/website/payments/create-order", dependencies=[Depends(require_website_key)])
-async def create_payment_order(body: CreatePaymentOrderRequest):
+def create_payment_order(body: CreatePaymentOrderRequest):
     """Create a Razorpay order for the website's urgent-booking advance,
     using the SAME Razorpay account/credentials as the Driver/Vendor apps
     (see app/utils/razorpay_client.py) - just a different order, not a
@@ -176,7 +176,8 @@ async def create_website_booking(
         # less than the customer actually owes. Cross-check the real
         # captured amount with Razorpay instead of trusting the field.
         try:
-            rp_order = RazorpayClient().get_order(payload.rp_order_id)
+            from starlette.concurrency import run_in_threadpool as _rtp
+            rp_order = await _rtp(RazorpayClient().get_order, payload.rp_order_id)
             verified_advance_amount = int((rp_order.get("amount_paid") or 0) // 100)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Could not confirm advance payment with Razorpay: {str(e)}")
@@ -186,8 +187,10 @@ async def create_website_booking(
     try:
         credentials, _details = find_or_create_guest_customer(db, payload.customer_number, payload.customer_name)
 
-        fare, rates = _calculate_fare_internal(
-            db, payload.pickup_drop_location, payload.trip_type, payload.car_type
+        # Google Maps / rate card lookups are blocking: run them in the thread pool so one slow lookup never freezes the whole server
+        from starlette.concurrency import run_in_threadpool
+        fare, rates = await run_in_threadpool(
+            _calculate_fare_internal, db, payload.pickup_drop_location, payload.trip_type, payload.car_type
         )
         website_quote = None
         if payload.quoted_fare:
@@ -304,7 +307,7 @@ async def create_website_booking(
 
 
 @router.get("/website/bookings/pending", dependencies=[Depends(require_website_key)])
-async def list_pending_website_bookings(db: Session = Depends(get_db)):
+def list_pending_website_bookings(db: Session = Depends(get_db)):
     """Shared logic (also excludes enquiries/soft-leads - see
     crud/website_booking_approvals.py's module docstring) lives in
     crud/website_booking_approvals.py, called from here and from the Admin
@@ -314,7 +317,7 @@ async def list_pending_website_bookings(db: Session = Depends(get_db)):
 
 
 @router.post("/website/bookings/{id}/approve", dependencies=[Depends(require_website_key)])
-async def approve_website_booking(id: UUID, db: Session = Depends(get_db)):
+def approve_website_booking(id: UUID, db: Session = Depends(get_db)):
     from app.crud.website_booking_approvals import approve_website_booking as _approve
     master_order = _approve(db, id)
     return {"status": "APPROVED", "order_id": master_order.id}
@@ -325,7 +328,7 @@ class WebsiteBookingReject(BaseModel):
 
 
 @router.post("/website/bookings/{id}/reject", dependencies=[Depends(require_website_key)])
-async def reject_website_booking(id: UUID, body: WebsiteBookingReject, db: Session = Depends(get_db)):
+def reject_website_booking(id: UUID, body: WebsiteBookingReject, db: Session = Depends(get_db)):
     from app.crud.website_booking_approvals import reject_website_booking as _reject
     return _reject(db, id, body.reason)
 
@@ -338,7 +341,7 @@ class WebsiteBookingRatesUpdate(BaseModel):
 
 
 @router.patch("/website/bookings/{id}/rates", dependencies=[Depends(require_website_key)])
-async def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate, db: Session = Depends(get_db)):
+def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate, db: Session = Depends(get_db)):
     """Lets the website's Enquiry "Customize" action set the DRIVER-facing
     per-km rate (what the Driver/Vendor App shows) on a still-pending
     request - separate from quoted_total_amount/fare_estimate, which is
@@ -374,7 +377,7 @@ async def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate
 
 
 @router.post("/website/bookings/{id}/request-cancel-otp", dependencies=[Depends(require_website_key)])
-async def request_cancel_otp(id: UUID, db: Session = Depends(get_db)):
+def request_cancel_otp(id: UUID, db: Session = Depends(get_db)):
     """Step 1 of a customer-initiated cancel: email a fresh OTP to the
     customer on file. A booking ID alone isn't proof of identity - anyone
     who has it (it's shown in confirmation emails/WhatsApp) could otherwise
@@ -417,7 +420,7 @@ class ConfirmCancelRequest(BaseModel):
 
 
 @router.post("/website/bookings/{id}/confirm-cancel", dependencies=[Depends(require_website_key)])
-async def confirm_cancel(id: UUID, body: ConfirmCancelRequest, db: Session = Depends(get_db)):
+def confirm_cancel(id: UUID, body: ConfirmCancelRequest, db: Session = Depends(get_db)):
     """Step 2: verify the OTP, then actually cancel - PENDING requests are
     simply rejected (nothing was ever posted to the marketplace), APPROVED
     ones go through cancel_order_by_customer for the real refund-tier logic."""
@@ -504,7 +507,7 @@ async def request_refund(id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/website/bookings/refund-requests", dependencies=[Depends(require_website_key)])
-async def list_refund_requests(db: Session = Depends(get_db)):
+def list_refund_requests(db: Session = Depends(get_db)):
     """Admin queue - see admin/pages/refund-requests.php on the website.
     Shared logic lives in crud/refund_requests.py - the Admin App's
     JWT-authenticated mirror (app/api/routes/admin.py) calls the same
@@ -525,7 +528,7 @@ class ProcessRefundRequest(BaseModel):
 
 
 @router.post("/website/bookings/{id}/process-refund", dependencies=[Depends(require_website_key)])
-async def process_refund(id: UUID, body: ProcessRefundRequest, db: Session = Depends(get_db)):
+def process_refund(id: UUID, body: ProcessRefundRequest, db: Session = Depends(get_db)):
     """Admin marks a requested refund as processed (approve=true, with the
     amount actually refunded via whatever payment channel was used - manual
     UPI or Razorpay) or denied (approve=false, with a reason in notes)."""
@@ -552,7 +555,7 @@ def _get_assignment_by_trip_token(db: Session, token: str):
 
 
 @router.get("/website/trip-link/{token}")
-async def get_trip_link_info(token: str, db: Session = Depends(get_db)):
+def get_trip_link_info(token: str, db: Session = Depends(get_db)):
     from app.models.order_assignments import AssignmentStatusEnum
     from app.models.orders import Order
     from app.models.end_records import EndRecord
@@ -664,7 +667,7 @@ def _mirror_location_to_website(order_id: int, lat: float, lng: float) -> None:
 
 
 @router.post("/website/trip-link/{token}/location")
-async def update_trip_link_location(token: str, body: TripLinkLocationPing, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def update_trip_link_location(token: str, body: TripLinkLocationPing, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Fired repeatedly by navigator.geolocation.watchPosition() while
     pages/driver-trip.php stays open in the driver's browser. Last-write-wins;
     no history is kept, only the latest fix."""
@@ -688,7 +691,7 @@ async def update_trip_link_location(token: str, body: TripLinkLocationPing, back
 
 
 @router.post("/website/trip-link/{token}/left")
-async def trip_link_page_left(token: str, db: Session = Depends(get_db)):
+def trip_link_page_left(token: str, db: Session = Depends(get_db)):
     """Sent via navigator.sendBeacon() when driver-trip.php detects it was
     backgrounded or is closing (visibilitychange/pagehide) - see the JS in
     pages/driver-trip.php. This is DETECTION, not enforcement: a website page
@@ -739,7 +742,7 @@ class WebsiteBookingSettingsUpdate(BaseModel):
 
 
 @router.get("/website/bookings/settings", dependencies=[Depends(require_website_key)])
-async def get_website_booking_settings(db: Session = Depends(get_db)):
+def get_website_booking_settings(db: Session = Depends(get_db)):
     """Same underlying values as GET /admin/website-booking-settings (admin-JWT
     gated, for the Admin app) - this is the shared-secret twin so the website
     can read/edit the two real settings too. See app/crud/customer_booking_request.py."""
@@ -751,7 +754,7 @@ async def get_website_booking_settings(db: Session = Depends(get_db)):
 
 
 @router.put("/website/bookings/settings", dependencies=[Depends(require_website_key)])
-async def update_website_booking_settings(body: WebsiteBookingSettingsUpdate, db: Session = Depends(get_db)):
+def update_website_booking_settings(body: WebsiteBookingSettingsUpdate, db: Session = Depends(get_db)):
     from app.crud.customer_booking_request import (
         set_platform_setting_value, WEBSITE_AUTO_APPROVE_SECONDS_KEY, WEBSITE_URGENT_APPROVE_SECONDS_KEY,
         get_auto_approve_seconds,
@@ -791,13 +794,13 @@ class WebsiteIntegrationCreate(BaseModel):
 
 
 @router.get("/admin/website-integrations", response_model=list[WebsiteIntegrationOut])
-async def list_website_integrations(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def list_website_integrations(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     from app.models.website_integration import WebsiteIntegration
     return db.query(WebsiteIntegration).order_by(WebsiteIntegration.created_at.desc()).all()
 
 
 @router.post("/admin/website-integrations", response_model=WebsiteIntegrationOut, status_code=status.HTTP_201_CREATED)
-async def create_website_integration(body: WebsiteIntegrationCreate, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def create_website_integration(body: WebsiteIntegrationCreate, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     import secrets
     from app.models.website_integration import WebsiteIntegration
 
@@ -813,7 +816,7 @@ async def create_website_integration(body: WebsiteIntegrationCreate, db: Session
 
 
 @router.put("/admin/website-integrations/{id}/deactivate", response_model=WebsiteIntegrationOut)
-async def deactivate_website_integration(id: UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def deactivate_website_integration(id: UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     from app.models.website_integration import WebsiteIntegration
     integration = db.query(WebsiteIntegration).filter(WebsiteIntegration.id == id).first()
     if not integration:
@@ -825,7 +828,7 @@ async def deactivate_website_integration(id: UUID, db: Session = Depends(get_db)
 
 
 @router.put("/admin/website-integrations/{id}/activate", response_model=WebsiteIntegrationOut)
-async def activate_website_integration(id: UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def activate_website_integration(id: UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     from app.models.website_integration import WebsiteIntegration
     integration = db.query(WebsiteIntegration).filter(WebsiteIntegration.id == id).first()
     if not integration:

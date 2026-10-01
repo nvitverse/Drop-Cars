@@ -50,7 +50,7 @@ def refresh_data():
     return {"message": "Data refreshed", "data": load_json_file()}
 
 @router.post("/hourly/quote", response_model=HourlyQuoteResponse, dependencies=[Depends(get_current_user_flexible)])
-async def hourly_quote(payload: RentalOrderRequest):
+def hourly_quote(payload: RentalOrderRequest):
     try:
         fare = calculate_hourly_fare(
             payload.package_hours,
@@ -71,7 +71,7 @@ async def hourly_quote(payload: RentalOrderRequest):
 
 
 @router.post("/hourly/confirm", status_code=status.HTTP_201_CREATED)
-async def hourly_confirm(
+def hourly_confirm(
     payload: RentalOrderRequest,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),

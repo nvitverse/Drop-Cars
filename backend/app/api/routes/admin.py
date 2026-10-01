@@ -139,7 +139,7 @@ def require_tax_accounts_permission(admin) -> None:
 
 
 @router.post("/admin/signup", response_model=AdminTokenResponse, status_code=status.HTTP_201_CREATED)
-async def admin_signup(
+def admin_signup(
     admin_data: AdminSignup,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -256,7 +256,7 @@ async def admin_signup(
         )
 
 @router.post("/admin/signin", response_model=AdminTokenResponse)
-async def admin_signin(
+def admin_signin(
     admin_data: AdminSignin,
     db: Session = Depends(get_db)
 ):
@@ -314,7 +314,7 @@ async def admin_signin(
         )
 
 @router.post("/admin/force-logout")
-async def admin_force_logout(
+def admin_force_logout(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -325,7 +325,7 @@ async def admin_force_logout(
 
 
 @router.get("/admin/profile", response_model=AdminOut)
-async def get_admin_profile(
+def get_admin_profile(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -349,7 +349,7 @@ async def get_admin_profile(
         )
 
 @router.get("/admin/acccount-ledger", response_model=List[AdminLedger])
-async def get_admin_account_ledger(
+def get_admin_account_ledger(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     skip: int = Query(0, ge=0),
@@ -375,7 +375,7 @@ async def get_admin_account_ledger(
         )
 
 @router.put("/admin/profile", response_model=AdminOut)
-async def update_admin_profile(
+def update_admin_profile(
     admin_update: AdminUpdate,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -403,7 +403,7 @@ async def update_admin_profile(
         )
 
 @router.get("/admin/list", response_model=List[AdminOut])
-async def list_admins(
+def list_admins(
     skip: int = 0,
     limit: int = 100,
     current_admin = Depends(get_current_admin),
@@ -456,7 +456,7 @@ class StaffDetailsUpdate(_StaffBaseModel):
 
 
 @router.patch("/admin/staff/{admin_id}", response_model=AdminOut)
-async def update_staff_details(
+def update_staff_details(
     admin_id: str,
     body: StaffDetailsUpdate,
     current_admin=Depends(get_current_admin),
@@ -493,7 +493,7 @@ async def update_staff_details(
 
 
 @router.patch("/admin/staff/{admin_id}/permissions", response_model=AdminOut)
-async def update_staff_permissions(
+def update_staff_permissions(
     admin_id: str,
     body: StaffPermissionsUpdate,
     current_admin=Depends(get_current_admin),
@@ -529,7 +529,7 @@ async def update_staff_permissions(
 
 
 @router.delete("/admin/staff/{admin_id}")
-async def remove_staff(
+def remove_staff(
     admin_id: str,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -631,7 +631,7 @@ def _ist_day_range_utc(date_str: str):
 
 
 @router.get("/admin/activity-log")
-async def get_activity_log(
+def get_activity_log(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     date_filter: Optional[str] = Query(None, description="all | today | yesterday | week | month"),
@@ -670,7 +670,7 @@ class ActivityLogWebhookUpdate(_ActivityLogWebhookBaseModel):
 
 
 @router.get("/admin/settings/activity-log-webhook")
-async def get_activity_log_webhook(
+def get_activity_log_webhook(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -681,7 +681,7 @@ async def get_activity_log_webhook(
 
 
 @router.post("/admin/settings/activity-log-webhook")
-async def update_activity_log_webhook(
+def update_activity_log_webhook(
     payload: ActivityLogWebhookUpdate,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -753,7 +753,7 @@ class DataArchiveWebhookUpdate(_ActivityLogWebhookBaseModel):
 
 
 @router.get("/admin/settings/data-archive-webhook")
-async def get_data_archive_webhook(
+def get_data_archive_webhook(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -763,7 +763,7 @@ async def get_data_archive_webhook(
 
 
 @router.post("/admin/settings/data-archive-webhook")
-async def update_data_archive_webhook(
+def update_data_archive_webhook(
     payload: DataArchiveWebhookUpdate,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -797,7 +797,7 @@ def _archivable_orders_query(db: Session, older_than_days: int):
 
 
 @router.get("/admin/orders/archive-preview")
-async def preview_archivable_orders(
+def preview_archivable_orders(
     older_than_days: int = Query(180, ge=30, description="Archive completed/cancelled bookings older than this many days"),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -809,7 +809,7 @@ async def preview_archivable_orders(
 
 
 @router.post("/admin/orders/archive")
-async def archive_old_orders(
+def archive_old_orders(
     older_than_days: int = Query(180, ge=30),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -858,7 +858,7 @@ async def archive_old_orders(
 
 
 @router.delete("/admin/activity-log")
-async def clear_activity_log(
+def clear_activity_log(
     date_filter: Optional[str] = Query(None, description="all | today | yesterday | week | month - which entries to delete"),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -940,7 +940,7 @@ STAFF_DAILY_TARGET_DEFAULT = "10"
 
 
 @router.get("/admin/staff/today-target")
-async def get_staff_today_target(
+def get_staff_today_target(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -966,7 +966,7 @@ async def get_staff_today_target(
 
 
 @router.put("/admin/staff/target")
-async def set_staff_today_target(
+def set_staff_today_target(
     payload: dict,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -984,7 +984,7 @@ async def set_staff_today_target(
 
 
 @router.get("/admin/staff/daily-record")
-async def get_own_daily_record(
+def get_own_daily_record(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -995,7 +995,7 @@ async def get_own_daily_record(
 
 
 @router.post("/admin/staff/daily-record")
-async def submit_own_daily_record(
+def submit_own_daily_record(
     payload: dict,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1011,7 +1011,7 @@ async def submit_own_daily_record(
 
 
 @router.get("/admin/staff/daily-records")
-async def list_staff_daily_records(
+def list_staff_daily_records(
     date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD, defaults to today (IST)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -1052,7 +1052,7 @@ from app.models.admin import Admin
 
 
 @router.get("/admin/staff/targets")
-async def list_staff_targets(
+def list_staff_targets(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -1077,7 +1077,7 @@ async def list_staff_targets(
 
 
 @router.put("/admin/staff/targets/{admin_id}")
-async def set_staff_targets(
+def set_staff_targets(
     admin_id: UUID,
     payload: dict,
     current_admin=Depends(get_current_admin),
@@ -1121,7 +1121,7 @@ async def set_staff_targets(
 
 
 @router.get("/admin/staff/my-target")
-async def get_my_staff_target(
+def get_my_staff_target(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -1179,7 +1179,7 @@ def upload_staff_directive_voice(
 
 
 @router.post("/admin/staff-directives")
-async def create_staff_directive(
+def create_staff_directive(
     payload: dict,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1218,7 +1218,7 @@ async def create_staff_directive(
 
 
 @router.get("/admin/staff-directives")
-async def list_staff_directives(
+def list_staff_directives(
     limit: int = Query(20, ge=1, le=100),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1248,7 +1248,7 @@ async def list_staff_directives(
 
 
 @router.delete("/admin/staff-directives/{directive_id}")
-async def delete_staff_directive(
+def delete_staff_directive(
     directive_id: UUID,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1285,7 +1285,7 @@ def _mask_email_for_admin(email: str) -> str:
 
 
 @router.post("/admin/settings/request-password-change-otp")
-async def request_owner_password_change_otp(
+def request_owner_password_change_otp(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -1353,7 +1353,7 @@ class OwnerPasswordChangeRequest(_StaffBaseModel):
 
 
 @router.post("/admin/settings/change-password")
-async def change_owner_password(
+def change_owner_password(
     body: OwnerPasswordChangeRequest,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1418,7 +1418,7 @@ async def change_owner_password(
 # NOTE: These routes must come BEFORE /admin/{admin_id} to avoid route conflicts
 
 @router.get("/admin/orders", response_model=AdminOrdersListResponse)
-async def list_all_orders(
+def list_all_orders(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     sort: str = Query("newest", description="newest (default) or oldest, by created_at"),
@@ -1840,7 +1840,7 @@ def admin_multicity_confirm(
 
 
 @router.post("/admin/orders/hourly/confirm", status_code=status.HTTP_201_CREATED)
-async def admin_hourly_confirm(
+def admin_hourly_confirm(
     payload: AdminHourlyConfirmRequest,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -1893,7 +1893,7 @@ async def admin_hourly_confirm(
 
 
 @router.get("/admin/orders/{order_id}", response_model=AdminOrderDetailResponse)
-async def get_single_order(
+def get_single_order(
     order_id: int,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -1968,7 +1968,9 @@ async def admin_edit_order_fare(
     old_vendor_price = before.vendor_price
 
     try:
-        order = edit_order(db, order_id, None, request.model_dump(exclude_unset=True))
+        # off the event loop: it recalculates the fare and used to wait on Google Maps while every other request queued behind it
+        from starlette.concurrency import run_in_threadpool
+        order = await run_in_threadpool(edit_order, db, order_id, None, request.model_dump(exclude_unset=True))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -2007,7 +2009,7 @@ class AdminIncreaseFareRequest(_AdminIncreaseFareBaseModel):
 
 
 @router.patch("/admin/orders/{order_id}/increase-all-inclusive-fare")
-async def admin_increase_all_inclusive_fare(
+def admin_increase_all_inclusive_fare(
     order_id: int,
     request: AdminIncreaseFareRequest,
     db: Session = Depends(get_db),
@@ -2065,7 +2067,7 @@ class AdminForceCompleteRequest(BaseModel):
 
 
 @router.patch("/admin/orders/{order_id}/master-edit")
-async def admin_master_edit_order_route(
+def admin_master_edit_order_route(
     order_id: int,
     request: AdminMasterEditOrderRequest,
     db: Session = Depends(get_db),
@@ -2103,7 +2105,7 @@ async def admin_master_edit_order_route(
 
 
 @router.post("/admin/orders/{order_id}/force-complete")
-async def admin_force_complete_order_route(
+def admin_force_complete_order_route(
     order_id: int,
     request: AdminForceCompleteRequest = AdminForceCompleteRequest(),
     db: Session = Depends(get_db),
@@ -2186,7 +2188,7 @@ async def admin_cancel_order(
 
 
 @router.get("/admin/cars", response_model=CarListResponse)
-async def list_all_cars(
+def list_all_cars(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     vehicle_owner_id: Optional[str] = Query(None, description="Filter by fleet owner ID"),
@@ -2265,7 +2267,7 @@ async def list_all_cars(
 
 
 @router.post("/admin/cars", response_model=AdminCreateCarResponse, status_code=status.HTTP_201_CREATED)
-async def create_car_admin_route(
+def create_car_admin_route(
     request: AdminCreateCarRequest,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -2285,7 +2287,7 @@ async def create_car_admin_route(
 
 
 @router.get("/admin/settings/new-car-year", response_model=NewCarYearSetting)
-async def get_new_car_year_setting(
+def get_new_car_year_setting(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -2293,7 +2295,7 @@ async def get_new_car_year_setting(
 
 
 @router.put("/admin/settings/new-car-year", response_model=NewCarYearSetting)
-async def update_new_car_year_setting(
+def update_new_car_year_setting(
     request: NewCarYearSetting,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -2305,7 +2307,7 @@ async def update_new_car_year_setting(
 
 
 @router.get("/admin/accounts", response_model=AccountListResponse)
-async def list_all_accounts(
+def list_all_accounts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(5000, ge=1, le=6000, description="Number of records to return"),
     account_type: Optional[str] = Query(None, description="Filter by account type: vendor, vehicle_owner, driver, quickdriver"),
@@ -2377,7 +2379,7 @@ async def list_all_accounts(
 
 
 @router.get("/admin/customers", response_model=CustomerListOut)
-async def list_all_customers(
+def list_all_customers(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     search: Optional[str] = Query(None, description="Search by customer name, phone number, or company name"),
@@ -2417,7 +2419,7 @@ class CustomerSegmentUpdate(_StaffBaseModel):
 
 
 @router.patch("/admin/customers/{customer_details_id}/segment")
-async def update_customer_segment_route(
+def update_customer_segment_route(
     customer_details_id: str,
     body: CustomerSegmentUpdate,
     current_admin=Depends(get_current_admin),
@@ -2430,7 +2432,7 @@ async def update_customer_segment_route(
 
 
 @router.get("/admin/accounts/{account_id}", response_model=AccountFullDetailsResponse)
-async def get_account_details(
+def get_account_details(
     account_id: UUID,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
     current_admin = Depends(get_current_admin),
@@ -2533,7 +2535,7 @@ async def get_account_details(
         )
 
 @router.post("/admin/search-vehicle-owner", response_model=VehicleOwnerInfoResponse, status_code=status.HTTP_200_OK)
-async def search_vehicle_owner(
+def search_vehicle_owner(
     search_request: SearchVehicleOwnerRequest,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -2564,7 +2566,7 @@ async def search_vehicle_owner(
         )
 
 @router.post("/admin/search-user/details",response_model=UserInfoResponse, status_code=status.HTTP_200_OK)
-async def search_user(
+def search_user(
     search_request: SearchUserRequest,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -2681,7 +2683,7 @@ def add_money_to_vehicle_owner(
 # ============ VENDOR MANAGEMENT ENDPOINTS ============
 
 @router.get("/admin-vendor/vendors", response_model=VendorListOut)
-async def list_all_vendors(
+def list_all_vendors(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     current_admin = Depends(get_current_admin),
@@ -2714,7 +2716,7 @@ async def list_all_vendors(
 
 
 @router.get("/admin/vendors/{vendor_id}", response_model=VendorFullDetailsResponse)
-async def get_vendor_details(
+def get_vendor_details(
     vendor_id: UUID,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -2786,7 +2788,7 @@ async def get_vendor_details(
 
 
 @router.patch("/admin/vendors/{vendor_id}/account-status", response_model=StatusUpdateResponse)
-async def update_vendor_account_status_route(
+def update_vendor_account_status_route(
     vendor_id: UUID,
     status_update: UpdateAccountStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -2822,7 +2824,7 @@ async def update_vendor_account_status_route(
 
 
 @router.patch("/admin/vendors/{vendor_id}/document-status", response_model=StatusUpdateResponse)
-async def update_vendor_document_status_route(
+def update_vendor_document_status_route(
     vendor_id: UUID,
     status_update: UpdateDocumentStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -2866,7 +2868,7 @@ async def update_vendor_document_status_route(
 # ============ VEHICLE OWNER MANAGEMENT ENDPOINTS ============
 
 @router.get("/admin-vehcile-owner/vehicle-owners", response_model=VehicleOwnerListOut)
-async def list_all_vehicle_owners(
+def list_all_vehicle_owners(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     search: Optional[str] = Query(None, description="Match fleet name/phone/city, or a driver's name/phone/licence number"),
@@ -2901,7 +2903,7 @@ async def list_all_vehicle_owners(
 
 
 @router.get("/admin/vehicle-owners/{vehicle_owner_id}", response_model=VehicleOwnerWithAssetsResponse)
-async def get_vehicle_owner_details(
+def get_vehicle_owner_details(
     vehicle_owner_id: UUID,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -3043,7 +3045,7 @@ async def get_vehicle_owner_details(
 
 
 @router.patch("/admin/vehicle-owners/{vehicle_owner_id}/account-status", response_model=StatusUpdateResponse)
-async def update_vehicle_owner_account_status_route(
+def update_vehicle_owner_account_status_route(
     vehicle_owner_id: UUID,
     status_update: UpdateAccountStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -3079,7 +3081,7 @@ async def update_vehicle_owner_account_status_route(
 
 
 @router.patch("/admin/vehicle-owners/{vehicle_owner_id}/document-status", response_model=StatusUpdateResponse)
-async def update_vehicle_owner_document_status_route(
+def update_vehicle_owner_document_status_route(
     vehicle_owner_id: UUID,
     status_update: UpdateDocumentStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -3123,7 +3125,7 @@ async def update_vehicle_owner_document_status_route(
 # ============ CAR MANAGEMENT ENDPOINTS ============
 
 @router.patch("/admin/cars/{car_id}/account-status", response_model=StatusUpdateResponse)
-async def update_car_account_status_route(
+def update_car_account_status_route(
     car_id: UUID,
     status_update: UpdateAccountStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -3159,7 +3161,7 @@ async def update_car_account_status_route(
 
 
 @router.patch("/admin/cars/{car_id}/document-status", response_model=StatusUpdateResponse)
-async def update_car_document_status_route(
+def update_car_document_status_route(
     car_id: UUID,
     document_type: str = Query(..., description="Document type: rc_front, rc_back, insurance, fc, car_img"),
     status_update: UpdateDocumentStatusRequest = ...,
@@ -3215,7 +3217,7 @@ async def update_car_document_status_route(
 # ============ DRIVER MANAGEMENT ENDPOINTS ============
 
 @router.patch("/admin/drivers/{driver_id}/account-status", response_model=StatusUpdateResponse)
-async def update_driver_account_status_route(
+def update_driver_account_status_route(
     driver_id: UUID,
     status_update: UpdateAccountStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -3251,7 +3253,7 @@ async def update_driver_account_status_route(
 
 
 @router.patch("/admin/drivers/{driver_id}/document-status", response_model=StatusUpdateResponse)
-async def update_driver_document_status_route(
+def update_driver_document_status_route(
     driver_id: UUID,
     status_update: UpdateDocumentStatusRequest,
     current_admin = Depends(get_current_admin),
@@ -3294,7 +3296,7 @@ async def update_driver_document_status_route(
 # ============ DOCUMENT VERIFICATION ENDPOINTS ============
 
 @router.get("/admin/accounts/{account_id}/documents", response_model=AccountDocumentsResponse)
-async def get_account_documents(
+def get_account_documents(
     account_id: UUID,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
     current_admin = Depends(get_current_admin),
@@ -3360,7 +3362,7 @@ async def get_account_documents(
 
 
 @router.patch("/admin/accounts/{account_id}/documents/{document_id}/status", response_model=DocumentStatusUpdateResponse)
-async def update_document_status(
+def update_document_status(
     account_id: UUID,
     document_id: str,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
@@ -3418,7 +3420,7 @@ async def update_document_status(
 
 
 @router.patch("/admin/accounts/{account_id}/documents/{document_id}/expiry")
-async def update_document_expiry(
+def update_document_expiry(
     account_id: UUID,
     document_id: str,
     expiry_date: Optional[str] = Query(None, description="YYYY-MM-DD, or omit to clear"),
@@ -3451,7 +3453,7 @@ class ExecutedPlatformUpdate(_ExecutedPlatformBaseModel):
 
 
 @router.patch("/admin/orders/{order_id}/executed-platform")
-async def update_order_executed_platform(
+def update_order_executed_platform(
     order_id: int,
     body: ExecutedPlatformUpdate,
     current_admin=Depends(get_current_admin),
@@ -3478,7 +3480,7 @@ async def update_order_executed_platform(
 
 
 @router.patch("/admin/drivers/{driver_id}/licence-expiry")
-async def update_driver_licence_expiry(
+def update_driver_licence_expiry(
     driver_id: UUID,
     expiry_date: Optional[str] = Query(None, description="YYYY-MM-DD, or omit to clear"),
     current_admin=Depends(get_current_admin),
@@ -3501,7 +3503,7 @@ class PermanentBlockRequest(_StaffBaseModel):
 
 
 @router.post("/admin/accounts/{account_id}/permanent-block")
-async def permanent_block_account(
+def permanent_block_account(
     account_id: UUID,
     body: PermanentBlockRequest,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
@@ -3526,7 +3528,7 @@ async def permanent_block_account(
 
 
 @router.post("/admin/accounts/{account_id}/permanent-unblock")
-async def permanent_unblock_account(
+def permanent_unblock_account(
     account_id: UUID,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
     current_admin=Depends(get_current_admin),
@@ -3556,7 +3558,7 @@ class TrustedPartnerOverrideRequest(BaseModel):
 
 
 @router.patch("/admin/vehicle-owners/{vehicle_owner_id}/trusted-override")
-async def set_trusted_partner_override(
+def set_trusted_partner_override(
     vehicle_owner_id: UUID,
     body: TrustedPartnerOverrideRequest,
     current_admin=Depends(get_current_admin),
@@ -3612,7 +3614,7 @@ async def set_trusted_partner_override(
 # ============ UNIFIED ACCOUNT STATUS UPDATE ============
 
 @router.patch("/admin/accounts/{account_id}/status", response_model=StatusUpdateResponse)
-async def update_account_status_unified(
+def update_account_status_unified(
     account_id: UUID,
     account_type: str = Query(..., description="Account type: vendor, vehicle_owner, driver, or quickdriver"),
     status_param: Optional[str] = Query(None, alias="status", description="New status (can also be sent in body)"),
@@ -3717,7 +3719,7 @@ class BulkAccountStatusRequest(_BulkBaseModel):
 
 
 @router.post("/admin/accounts/bulk-status")
-async def update_account_status_bulk(
+def update_account_status_bulk(
     body: BulkAccountStatusRequest,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -3749,7 +3751,7 @@ async def update_account_status_bulk(
 
 
 @router.post("/admin/search-user/reset-password",response_model=UserPasswordUpdateResponse, status_code=status.HTTP_200_OK)
-async def search_user_reset_password(
+def search_user_reset_password(
     search_request: UserPasswordUpdate,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -3781,7 +3783,7 @@ async def search_user_reset_password(
 
 
 @router.get("/admin/vacant-cities")
-async def admin_get_vacant_city_updates(
+def admin_get_vacant_city_updates(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -3883,7 +3885,7 @@ async def admin_get_vacant_city_updates(
 # --- Admin: remove accounts (dedupe duplicates) ---
 
 @router.delete("/admin/accounts/{account_id}")
-async def admin_remove_account(
+def admin_remove_account(
     account_id: str,
     account_type: str = Query(..., description="vendor | vehicle_owner | driver | quickdriver | car"),
     db: Session = Depends(get_db),
@@ -4220,7 +4222,7 @@ class WalletAdjustRequest(BaseModel):
 
 
 @router.post("/admin/wallet/search")
-async def admin_wallet_search(
+def admin_wallet_search(
     body: WalletSearchRequest,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4230,7 +4232,7 @@ async def admin_wallet_search(
 
 
 @router.get("/admin/wallet/search-list")
-async def admin_wallet_search_list(
+def admin_wallet_search_list(
     role: str = Query(..., description="'vehicle_owner' or 'vendor'"),
     query: str = Query(..., min_length=2, description="Partial phone number or name - as few as 2-4 characters"),
     db: Session = Depends(get_db),
@@ -4243,7 +4245,7 @@ async def admin_wallet_search_list(
 
 
 @router.post("/admin/wallet/adjust")
-async def admin_wallet_adjust(
+def admin_wallet_adjust(
     body: WalletAdjustRequest,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4288,7 +4290,7 @@ def _serialize_ledger_row(row) -> dict:
 
 
 @router.get("/admin/wallet/ledger/vehicle-owner/{vehicle_owner_id}")
-async def admin_vehicle_owner_ledger(
+def admin_vehicle_owner_ledger(
     vehicle_owner_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
@@ -4304,7 +4306,7 @@ async def admin_vehicle_owner_ledger(
 
 
 @router.get("/admin/wallet/ledger/vendor/{vendor_id}")
-async def admin_vendor_ledger(
+def admin_vendor_ledger(
     vendor_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
@@ -4341,7 +4343,7 @@ class ResetYearlyCycleBody(BaseModel):
 
 
 @router.post("/admin/billing/reset-yearly-cycle")
-async def admin_reset_yearly_cycle(
+def admin_reset_yearly_cycle(
     body: ResetYearlyCycleBody,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4360,7 +4362,7 @@ async def admin_reset_yearly_cycle(
 
 
 @router.get("/admin/billing/settings")
-async def admin_get_billing_settings(
+def admin_get_billing_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4369,7 +4371,7 @@ async def admin_get_billing_settings(
 
 
 @router.put("/admin/billing/settings")
-async def admin_update_billing_settings(
+def admin_update_billing_settings(
     body: BillingSettingsUpdate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4388,7 +4390,7 @@ async def admin_update_billing_settings(
 # --- Admin: referral bonus amount ---
 
 @router.get("/admin/referral-settings")
-async def admin_get_referral_settings(
+def admin_get_referral_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4397,7 +4399,7 @@ async def admin_get_referral_settings(
 
 
 @router.put("/admin/referral-settings")
-async def admin_update_referral_settings(
+def admin_update_referral_settings(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4408,7 +4410,7 @@ async def admin_update_referral_settings(
 
 
 @router.get("/admin/referral-history")
-async def admin_get_referral_history(
+def admin_get_referral_history(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -4453,7 +4455,7 @@ async def admin_get_referral_history(
 # --- Admin: cash-mismatch audit ---
 
 @router.get("/admin/cash-audit/settings")
-async def admin_get_cash_audit_settings(
+def admin_get_cash_audit_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4462,7 +4464,7 @@ async def admin_get_cash_audit_settings(
 
 
 @router.put("/admin/cash-audit/settings")
-async def admin_update_cash_audit_settings(
+def admin_update_cash_audit_settings(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4473,7 +4475,7 @@ async def admin_update_cash_audit_settings(
 
 
 @router.get("/admin/cash-audit/flagged")
-async def admin_get_flagged_trips(
+def admin_get_flagged_trips(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4482,7 +4484,7 @@ async def admin_get_flagged_trips(
 
 
 @router.put("/admin/cash-audit/{end_record_id}/clear")
-async def admin_clear_cash_flag(
+def admin_clear_cash_flag(
     end_record_id: int,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4495,7 +4497,7 @@ async def admin_clear_cash_flag(
 # --- Admin: analytics dashboard ---
 
 @router.get("/admin/analytics/summary")
-async def admin_analytics_summary(
+def admin_analytics_summary(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -4506,7 +4508,7 @@ async def admin_analytics_summary(
 
 
 @router.get("/admin/dashboard/needs-attention")
-async def admin_needs_attention_summary(
+def admin_needs_attention_summary(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4575,7 +4577,7 @@ async def admin_needs_attention_summary(
 
 
 @router.get("/admin/fleet-hub/counts")
-async def admin_fleet_hub_counts(
+def admin_fleet_hub_counts(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4687,7 +4689,7 @@ async def admin_fleet_hub_counts(
 
 
 @router.get("/admin/dashboard/business-snapshot")
-async def admin_business_snapshot(
+def admin_business_snapshot(
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD, IST. Defaults to today when omitted."),
     end_date: Optional[str] = Query(None, description="YYYY-MM-DD, IST, inclusive. Defaults to start_date (or today) when omitted."),
     db: Session = Depends(get_db),
@@ -4801,7 +4803,7 @@ async def admin_business_snapshot(
 
 
 @router.get("/admin/commission-rates")
-async def admin_get_commission_rates(
+def admin_get_commission_rates(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4813,7 +4815,7 @@ async def admin_get_commission_rates(
 
 
 @router.put("/admin/commission-rates")
-async def admin_update_commission_rates(
+def admin_update_commission_rates(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4832,7 +4834,7 @@ async def admin_update_commission_rates(
 
 
 @router.post("/admin/billing/run")
-async def admin_run_billing(
+def admin_run_billing(
     dry_run: bool = Query(True, description="Preview only (default). Set false to actually charge."),
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4842,7 +4844,7 @@ async def admin_run_billing(
 
 
 @router.post("/admin/billing/start-cycle")
-async def admin_start_billing_cycle(
+def admin_start_billing_cycle(
     dry_run: bool = Query(True, description="Preview only (default). Set false to seed due dates."),
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4873,7 +4875,7 @@ class SetUserEmailRequest(BaseModel):
 
 
 @router.get("/admin/email/settings")
-async def admin_get_email_settings(
+def admin_get_email_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4888,7 +4890,7 @@ async def admin_get_email_settings(
 
 
 @router.put("/admin/email/settings")
-async def admin_update_email_settings(
+def admin_update_email_settings(
     body: SmtpSettingsUpdate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4901,7 +4903,7 @@ async def admin_update_email_settings(
 
 
 @router.post("/admin/email/test")
-async def admin_send_test_email(
+def admin_send_test_email(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4917,7 +4919,7 @@ async def admin_send_test_email(
 
 
 @router.put("/admin/users/email")
-async def admin_set_user_email(
+def admin_set_user_email(
     body: SetUserEmailRequest,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -4964,7 +4966,7 @@ class NotificationSettingsUpdate(BaseModel):
 
 
 @router.get("/admin/notification-settings")
-async def admin_get_notification_settings(
+def admin_get_notification_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -4978,7 +4980,7 @@ async def admin_get_notification_settings(
 
 
 @router.put("/admin/notification-settings")
-async def admin_update_notification_settings(
+def admin_update_notification_settings(
     body: NotificationSettingsUpdate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5009,7 +5011,7 @@ def admin_upload_notification_sound(
 
 
 @router.post("/admin/notification-settings/{event_key}/reset-sound")
-async def admin_reset_notification_sound(
+def admin_reset_notification_sound(
     event_key: str,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5041,14 +5043,14 @@ class AssignmentPriorityConfigUpdate(BaseModel):
 
 @router.get("/admin/assignment-priority-settings", dependencies=[Depends(get_current_admin)])
 @router.get("/api/v1/assignment-priority-settings", dependencies=[Depends(get_current_admin)])
-async def get_assignment_priority_settings_route(
+def get_assignment_priority_settings_route(
     db: Session = Depends(get_db),
 ):
     return get_assignment_priority_config(db)
 
 
 @router.put("/admin/assignment-priority-settings")
-async def update_assignment_priority_settings_route(
+def update_assignment_priority_settings_route(
     body: AssignmentPriorityConfigUpdate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5073,7 +5075,7 @@ class RejectionRequest(BaseModel):
 
 
 @router.get("/admin/customer-bookings", response_model=List[CustomerBookingOut])
-async def admin_get_customer_bookings(
+def admin_get_customer_bookings(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
@@ -5089,7 +5091,7 @@ async def admin_get_customer_bookings(
 
 
 @router.put("/admin/customer-bookings/{id}", response_model=CustomerBookingOut)
-async def admin_update_customer_booking(
+def admin_update_customer_booking(
     id: UUID,
     body: AdminBookingUpdate,
     db: Session = Depends(get_db),
@@ -5221,7 +5223,7 @@ class AdminPushTokenRegister(BaseModel):
 
 
 @router.post("/admin/notifications/register-token")
-async def admin_register_push_token(
+def admin_register_push_token(
     body: AdminPushTokenRegister,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
@@ -5242,7 +5244,7 @@ async def admin_register_push_token(
 
 
 @router.get("/admin/website-booking-settings")
-async def admin_get_website_booking_settings(
+def admin_get_website_booking_settings(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
@@ -5320,7 +5322,7 @@ class WebsiteBookingSettingsUpdate(BaseModel):
 
 
 @router.put("/admin/website-booking-settings")
-async def admin_update_website_booking_settings(
+def admin_update_website_booking_settings(
     body: WebsiteBookingSettingsUpdate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
@@ -5383,7 +5385,7 @@ async def admin_update_website_booking_settings(
 
 
 @router.get("/admin/rate-card")
-async def admin_get_rate_card(
+def admin_get_rate_card(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
@@ -5391,7 +5393,7 @@ async def admin_get_rate_card(
 
 
 @router.put("/admin/rate-card")
-async def admin_update_rate_card(
+def admin_update_rate_card(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
@@ -5404,7 +5406,7 @@ async def admin_update_rate_card(
 # correct, or delete any cached value here without code changes.
 
 @router.get("/admin/route-distances")
-async def admin_list_route_distances(
+def admin_list_route_distances(
     search: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -5438,7 +5440,7 @@ async def admin_list_route_distances(
 
 
 @router.post("/admin/route-distances")
-async def admin_add_route_distance(
+def admin_add_route_distance(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5489,7 +5491,7 @@ async def admin_add_route_distance(
 
 
 @router.put("/admin/route-distances/{route_id}")
-async def admin_update_route_distance(
+def admin_update_route_distance(
     route_id: UUID,
     body: dict,
     db: Session = Depends(get_db),
@@ -5512,7 +5514,7 @@ async def admin_update_route_distance(
 
 
 @router.delete("/admin/route-distances/{route_id}")
-async def admin_delete_route_distance(
+def admin_delete_route_distance(
     route_id: UUID,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5531,7 +5533,7 @@ async def admin_delete_route_distance(
 # Stored in platform_settings so the admin can edit it without code changes.
 
 @router.get("/admin/cities")
-async def admin_get_cities(
+def admin_get_cities(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -5540,7 +5542,7 @@ async def admin_get_cities(
 
 
 @router.put("/admin/cities")
-async def admin_update_cities(
+def admin_update_cities(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5561,7 +5563,7 @@ async def admin_update_cities(
 # Bookings can be posted in, city by city (off by default outside Tamil Nadu).
 
 @router.get("/admin/serviceable-cities")
-async def admin_get_serviceable_cities(
+def admin_get_serviceable_cities(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -5570,7 +5572,7 @@ async def admin_get_serviceable_cities(
 
 
 @router.put("/admin/serviceable-cities")
-async def admin_update_serviceable_cities(
+def admin_update_serviceable_cities(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5605,7 +5607,7 @@ async def admin_update_serviceable_cities(
 # remove models - e.g. drop "Renault Kwid" - without a code change.
 
 @router.get("/admin/car-models")
-async def admin_get_car_models(
+def admin_get_car_models(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -5614,7 +5616,7 @@ async def admin_get_car_models(
 
 
 @router.put("/admin/car-models")
-async def admin_update_car_models(
+def admin_update_car_models(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5653,7 +5655,7 @@ async def admin_update_car_models(
 
 
 @router.get("/admin/car-types")
-async def admin_list_car_types(
+def admin_list_car_types(
     current_admin=Depends(get_current_admin),
 ):
     """Valid car_type values for the Car Models admin screen's type dropdown."""
@@ -5666,7 +5668,7 @@ async def admin_list_car_types(
 # fare formulas. Previously hardcoded in crud/new_orders.py; now admin-editable.
 
 @router.get("/admin/fare-rules")
-async def admin_get_fare_rules(
+def admin_get_fare_rules(
     current_admin=Depends(get_current_admin),
 ):
     from app.utils.fare_rules import get_fare_rules
@@ -5674,7 +5676,7 @@ async def admin_get_fare_rules(
 
 
 @router.put("/admin/fare-rules")
-async def admin_update_fare_rules(
+def admin_update_fare_rules(
     body: dict,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5699,7 +5701,7 @@ async def admin_update_fare_rules(
 # as an admin_id and 500s on the UUID cast.
 
 @router.get("/admin/payout-requests", response_model=List[PayoutRequestOut])
-async def admin_list_payout_requests(
+def admin_list_payout_requests(
     status_filter: str | None = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -5710,7 +5712,7 @@ async def admin_list_payout_requests(
 
 
 @router.patch("/admin/payout-requests/{request_id}/pay", response_model=PayoutRequestOut)
-async def admin_mark_payout_paid(
+def admin_mark_payout_paid(
     request_id: int,
     payload: ProcessPayoutRequest,
     db: Session = Depends(get_db),
@@ -5731,7 +5733,7 @@ async def admin_mark_payout_paid(
 
 
 @router.patch("/admin/payout-requests/{request_id}/reject", response_model=PayoutRequestOut)
-async def admin_reject_payout_request(
+def admin_reject_payout_request(
     request_id: int,
     payload: ProcessPayoutRequest,
     db: Session = Depends(get_db),
@@ -5741,7 +5743,7 @@ async def admin_reject_payout_request(
 
 
 @router.post("/admin/payout-requests/admin-initiated", response_model=PayoutRequestOut, status_code=status.HTTP_201_CREATED)
-async def admin_create_initiated_payout(
+def admin_create_initiated_payout(
     payload: AdminInitiatedPayoutRequest,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5787,7 +5789,7 @@ async def admin_create_initiated_payout(
 # are a different (3-segment) shape and were never affected - left in
 # their original place further down.
 @router.get("/admin/refund-requests")
-async def admin_list_refund_requests(
+def admin_list_refund_requests(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -5796,7 +5798,7 @@ async def admin_list_refund_requests(
 
 
 @router.get("/admin/subscription-lookup")
-async def admin_subscription_lookup(
+def admin_subscription_lookup(
     user_id: Optional[str] = Query(None),
     phone_number: Optional[str] = Query(None),
     user_type: Optional[str] = Query(None),
@@ -5882,7 +5884,7 @@ async def admin_subscription_lookup(
 
 
 @router.get("/admin/profile-edit-reviews")
-async def get_admin_profile_edit_reviews(
+def get_admin_profile_edit_reviews(
     status_filter: Optional[str] = Query("PENDING"),
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -5899,7 +5901,7 @@ async def get_admin_profile_edit_reviews(
 
 
 @router.get("/admin/documents/needs-review")
-async def get_documents_needing_review_endpoint(
+def get_documents_needing_review_endpoint(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -6028,7 +6030,7 @@ def reject_car_substitution_request_endpoint(
 # If declared earlier, it shadows literal routes like /admin/notification-settings
 # and /admin/vacant-cities ("notification-settings" gets parsed as admin_id -> UUID error).
 @router.get("/admin/{admin_id}", response_model=AdminOut)
-async def get_admin_by_id_route(
+def get_admin_by_id_route(
     admin_id: str,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -6122,7 +6124,7 @@ class AdminProcessRefundRequest(BaseModel):
 
 
 @router.post("/admin/refund-requests/{id}/process")
-async def admin_process_refund_request(
+def admin_process_refund_request(
     id: UUID,
     body: AdminProcessRefundRequest,
     current_admin=Depends(get_current_admin),
@@ -6236,7 +6238,7 @@ def get_urgent_unassigned_alarm_bookings(
 # their own separate inbox, see enquiries.tsx.
 
 @router.get("/admin/website-bookings/pending")
-async def admin_list_pending_website_bookings(
+def admin_list_pending_website_bookings(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -6245,7 +6247,7 @@ async def admin_list_pending_website_bookings(
 
 
 @router.post("/admin/website-bookings/{id}/approve")
-async def admin_approve_website_booking(
+def admin_approve_website_booking(
     id: UUID,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -6267,7 +6269,7 @@ class WebsiteBookingBulkApprove(BaseModel):
 
 
 @router.post("/admin/website-bookings/bulk-approve")
-async def admin_bulk_approve_website_bookings(
+def admin_bulk_approve_website_bookings(
     body: WebsiteBookingBulkApprove,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -6294,7 +6296,7 @@ class WebsiteBookingHold(BaseModel):
 
 
 @router.post("/admin/website-bookings/{id}/hold")
-async def admin_hold_website_booking(
+def admin_hold_website_booking(
     id: UUID,
     body: WebsiteBookingHold,
     current_admin=Depends(get_current_admin),
@@ -6317,7 +6319,7 @@ async def admin_hold_website_booking(
 
 
 @router.post("/admin/website-bookings/{id}/release-hold")
-async def admin_release_website_booking_hold(
+def admin_release_website_booking_hold(
     id: UUID,
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -6332,7 +6334,7 @@ async def admin_release_website_booking_hold(
 
 
 @router.post("/admin/website-bookings/approve-all")
-async def admin_approve_all_website_bookings(
+def admin_approve_all_website_bookings(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -6378,7 +6380,7 @@ class AdminWebsiteBookingReject(BaseModel):
 
 
 @router.post("/admin/website-bookings/{id}/reject")
-async def admin_reject_website_booking(
+def admin_reject_website_booking(
     id: UUID,
     body: AdminWebsiteBookingReject,
     current_admin=Depends(get_current_admin),
@@ -6508,7 +6510,7 @@ class ProcessProfileEditSchema(BaseModel):
 
 
 @router.post("/admin/profile-edit-reviews/{request_id}/approve")
-async def approve_profile_edit_request(
+def approve_profile_edit_request(
     request_id: int,
     payload: ProcessProfileEditSchema,
     db: Session = Depends(get_db),
@@ -6599,7 +6601,7 @@ async def approve_profile_edit_request(
 
 
 @router.post("/admin/profile-edit-reviews/{request_id}/reject")
-async def reject_profile_edit_request(
+def reject_profile_edit_request(
     request_id: int,
     payload: ProcessProfileEditSchema,
     db: Session = Depends(get_db),
@@ -6642,7 +6644,7 @@ def check_cancellation_role_permissions(admin) -> bool:
 
 
 @router.post("/admin/orders/{order_id}/permanent-delete")
-async def admin_permanently_delete_booking(
+def admin_permanently_delete_booking(
     order_id: int,
     confirm_money: bool = Query(False, description="Also delete a booking whose wallet entries already exist"),
     db: Session = Depends(get_db),
@@ -6728,7 +6730,7 @@ class CustomerNumberSwitchRequest(BaseModel):
 
 
 @router.patch("/admin/orders/{order_id}/customer-visibility")
-async def admin_set_customer_number_visibility(
+def admin_set_customer_number_visibility(
     order_id: int,
     payload: CustomerNumberSwitchRequest,
     db: Session = Depends(get_db),
@@ -6745,7 +6747,7 @@ async def admin_set_customer_number_visibility(
 
 
 @router.post("/admin/orders/{order_id}/cancel-by-admin")
-async def admin_cancel_booking_by_customer(
+def admin_cancel_booking_by_customer(
     order_id: int,
     payload: AdminCancelOrderSchema = Body(...),
     db: Session = Depends(get_db),
@@ -6836,7 +6838,7 @@ async def admin_cancel_booking_by_customer(
 
 
 @router.post("/admin/orders/{order_id}/remove-driver-with-penalty")
-async def remove_driver_with_penalty_endpoint(
+def remove_driver_with_penalty_endpoint(
     order_id: int,
     payload: RemoveDriverWithPenaltySchema = Body(...),
     db: Session = Depends(get_db),
@@ -6976,7 +6978,7 @@ class SystemSettingsUpdateSchema(BaseModel):
 
 @router.get("/admin/settings/system")
 @router.get("/admin/system-settings")
-async def get_system_settings_endpoint(
+def get_system_settings_endpoint(
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin)
 ):
@@ -6993,7 +6995,7 @@ async def get_system_settings_endpoint(
 @router.put("/admin/settings/system")
 @router.post("/admin/system-settings")
 @router.put("/admin/system-settings")
-async def update_system_settings_endpoint(
+def update_system_settings_endpoint(
     body: SystemSettingsUpdateSchema,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin)
@@ -7039,7 +7041,7 @@ async def update_system_settings_endpoint(
 
 
 @router.get("/public/gst-business-info")
-async def get_public_gst_business_info(db: Session = Depends(get_db)):
+def get_public_gst_business_info(db: Session = Depends(get_db)):
     """No auth - the Website's invoice-gst.php (a separate PHP app with no
     admin login) calls this to print the real, Owner-set GSTIN/business
     name/address on every tax invoice instead of a hardcoded placeholder.
@@ -7064,7 +7066,7 @@ NAMED_ROLES = {
 
 
 @router.get("/admin/rbac/roles")
-async def get_rbac_roles_endpoint(current_admin = Depends(get_current_admin)):
+def get_rbac_roles_endpoint(current_admin = Depends(get_current_admin)):
     """Retrieve all defined named roles and available permissions for RBAC management."""
     return {
         "roles": NAMED_ROLES,
@@ -7073,7 +7075,7 @@ async def get_rbac_roles_endpoint(current_admin = Depends(get_current_admin)):
 
 
 @router.put("/admin/staff/{admin_id}/role")
-async def update_staff_role_endpoint(
+def update_staff_role_endpoint(
     admin_id: UUID,
     role_name: str = Body(..., embed=True),
     custom_permissions: Optional[List[str]] = Body(None, embed=True),

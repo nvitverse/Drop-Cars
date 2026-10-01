@@ -135,14 +135,19 @@ def _origin_and_destination_from_index_map(index_map: Dict[str, str]) -> (str, s
     return index_map[origin_key], index_map[destination_key]
 
 
-def calculate_oneway_fare(pickup_drop_location: Dict[str, str], cost_per_km: int, driver_allowance: int, extra_driver_allowance: int, permit_charges: int,extra_permit_charges: int, hill_charges: int, toll_charges: int, extra_cost_per_km:int, night_charges : int, trip_type : str) -> Dict[str, Any]:
-    origin, destination = _origin_and_destination_from_index_map(pickup_drop_location)
-    total_km,duration_text = get_distance_km_between_locations(origin, destination)
-    oneway_min_km = get_fare_rules()["oneway_min_km"]
+def calculate_oneway_fare(pickup_drop_location: Dict[str, str], cost_per_km: int, driver_allowance: int, extra_driver_allowance: int, permit_charges: int,extra_permit_charges: int, hill_charges: int, toll_charges: int, extra_cost_per_km:int, night_charges : int, trip_type : str, known_km: Optional[float] = None, known_trip_time: Optional[str] = None) -> Dict[str, Any]:
     remark_trip_min_km = 0
-    if trip_type.value == OrderTypeEnum.ONEWAY.value and total_km < oneway_min_km:
-        remark_trip_min_km = total_km
-        total_km = oneway_min_km
+    if known_km:
+        # Editing the fare of a booking that already has its billed km: use it as it is. Recomputing the route here meant a Google Maps
+        # call (15 s timeout) on EVERY fare edit, and silently replaced a km the admin had set by hand with the route km.
+        total_km, duration_text = float(known_km), known_trip_time or ""
+    else:
+        origin, destination = _origin_and_destination_from_index_map(pickup_drop_location)
+        total_km,duration_text = get_distance_km_between_locations(origin, destination)
+        oneway_min_km = get_fare_rules()["oneway_min_km"]
+        if trip_type.value == OrderTypeEnum.ONEWAY.value and total_km < oneway_min_km:
+            remark_trip_min_km = total_km
+            total_km = oneway_min_km
     base_km_amount = int(round(total_km * cost_per_km))
     extra_base_km_amount = int(round(total_km * extra_cost_per_km))
 

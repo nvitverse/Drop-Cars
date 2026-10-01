@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/cardetails/car-models/public")
-async def list_car_models_public():
+def list_car_models_public():
     """Car name -> car_type catalog for the 'Car Name' picker (auto-fills Car
     Type on selection). Read-only, not sensitive, same list in every app.
     Editable from the admin panel (Settings > Car Models)."""

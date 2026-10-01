@@ -259,7 +259,7 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
 
 
 @router.get("/customer/bookings", response_model=List[CustomerBookingOut])
-async def get_my_bookings(
+def get_my_bookings(
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer)
 ):
@@ -271,7 +271,7 @@ async def get_my_bookings(
 
 
 @router.get("/customer/bookings/{id}", response_model=CustomerBookingOut)
-async def get_booking_details(
+def get_booking_details(
     id: UUID,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer)
@@ -288,7 +288,7 @@ async def get_booking_details(
 
 
 @router.get("/customer/bookings/{id}/live-location")
-async def get_booking_live_location(
+def get_booking_live_location(
     id: UUID,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer)
@@ -576,7 +576,7 @@ def verify_customer_gst_payment(
 
 
 @router.get("/customer/ratings/rateable", response_model=List[RateableTripOut])
-async def list_rateable_trips(
+def list_rateable_trips(
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),
 ):

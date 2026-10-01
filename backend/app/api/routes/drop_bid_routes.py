@@ -59,7 +59,7 @@ class CreateDropBidRequestSchema(BaseModel):
 
 
 @router.post("/requests", status_code=status.HTTP_201_CREATED)
-async def create_drop_bid_request(
+def create_drop_bid_request(
     payload: CreateDropBidRequestSchema,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),
@@ -129,7 +129,7 @@ def _request_out(req: DropBidRequest, offers_count: int, submitted_offer: Option
 
 
 @router.get("/requests")
-async def list_drop_bid_requests(
+def list_drop_bid_requests(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
 ):
@@ -212,7 +212,7 @@ def _offer_out(o: DropBidOffer, db: Session) -> dict:
 
 
 @router.get("/my-requests")
-async def list_my_drop_bid_requests(
+def list_my_drop_bid_requests(
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),
 ):
@@ -237,7 +237,7 @@ class DropBidSettingsUpdateSchema(BaseModel):
 
 
 @router.get("/settings", dependencies=[Depends(get_current_user_flexible)])
-async def get_drop_bid_settings(db: Session = Depends(get_db)):
+def get_drop_bid_settings(db: Session = Depends(get_db)):
     """Public / driver / admin endpoint to get Drop Bid settings."""
     from app.models.platform_setting import PlatformSetting
     setting = db.query(PlatformSetting).filter(PlatformSetting.key == "DROP_BID_ALLOW_CHANGE_BID").first()
@@ -246,7 +246,7 @@ async def get_drop_bid_settings(db: Session = Depends(get_db)):
 
 
 @router.put("/settings", dependencies=[Depends(get_current_admin)])
-async def update_drop_bid_settings(
+def update_drop_bid_settings(
     payload: DropBidSettingsUpdateSchema,
     db: Session = Depends(get_db),
 ):
@@ -274,7 +274,7 @@ class SubmitOfferSchema(BaseModel):
 
 
 @router.post("/requests/{request_id}/offers", status_code=status.HTTP_201_CREATED)
-async def submit_drop_bid_offer(
+def submit_drop_bid_offer(
     request_id: str,
     payload: SubmitOfferSchema,
     db: Session = Depends(get_db),
@@ -362,7 +362,7 @@ async def submit_drop_bid_offer(
 
 
 @router.get("/driver-offers")
-async def list_driver_drop_bid_offers(
+def list_driver_drop_bid_offers(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
 ):
@@ -427,7 +427,7 @@ class CustomerCounterSchema(BaseModel):
 
 
 @router.post("/offers/{offer_id}/counter")
-async def customer_counter_offer(
+def customer_counter_offer(
     offer_id: str,
     payload: CustomerCounterSchema,
     db: Session = Depends(get_db),
@@ -478,7 +478,7 @@ class CounterResponseSchema(BaseModel):
 
 
 @router.post("/offers/{offer_id}/counter-response")
-async def driver_respond_to_counter(
+def driver_respond_to_counter(
     offer_id: str,
     payload: CounterResponseSchema,
     db: Session = Depends(get_db),
@@ -517,7 +517,7 @@ async def driver_respond_to_counter(
 
 
 @router.post("/offers/{offer_id}/customer-counter-response")
-async def customer_respond_to_counter(
+def customer_respond_to_counter(
     offer_id: str,
     payload: CounterResponseSchema,
     db: Session = Depends(get_db),
@@ -580,7 +580,7 @@ class DropBidVerifyRequest(BaseModel):
 
 
 @router.post("/offers/{offer_id}/pay-advance", response_model=DropBidPayResponse)
-async def pay_drop_bid_advance(
+def pay_drop_bid_advance(
     offer_id: str,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),
@@ -619,7 +619,7 @@ async def pay_drop_bid_advance(
 
 
 @router.post("/offers/{offer_id}/verify-advance")
-async def verify_drop_bid_advance(
+def verify_drop_bid_advance(
     offer_id: str,
     payload: DropBidVerifyRequest,
     db: Session = Depends(get_db),
@@ -653,7 +653,7 @@ async def verify_drop_bid_advance(
 # ---------------------------------------------------------------------------
 
 @router.post("/offers/{offer_id}/accept", status_code=status.HTTP_201_CREATED)
-async def accept_drop_bid_offer(
+def accept_drop_bid_offer(
     offer_id: str,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),

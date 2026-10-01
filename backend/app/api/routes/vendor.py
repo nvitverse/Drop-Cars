@@ -17,7 +17,7 @@ from app.utils.gcs import generate_signed_url_from_gcs
 router = APIRouter()
 
 @router.post("/vendor/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def vendor_signup(
+def vendor_signup(
     full_name: str = Form(..., description="Full name (3-100 characters)"),
     primary_number: str = Form(..., description="Primary mobile number"),
     secondary_number: Optional[str] = Form(None, description="Secondary mobile number (optional)"),
@@ -116,7 +116,7 @@ async def vendor_signup(
         )
 
 @router.post("/vendor/signin", response_model=TokenResponse)
-async def vendor_signin(
+def vendor_signin(
     vendor_data: VendorSignin,
     db: Session = Depends(get_db)
 ):
@@ -406,7 +406,7 @@ def _mask_phone_last4(number: str) -> str:
 
 
 @router.get("/vacant-cities")
-async def get_vacant_city_updates(
+def get_vacant_city_updates(
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
 ):
@@ -559,7 +559,7 @@ class DriverSearchRequest(BaseModel):
 
 
 @router.post("/vendor/drivers/search")
-async def search_driver(
+def search_driver(
     body: DriverSearchRequest,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -570,7 +570,7 @@ async def search_driver(
 
 
 @router.get("/vendor/drivers/search")
-async def search_driver_get(
+def search_driver_get(
     query: str,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -583,7 +583,7 @@ async def search_driver_get(
 # --- Self-service email add/change with OTP verification (logged-in vendor) ---
 
 @router.get("/vendor/email")
-async def get_vendor_email(
+def get_vendor_email(
     db: Session = Depends(get_db),
     vendor_id: str = Depends(get_current_vendor),
 ):
@@ -596,7 +596,7 @@ async def get_vendor_email(
 
 
 @router.post("/vendor/email/request-otp")
-async def vendor_request_email_otp(
+def vendor_request_email_otp(
     payload: dict,
     db: Session = Depends(get_db),
     vendor_id: str = Depends(get_current_vendor),
@@ -611,7 +611,7 @@ async def vendor_request_email_otp(
 
 
 @router.post("/vendor/email/confirm")
-async def vendor_confirm_email(
+def vendor_confirm_email(
     payload: dict,
     db: Session = Depends(get_db),
     vendor_id: str = Depends(get_current_vendor),
@@ -637,7 +637,7 @@ class PaymentDetailsUpdate(BaseModel):
 
 
 @router.put("/vendor/payment-details")
-async def update_vendor_payment_details(
+def update_vendor_payment_details(
     payload: PaymentDetailsUpdate,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),

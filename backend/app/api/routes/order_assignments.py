@@ -48,7 +48,7 @@ router = APIRouter()
 
 
 @router.get("/available-drivers")
-async def get_available_drivers(
+def get_available_drivers(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -62,7 +62,7 @@ async def get_available_drivers(
 
 
 @router.get("/available-cars")
-async def get_available_cars(
+def get_available_cars(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -76,7 +76,7 @@ async def get_available_cars(
 
 
 @router.get("/driver/available-cars")
-async def get_available_cars_for_driver(
+def get_available_cars_for_driver(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
 ):
@@ -88,7 +88,7 @@ async def get_available_cars_for_driver(
 
 
 @router.get("/driver/available-drivers")
-async def get_available_drivers_for_driver(
+def get_available_drivers_for_driver(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
 ):
@@ -99,7 +99,7 @@ async def get_available_drivers_for_driver(
 
 
 @router.get("/vehicle_owner/pending", response_model=List[Union[vehicle_owner_pending_new_orders,vehicle_owner_pending_horuly_rental]])
-async def get_pending_orders_for_vehicle_owner(
+def get_pending_orders_for_vehicle_owner(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -383,7 +383,7 @@ async def accept_order(
 
 
 @router.get("/{assignment_id}", response_model=OrderAssignmentResponse)
-async def get_assignment(
+def get_assignment(
     assignment_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
@@ -407,7 +407,7 @@ async def get_assignment(
 
 
 @router.get("/vehicle_owner/{vehicle_owner_id}", response_model=List[OrderAssignmentResponse])
-async def get_assignments_by_vehicle_owner(
+def get_assignments_by_vehicle_owner(
     vehicle_owner_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
@@ -426,7 +426,7 @@ async def get_assignments_by_vehicle_owner(
 
 
 @router.get("/order/{order_id}", response_model=List[OrderAssignmentResponse])
-async def get_assignments_by_order(
+def get_assignments_by_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
@@ -437,7 +437,7 @@ async def get_assignments_by_order(
 
 
 @router.patch("/{assignment_id}/status", response_model=OrderAssignmentResponse)
-async def update_assignment_status_endpoint(
+def update_assignment_status_endpoint(
     assignment_id: int,
     payload: OrderAssignmentStatusUpdate,
     db: Session = Depends(get_db),
@@ -471,7 +471,7 @@ async def update_assignment_status_endpoint(
 
 
 @router.patch("/{assignment_id}/cancel", response_model=OrderAssignmentResponse)
-async def cancel_assignment_endpoint(
+def cancel_assignment_endpoint(
     assignment_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
@@ -517,7 +517,7 @@ async def cancel_assignment_endpoint(
 
 
 @router.patch("/{assignment_id}/complete", response_model=OrderAssignmentResponse)
-async def complete_assignment_endpoint(
+def complete_assignment_endpoint(
     assignment_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
@@ -752,7 +752,7 @@ async def create_car_substitution_request_endpoint(
 
 
 @router.get("/driver/assigned-orders/{order_id}", response_model=List[DriverOrderReport])
-async def get_driver_assigned_orders_report_endpoint(
+def get_driver_assigned_orders_report_endpoint(
     order_id: int,
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
@@ -764,7 +764,7 @@ async def get_driver_assigned_orders_report_endpoint(
     return assigned_orders
 
 @router.get("/driver/assigned-orders", response_model=List[DriverOrderListResponse])
-async def get_driver_assigned_orders_endpoint(
+def get_driver_assigned_orders_endpoint(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
 ):
@@ -775,7 +775,7 @@ async def get_driver_assigned_orders_endpoint(
     return assigned_orders
 
 @router.get("/driver/assigned/completed-trips", response_model=List[DriverOrderListResponse])
-async def get_driver_assigned_completed_trips_endpoint(
+def get_driver_assigned_completed_trips_endpoint(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
 ):
@@ -857,7 +857,7 @@ class DriverLocationPing(BaseModel):
 
 
 @router.post("/driver/orders/{order_id}/location")
-async def update_driver_location(
+def update_driver_location(
     order_id: int,
     body: DriverLocationPing,
     db: Session = Depends(get_db),
@@ -911,7 +911,7 @@ async def update_driver_location(
 
 
 @router.post("/driver/orders/{order_id}/location/left")
-async def driver_location_sharing_paused(
+def driver_location_sharing_paused(
     order_id: int,
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
@@ -1047,7 +1047,7 @@ def _driver_trip_or_404(db, order_id: int, current_driver):
 
 
 @router.get("/driver/trip-bill/{order_id}")
-async def get_driver_trip_bill(order_id: int, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
+def get_driver_trip_bill(order_id: int, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
     """Customer-safe bill + what is still to collect, for the trip report / completion pages."""
     from app.crud.end_records import build_customer_bill
     from app.models.end_records import EndRecord
@@ -1074,7 +1074,7 @@ class TripCompletionIn(BaseModel):
 
 
 @router.post("/driver/trip-completion/{order_id}")
-async def submit_driver_trip_completion(
+def submit_driver_trip_completion(
     order_id: int, body: TripCompletionIn, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)
 ):
     """Last step of a trip: the driver rates the customer and confirms what was actually collected. Recorded for audit
@@ -1156,7 +1156,7 @@ async def submit_driver_trip_completion(
 
 
 @router.get("/driver/trip-history", response_model=List[dict])
-async def get_driver_trip_history(
+def get_driver_trip_history(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
 ):
@@ -1168,7 +1168,7 @@ async def get_driver_trip_history(
 
 
 @router.get("/driver/posted-bookings")
-async def get_driver_posted_bookings_endpoint(
+def get_driver_posted_bookings_endpoint(
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver),
 ):
@@ -1186,7 +1186,7 @@ class CustomerNumberSwitchPayload(BaseModel):
 
 
 @router.post("/driver/posted-bookings/{order_id}/customer-number")
-async def set_posted_booking_customer_number_visibility(
+def set_posted_booking_customer_number_visibility(
     order_id: int,
     payload: CustomerNumberSwitchPayload,
     db: Session = Depends(get_db),
@@ -1281,7 +1281,7 @@ class FleetOwnerRebidSchema(BaseModel):
 
 
 @router.post("/order-assignments/{assignment_id}/re-bid")
-async def fleet_owner_rebid(
+def fleet_owner_rebid(
     assignment_id: int,
     payload: FleetOwnerRebidSchema,
     db: Session = Depends(get_db),
@@ -1472,7 +1472,7 @@ class UpdateAdvanceReceivedPayload(BaseModel):
 
 
 @router.put("/orders/{order_id}/advance-received", dependencies=[Depends(get_current_user_flexible)])
-async def update_order_advance_received(
+def update_order_advance_received(
     order_id: str,
     payload: UpdateAdvanceReceivedPayload,
     request: Request,

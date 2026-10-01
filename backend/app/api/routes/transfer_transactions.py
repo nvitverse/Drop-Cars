@@ -27,7 +27,7 @@ from uuid import UUID
 router = APIRouter()
 
 @router.post("/transfer/request", response_model=TransferTransactionOut, status_code=status.HTTP_201_CREATED)
-async def request_transfer(
+def request_transfer(
     transfer_data: TransferRequest,
     current_vendor = Depends(get_current_vendor),
     db: Session = Depends(get_db)
@@ -65,7 +65,7 @@ async def request_transfer(
         )
 
 @router.get("/transfer/balance", response_model=VendorBalanceOut)
-async def get_balance(
+def get_balance(
     current_vendor = Depends(get_current_vendor),
     db: Session = Depends(get_db)
 ):
@@ -99,7 +99,7 @@ async def get_balance(
         )
 
 @router.get("/transfer/history", response_model=TransferHistoryOut)
-async def get_transfer_history(
+def get_transfer_history(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     current_vendor = Depends(get_current_vendor),
@@ -131,7 +131,7 @@ async def get_transfer_history(
         )
 
 @router.get("/transfer/statistics")
-async def get_transfer_statistics_route(
+def get_transfer_statistics_route(
     current_vendor = Depends(get_current_vendor),
     db: Session = Depends(get_db)
 ):
@@ -163,7 +163,7 @@ async def get_transfer_statistics_route(
 # --- Admin Endpoints ---
 
 @router.get("/admin/transfers/pending", response_model=TransferHistoryOut)
-async def get_pending_transfers(
+def get_pending_transfers(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     current_admin = Depends(get_current_admin),
@@ -196,7 +196,7 @@ async def get_pending_transfers(
         )
 
 @router.post("/admin/transfers/{transaction_id}/process", response_model=TransferTransactionOut)
-async def process_transfer(
+def process_transfer(
     transaction_id: UUID,
     admin_action: AdminTransferAction,
     current_admin = Depends(get_current_admin),
@@ -231,7 +231,7 @@ async def process_transfer(
         )
 
 @router.get("/admin/transfers/{transaction_id}", response_model=TransferTransactionOut)
-async def get_transfer_details(
+def get_transfer_details(
     transaction_id: UUID,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -265,7 +265,7 @@ async def get_transfer_details(
         )
 
 @router.get("/admin/vendors/{vendor_id}/balance", response_model=VendorBalanceOut)
-async def get_vendor_balance_admin(
+def get_vendor_balance_admin(
     vendor_id: UUID,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)

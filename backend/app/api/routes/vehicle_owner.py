@@ -80,7 +80,7 @@ def upload_signup_document(
 
 
 @router.post("/vehicleowner/send-email-otp")
-async def send_email_otp(
+def send_email_otp(
     email: str = Form(...),
     db: Session = Depends(get_db),
 ):
@@ -143,7 +143,7 @@ async def send_email_otp(
 
 
 @router.post("/vehicleowner/verify-email-otp")
-async def verify_email_otp(
+def verify_email_otp(
     email: str = Form(...),
     code: str = Form(...),
     db: Session = Depends(get_db),
@@ -422,7 +422,7 @@ def get_my_status_counts(
 
 
 @router.get("/available-cars")
-async def get_all_cars(
+def get_all_cars(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -435,7 +435,7 @@ async def get_all_cars(
     return available_cars
 
 @router.get("/available-drivers")
-async def get_available_drivers(
+def get_available_drivers(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -730,7 +730,7 @@ def get_all_document_statuses(
 
 @router.put("/vehicle-owner/vacant-cities")
 @router.post("/vehicle-owner/vacant-cities")
-async def set_vacant_cities(
+def set_vacant_cities(
     payload: VacantCitiesUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -798,7 +798,7 @@ async def set_vacant_cities(
 
 
 @router.get("/vehicle-owner/vacant-fleet")
-async def get_vacant_fleet(
+def get_vacant_fleet(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -838,7 +838,7 @@ async def get_vacant_fleet(
 
 
 @router.delete("/vehicle-owner/vacant-fleet/{car_id}")
-async def clear_vacant_car(
+def clear_vacant_car(
     car_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -869,7 +869,7 @@ async def clear_vacant_car(
 
 
 @router.get("/vehicle-owner/vacant-cities")
-async def get_vacant_cities(
+def get_vacant_cities(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -928,7 +928,7 @@ async def get_vacant_cities(
 
 
 @router.post("/vehicle-owner/vacant-cities/confirm")
-async def confirm_vacant_cities(
+def confirm_vacant_cities(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -947,7 +947,7 @@ async def confirm_vacant_cities(
 
 
 @router.get("/vehicle-owner/billing-status")
-async def owner_billing_status(
+def owner_billing_status(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -958,7 +958,7 @@ async def owner_billing_status(
 
 
 @router.put("/vehicle-owner/auto-renew")
-async def update_auto_renew(
+def update_auto_renew(
     body: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -979,7 +979,7 @@ async def update_auto_renew(
 
 
 @router.put("/vehicle-owner/subscription/start-monthly")
-async def start_monthly_plan(
+def start_monthly_plan(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -990,7 +990,7 @@ async def start_monthly_plan(
 
 
 @router.put("/vehicle-owner/subscription/upgrade-yearly")
-async def upgrade_to_yearly_plan(
+def upgrade_to_yearly_plan(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -1001,7 +1001,7 @@ async def upgrade_to_yearly_plan(
 
 
 @router.get("/vehicle-owner/referral")
-async def get_my_referral(
+def get_my_referral(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -1015,7 +1015,7 @@ async def get_my_referral(
 
 
 @router.put("/vehicle-owner/referral/apply")
-async def apply_referral(
+def apply_referral(
     body: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1028,7 +1028,7 @@ async def apply_referral(
 
 
 @router.put("/vehicle-owner/local-city")
-async def update_local_city(
+def update_local_city(
     body: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1061,7 +1061,7 @@ async def update_local_city(
 
 
 @router.put("/vehicle-owner/mobile-number")
-async def change_owner_mobile_number(
+def change_owner_mobile_number(
     payload: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1112,7 +1112,7 @@ async def change_owner_mobile_number(
 
 
 @router.put("/vehicle-owner/profile-info")
-async def update_owner_profile_info(
+def update_owner_profile_info(
     payload: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1158,7 +1158,7 @@ async def update_owner_profile_info(
 
 
 @router.put("/vehicle-owner/email")
-async def set_owner_email(
+def set_owner_email(
     payload: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1185,7 +1185,7 @@ async def set_owner_email(
 # --- Self-service email add/change with OTP verification (logged-in owner) ---
 
 @router.get("/vehicle-owner/email")
-async def get_owner_email(
+def get_owner_email(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -1200,7 +1200,7 @@ async def get_owner_email(
 
 
 @router.post("/vehicle-owner/email/request-otp")
-async def owner_request_email_otp(
+def owner_request_email_otp(
     payload: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1213,7 +1213,7 @@ async def owner_request_email_otp(
 
 
 @router.post("/vehicle-owner/email/confirm")
-async def owner_confirm_email(
+def owner_confirm_email(
     payload: dict,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -1246,7 +1246,7 @@ class VehicleOwnerPaymentDetailsUpdate(_BaseModel):
 
 
 @router.put("/vehicle-owner/payment-details")
-async def update_vehicle_owner_payment_details(
+def update_vehicle_owner_payment_details(
     payload: VehicleOwnerPaymentDetailsUpdate,
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
@@ -1269,7 +1269,7 @@ async def update_vehicle_owner_payment_details(
 
 
 @router.get("/vehicleowner/feedbacks")
-async def get_vehicle_owner_feedbacks(
+def get_vehicle_owner_feedbacks(
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
 ):

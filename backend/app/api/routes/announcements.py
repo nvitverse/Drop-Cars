@@ -18,7 +18,7 @@ router = APIRouter()
 # --- Driver-facing: shown on app entry ---
 
 @router.get("/announcements/active", response_model=List[AnnouncementOut])
-async def get_active(
+def get_active(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -28,7 +28,7 @@ async def get_active(
 # --- Admin CRUD ---
 
 @router.get("/admin/announcements", response_model=List[AnnouncementOut])
-async def admin_list_announcements(
+def admin_list_announcements(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
@@ -36,7 +36,7 @@ async def admin_list_announcements(
 
 
 @router.post("/admin/announcements", response_model=AnnouncementOut)
-async def admin_create_announcement(
+def admin_create_announcement(
     body: AnnouncementCreate,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -45,7 +45,7 @@ async def admin_create_announcement(
 
 
 @router.put("/admin/announcements/{announcement_id}", response_model=AnnouncementOut)
-async def admin_update_announcement(
+def admin_update_announcement(
     announcement_id: int,
     body: AnnouncementUpdate,
     db: Session = Depends(get_db),
@@ -58,7 +58,7 @@ async def admin_update_announcement(
 
 
 @router.delete("/admin/announcements/{announcement_id}")
-async def admin_delete_announcement(
+def admin_delete_announcement(
     announcement_id: int,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),

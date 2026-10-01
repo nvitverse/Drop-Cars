@@ -203,7 +203,7 @@ def signup_car_driver(
     }
 
 @router.post("/cardriver/signin", response_model=CarDriverSigninResponse)
-async def signin_car_driver(
+def signin_car_driver(
     signin_data: CarDriverSigninRequest,
     db: Session = Depends(get_db),
 ):
@@ -279,7 +279,7 @@ class DriverFirebaseVerifyRequest(BaseModel):
 
 
 @router.post("/cardriver/firebase/verify", response_model=CarDriverSigninResponse)
-async def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Session = Depends(get_db)):
+def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Session = Depends(get_db)):
     """Firebase Phone Auth sign-in for an EXISTING driver. Deliberately
     never creates a driver record - drivers are only ever created by their
     fleet owner via /cardriver/signup with real KYC documents (licence,
@@ -334,7 +334,7 @@ async def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Sess
 
 
 @router.post("/cardriver/signin-as-owner", response_model=CarDriverSigninResponse)
-async def signin_car_driver_as_owner(
+def signin_car_driver_as_owner(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -465,7 +465,7 @@ async def signin_car_driver_as_owner(
 
 
 @router.put("/cardriver/online", response_model=DriverStatusUpdateResponse)
-async def set_driver_online(
+def set_driver_online(
     current_driver: CarDriver = Depends(get_current_driver),
     db: Session = Depends(get_db),
 ):
@@ -494,7 +494,7 @@ async def set_driver_online(
         )
 
 @router.put("/cardriver/offline", response_model=DriverStatusUpdateResponse)
-async def set_driver_offline(
+def set_driver_offline(
     current_driver: CarDriver = Depends(get_current_driver),
     db: Session = Depends(get_db),
 ):
@@ -523,7 +523,7 @@ async def set_driver_offline(
         )
 
 @router.get("/cardriver/me", response_model=CarDriverOut)
-async def get_my_driver_profile(
+def get_my_driver_profile(
     current_driver: CarDriver = Depends(get_current_driver),
 ):
     """Driver-JWT-authenticated self-lookup - added 2026-09-04 so the app

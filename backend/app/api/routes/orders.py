@@ -43,7 +43,7 @@ def list_pending_vendor_orders(
 
 
 @router.get("/admin/{order_id}", response_model=AdminOrderDetailResponse)
-async def get_admin_order_details_endpoint(
+def get_admin_order_details_endpoint(
     order_id: int,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
@@ -68,7 +68,7 @@ async def get_admin_order_details_endpoint(
 
 
 @router.get("/vendor/{order_id}", response_model=VendorOrderDetailResponse)
-async def get_vendor_order_details_endpoint(
+def get_vendor_order_details_endpoint(
     order_id: int,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -94,7 +94,7 @@ async def get_vendor_order_details_endpoint(
 
 
 @router.post("/{order_id}/close", response_model=CloseOrderResponse)
-async def close_order_endpoint(
+def close_order_endpoint(
     order_id: int,
     closed_vendor_price: int = Form(...),
     closed_driver_price: int = Form(...),
@@ -125,7 +125,7 @@ async def close_order_endpoint(
 
 
 @router.get("/vehicle-owner/pending", response_model=List[VehicleOwnerOrderDetailResponse])
-async def get_vehicle_owner_pending_orders_endpoint(
+def get_vehicle_owner_pending_orders_endpoint(
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
 ):
@@ -152,7 +152,7 @@ async def get_vehicle_owner_pending_orders_endpoint(
 
 
 @router.get("/vehicle-owner/non-pending", response_model=List[VehicleOwnerOrderDetailResponse])
-async def get_vehicle_owner_non_pending_orders_endpoint(
+def get_vehicle_owner_non_pending_orders_endpoint(
     start_date: Optional[datetime] = Query(None, description="Inclusive lower bound on Order.created_at"),
     end_date: Optional[datetime] = Query(None, description="Inclusive upper bound on Order.created_at"),
     skip: int = Query(0, ge=0),
@@ -189,7 +189,7 @@ async def get_vehicle_owner_non_pending_orders_endpoint(
 
 
 @router.get("/vehicle-owner/substitution-requests")
-async def get_vehicle_owner_substitution_requests_endpoint(
+def get_vehicle_owner_substitution_requests_endpoint(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
@@ -246,7 +246,7 @@ async def get_vehicle_owner_substitution_requests_endpoint(
 
 
 @router.patch("/{order_id}/visibility/vehicle-owner/show")
-async def show_customer_to_vehicle_owner(
+def show_customer_to_vehicle_owner(
     order_id: int,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -260,7 +260,7 @@ async def show_customer_to_vehicle_owner(
 
 
 @router.patch("/{order_id}/visibility/vehicle-owner/hide")
-async def hide_customer_from_vehicle_owner(
+def hide_customer_from_vehicle_owner(
     order_id: int,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -278,7 +278,7 @@ class UpdateVisibilityRequest(BaseModel):
 
 
 @router.patch("/{order_id}/visibility/vehicle-owner")
-async def update_data_visibility_vehicle_owner(
+def update_data_visibility_vehicle_owner(
     order_id: int,
     request: UpdateVisibilityRequest,
     db: Session = Depends(get_db),
@@ -363,7 +363,7 @@ class IncreaseFareRequest(BaseModel):
 
 
 @router.patch("/{order_id}/increase-all-inclusive-fare")
-async def increase_all_inclusive_fare_endpoint(
+def increase_all_inclusive_fare_endpoint(
     order_id: int,
     request: IncreaseFareRequest,
     db: Session = Depends(get_db),
@@ -423,7 +423,7 @@ async def notify_order_endpoint(
 
 
 @router.get("/max-assignment-times", dependencies=[Depends(get_current_user_flexible)])
-async def get_max_assignment_times(
+def get_max_assignment_times(
     db: Session = Depends(get_db),
 ):
     """
@@ -449,7 +449,7 @@ class ManualAssignRequest(BaseModel):
 
 
 @router.post("/{order_id}/manual-assign")
-async def manual_assign_order(
+def manual_assign_order(
     order_id: int,
     payload: ManualAssignRequest,
     db: Session = Depends(get_db),
@@ -488,7 +488,7 @@ async def manual_assign_order(
 
 
 @router.post("/{order_id}/vendor-assign")
-async def vendor_assign_order(
+def vendor_assign_order(
     order_id: int,
     payload: ManualAssignRequest,
     db: Session = Depends(get_db),
@@ -554,7 +554,7 @@ def _check_cancellation_role_permission(admin) -> bool:
 
 
 @router.post("/{order_id}/cancel-by-admin")
-async def cancel_order_by_admin(
+def cancel_order_by_admin(
     order_id: int,
     payload: AdminCancelOrderRequest,
     db: Session = Depends(get_db),
@@ -652,7 +652,7 @@ async def cancel_order_by_admin(
 
 
 @router.post("/{order_id}/cancel-by-vendor")
-async def cancel_order_by_vendor(
+def cancel_order_by_vendor(
     order_id: int,
     db: Session = Depends(get_db),
     current_vendor=Depends(get_current_vendor),
@@ -679,7 +679,7 @@ async def cancel_order_by_vendor(
 
 
 @router.post("/{order_id}/unallocate-with-penalty")
-async def unallocate_driver_with_penalty(
+def unallocate_driver_with_penalty(
     order_id: int,
     payload: RemoveWithPenaltyRequest,
     db: Session = Depends(get_db),

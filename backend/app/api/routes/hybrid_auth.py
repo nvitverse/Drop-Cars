@@ -72,7 +72,7 @@ class FirebaseVerifyRequest(BaseModel):
 
 
 @router.post("/auth/firebase/verify", response_model=CustomerTokenResponse)
-async def firebase_verify(body: FirebaseVerifyRequest, db: Session = Depends(get_db)):
+def firebase_verify(body: FirebaseVerifyRequest, db: Session = Depends(get_db)):
     try:
         payload = verify_firebase_id_token(body.id_token)
     except FirebaseNotConfigured as e:
@@ -103,7 +103,7 @@ class GoogleVerifyRequest(BaseModel):
 
 
 @router.post("/auth/google/verify", response_model=CustomerTokenResponse)
-async def google_verify(body: GoogleVerifyRequest, db: Session = Depends(get_db)):
+def google_verify(body: GoogleVerifyRequest, db: Session = Depends(get_db)):
     try:
         payload = verify_google_id_token(body.id_token)
     except GoogleAuthNotConfigured as e:
@@ -152,7 +152,7 @@ async def phone_request_otp(body: PhoneOtpRequest, db: Session = Depends(get_db)
 
 
 @router.post("/auth/phone/verify-otp", response_model=CustomerTokenResponse)
-async def phone_verify_otp(body: PhoneOtpVerify, db: Session = Depends(get_db)):
+def phone_verify_otp(body: PhoneOtpVerify, db: Session = Depends(get_db)):
     number = body.primary_number.strip()
     otp = (
         db.query(PhoneOtp)
@@ -223,7 +223,7 @@ async def link_phone_request_otp(
 
 
 @router.post("/auth/profile/link-phone/verify", response_model=CustomerOut)
-async def link_phone_verify(
+def link_phone_verify(
     body: LinkPhoneVerify, db: Session = Depends(get_db), current_customer=Depends(get_current_customer),
 ):
     number = body.primary_number.strip()
@@ -251,7 +251,7 @@ async def link_phone_verify(
 
 
 @router.post("/auth/profile/link-email", response_model=CustomerOut)
-async def link_email(
+def link_email(
     body: LinkEmailRequest, db: Session = Depends(get_db), current_customer=Depends(get_current_customer),
 ):
     """Step for a Phone-signed-in customer with no email yet (required for
@@ -279,7 +279,7 @@ class NotificationPreferenceUpdate(BaseModel):
 
 
 @router.patch("/auth/profile/notification-preference", response_model=CustomerOut)
-async def update_notification_preference(
+def update_notification_preference(
     body: NotificationPreferenceUpdate, db: Session = Depends(get_db), current_customer=Depends(get_current_customer),
 ):
     if body.preference not in ("email_push", "sms"):

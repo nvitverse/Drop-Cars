@@ -79,7 +79,7 @@ def _normalize(value: str) -> str:
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
 
     role = body.role.strip().lower()
     number = body.primary_number.strip()
@@ -191,7 +191,7 @@ class EmailOtpReset(BaseModel):
 
 
 @router.post("/email/request-reset-otp")
-async def request_reset_otp(body: EmailOtpRequest, db: Session = Depends(get_db)):
+def request_reset_otp(body: EmailOtpRequest, db: Session = Depends(get_db)):
     role = body.role.strip().lower()
     number = body.primary_number.strip()
 
@@ -251,7 +251,7 @@ async def request_reset_otp(body: EmailOtpRequest, db: Session = Depends(get_db)
 
 
 @router.post("/email/reset-password")
-async def reset_password_with_otp(body: EmailOtpReset, db: Session = Depends(get_db)):
+def reset_password_with_otp(body: EmailOtpReset, db: Session = Depends(get_db)):
     role = body.role.strip().lower()
     number = body.primary_number.strip()
 
@@ -314,7 +314,7 @@ class LinkEmailOtpReset(BaseModel):
 
 
 @router.post("/email/link-email-and-request-otp")
-async def link_email_and_request_otp(body: LinkEmailOtpRequest, db: Session = Depends(get_db)):
+def link_email_and_request_otp(body: LinkEmailOtpRequest, db: Session = Depends(get_db)):
     role = body.role.strip().lower()
     number = body.primary_number.strip()
     email = body.email.strip().lower()
@@ -388,7 +388,7 @@ async def link_email_and_request_otp(body: LinkEmailOtpRequest, db: Session = De
 
 
 @router.post("/email/verify-link-and-reset")
-async def verify_link_and_reset(body: LinkEmailOtpReset, db: Session = Depends(get_db)):
+def verify_link_and_reset(body: LinkEmailOtpReset, db: Session = Depends(get_db)):
     role = body.role.strip().lower()
     number = body.primary_number.strip()
     email = body.email.strip().lower()

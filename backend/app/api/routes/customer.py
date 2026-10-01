@@ -23,7 +23,7 @@ def _build_customer_out(credentials, details) -> CustomerOut:
 
 
 @router.post("/customer/signup", response_model=CustomerTokenResponse, status_code=status.HTTP_201_CREATED)
-async def customer_signup(body: CustomerSignup, db: Session = Depends(get_db)):
+def customer_signup(body: CustomerSignup, db: Session = Depends(get_db)):
     credentials, details = create_customer(db, body)
     access_token = create_access_token({
         "sub": str(credentials.id),
@@ -34,7 +34,7 @@ async def customer_signup(body: CustomerSignup, db: Session = Depends(get_db)):
 
 
 @router.post("/customer/signin", response_model=CustomerTokenResponse)
-async def customer_signin(body: CustomerSignin, db: Session = Depends(get_db)):
+def customer_signin(body: CustomerSignin, db: Session = Depends(get_db)):
     from app.crud.customer import get_customer_by_primary_number
     existing = get_customer_by_primary_number(db, body.primary_number)
     if not existing:
@@ -57,7 +57,7 @@ async def customer_signin(body: CustomerSignin, db: Session = Depends(get_db)):
 
 
 @router.get("/customer/me", response_model=CustomerOut)
-async def get_my_customer_profile(
+def get_my_customer_profile(
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),
 ):
@@ -68,7 +68,7 @@ async def get_my_customer_profile(
 
 
 @router.put("/customer/me/addresses")
-async def update_saved_addresses(
+def update_saved_addresses(
     body: SavedAddressesUpdate,
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer),

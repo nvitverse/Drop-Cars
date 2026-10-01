@@ -352,7 +352,7 @@ def edit_order(db: Session, order_id: int, vendor_id: Optional[str], updates: Di
             trip_type=new_order.trip_type,
         )
         if new_order.trip_type in (OrderTypeEnum.ONEWAY, OrderTypeEnum.MULTY_CITY):
-            fare = calculate_oneway_fare(**fare_args)
+            fare = calculate_oneway_fare(**fare_args, known_km=new_order.trip_distance, known_trip_time=new_order.trip_time)
         else:
             fare = calculate_multisegment_fare(
                 **fare_args,

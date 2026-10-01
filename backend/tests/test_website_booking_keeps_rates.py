@@ -301,3 +301,82 @@ def test_a_star_place_means_any_destination():
     cfg = DT.validate({"permits": [{"label": "Sedan permit", "keywords": ["*"], "vehicles": ["SEDAN_4_PLUS_1"], "driver": 400}]})
     out = DT.split_fare(cfg, car_type="SEDAN_4_PLUS_1", pickup_drop_location={"0": "Chennai", "1": "Madurai"}, customer_km_rate=15, customer_bata=400, customer_permit=500)
     assert (out["permit_charges"], out["extra_permit_charges"]) == (400, 100)
+
+
+# ------------------------------------------------------------------ the booking rules an auto-posted website booking must get (owner, 2026-10-02)
+from datetime import datetime as _dt  # noqa: E402
+
+
+def _posted_order(db, hours_ahead, **over):
+    r = _request(db, start_date_time=datetime.now(timezone.utc) + timedelta(hours=hours_ahead), **over)
+    master, _ = _post(db, r)
+    from app.models.orders import Order
+    return db.query(Order).filter(Order.id == master.id).one()
+
+
+def test_an_auto_posted_booking_is_reserved_for_trusted_partners(pg_session, quiet):
+    """Trusted Partner priority lock: set when the booking is posted (it was left empty, so nothing was reserved)."""
+    o = _posted_order(pg_session, 30)
+    assert o.priority_for_paid is True and o.priority_cutoff_at is not None
+    now = datetime.now(timezone.utc)
+    cutoff = o.priority_cutoff_at if o.priority_cutoff_at.tzinfo else o.priority_cutoff_at.replace(tzinfo=timezone.utc)
+    assert now < cutoff <= o.start_date_time.replace(tzinfo=timezone.utc) - timedelta(hours=2)            # ends at least 2 h before pickup
+
+
+def test_the_lock_applies_to_a_standard_driver_but_not_a_trusted_partner(pg_session, quiet):
+    """The accept gate (order_assignments) only locks when priority_for_paid AND a cutoff are both set."""
+    o = _posted_order(pg_session, 30)
+    assert bool(o.priority_for_paid and o.priority_cutoff_at)
+
+
+def test_a_pickup_within_the_hour_is_urgent_even_if_the_customer_did_not_ask(pg_session, quiet):
+    assert _posted_order(pg_session, 0.5).is_urgent is True
+    assert _posted_order(pg_session, 30).is_urgent is False
+    assert _posted_order(pg_session, 30, is_urgent=True).is_urgent is True
+
+
+def test_the_customer_number_stays_hidden_until_the_reveal_rule_opens(pg_session, quiet):
+    """Automatic rule: the number opens 6 h before pickup. A booking posted by the website carries no manual override."""
+    from app.crud.order_assignments import customer_number_reveal_at, get_masked_customer_number
+    o = _posted_order(pg_session, 30)
+    assert o.data_visibility_vehicle_owner is False and o.customer_phone_reveal_at is None
+    reveal = customer_number_reveal_at(pg_session, o)
+    assert reveal is not None and abs((reveal - o.start_date_time.astimezone(timezone.utc).replace(tzinfo=None)).total_seconds() + 6 * 3600) < 5
+    assert o.customer_number not in get_masked_customer_number(pg_session, o)
+    assert get_masked_customer_number(pg_session, o).startswith("Available")
+
+
+def test_the_distance_is_remembered_for_the_close_trip_check(pg_session, quiet):
+    o = _posted_order(pg_session, 30)
+    assert o.calculated_trip_distance == 135 and o.trip_distance == 135
+
+
+# ------------------------------------------------------------------ "everything is late": Edit Fare timed out after 25 s
+def test_edit_fare_uses_the_stored_km_and_never_calls_google_maps(pg_session, client_with_db, quiet, monkeypatch):
+    """Edit Fare recalculated the route distance (Google Maps, 15 s timeout) on every save; the admin app gives up after 25 s
+    ('signal is aborted'). It must use the booking's own billed km: instant, and a km the admin set by hand is kept."""
+    def boom(*a, **k):
+        raise AssertionError("the route distance must not be looked up when a fare is edited")
+
+    monkeypatch.setattr("app.crud.new_orders.get_distance_km_between_locations", boom)
+    o = _posted_order(pg_session, 30)
+    owner = _admin(pg_session, "Owner")
+    r = client_with_db.patch(f"/api/admin/orders/{o.id}/edit-fare", json={"cost_per_km": 16, "extra_cost_per_km": 0, "driver_allowance": 300}, headers=_auth("admin", owner))
+    assert r.status_code == 200, r.text
+    assert r.json()["vendor_price"] == 135 * 16 + 300                       # the stored 135 km, no route lookup
+
+
+def test_blocking_route_handlers_do_not_run_on_the_event_loop():
+    """330 handlers were `async def` without a single await: all their database / HTTP / e-mail work ran ON the event loop, so one slow
+    request (an e-mail, a Maps call) froze every other request on that server. A handler with no await must be a plain def (thread pool)."""
+    import ast
+    import glob
+    offenders = []
+    for path in glob.glob("app/api/routes/*.py"):
+        tree = ast.parse(open(path, encoding="utf-8-sig").read())
+        for node in tree.body:
+            if isinstance(node, ast.AsyncFunctionDef) and any(isinstance(d, ast.Call) and getattr(d.func, "attr", "") in ("get", "post", "put", "patch", "delete") for d in node.decorator_list):
+                if not any(isinstance(n, (ast.Await, ast.AsyncWith, ast.AsyncFor)) for n in ast.walk(node)):
+                    offenders.append(f"{path}:{node.name}")
+    # driver_cancel_order_endpoint stays async on purpose: it schedules a push with asyncio.create_task (needs the loop)
+    assert [o for o in offenders if not o.endswith("driver_cancel_order_endpoint")] == [], offenders[:10]

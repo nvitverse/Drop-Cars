@@ -67,7 +67,7 @@ def _redact_pii_for_staff(admin, invoice: TaxInvoice) -> None:
 # printed on every GST invoice and the rates every computation uses)
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/setup-status", response_model=SetupStatusOut)
-async def setup_status(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def setup_status(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """What tax setup is still incomplete, framed as an ask, not a
     blocker - nothing in this system refuses to issue an invoice or close
     a trip because the company profile is unset (see
@@ -79,14 +79,14 @@ async def setup_status(db: Session = Depends(get_db), current_admin=Depends(get_
 
 
 @router.get("/admin/tax/company-profile", response_model=CompanyProfileOut)
-async def get_company_profile(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def get_company_profile(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     require_owner(current_admin)
     profile = tax_engine.get_company_profile(db)
     return CompanyProfileOut(**profile, is_complete=tax_engine.is_company_profile_complete(profile))
 
 
 @router.put("/admin/tax/company-profile", response_model=CompanyProfileOut)
-async def update_company_profile(
+def update_company_profile(
     payload: CompanyProfileUpdate, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -106,13 +106,13 @@ async def update_company_profile(
 
 
 @router.get("/admin/tax/rates", response_model=TaxRatesOut)
-async def get_tax_rates(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def get_tax_rates(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     require_tax_accounts_permission(current_admin)
     return TaxRatesOut(**tax_engine.get_tax_rates(db))
 
 
 @router.put("/admin/tax/rates", response_model=TaxRatesOut)
-async def update_tax_rate(
+def update_tax_rate(
     payload: TaxRateUpdate, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -141,7 +141,7 @@ async def update_tax_rate(
 # Invoice ledger
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/invoices", response_model=list[TaxInvoiceOut])
-async def list_invoices(
+def list_invoices(
     invoice_type: Optional[str] = Query(None),
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
@@ -187,7 +187,7 @@ class ManualTaxInvoiceRequest(BaseModel):
 
 
 @router.post("/admin/tax/invoices/credit-note", response_model=TaxInvoiceOut)
-async def credit_note_invoice(
+def credit_note_invoice(
     payload: CreditNoteRequest, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -215,25 +215,25 @@ async def credit_note_invoice(
 # Monthly tax reports + one-click exports
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/reports/gstr1")
-async def gstr1_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def gstr1_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     require_tax_accounts_permission(current_admin)
     return tax_invoices_crud.get_gstr1_summary(db, year=year, month=month)
 
 
 @router.get("/admin/tax/reports/gstr3b")
-async def gstr3b_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def gstr3b_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     require_tax_accounts_permission(current_admin)
     return tax_invoices_crud.get_gstr3b_summary(db, year=year, month=month)
 
 
 @router.get("/admin/tax/reports/section-9-5")
-async def section_9_5_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def section_9_5_report(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     require_tax_accounts_permission(current_admin)
     return tax_invoices_crud.get_section_9_5_report(db, year=year, month=month)
 
 
 @router.get("/admin/tax/exports/gstr1.json")
-async def export_gstr1_json(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def export_gstr1_json(year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """One-click JSON export shaped for CA hand-off. NOTE: this is Drop
     Cars' own internal JSON shape, not a byte-for-byte match of the GST
     portal's offline-tool JSON schema (that schema is government-maintained
@@ -248,7 +248,7 @@ async def export_gstr1_json(year: int, month: int, db: Session = Depends(get_db)
 
 
 @router.get("/admin/tax/exports/invoices.csv", response_class=PlainTextResponse)
-async def export_invoices_csv(
+def export_invoices_csv(
     year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     require_tax_accounts_permission(current_admin)
@@ -280,7 +280,7 @@ async def export_invoices_csv(
 # Driver settlements
 # ---------------------------------------------------------------------------
 @router.post("/admin/tax/driver-settlements/generate", response_model=DriverSettlementOut)
-async def generate_driver_settlement(
+def generate_driver_settlement(
     payload: GenerateSettlementRequest, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -299,7 +299,7 @@ async def generate_driver_settlement(
 
 
 @router.post("/admin/tax/driver-settlements/{settlement_id}/finalize", response_model=DriverSettlementOut)
-async def finalize_driver_settlement(
+def finalize_driver_settlement(
     settlement_id: str, request: Request, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     """Locking a settlement is Owner-only - once finalized it's what gets
@@ -318,7 +318,7 @@ async def finalize_driver_settlement(
 
 
 @router.get("/admin/tax/driver-settlements/{driver_id}", response_model=DriverSettlementOut)
-async def get_driver_settlement(
+def get_driver_settlement(
     driver_id: str, year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     require_tax_accounts_permission(current_admin)
@@ -329,7 +329,7 @@ async def get_driver_settlement(
 
 
 @router.get("/admin/tax/driver-settlements/{driver_id}/export.csv", response_class=PlainTextResponse)
-async def export_driver_settlement_csv(
+def export_driver_settlement_csv(
     driver_id: str, year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     """Single-click downloadable statement per the prompt's spec (driver's
@@ -365,7 +365,7 @@ async def export_driver_settlement_csv(
 # Invoice sequence counter management (Owner only - protects invoice numbering)
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/invoices/sequence-status")
-async def get_sequence_status(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def get_sequence_status(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Return the current invoice sequence: series, financial year, last number issued, and
     what the next invoice number will look like. Used by the GST Invoices screen to display
     sequence health and let Owner adjust numbering if needed."""
@@ -390,7 +390,7 @@ async def get_sequence_status(db: Session = Depends(get_db), current_admin=Depen
 
 
 @router.put("/admin/tax/invoices/sequence-counter")
-async def update_sequence_counter(
+def update_sequence_counter(
     payload: dict, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -435,7 +435,7 @@ async def update_sequence_counter(
 # Manual invoice issuance (B2B / off-platform trips)
 # ---------------------------------------------------------------------------
 @router.post("/admin/tax/invoices/manual-issue")
-async def issue_manual_invoice(
+def issue_manual_invoice(
     payload: dict, request: Request,
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
@@ -790,7 +790,7 @@ def build_invoice_html(invoice, company: dict) -> str:
 # PDF download for a single invoice (Admin RBAC)
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/invoices/{invoice_id}/pdf")
-async def download_invoice_pdf(
+def download_invoice_pdf(
     invoice_id: str, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):
     """Generate and return a PDF for a single GST invoice.
@@ -939,7 +939,7 @@ def require_invoice_access(booking_id: str, request: Request, db: Session = Depe
 @router.get("/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
 @router.get("/api/customer/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
 @router.get("/api/bookings/{booking_id}/invoice-pdf", dependencies=[Depends(require_invoice_access)])
-async def get_booking_invoice_pdf(
+def get_booking_invoice_pdf(
     booking_id: str,
     db: Session = Depends(get_db),
 ):
@@ -1042,7 +1042,7 @@ async def get_booking_invoice_pdf(
 # Finance audit log (Owner only)
 # ---------------------------------------------------------------------------
 @router.get("/admin/tax/audit-log", response_model=FinanceAuditLogListOut)
-async def get_audit_log(
+def get_audit_log(
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
 ):

@@ -841,7 +841,7 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/ai/trip-detail/{order_id}")
-async def trip_detail_for_chat(
+def trip_detail_for_chat(
     order_id: int,
     language: str = "",
     db: Session = Depends(get_db),

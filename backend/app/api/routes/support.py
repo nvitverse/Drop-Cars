@@ -133,7 +133,7 @@ class PublicAdminHelpRequest(BaseModel):
 
 
 @router.post("/public-request-admin-help")
-async def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Depends(get_db)):
+def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Depends(get_db)):
     """Allow an existing driver/owner on the password reset screen to submit a
     support request directly into the Admin App's Support Chats inbox,
     validating first that an account exists for their primary_number."""
@@ -209,7 +209,7 @@ async def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session
 
 
 @router.post("/dispatch-message", dependencies=[Depends(get_current_user_flexible)])
-async def send_support_message(payload: SupportMessagePayload, request: Request, db: Session = Depends(get_db)):
+def send_support_message(payload: SupportMessagePayload, request: Request, db: Session = Depends(get_db)):
     """The Driver App's "Drop Cars Admin / Support" chat. This really
     creates/continues a live thread Admin can see and reply to (Admin App
     Chats), plus an email nudge - not a canned auto-reply pretending a
@@ -258,7 +258,7 @@ async def send_support_message(payload: SupportMessagePayload, request: Request,
 
 
 @router.get("/my-thread", dependencies=[Depends(get_current_user_flexible)])
-async def get_my_support_thread(request: Request, after_id: int = 0, db: Session = Depends(get_db)):
+def get_my_support_thread(request: Request, after_id: int = 0, db: Session = Depends(get_db)):
     """The driver/owner's own support thread, so the chat can show Admin's
     replies (poll this like booking-chat)."""
     role, caller = _resolve_sender(request, db)
@@ -278,7 +278,7 @@ async def get_my_support_thread(request: Request, after_id: int = 0, db: Session
 
 
 @router.get("/my-unread-count", dependencies=[Depends(get_current_user_flexible)])
-async def get_my_support_unread_count(request: Request, db: Session = Depends(get_db)):
+def get_my_support_unread_count(request: Request, db: Session = Depends(get_db)):
     """Just a count, with no side effect of marking anything read - for a
     tab-bar badge that stays lit until the driver actually opens the chat
     (GET /my-thread marks messages read as a side effect, which would make
@@ -292,7 +292,7 @@ async def get_my_support_unread_count(request: Request, db: Session = Depends(ge
 
 
 @router.get("/on-duty-contact")
-async def get_on_duty_contact(db: Session = Depends(get_db)):
+def get_on_duty_contact(db: Session = Depends(get_db)):
     """Who to call right now - whichever staff/owner admin has toggled
     "on duty" most recently, so drivers get a real, currently-reachable
     number instead of a hardcoded placeholder. Falls back to any Owner-role
@@ -318,7 +318,7 @@ class OnDutyPayload(BaseModel):
 
 
 @router.get("/admin/on-duty")
-async def get_my_on_duty(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def get_my_on_duty(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Get current admin's on-duty status. `effective` is what the booking rules use: the switch is ON, the app
     was used in the last few minutes and the shift is under the maximum length."""
     from datetime import timedelta
@@ -336,7 +336,7 @@ async def get_my_on_duty(db: Session = Depends(get_db), current_admin=Depends(ge
 
 
 @router.patch("/admin/on-duty")
-async def set_my_on_duty(payload: OnDutyPayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def set_my_on_duty(payload: OnDutyPayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Admin App > Settings self-toggle."""
     now = datetime.now(timezone.utc)
     current_admin.is_on_duty = payload.on_duty
@@ -349,7 +349,7 @@ async def set_my_on_duty(payload: OnDutyPayload, db: Session = Depends(get_db), 
 
 
 @router.post("/admin/on-duty/heartbeat")
-async def admin_duty_heartbeat(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def admin_duty_heartbeat(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """The Admin App can ping this while it is open (e.g. every minute). Any authenticated call already counts as
     presence; this is the cheapest one and tells the app whether it really counts as on duty."""
     from datetime import timedelta
@@ -366,7 +366,7 @@ async def admin_duty_heartbeat(db: Session = Depends(get_db), current_admin=Depe
 
 
 @router.get("/admin/threads")
-async def list_support_threads_for_admin(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def list_support_threads_for_admin(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Admin App > Chats - one row per driver/owner who has messaged
     Support, newest activity first."""
     keys = [r[0] for r in db.query(SupportMessage.thread_key).distinct().all()]
@@ -388,7 +388,7 @@ async def list_support_threads_for_admin(db: Session = Depends(get_db), current_
 
 
 @router.get("/admin/threads/{thread_key}")
-async def get_support_thread_for_admin(thread_key: str, after_id: int = 0, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def get_support_thread_for_admin(thread_key: str, after_id: int = 0, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     q = db.query(SupportMessage).filter(SupportMessage.thread_key == thread_key)
     all_msgs = q.order_by(SupportMessage.id.asc()).all()
     if not all_msgs:
@@ -409,7 +409,7 @@ async def get_support_thread_for_admin(thread_key: str, after_id: int = 0, db: S
 
 
 @router.post("/admin/threads/{thread_key}", status_code=status.HTTP_201_CREATED)
-async def reply_to_support_thread(thread_key: str, payload: SupportMessagePayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+def reply_to_support_thread(thread_key: str, payload: SupportMessagePayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     prior = db.query(SupportMessage).filter(SupportMessage.thread_key == thread_key).order_by(SupportMessage.id.desc()).first()
     if not prior:
         raise HTTPException(status_code=404, detail="No such support thread")
