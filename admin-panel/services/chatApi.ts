@@ -37,7 +37,7 @@ export interface InboxMessage {
   masked: boolean;
   notice?: string;
   bot_pending?: boolean;
-  meta?: { bot?: boolean; tools?: string[]; handoff?: boolean; suggestions?: string[] } | null;
+  meta?: { bot?: boolean; tools?: string[]; handoff?: boolean; suggestions?: string[]; proposals?: Proposal[] } | null;
 }
 
 export interface InboxChatSummary {
@@ -52,6 +52,17 @@ export interface InboxChatSummary {
   number_policy?: string | null;
   bot_state?: 'ON' | 'OFF' | 'HANDOFF' | 'HUMAN';
   needs_human?: boolean;
+}
+
+/** An action the assistant prepared. Nothing happens until the admin presses Confirm (POST /admin/assistant/execute). */
+export interface Proposal {
+  id: string;
+  tool: string;
+  summary: string;
+  risk: 'low' | 'medium' | 'high' | 'sensitive';
+  status: 'PENDING' | 'EXECUTING' | 'EXECUTED' | 'FAILED' | 'DISMISSED' | 'EXPIRED';
+  expires_at: string | null;
+  message?: string | null;
 }
 
 export interface StaffMember {
@@ -112,6 +123,11 @@ export const chatApi = {
   /** Ask the assistant to answer MY latest message (the send reply said bot_pending). Can take a while: it may look things up. */
   askBot: (id: string) => call<{ replied: boolean; handoff?: boolean; message?: InboxMessage | null; reason?: string }>(`/${id}/bot`, json({})),
   setBot: (id: string, state: 'ON' | 'OFF') => call<{ bot_state: string }>(`/${id}/bot`, { method: 'PATCH', body: JSON.stringify({ state }) }),
+  getProposal: (id: string) => apiService.makeRequest<Proposal>(`/admin/assistant/proposals/${id}`),
+  dismissProposal: (id: string) => apiService.makeRequest<Proposal>(`/admin/assistant/proposals/${id}/dismiss`, { method: 'POST' }),
+  /** Only the id is sent: the server holds the arguments. `data` (e.g. an OTP) is shown on the card and never stored. */
+  executeProposal: (id: string) =>
+    apiService.makeRequest<{ ok: boolean; proposal: Proposal; data?: Record<string, any> }>('/admin/assistant/execute', { method: 'POST', body: JSON.stringify({ proposal_id: id }) }),
   openBooking: (orderId: number) => call<InboxChatSummary>(`/booking/${orderId}`, json({})),
 
   /** Voice notes and photos: upload first, then send the returned url in a message. */
@@ -132,6 +148,18 @@ export const chatApi = {
     }
     return res.json();
   },
+};
+
+/** Voice -> text (Tamil + English). Throws with the server's honest message when voice typing is not set up. */
+export const transcribeVoice = async (uri: string): Promise<string> => {
+  const token = await AsyncStorage.getItem('auth_token');
+  const form = new FormData();
+  form.append('file', { uri, name: 'command.m4a', type: 'audio/m4a' } as any);
+  const res = await fetch(`${BASE_URL}/admin/assistant/transcribe`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  let body: any = null;
+  try { body = await res.json(); } catch { /* keep the status text */ }
+  if (!res.ok) throw new Error(body?.detail || `Voice typing failed (${res.status})`);
+  return String(body?.text || '');
 };
 
 export const timeLabel = (iso?: string | null): string => {

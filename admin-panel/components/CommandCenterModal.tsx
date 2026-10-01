@@ -37,6 +37,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { colors } from '@/constants/theme';
 import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync } from 'expo-audio';
+import { transcribeVoice } from '@/services/chatApi';
 
 export default function CommandCenterModal() {
   const { isDark, themeColors } = useTheme();
@@ -55,6 +56,8 @@ export default function CommandCenterModal() {
 
   const [inputVal, setInputVal] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -89,15 +92,25 @@ export default function CommandCenterModal() {
     }
   };
 
+  // Real speech-to-text (Tamil + English): the recording is sent to the server, the transcript fills the box so you can check it
+  // before sending. If voice typing is not set up or fails, it says so - it never types made-up text.
   const handleStopVoice = async () => {
     try {
       setIsRecording(false);
       await recorder.stop();
-      // On stop, simulate quick speech recognition command or prefill text
-      // For immediate typing, user can also type or use speech keyboard dictation
-      setInputVal('Tiruvannamalai to Chennai, Sedan, 14, 1, 300, 100, Toll extra');
-    } catch (e) {
-      console.error('Error stopping voice recording:', e);
+      const uri = recorder.uri;
+      if (!uri) {
+        setVoiceNote('Nothing was recorded. Hold the mic while you speak.');
+        return;
+      }
+      setTranscribing(true);
+      setVoiceNote(null);
+      const text = await transcribeVoice(uri);
+      setInputVal((prev) => (prev ? `${prev} ${text}` : text));
+    } catch (e: any) {
+      setVoiceNote(e?.message || 'Voice typing failed. Please type the message.');
+    } finally {
+      setTranscribing(false);
     }
   };
 
@@ -335,6 +348,11 @@ export default function CommandCenterModal() {
           </View>
 
           {/* Input & Voice Controls */}
+          {transcribing || voiceNote ? (
+            <Text style={{ paddingHorizontal: 16, paddingTop: 6, fontSize: 12, color: transcribing ? themeColors.textSecondary : '#DC2626' }}>
+              {transcribing ? 'Understanding your voice...' : voiceNote}
+            </Text>
+          ) : null}
           <View style={[styles.inputRow, { borderTopColor: themeColors.border, backgroundColor: themeColors.surface }]}>
             <TouchableOpacity
               style={[

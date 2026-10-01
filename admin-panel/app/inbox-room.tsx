@@ -8,7 +8,8 @@ import { ArrowLeft, Bot, Check, CheckCheck, ShieldAlert } from 'lucide-react-nat
 import { useTheme } from '@/context/ThemeContext';
 import VoiceNote from '@/components/chat/VoiceNote';
 import ChatComposer from '@/components/chat/ChatComposer';
-import { chatApi, InboxChatSummary, InboxMessage, roleLabel, timeLabel } from '@/services/chatApi';
+import ProposalCard from '@/components/chat/ProposalCard';
+import { chatApi, InboxChatSummary, InboxMessage, roleLabel, timeLabel, transcribeVoice } from '@/services/chatApi';
 
 const POLL_MS = 4000;
 
@@ -105,7 +106,17 @@ export default function InboxRoomScreen() {
     }
   };
 
+  // In the assistant chat, speaking means "type what I said": the transcript is sent as a normal message so you can see what was understood.
   const sendVoice = async (uri: string) => {
+    if (chat?.type === 'ASSISTANT') {
+      try {
+        const text = await transcribeVoice(uri);
+        await sendText(text);
+      } catch (e: any) {
+        setError(e?.message || 'Voice typing failed. Please type the message.');
+      }
+      return;
+    }
     try {
       const up = await chatApi.upload(uri, 'audio/m4a');
       merge([await chatApi.send(String(id), { voice_url: up.url })]);
@@ -131,6 +142,7 @@ export default function InboxRoomScreen() {
           ) : item.text ? (
             <Text style={[s.text, { color: mine ? (c.onPrimary || '#fff') : c.text }]}>{item.text}</Text>
           ) : null}
+          {item.meta?.proposals?.map((pr) => <ProposalCard key={pr.id} proposal={pr} colors={c} />)}
           <View style={s.meta}>
             <Text style={[s.time, { color: mine ? 'rgba(255,255,255,0.75)' : c.textMuted }]}>{timeLabel(item.created_at)}</Text>
             {mine ? (item.read ? <CheckCheck size={13} color="#BFDBFE" /> : <Check size={13} color="rgba(255,255,255,0.75)" />) : null}
@@ -186,6 +198,11 @@ export default function InboxRoomScreen() {
           />
         )}
         {error && messages.length ? <Text style={[s.notice, { color: c.error }]}>{error}</Text> : null}
+        {chat?.type === 'ASSISTANT' && !botBusy && messages.length === 0 ? (
+          <TouchableOpacity style={[s.quick, { borderColor: c.primary, backgroundColor: c.surface }]} onPress={() => sendText('What needs my attention?')}>
+            <Text style={{ color: c.primary, fontWeight: '700', fontSize: 12.5 }}>What needs my attention?</Text>
+          </TouchableOpacity>
+        ) : null}
         {botBusy ? <Text style={[s.notice, { color: c.textMuted }]}>Assistant is working on it...</Text> : null}
         {notice ? <Text style={[s.notice, { color: c.warning }]}>{notice}</Text> : null}
         {chat && !chat.can_post ? (
@@ -215,5 +232,6 @@ const s = StyleSheet.create({
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2 },
   time: { fontSize: 10.5 },
   notice: { textAlign: 'center', fontSize: 11.5, paddingHorizontal: 14, paddingBottom: 4 },
+  quick: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, marginBottom: 8 },
   closed: { textAlign: 'center', padding: 14, fontSize: 13 },
 });
