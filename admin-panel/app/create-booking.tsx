@@ -349,6 +349,9 @@ export default function CreateBookingScreen() {
   const [extraAmount, setExtraAmount] = useState('0');
 
   // Vehicle Default Tariffs Matrix
+  // Vendor Extra Bata defaults (100; Crysta 200) were zeroed by mistake in the
+  // 2026-09-29 rate update and restored 2026-10-01 - the per-km rates from that
+  // update are unchanged.
   const getDefaultsForCarType = (selectedCar: string, currentTrip: string = tripType) => {
     const t = (selectedCar || '').toUpperCase();
     const isRound = currentTrip === 'roundtrip' || currentTrip === 'multicity';
@@ -358,7 +361,7 @@ export default function CreateBookingScreen() {
         cost_per_km: isRound ? '22' : '23',
         extra_cost_per_km: '0',
         driver_allowance: isRound ? '400' : '300',
-        extra_driver_allowance: '0',
+        extra_driver_allowance: '200',
       };
     }
     if (t.includes('INNOVA')) {
@@ -366,7 +369,7 @@ export default function CreateBookingScreen() {
         cost_per_km: isRound ? '20' : '21',
         extra_cost_per_km: '0',
         driver_allowance: isRound ? '400' : '300',
-        extra_driver_allowance: '0',
+        extra_driver_allowance: '100',
       };
     }
     if (t.includes('SUV')) {
@@ -374,7 +377,7 @@ export default function CreateBookingScreen() {
         cost_per_km: isRound ? '19' : '20',
         extra_cost_per_km: '0',
         driver_allowance: '300',
-        extra_driver_allowance: '0',
+        extra_driver_allowance: '100',
       };
     }
     if (t.includes('NEW_SEDAN_2022_MODEL')) {
@@ -384,7 +387,7 @@ export default function CreateBookingScreen() {
         cost_per_km: isRound ? '15' : '16',
         extra_cost_per_km: '0',
         driver_allowance: '300',
-        extra_driver_allowance: '0',
+        extra_driver_allowance: '100',
       };
     }
     // Sedan / Etios / Hatchback default
@@ -392,7 +395,7 @@ export default function CreateBookingScreen() {
       cost_per_km: isRound ? '14' : '15',
       extra_cost_per_km: '0',
       driver_allowance: '300',
-      extra_driver_allowance: '0',
+      extra_driver_allowance: '100',
     };
   };
 
@@ -1331,17 +1334,28 @@ export default function CreateBookingScreen() {
                           <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Drop here to swap / reorder</Text>
                         </View>
                       )}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        {/* Drag & Reorder Handle on the Left Edge */}
-                        <View style={{ alignItems: 'center', justifyContent: 'center', gap: 2, marginTop: 18 }}>
+                      {/* flex-end: the handle lines up with the location field, not with its label */}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
+                        {/* Drag & Reorder Handle - one box, same height as the field */}
+                        <View
+                          style={{
+                            width: 34,
+                            height: 48,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: isItemDragging ? colors.primary : (isDark ? '#334155' : '#CBD5E1'),
+                            backgroundColor: isDark ? (isItemDragging ? '#334155' : '#1E293B') : (isItemDragging ? '#E2E8F0' : '#F1F5F9'),
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
                           {idx > 0 && (
                             <TouchableOpacity
                               onPress={() => moveStopUp(idx)}
-                              style={{ padding: 2 }}
                               hitSlop={6}
                               accessibilityLabel={`Move ${label} up`}
                             >
-                              <ChevronUp size={16} color={themeColors.primary} />
+                              <ChevronUp size={13} color={themeColors.primary} />
                             </TouchableOpacity>
                           )}
                           <View
@@ -1371,12 +1385,6 @@ export default function CreateBookingScreen() {
                             } as any)}
                             style={[
                               {
-                                paddingHorizontal: 7,
-                                paddingVertical: 10,
-                                borderRadius: 6,
-                                backgroundColor: isDark ? (isItemDragging ? '#334155' : '#1E293B') : (isItemDragging ? '#E2E8F0' : '#F1F5F9'),
-                                borderWidth: 1,
-                                borderColor: isItemDragging ? colors.primary : (isDark ? '#334155' : '#CBD5E1'),
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 cursor: isItemDragging ? 'grabbing' : 'grab',
@@ -1385,16 +1393,15 @@ export default function CreateBookingScreen() {
                             ]}
                             accessibilityLabel={`Drag or click to reorder ${label}`}
                           >
-                            <GripVertical size={18} color={isItemDragging ? colors.primary : themeColors.textSecondary} />
+                            <GripVertical size={16} color={isItemDragging ? colors.primary : themeColors.textSecondary} />
                           </View>
                           {idx < stops.length - 1 && (
                             <TouchableOpacity
                               onPress={() => moveStopDown(idx)}
-                              style={{ padding: 2 }}
                               hitSlop={6}
                               accessibilityLabel={`Move ${label} down`}
                             >
-                              <ChevronDown size={16} color={themeColors.primary} />
+                              <ChevronDown size={13} color={themeColors.primary} />
                             </TouchableOpacity>
                           )}
                         </View>
@@ -1433,7 +1440,7 @@ export default function CreateBookingScreen() {
                           </View>
 
                           <TouchableOpacity
-                            style={[styles.input, { justifyContent: 'center', paddingVertical: 12, backgroundColor: themeColors.surface, marginBottom: 0 }]}
+                            style={[styles.input, { justifyContent: 'center', paddingVertical: 12, height: 48, backgroundColor: themeColors.surface, marginBottom: 0 }]}
                             onPress={() => openLocationPicker(idx)}
                             activeOpacity={0.8}
                           >
@@ -1460,7 +1467,7 @@ export default function CreateBookingScreen() {
 
                       {/* Optional address / maps link input when checkbox is checked */}
                       {locationLinksEnabled && (
-                        <View style={{ marginLeft: 34, marginTop: 6 }}>
+                        <View style={{ marginLeft: 44, marginTop: 6 }}>
                           <TextInput
                             style={[styles.input, { marginBottom: 0 }]}
                             placeholder={`Address or Google Maps link for ${label.toLowerCase()} (optional)`}
@@ -1521,43 +1528,6 @@ export default function CreateBookingScreen() {
               <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Customer Details</Text>
             </View>
 
-            {/* Vendor Checkbox on Right */}
-            <TouchableOpacity
-              onPress={handleToggleVendorAsCustomer}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingVertical: 4,
-                paddingHorizontal: 8,
-                borderRadius: 6,
-                backgroundColor: isVendorAsCustomer ? (isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF') : 'transparent',
-                borderWidth: 1,
-                borderColor: isVendorAsCustomer ? colors.primary : (isDark ? '#334155' : '#E2E8F0'),
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel="Auto-fill Vendor details as Customer"
-            >
-              <View style={{
-                width: 16,
-                height: 16,
-                borderRadius: 4,
-                borderWidth: 1.5,
-                borderColor: isVendorAsCustomer ? colors.primary : (isDark ? '#64748B' : '#94A3B8'),
-                backgroundColor: isVendorAsCustomer ? colors.primary : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                {isVendorAsCustomer && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
-              </View>
-              <Text style={{
-                fontSize: 12.5,
-                fontWeight: isVendorAsCustomer ? '700' : '500',
-                color: isVendorAsCustomer ? colors.primary : themeColors.textSecondary,
-              }}>
-                Vendor
-              </Text>
-            </TouchableOpacity>
           </View>
           <View style={styles.responsiveGridRow}>
             <View style={styles.responsiveGridCol}>
