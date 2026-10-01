@@ -1563,20 +1563,25 @@ def _admin_fleet_low_balance(db, fleet_owner, payload, estimated_price, vendor_p
 
 
 def _admin_apply_reveal(db, master_order_id, payload):
-    """Store the moment the admin chose for the driver to see the customer
-    number ("6 hrs before" / picked date & time). Nothing chosen = automatic."""
+    """Store what the admin chose for THIS booking: the moment the driver sees the
+    customer number ("6 hrs before" / picked date & time) and the commission %.
+    Nothing chosen = the automatic rule / the platform's rate."""
     at = getattr(payload, "customer_phone_reveal_at", None)
     hours = getattr(payload, "customer_phone_reveal_hours", None)
-    if at is None and hours is None:
+    pct = getattr(payload, "commission_percent", None)
+    if at is None and hours is None and pct is None:
         return
     from datetime import timedelta
     from app.models.orders import Order
     order = db.query(Order).filter(Order.id == master_order_id).first()
     if order is None:
         return
-    if at is None:
+    if at is None and hours is not None:
         at = order.start_date_time - timedelta(hours=float(hours))
-    order.customer_phone_reveal_at = at
+    if at is not None:
+        order.customer_phone_reveal_at = at
+    if pct is not None:
+        order.commission_percent = float(pct)
     db.commit()
 
 

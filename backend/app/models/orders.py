@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, TIMESTAMP, Integer, func, JSON, Enum as SqlEnum, ForeignKey, Boolean, Interval
+from sqlalchemy import Column, String, TIMESTAMP, Integer, func, JSON, Enum as SqlEnum, ForeignKey, Boolean, Interval, Float
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 import enum
 from app.database.session import Base
@@ -109,6 +109,8 @@ class Order(Base):
     # Admin chose a fixed moment for the driver to see the customer number
     # ("6 hrs before" / a picked date & time). Null = the automatic rule.
     customer_phone_reveal_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    # Admin chose a commission % for this booking (Post booking form). Null = the platform's rates.
+    commission_percent = Column(Float, nullable=True)
 
     # Closing amounts (set when order is completed)
     closed_vendor_price = Column(Integer, nullable=True)

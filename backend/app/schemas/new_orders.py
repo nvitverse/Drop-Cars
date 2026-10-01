@@ -88,6 +88,8 @@ class RentalOrderRequest(BaseModel):
     # Neither set = the automatic rule. hours = that many hrs before pickup.
     customer_phone_reveal_hours: Optional[float] = Field(default=None, ge=0, le=168)
     customer_phone_reveal_at: Optional[datetime] = None
+    # Admin "Post booking": commission % for this booking (replaces the platform's rate). None = platform rate.
+    commission_percent: Optional[float] = Field(default=None, ge=0, le=100)
     pickup_notes: Optional[str] = None
     max_time_to_assign_order: Optional[int] = Field(
         default=15, 
@@ -269,6 +271,8 @@ class OnewayQuoteRequest(BaseModel):
     # Neither set = the automatic rule. hours = that many hrs before pickup.
     customer_phone_reveal_hours: Optional[float] = Field(default=None, ge=0, le=168)
     customer_phone_reveal_at: Optional[datetime] = None
+    # Admin "Post booking": commission % for this booking (replaces the platform's rate). None = platform rate.
+    commission_percent: Optional[float] = Field(default=None, ge=0, le=100)
     # GST amount the admin saw on the form (auto 5% of the km fare, or typed).
     # Saved with the booking when its GST charge item is ticked.
     gst_amount: Optional[int] = Field(default=None, ge=0)
