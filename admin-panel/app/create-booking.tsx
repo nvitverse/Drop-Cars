@@ -713,19 +713,149 @@ export default function CreateBookingScreen() {
     setGstAmount(stripLeadingZero(v));
   };
 
+  const getLocationStringForOrder = (location: any): string => {
+    if (!location) return '';
+    if (typeof location === 'object' && !('pickup' in location)) {
+      const keys = Object.keys(location).sort((a, b) => Number(a) - Number(b));
+      return keys.map((key) => location[key] || '').join(' ').toLowerCase();
+    }
+    const pickup = location.pickup?.address || location.pickup?.city || location.pickup || '';
+    const drop = location.drop?.address || location.drop?.city || location.drop || '';
+    const stops = Array.isArray(location.intermediate_stops) ? location.intermediate_stops : [];
+    const stopsText = stops.map((stop: any) => (typeof stop === 'string' ? stop : stop.address || stop.city || '')).join(' ');
+    return `${pickup} ${drop} ${stopsText}`.toLowerCase();
+  };
+
+  const mapOrderToLead = (o: any): WebsiteEnquiry => {
+    const loc = o.pickup_drop_location;
+    let pickup = '';
+    let drop = '';
+    if (loc) {
+      if (typeof loc === 'object') {
+        if ('pickup' in loc || 'drop' in loc) {
+          pickup = (loc as any).pickup?.address || (loc as any).pickup?.city || (typeof (loc as any).pickup === 'string' ? (loc as any).pickup : '');
+          drop = (loc as any).drop?.address || (loc as any).drop?.city || (typeof (loc as any).drop === 'string' ? (loc as any).drop : '');
+        } else {
+          const keys = Object.keys(loc).sort((a, b) => Number(a) - Number(b));
+          if (keys.length > 0) pickup = String(loc[keys[0]] || '');
+          if (keys.length > 1) drop = String(loc[keys[keys.length - 1]] || '');
+        }
+      } else if (typeof loc === 'string') {
+        const parts = loc.split(/->|→/);
+        pickup = parts[0]?.trim() || '';
+        drop = parts[1]?.trim() || '';
+      }
+    }
+
+    const startDt = o.start_date_time ? String(o.start_date_time) : '';
+    let travelDate = '';
+    let travelTime = '';
+    if (startDt.includes('T')) {
+      const [d, t] = startDt.split('T');
+      travelDate = d;
+      travelTime = (t || '').slice(0, 5);
+    } else if (startDt.includes(' ')) {
+      const [d, t] = startDt.split(' ');
+      travelDate = d;
+      travelTime = (t || '').slice(0, 5);
+    }
+
+    const bId = o.booking_id || (o.id ? (String(o.id).startsWith('C') || String(o.id).startsWith('E') ? String(o.id) : `C${o.id}`) : '');
+
+    return {
+      id: Number(o.id) || 0,
+      booking_id: bId,
+      name: o.customer_name || 'Customer',
+      phone: o.customer_number || '',
+      pickup: pickup || 'Pickup',
+      drop_location: drop || 'Drop',
+      trip_type: o.trip_type || 'oneway',
+      vehicle_type: o.car_type || 'SEDAN',
+      travel_date: travelDate || null,
+      travel_time: travelTime || null,
+      fare_estimate: Number(o.estimated_price || o.vendor_price) || null,
+      cost_per_km: Number(o.cost_per_km) || null,
+      extra_cost_per_km: Number(o.extra_cost_per_km) || null,
+      include_gst: Boolean(o.include_gst),
+      status: o.status || 'Confirmed',
+      booking_status: o.status || null,
+      website: o.source || 'Platform Booking',
+      source: 'Order / Booking',
+      dispatcher_notes: o.pickup_notes || o.special_instructions || o.notes || null,
+      assigned_dispatcher: null,
+      followup_time: null,
+      lead_stage: 'order',
+      is_touched: true,
+      created_at: o.created_at || null,
+    };
+  };
+
   const searchLeads = async () => {
     const q = linkQuery.trim();
-    if (q.length < 3) {
-      Alert.alert('Type more', 'Enter at least 3 characters of the booking ID, name, phone or place.');
+    if (q.length < 2) {
+      Alert.alert('Type more', 'Enter at least 2 characters of the booking ID, name, phone or place.');
       return;
     }
     setLinkSearching(true);
     try {
-      const open = await enquiriesApi.list({ tab: 'not_responded', search: q });
-      let rows = open.enquiries || [];
-      // already-confirmed bookings live in the other tab
-      if (rows.length === 0) rows = (await enquiriesApi.list({ tab: 'responded', search: q })).enquiries || [];
-      setLinkResults(rows.slice(0, 6));
+      // 1. Search website enquiries (both tabs in parallel)
+      const [openRes, respRes, ordersRes] = await Promise.allSettled([
+        enquiriesApi.list({ tab: 'not_responded', search: q }),
+        enquiriesApi.list({ tab: 'responded', search: q }),
+        apiService.getOrders(0, 100, 'newest').catch(() => ({ orders: [] })),
+      ]);
+
+      const openRows: WebsiteEnquiry[] = openRes.status === 'fulfilled' ? (openRes.value?.enquiries || []) : [];
+      const respRows: WebsiteEnquiry[] = respRes.status === 'fulfilled' ? (respRes.value?.enquiries || []) : [];
+
+      // 2. Search backend orders
+      const ordersList: any[] = ordersRes.status === 'fulfilled' ? ((ordersRes.value as any)?.orders || []) : [];
+      const qLower = q.toLowerCase();
+      const qDigits = q.replace(/[^0-9]/g, '');
+
+      const matchedOrders: WebsiteEnquiry[] = ordersList
+        .filter((o: any) => {
+          if (!o || !o.id) return false;
+          const idStr = String(o.id).toLowerCase();
+          const bIdStr = String(o.booking_id || '').toLowerCase();
+          const nameStr = String(o.customer_name || '').toLowerCase();
+          const phoneStr = String(o.customer_number || '').replace(/[^0-9]/g, '');
+          const locStr = getLocationStringForOrder(o.pickup_drop_location);
+
+          return (
+            idStr.includes(qLower) ||
+            bIdStr.includes(qLower) ||
+            (qDigits.length >= 2 && idStr.includes(qDigits)) ||
+            nameStr.includes(qLower) ||
+            (qDigits.length >= 3 && phoneStr.includes(qDigits)) ||
+            locStr.includes(qLower)
+          );
+        })
+        .map(mapOrderToLead);
+
+      // 3. Direct ID lookup fallback if numeric and not matched yet
+      if (qDigits && matchedOrders.length === 0) {
+        try {
+          const singleOrder = await apiService.getOrder(qDigits);
+          if (singleOrder && singleOrder.id) {
+            matchedOrders.push(mapOrderToLead(singleOrder));
+          }
+        } catch {}
+      }
+
+      // Combine and deduplicate
+      const seen = new Set<string>();
+      const combined: WebsiteEnquiry[] = [];
+
+      for (const item of [...openRows, ...respRows, ...matchedOrders]) {
+        const key = item.booking_id ? `bid:${item.booking_id}` : `id:${item.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(item);
+        }
+      }
+
+      setLinkResults(combined.slice(0, 10));
     } catch (e: any) {
       Alert.alert('Search failed', e?.message || 'Could not reach the enquiries service');
       setLinkResults([]);
@@ -1456,22 +1586,36 @@ export default function CreateBookingScreen() {
               {linkResults && linkResults.length === 0 && (
                 <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>No lead or booking found. Check the ID or try the phone number.</Text>
               )}
-              {(linkResults || []).map((r) => (
-                <TouchableOpacity
-                  key={r.id}
-                  style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
-                  onPress={() => applyLead(r)}
-                  accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                    <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>{r.name || 'Customer'} · {r.phone || ''}</Text>
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: String(r.status || '').toLowerCase() === 'confirmed' ? colors.success : colors.primary }}>{r.booking_id || `#${r.id}`}</Text>
-                  </View>
-                  <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-                    {[r.pickup, r.drop_location].filter(Boolean).join(' → ')} · {[r.vehicle_type, r.trip_type].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {(linkResults || []).map((r) => {
+                const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed' || String(r.lead_stage || '') === 'order';
+                const dispVehicle = r.vehicle_type ? r.vehicle_type.replace(/_/g, ' ') : 'Sedan';
+                const dispTrip = r.trip_type ? r.trip_type.replace(/_/g, ' ') : 'Oneway';
+                return (
+                  <TouchableOpacity
+                    key={`${r.id}-${r.booking_id || ''}`}
+                    style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: themeColors.border }}
+                    onPress={() => applyLead(r)}
+                    accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                        {r.name || 'Customer'}{r.phone ? ` · ${r.phone}` : ''}
+                      </Text>
+                      <View style={{ backgroundColor: isConfirmed ? colors.success + '18' : colors.primary + '18', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 5 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: isConfirmed ? colors.success : colors.primary }}>
+                          {r.booking_id || `#${r.id}`}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12.5, color: themeColors.text, fontWeight: '600', marginTop: 3 }} numberOfLines={1}>
+                      {[r.pickup, r.drop_location].filter(Boolean).join(' → ')}
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                      {[dispVehicle, dispTrip].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}{r.travel_time ? ` ${r.travel_time}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </>
           )}
         </View>
