@@ -1573,6 +1573,35 @@ def _admin_allocate_new_booking(db, master_order_id, fleet_owner, payload, curre
     )
 
 
+class RouteKmRequest(BaseModel):
+    pickup_drop_location: Dict[str, str]
+    # Round trip / multi city add up every leg; oneway / local use pickup -> last stop
+    trip_type: str = "oneway"
+
+
+@router.post("/admin/orders/route-km")
+def admin_route_km(payload: RouteKmRequest, current_admin=Depends(get_current_admin)):
+    """Real driving distance for the stops on the Post booking form, so the Km
+    limit field can show the actual route as soon as the locations are filled
+    (before Get Quote). Same cached Distance Matrix lookups as the fare."""
+    from app.crud.new_orders import _sum_multisegment_distance_and_duration, _origin_and_destination_from_index_map
+    from app.utils.maps import get_distance_km_between_locations
+    stops = {k: v for k, v in payload.pickup_drop_location.items() if str(v or "").strip()}
+    if len(stops) < 2:
+        raise HTTPException(status_code=422, detail="Pick the pickup and drop locations first")
+    try:
+        if payload.trip_type.lower().replace(" ", "") in ("roundtrip", "multicity", "multy city".replace(" ", "")):
+            km, duration = _sum_multisegment_distance_and_duration(stops)
+        else:
+            origin, destination = _origin_and_destination_from_index_map(stops)
+            km, duration = get_distance_km_between_locations(origin, destination)
+        return {"route_km": float(km), "trip_time": duration}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not work out the distance: {str(e)}")
+
+
 @router.post("/admin/orders/oneway/confirm", status_code=status.HTTP_201_CREATED)
 def admin_oneway_confirm(
     payload: AdminOnewayConfirmRequest,
@@ -1598,10 +1627,10 @@ def admin_oneway_confirm(
             payload.extra_cost_per_km, payload.night_charges, payload.trip_type,
         )
         distance_edited = False
-        if payload.min_km_override is not None:
-            from app.crud.new_orders import apply_min_km_override
+        if payload.min_km_override is not None or payload.km_override is not None:
+            from app.crud.new_orders import apply_admin_km
             _before_km = fare["total_km"]
-            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            fare = apply_admin_km(fare, payload)
             distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)
@@ -1666,10 +1695,10 @@ def admin_roundtrip_confirm(
             start_date_time=payload.start_date_time, end_date_time=payload.end_date_time,
         )
         distance_edited = False
-        if payload.min_km_override is not None:
-            from app.crud.new_orders import apply_min_km_override
+        if payload.min_km_override is not None or payload.km_override is not None:
+            from app.crud.new_orders import apply_admin_km
             _before_km = fare["total_km"]
-            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            fare = apply_admin_km(fare, payload)
             distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)
@@ -1734,10 +1763,10 @@ def admin_multicity_confirm(
             start_date_time=payload.start_date_time, end_date_time=payload.end_date_time,
         )
         distance_edited = False
-        if payload.min_km_override is not None:
-            from app.crud.new_orders import apply_min_km_override
+        if payload.min_km_override is not None or payload.km_override is not None:
+            from app.crud.new_orders import apply_admin_km
             _before_km = fare["total_km"]
-            fare = apply_min_km_override(fare, payload.min_km_override, payload.cost_per_km, payload.extra_cost_per_km)
+            fare = apply_admin_km(fare, payload)
             distance_edited = round(fare["total_km"]) != round(_before_km)
         if payload.override_km is not None and round(payload.override_km) != round(fare["total_km"]):
             fare = apply_distance_override(fare, payload.override_km, payload.override_trip_time, payload.cost_per_km, payload.extra_cost_per_km)

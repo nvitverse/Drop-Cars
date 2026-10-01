@@ -362,20 +362,44 @@ export default function CreateBookingScreen() {
   const [totalBookingAmount, setTotalBookingAmount] = useState('');
   const [extraAmount, setExtraAmount] = useState('0');
 
-  // Minimum billable km for THIS booking. Follows Settings > Fare Rules (130
-  // oneway, 250 per day for round trip / multi city) until the admin types
-  // a value; only a typed value is sent to the server.
+  // "Km limit": the km this booking is billed for. It loads the real route km
+  // as soon as the locations are filled (never less than the minimum coverage
+  // from Settings > Fare Rules: 130 oneway, 250 per day round trip / multi
+  // city), and follows the quote. Once the admin types a value, that exact km
+  // is what gets billed (km_override) until they press Reset.
   const [fareRules, setFareRules] = useState({ oneway_min_km: 130, round_trip_min_km_per_day: 250, multicity_min_km_per_day: 250 });
   const [minKm, setMinKm] = useState('130');
   const [minKmTouched, setMinKmTouched] = useState(false);
-  const hasMinKm = tripType === 'oneway' || tripType === 'roundtrip' || tripType === 'multicity';
+  const [routeKm, setRouteKm] = useState<number | null>(null);
+  const hasMinKm = tripType === 'oneway' || tripType === 'roundtrip' || tripType === 'multicity' || tripType === 'local';
   const defaultMinKm = tripType === 'oneway' ? fareRules.oneway_min_km
     : tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day * tripDays
     : tripType === 'multicity' ? fareRules.multicity_min_km_per_day * tripDays
     : 0;
+  const autoKm = Math.round(routeKm != null ? Math.max(routeKm, defaultMinKm) : defaultMinKm);
   useEffect(() => {
-    if (!minKmTouched) setMinKm(String(defaultMinKm));
-  }, [defaultMinKm, minKmTouched]);
+    if (!minKmTouched) setMinKm(String(autoKm));
+  }, [autoKm, minKmTouched]);
+
+  // Fetch the real route km once every location is filled in.
+  const routeKey = (tripType === 'roundtrip' || tripType === 'multicity' ? stops : [stops[0], stops[stops.length - 1]]).join('|');
+  useEffect(() => {
+    if (!hasMinKm) { setRouteKm(null); return; }
+    const places = tripType === 'roundtrip' || tripType === 'multicity' ? stops : [stops[0], stops[stops.length - 1]];
+    if (places.length < 2 || places.some((p) => !p || !p.trim())) { setRouteKm(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const loc: Record<string, string> = {};
+        places.forEach((p, i) => { loc[String(i)] = p; });
+        const res = await apiService.getRouteKm(tripType, loc);
+        if (!cancelled) setRouteKm(Number(res?.route_km) || null);
+      } catch {
+        if (!cancelled) setRouteKm(null);
+      }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [routeKey, tripType, hasMinKm]);
   // GST follows 5% of the km fare until the admin types an amount.
   const [gstTouched, setGstTouched] = useState(false);
 
@@ -894,8 +918,8 @@ export default function CreateBookingScreen() {
       location_links: locationLinksEnabled ? locationLinks : undefined,
       start_date_time: startIso,
       end_date_time: endIso,
-      // Only a minimum the admin typed is sent; otherwise Fare Rules apply.
-      min_km_override: hasMinKm && minKmTouched && minKm.trim() !== '' ? (Number(minKm) || 0) : undefined,
+      // Only a km the admin typed is sent; otherwise the route km / minimum applies.
+      km_override: hasMinKm && minKmTouched && Number(minKm) > 0 ? Number(minKm) : undefined,
       customer_name: customerName.trim(),
       customer_number: formattedPhone,
       cost_per_km: Number(costPerKm) || 0,
@@ -1836,22 +1860,22 @@ export default function CreateBookingScreen() {
                 </View>
               ) : (
                 <View>
-                  {/* Minimum billable km: one editable row (was a fixed rule banner) */}
+                  {/* Km limit: one editable row. Shows the real route km once the locations are filled. */}
                   {hasMinKm && (
                     <View style={styles.inlineField}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                         <Text style={[styles.priceLabel, { marginBottom: 0 }]}>
-                          Min billable km{tripDays > 1 ? ` (${tripDays} days)` : ''}
+                          Km limit{tripDays > 1 ? ` (${tripDays} days)` : ''}
                         </Text>
                         {tip(
-                          'Minimum billable km',
-                          `At least this many km are billed even when the route is shorter. If the route is longer, the real km is billed.\n\nDefault: ${fareRules.oneway_min_km} km for Oneway, ${fareRules.round_trip_min_km_per_day} km per day for Round Trip, ${fareRules.multicity_min_km_per_day} km per day for Multi City (Settings > Fare Rules).\n\nA value typed here applies to this booking only.`,
+                          'Km limit',
+                          `The km this booking is billed for.\n\n${routeKm != null ? `Route distance: ${Math.round(routeKm)} km.\n` : 'Fill both locations to load the route distance.\n'}Minimum coverage: ${defaultMinKm} km${tripType === 'oneway' ? ' (Oneway)' : tripDays > 1 ? ` (${tripDays} days x ${tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day : fareRules.multicity_min_km_per_day} km)` : ' per day'}. A shorter route is still billed for this many km; a longer route is billed for its real km.\n\nType a different number to bill that exact km for this booking. Reset goes back to the automatic value.`,
                         )}
                       </View>
                       {minKmTouched && (
                         <TouchableOpacity
                           onPress={() => { setMinKmTouched(false); if (fare) setRequoteTick((n) => n + 1); }}
-                          accessibilityLabel="Reset minimum km to the default"
+                          accessibilityLabel="Reset km limit to the automatic value"
                         >
                           <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>Reset</Text>
                         </TouchableOpacity>
@@ -1862,9 +1886,9 @@ export default function CreateBookingScreen() {
                         onChangeText={(v) => { setMinKmTouched(true); setMinKm(v.replace(/[^0-9]/g, '')); }}
                         onBlur={() => { if (fare && minKmTouched) setRequoteTick((n) => n + 1); }}
                         keyboardType="numeric"
-                        placeholder={String(defaultMinKm)}
+                        placeholder={String(autoKm)}
                         placeholderTextColor={colors.textMuted}
-                        accessibilityLabel="Minimum billable km"
+                        accessibilityLabel="Km limit"
                       />
                     </View>
                   )}

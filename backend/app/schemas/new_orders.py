@@ -258,6 +258,9 @@ class OnewayQuoteRequest(BaseModel):
     # comes from Fare Rules: 130 oneway, 250/day round trip). Billed km =
     # max(actual route km, this). Only honoured for admin callers.
     min_km_override: Optional[float] = Field(default=None, ge=0, le=10000)
+    # Admin "Km limit" field: the exact km to bill for THIS booking (the route
+    # km by default, edited by the admin). Admin callers only.
+    km_override: Optional[float] = Field(default=None, ge=0, le=10000)
     # GST amount the admin saw on the form (auto 5% of the km fare, or typed).
     # Saved with the booking when its GST charge item is ticked.
     gst_amount: Optional[int] = Field(default=None, ge=0)
