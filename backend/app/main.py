@@ -22,6 +22,7 @@ import app.models.vehicle_owner_details
 import app.models.booking_chat
 import app.models.support_message
 import app.models.conversation
+import app.models.assistant_proposal
 import app.models.trip_review
 import app.models.stale_document_file
 import app.models.car_details
@@ -192,6 +193,8 @@ app.include_router(workers_router.router, prefix="/api", tags=["Workers & Operat
 from app.api.routes import driver_tours as driver_tours_router
 app.include_router(driver_tours_router.router, tags=["Driver Tours & Running Ledger"])
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
+from app.api.routes import admin_assistant as admin_assistant_router
+app.include_router(admin_assistant_router.router, prefix="/api", tags=["Admin Assistant"])    # before admin.router (its catch-all /admin/{id})
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 from app.api.routes import system_health as _system_health_routes
 app.include_router(_system_health_routes.router, prefix="/api", tags=["SystemHealth"])
