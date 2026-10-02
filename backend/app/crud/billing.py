@@ -556,6 +556,50 @@ def activate_plan_from_payment(db: Session, vehicle_owner_id, plan: str) -> Opti
     return plan
 
 
+RECOVER_WINDOW_DAYS = 3
+
+
+def _has_active_plan(details) -> bool:
+    return details.billing_next_date is not None and details.billing_next_date >= date.today()
+
+
+def activate_if_fee_topup(db: Session, vehicle_owner_id, credited: int) -> Optional[str]:
+    """Older Driver App builds do not say that a top-up is a subscription purchase. A top-up of exactly the monthly fee by someone
+    with no active plan IS that purchase (owner rule 2026-10-02: paying the fee activates the plan), so activate it. Anything
+    else is an ordinary wallet top-up and is left alone."""
+    fee = int(get_billing_settings(db).get("monthly_fee") or 0)
+    if fee <= 0 or int(credited or 0) != fee:
+        return None
+    details = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).first()
+    if details is None or _has_active_plan(details) or (details.wallet_balance or 0) < fee:
+        return None
+    return activate_plan_from_payment(db, vehicle_owner_id, "MONTHLY")
+
+
+def recover_recent_fee_topups(db: Session) -> dict:
+    """Finish what activate_if_fee_topup would have done for top-ups of exactly the monthly fee in the last few days (drivers who
+    paid Rs 199 and only got wallet money). Idempotent: once the plan is active the owner no longer qualifies."""
+    fee = int(get_billing_settings(db).get("monthly_fee") or 0)
+    out = {"activated": 0, "checked": 0}
+    if fee <= 0:
+        return out
+    since = datetime.now(timezone.utc) - timedelta(days=RECOVER_WINDOW_DAYS)
+    owners = [r[0] for r in (
+        db.query(WalletLedger.vehicle_owner_id)
+        .filter(WalletLedger.reference_type == "RAZORPAY_PAYMENT", WalletLedger.entry_type == WalletEntryTypeEnum.CREDIT,
+                WalletLedger.amount == fee, WalletLedger.created_at >= since)
+        .distinct().all()
+    )]
+    for oid in owners:
+        out["checked"] += 1
+        try:
+            if activate_if_fee_topup(db, oid, fee):
+                out["activated"] += 1
+        except Exception:  # noqa: BLE001
+            db.rollback()
+    return out
+
+
 def run_monthly_auto_renewals(db: Session) -> dict:
     """Monthly subscribers are renewed from their wallet the day the month ends: wallet >= the fee -> the fee is debited
     (ledger MONTHLY_SUBSCRIPTION_FEE) and the next 30 days start; wallet too low -> nothing is taken and the plan simply lapses
@@ -613,6 +657,8 @@ def run_member_auto_renewals(db: Session) -> dict:
         m = run_monthly_auto_renewals(db)
         for k in out:
             out[k] += m.get(k, 0)
+        r = recover_recent_fee_topups(db)       # Rs 199 paid on an older app build, only wallet money so far: buy the plan now
+        out["renewed"] += r.get("activated", 0)
     except Exception:  # noqa: BLE001
         db.rollback()
     if fee <= 0:

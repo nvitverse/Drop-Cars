@@ -106,3 +106,20 @@ def test_owner_permit_rules():
     assert p("SUV_7_PLUS_1", "Tirupati") == 2000 and p("INNOVA_CRYSTA_7_PLUS_1", "Vijayawada") == 2000   # ... and 2000 only for 7+1
     assert p("SUV_7_PLUS_1", "Bangalore") == 1000                                                     # 7+1 otherwise same as 6+1
     assert _split("SUV_6_PLUS_1", "Oneway", 20, 300, 1500, ("Chennai", "Kochi"))["extra_permit_charges"] == 500   # the rest of what the customer paid is extra
+
+
+def test_a_199_topup_on_an_older_app_still_buys_the_plan(pg_session):
+    from app.crud.wallet import credit_wallet
+    d = _owner(pg_session, 0)
+    credit_wallet(pg_session, vehicle_owner_id=str(d.vehicle_owner_id), amount=199, reference_id="pay_x1", reference_type="RAZORPAY_PAYMENT", notes="top-up")
+    pg_session.flush()
+    assert billing.recover_recent_fee_topups(pg_session)["activated"] >= 1
+    pg_session.refresh(d)
+    assert (d.subscription_type, d.wallet_balance) == ("MONTHLY", 0)
+    assert billing.recover_recent_fee_topups(pg_session)["activated"] == 0                      # once active, never again
+    e = _owner(pg_session, 0)                                                                  # an ordinary 500 top-up is left alone
+    credit_wallet(pg_session, vehicle_owner_id=str(e.vehicle_owner_id), amount=500, reference_id="pay_x2", reference_type="RAZORPAY_PAYMENT", notes="top-up")
+    pg_session.flush()
+    billing.recover_recent_fee_topups(pg_session)
+    pg_session.refresh(e)
+    assert (e.subscription_type, e.wallet_balance) != ("MONTHLY", 0) and e.wallet_balance == 500

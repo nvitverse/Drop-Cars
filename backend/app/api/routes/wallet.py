@@ -134,13 +134,16 @@ def verify_rp_payment(
     # The payment was for a subscription: activate it now. The money is already safely in the wallet, so if this step
     # fails the recovery sweep / the next Subscribe tap still finishes it.
     _purpose = str(getattr(txn, "notes", "") or "").lower()
-    if _purpose.startswith("subscription_"):
-        try:
-            from app.crud.billing import activate_plan_from_payment
+    try:
+        from app.crud.billing import activate_plan_from_payment, activate_if_fee_topup
+        if _purpose.startswith("subscription_"):
             activate_plan_from_payment(db, vehicle_owner_id, _purpose.split("_", 1)[1])
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            print(f"subscription activation after payment failed (will retry): {e}")
+        else:                                    # older app builds: a top-up of exactly the monthly fee is the plan purchase
+            from app.utils.razorpay_fees import net_from_charged as _net
+            activate_if_fee_topup(db, vehicle_owner_id, _net(db, txn.amount / 100))
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        print(f"subscription activation after payment failed (will retry): {e}")
 
     return txn
 
