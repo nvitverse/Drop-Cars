@@ -126,6 +126,12 @@ if (function_exists('dropcars_get_db')) {
     $pdo = $GLOBALS['db'];
 }
 
+require_once __DIR__ . '/../admin/includes/enquiries-schema.php';
+if (isset($pdo) && $pdo instanceof PDO) {
+    dropcars_ensure_bookings_columns($pdo);
+    dropcars_ensure_enquiries_columns($pdo);
+}
+
 $needNewId = !preg_match('/^C\d{8,}$/', $bookingId);
 
 // Check if booking ID already exists in DB to prevent overwriting
@@ -138,7 +144,6 @@ if (!$needNewId && isset($pdo) && $pdo instanceof PDO) {
 }
 
 if ($needNewId) {
-    require_once __DIR__ . '/../admin/includes/enquiries-schema.php';
     $bookingId = dropcars_next_enquiry_booking_id(isset($pdo) && $pdo instanceof PDO ? $pdo : null, 'C');
 }
 $customerName = htmlspecialchars($bookingData['customerName'] ?? 'N/A');
@@ -206,6 +211,26 @@ $pickupLng = isset($bookingData['pickupLng']) ? (float) $bookingData['pickupLng'
 $pickupMapsLink = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
     ? 'https://www.google.com/maps?q=' . $pickupLat . ',' . $pickupLng
     : null;
+
+$dropLat = isset($bookingData['dropLat']) ? (float) $bookingData['dropLat'] : null;
+$dropLng = isset($bookingData['dropLng']) ? (float) $bookingData['dropLng'] : null;
+
+$mapOrigin = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
+    ? ($pickupLat . ',' . $pickupLng)
+    : strip_tags($pickupPlain ?: $pickup);
+$mapDest = ($dropLat !== null && $dropLng !== null && $dropLat >= -90 && $dropLat <= 90 && $dropLng >= -180 && $dropLng <= 180)
+    ? ($dropLat . ',' . $dropLng)
+    : strip_tags($dropPlain ?: $drop);
+
+$viewMapUrl = 'https://www.google.com/maps/dir/?api=1&origin=' . rawurlencode($mapOrigin) . '&destination=' . rawurlencode($mapDest);
+$stopsList = $bookingData['stops'] ?? [];
+if (!empty($stopsList) && is_array($stopsList)) {
+    $cleanStops = array_filter(array_map('strip_tags', $stopsList));
+    if (!empty($cleanStops)) {
+        $viewMapUrl .= '&waypoints=' . rawurlencode(implode('|', $cleanStops));
+    }
+}
+
 $customerNamePlain = trim((string) ($bookingData['customerName'] ?? 'Guest'));
 $fareType = (string) ($bookingData['fareType'] ?? 'base');
 
@@ -533,9 +558,8 @@ $cleanCustomerName = trim(strip_tags((string)$customerName));
 if ($cleanCustomerName === '' || $cleanCustomerName === 'N/A') {
     $cleanCustomerName = 'Customer';
 }
-$cleanPageName = trim(str_replace(["\u{2708}\u{FE0F}", "\u{2708}", "\u{1F696}", "\u{1F3D9}\u{FE0F}", "\u{1F3D9}", "\u{1F3E0}", "\u{1F4C4}", '✈️', '🚖', '🏙️', '🏠', '📄'], '', (string)$pageDisplayName));
-$checkEmoji = "\u{2705}";
-$subject = "{$checkEmoji} Drop Cars {$subjectTag} #{$bookingId} - {$cleanCustomerName} ({$cleanPageName})";
+$cleanPageName = trim(str_replace(["\u{2708}\u{FE0F}", "\u{2708}", "\u{1F696}", "\u{1F695}", "\u{1F3D9}\u{FE0F}", "\u{1F3D9}", "\u{1F3E0}", "\u{1F4C4}", '✈️', '🚖', '🚕', '🏙️', '🏠', '📄'], '', (string)$pageDisplayName));
+$subject = "✅ Drop Cars {$subjectTag} #{$bookingId} - {$cleanCustomerName} ({$cleanPageName})";
 
 $bodyHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 body{font-family:Arial,sans-serif;line-height:1.6;color:#333;}
@@ -591,7 +615,13 @@ $bodyHtml .= '
 <tr><td class="k">⏰ Pickup Time</td><td class="v">' . htmlspecialchars($travelTime) . '</td></tr>
 <tr><td class="k">🚗 Vehicle</td><td class="v">' . htmlspecialchars($vehicleType) . '</td></tr>
 ' . ($distance > 0 ? '<tr><td class="k">🛣️ Distance</td><td class="v">' . number_format($distance, 0) . ' km</td></tr>' : '') . '
-</table></div></div>
+</table>
+<div style="padding: 12px 0 14px 0; text-align: center; border-top: 1px dashed #d8e4f3; margin-top: 8px;">
+    <a href="' . htmlspecialchars($viewMapUrl) . '" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0b4a8f 0%, #1f6fc7 100%); color: #ffffff !important; padding: 10px 22px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 13px; box-shadow: 0 2px 6px rgba(11,74,143,0.30); border: 1px solid #083870;">
+        🗺️ View Map &amp; Route Directions ↗
+    </a>
+</div>
+</div></div>
 ';
 
 
@@ -679,6 +709,7 @@ $bodyPlain .= "Phone: {$formattedContact}\n";
 $bodyPlain .= "Trip Type: {$tripLabel}\n";
 $bodyPlain .= "Pickup: {$pickup}\n";
 $bodyPlain .= "Drop: {$drop}\n";
+$bodyPlain .= "🗺️ View Map: {$viewMapUrl}\n";
 if ($pickupMapsLink) {
     $bodyPlain .= "Pickup GPS: {$pickupMapsLink}\n";
 }
@@ -919,67 +950,19 @@ if ($threadKeySource === '||||') {
     $threadKeySource = 'unknown';
 }
 $threadHash          = substr(sha1($threadKeySource), 0, 24);
-$threadRootMessageId = '<trip-thread-' . $threadHash . '@gmail.com>';
+$threadRootMessageId = '<booking-thread-' . $threadHash . '@gmail.com>';
+$currentMessageId   = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
 
 $phpmailerPath = __DIR__ . '/phpmailer/src/PHPMailer.php';
 // Skip blocking SMTP on the single-threaded php -S dev server.
 if (php_sapi_name() === 'cli-server') {
     error_log('[dropcars] Skipping SMTP send on built-in dev server (cli-server).');
 } elseif (is_file($phpmailerPath) && $appPassword) {
-    require_once __DIR__ . '/phpmailer/src/Exception.php';
-    require_once __DIR__ . '/phpmailer/src/PHPMailer.php';
-    require_once __DIR__ . '/phpmailer/src/SMTP.php';
-    $sendEmail = function ($toAddress, $subjectLine, $htmlBody, $plainBody) use ($smtp, $bookingId, $threadRootMessageId, $threadHash) {
-        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host = 'smtp.gmail.com';
-            $mail->SMTPAuth = true;
-            $mail->SMTPSecure = 'tls';
-            $mail->Port = 587;
-            dropcars_phpmailer_apply_smtp($mail, $smtp);
-            $mail->addAddress($toAddress);
-            $mail->CharSet = 'UTF-8';
-            $mail->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
-            $mail->addCustomHeader('In-Reply-To', $threadRootMessageId);
-            $mail->addCustomHeader('References', $threadRootMessageId);
-            $mail->addCustomHeader('X-DropCars-Thread-Key', $threadHash);
-            $mail->addCustomHeader('X-Entity-Ref-ID', 'confirm-' . $bookingId . '-' . uniqid());
-            $mail->Subject = $subjectLine;
-            $mail->Body = $htmlBody;
-            $mail->AltBody = $plainBody;
-            $mail->isHTML(true);
-            $mail->send();
-            return true;
-        } catch (Exception $e) {
-            // Fallback to Port 465 SSL
-            try {
-                $mail2 = new \PHPMailer\PHPMailer\PHPMailer(true);
-                $mail2->isSMTP();
-                $mail2->Host = 'smtp.gmail.com';
-                $mail2->SMTPAuth = true;
-                $mail2->SMTPSecure = 'ssl';
-                $mail2->Port = 465;
-                dropcars_phpmailer_apply_smtp($mail2, $smtp);
-                $mail2->addAddress($toAddress);
-                $mail2->CharSet = 'UTF-8';
-                $mail2->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
-                $mail2->addCustomHeader('In-Reply-To', $threadRootMessageId);
-                $mail2->addCustomHeader('References', $threadRootMessageId);
-                $mail2->addCustomHeader('X-DropCars-Thread-Key', $threadHash);
-                $mail2->addCustomHeader('X-Entity-Ref-ID', 'confirm-' . $bookingId . '-' . uniqid());
-                $mail2->Subject = $subjectLine;
-                $mail2->Body = $htmlBody;
-                $mail2->AltBody = $plainBody;
-                $mail2->isHTML(true);
-                $mail2->send();
-                return true;
-            } catch (Exception $e2) {
-                error_log("Drop Cars SMTP 587 Error: " . $e->getMessage() . " | Port 465 Fallback Error: " . $e2->getMessage());
-                return false;
-            }
-        }
-    };
+    $customHeaders = [
+        'Message-ID' => $currentMessageId,
+        'X-DropCars-Thread-Key' => 'booking-' . $threadHash,
+        'X-Entity-Ref-ID' => 'confirm-' . $bookingId . '-' . uniqid(),
+    ];
 
     $adminRecipients = array_filter(array_map('trim', explode(',', (string) $mailTo)));
     if (empty($adminRecipients)) {
@@ -987,8 +970,20 @@ if (php_sapi_name() === 'cli-server') {
     }
     foreach ($adminRecipients as $recipient) {
         if ($recipient !== '' && filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
-            if ($sendEmail($recipient, $subject, $bodyHtml, $bodyPlain)) {
+            $mailRes = dropcars_send_mail_with_fallback(
+                $smtp,
+                __DIR__ . '/phpmailer/src',
+                $recipient,
+                $subject,
+                $bodyHtml,
+                $bodyPlain,
+                $customHeaders,
+                $config
+            );
+            if ($mailRes['ok']) {
                 $adminEmailSent = true;
+            } else {
+                error_log("Drop Cars confirm_booking admin mail failed: " . $mailRes['error']);
             }
         }
     }
