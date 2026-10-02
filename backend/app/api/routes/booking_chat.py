@@ -101,7 +101,7 @@ def _other_party(db: Session, o: Order, a, side: str):
     other, other_role, other_phone = None, None, None
     if side == "POSTER":
         from app.models.car_driver import CarDriver
-        d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
+        d = db.get(CarDriver, a.driver_id) if a.driver_id else None   # identity-map hit when list_threads pre-loaded it
         other = d.full_name if d else "Driver"
         other_role = "DRIVER"
         other_phone = d.primary_number if d else None
@@ -157,9 +157,36 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
             by_id.setdefault(o.id, o)
         orders = list(by_id.values())
         me = None  # decided per order below
+    # Everything the loop needs is fetched in a handful of queries (it used to be ~6 queries PER booking: up to 1,200
+    # round-trips to Cloud SQL for the Admin inbox, which is why Chats took many seconds to open).
+    order_ids = [o.id for o in orders]
+    latest_assignment: dict = {}
+    last_msg: dict = {}
+    unread_by: dict = {}
+    if order_ids:
+        for a_ in (
+            db.query(OrderAssignment)
+            .filter(OrderAssignment.order_id.in_(order_ids), OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED)
+            .order_by(OrderAssignment.created_at.desc()).all()
+        ):
+            latest_assignment.setdefault(a_.order_id, a_)
+        newest_ids = [r[0] for r in db.query(func.max(BookingChatMessage.id)).filter(BookingChatMessage.order_id.in_(order_ids)).group_by(BookingChatMessage.order_id).all()]
+        if newest_ids:
+            for m_ in db.query(BookingChatMessage).filter(BookingChatMessage.id.in_(newest_ids)).all():
+                last_msg[m_.order_id] = m_
+        for oid, sd, n in (
+            db.query(BookingChatMessage.order_id, BookingChatMessage.sender_side, func.count(BookingChatMessage.id))
+            .filter(BookingChatMessage.order_id.in_(order_ids), BookingChatMessage.read_at.is_(None))
+            .group_by(BookingChatMessage.order_id, BookingChatMessage.sender_side).all()
+        ):
+            unread_by.setdefault(oid, {})[sd] = int(n)
+        driver_ids = {a_.driver_id for a_ in latest_assignment.values() if a_.driver_id}
+        if driver_ids:
+            from app.models.car_driver import CarDriver
+            db.query(CarDriver).filter(CarDriver.id.in_(driver_ids)).all()      # warm the session so _other_party's db.get() costs nothing
     out = []
     for o in orders:
-        a = chat.active_assignment(db, o.id)
+        a = latest_assignment.get(o.id)
         if a is None:
             continue  # nothing to chat about until a driver accepts
         st = str(getattr(a.assignment_status, "value", a.assignment_status))
@@ -173,10 +200,8 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
             d = done_at if done_at.tzinfo else done_at.replace(tzinfo=timezone.utc)
             if d < cutoff:
                 continue  # chat for a trip finished >10 days ago is already purged
-        last = db.query(BookingChatMessage).filter(BookingChatMessage.order_id == o.id).order_by(BookingChatMessage.id.desc()).first()
-        unread = db.query(func.count(BookingChatMessage.id)).filter(
-            BookingChatMessage.order_id == o.id, BookingChatMessage.sender_side != side, BookingChatMessage.read_at.is_(None)
-        ).scalar() or 0
+        last = last_msg.get(o.id)
+        unread = sum(n for sd, n in unread_by.get(o.id, {}).items() if sd != side)
         other, other_role, other_phone = _other_party(db, o, a, side)
         out.append({
             "order_id": o.id, "title": chat.booking_title(o), "trip_type": chat._v(o.trip_type), "car_type": chat._v(o.car_type),
