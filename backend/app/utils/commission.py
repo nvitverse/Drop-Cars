@@ -249,9 +249,19 @@ def compute_split(commission_class: str, *, driver_fare: int = 0, base_fare: int
     }
 
 
-# Minimum wallet amount held from the accepting driver. It is a no-show guarantee: if the driver does not
-# execute the trip the hold is forfeited as the penalty, otherwise it is returned in full when the trip completes.
+# Minimum wallet amount held from the accepting driver, on EVERY booking (even when the commission is only Rs 301).
+# It is a no-show guarantee: if the driver does not execute the trip the hold is forfeited as the penalty. When the trip
+# completes the commission (plus any extras he owes) is taken out of the hold and the rest is returned to his wallet.
+# When the commission with extras is more than the minimum, that bigger amount is what is held.
 MIN_DRIVER_HOLD = 500
+
+
+def min_hold_amount(db: Session) -> int:
+    """The admin-editable minimum hold (platform setting min_driver_hold, default Rs 500)."""
+    try:
+        return max(0, int(get_fee_settings(db).get("min_driver_hold", MIN_DRIVER_HOLD)))
+    except Exception:  # noqa: BLE001
+        return MIN_DRIVER_HOLD
 
 
 def expected_hold(split: dict, advance_with_poster: int = 0) -> int:
@@ -260,7 +270,7 @@ def expected_hold(split: dict, advance_with_poster: int = 0) -> int:
     - what he will actually have to hand over at trip close (the poster's share plus the platform fee, less whatever
       the poster already holds from the customer as advance), and
     - never below MIN_DRIVER_HOLD (Rs 500), the guarantee against not executing the trip.
-    Whatever is not needed at close is returned when the trip completes."""
+    At close the commission (with extras) is deducted and whatever is left of the hold is refunded to the wallet."""
     owed = int(split["poster_share"]) + int(split["platform_fee"]) - int(advance_with_poster or 0)
     return max(int(split.get("min_hold", MIN_DRIVER_HOLD)), owed)
 

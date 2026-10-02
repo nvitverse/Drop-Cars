@@ -305,7 +305,7 @@ async def _rule_based_assistant(
     - Toll, Fastag & Parking Policies
     - Delay & Waiting Time Calculation
     - Cancellation & Rs.500 Penalty Guidelines
-    - Wallet Security Hold & Instant Release Rules
+    - Wallet Hold (min ₹500, commission deducted, rest refunded)
     - Round Trip / Bata, Luggage, Pet, Hill Station rules
     - Documents & licence renewal, App login trouble, Advance & GST, Fuel/AC,
       Insurance during duty
@@ -463,17 +463,16 @@ async def _rule_based_assistant(
         if is_tamil:
             reply = (
                 "💳 **வாலட் செக்யூரிட்டி ஹோல்டு & கட்டணப் பட்டுவாடா**:\n\n"
-                "• **செக்யூரிட்டி ஹோல்டு (₹500)**: ஒவ்வொரு சவாரியை ஏற்கும் போதும் வாலட்டில் குறைந்தபட்சம் ₹500 பாதுகாப்பு வைப்புத்தொகையாக "
-                "தற்காலிகமாக ஹோல்டு செய்யப்படும்.\n"
-                "• **உடனடி விடுவிப்பு (Instant Release)**: சவாரி வெற்றிகரமாக முடிந்து OTP வெரிஃபை ஆன அடுத்த நொடியே ₹500 உங்கள் Available Balance-க்கு திரும்ப வந்துவிடும்.\n"
+                "• **வாலட் ஹோல்டு (குறைந்தது ₹500)**: ஒவ்வொரு சவாரியை ஏற்கும் போதும் வாலட்டில் குறைந்தது ₹500 ஹோல்டு செய்யப்படும் (கமிஷன் ₹301 மட்டுமே என்றாலும்). கமிஷன் + கூடுதல் கட்டணம் ₹500-ஐ விட அதிகமாக இருந்தால் அந்தத் தொகை ஹோல்டு ஆகும்.\n"
+                "• **கமிஷன் கழிக்கப்பட்டு மீதி திரும்பும்**: சவாரி முடிந்ததும் ஹோல்டு தொகையிலிருந்து கமிஷன் கழிக்கப்படும்; மீதித் தொகை உங்கள் வாலட்டிற்கு திரும்பி வரும். புக்கிங் ரத்தானால் முழுத் தொகையும் திரும்பும்.\n"
                 "• **வாராந்திர வரவு (Weekly Payout)**: உங்கள் நிகர வருமானம் மற்றும் கமிஷன் தொகை பதிவு செய்த வங்கி கணக்கிற்கு நேரடியாக அனுப்பப்படும்.\n"
                 "• குறைந்தபட்சம் ₹1,000 வாலட் பேலன்ஸ் வைத்திருப்பது தொடர்ச்சியாக புதிய சவாரிகளை ஏற்க உதவும்."
             )
         else:
             reply = (
                 "💳 **Wallet Security Hold & Payout Overview**:\n\n"
-                "• **Security Hold (₹500)**: A refundable ₹500 security hold is temporarily reserved per active booking to guarantee dispatch reliability.\n"
-                "• **Instant Release**: The ₹500 hold is instantly released back to your available balance the moment the ride is completed via OTP.\n"
+                "• **Wallet Hold (minimum ₹500)**: On every booking you accept, at least ₹500 is held from your wallet - even if the commission is only ₹301. If the commission with extras is more than ₹500, that bigger amount is held.\n"
+                "• **Commission deducted, rest refunded**: When the ride is completed the commission is taken from the hold and the remaining amount is refunded to your available balance. A cancelled booking is refunded in full.\n"
                 "• **Bank Settlement**: Earnings and partner payouts are automatically disbursed directly to your verified bank account.\n"
                 "• Maintaining at least ₹1,000 wallet balance ensures uninterrupted booking acceptance."
             )

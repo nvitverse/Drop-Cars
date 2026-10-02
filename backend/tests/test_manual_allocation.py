@@ -28,7 +28,7 @@ def _owner(db, balance):
 
 
 def _order(db, estimated=2000, vendor=2300):
-    """Hold for this booking = vendor - estimated = 300 (no km row behind it)."""
+    """Commission for this booking = vendor - estimated = 300, but the minimum hold of 500 applies (no km row behind it)."""
     from app.models.orders import Order, OrderSourceEnum, Trip_status
     from app.models.new_orders import OrderTypeEnum, CarTypeEnum
 
@@ -78,9 +78,9 @@ def test_enough_wallet_holds_the_commission(pg_session, quiet):
 
     owner, order = _owner(pg_session, 1000), _order(pg_session)
     res = allocate_to_fleet_owner(pg_session, order, owner, staff=_staff())
-    assert res["status"] == "SUCCESS" and res["on_credit"] is False and res["held_amount"] == 300
-    assert get_owner_balance(pg_session, str(owner.vehicle_owner_id)) == 700
-    assert get_trip_hold(pg_session, order.id, str(owner.vehicle_owner_id)) == 300
+    assert res["status"] == "SUCCESS" and res["on_credit"] is False and res["held_amount"] == 500
+    assert get_owner_balance(pg_session, str(owner.vehicle_owner_id)) == 500
+    assert get_trip_hold(pg_session, order.id, str(owner.vehicle_owner_id)) == 500
 
 
 def test_low_wallet_is_refused_without_credit(pg_session, quiet):
@@ -90,7 +90,7 @@ def test_low_wallet_is_refused_without_credit(pg_session, quiet):
     owner, order = _owner(pg_session, 100), _order(pg_session)
     res = allocate_to_fleet_owner(pg_session, order, owner, staff=_staff())
     assert res["status"] == "INSUFFICIENT_BALANCE"
-    assert res["wallet_balance"] == 100 and res["required_amount"] == 300
+    assert res["wallet_balance"] == 100 and res["required_amount"] == 500
     assert res["requires_credit_approval"] is True
     assert pg_session.query(OrderAssignment).filter(OrderAssignment.order_id == order.id).count() == 0
     assert _ledger(pg_session, owner, order) == []
@@ -105,7 +105,7 @@ def test_credit_takes_nothing_now_and_names_the_staff(pg_session, quiet):
     owner, order = _owner(pg_session, 100), _order(pg_session)
     res = allocate_to_fleet_owner(pg_session, order, owner, on_credit=True, staff=_staff())
     assert res["status"] == "SUCCESS" and res["on_credit"] is True and res["held_amount"] == 0
-    assert res["commission_amount"] == 300
+    assert res["commission_amount"] == 500
 
     # Wallet untouched now; the trip-completion settlement debits the full
     # commission (hold is 0), which is what takes the wallet below zero.
@@ -122,7 +122,7 @@ def test_credit_takes_nothing_now_and_names_the_staff(pg_session, quiet):
     assert log.admin_username == "kumar"
     assert log.details["on_credit"] is True
     assert log.details["wallet_balance_at_allocation"] == 100
-    assert log.details["commission_amount"] == 300
+    assert log.details["commission_amount"] == 500
 
     # Fleet owner is told it is on credit; admin devices are alerted with who did it.
     assert any("on credit" in body for _, body in quiet)
@@ -135,8 +135,8 @@ def test_credit_is_not_used_when_the_wallet_can_pay(pg_session, quiet):
 
     owner, order = _owner(pg_session, 1000), _order(pg_session)
     res = allocate_to_fleet_owner(pg_session, order, owner, on_credit=True, staff=_staff())
-    assert res["on_credit"] is False and res["held_amount"] == 300
-    assert get_owner_balance(pg_session, str(owner.vehicle_owner_id)) == 700
+    assert res["on_credit"] is False and res["held_amount"] == 500
+    assert get_owner_balance(pg_session, str(owner.vehicle_owner_id)) == 500
 
 
 def test_vendor_cannot_allocate_on_credit(pg_session, quiet):

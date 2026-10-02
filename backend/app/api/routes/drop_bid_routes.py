@@ -726,7 +726,8 @@ def accept_drop_bid_offer(
     # fleet owner is that owner's problem to fix (enforced separately via
     # the negative-balance suspension threshold), not something that should
     # stop the CUSTOMER from finalizing a trip they're ready to pay for.
-    hold_amount = max(0, round(offer.offer_price * 0.05))
+    from app.utils.commission import min_hold_amount
+    hold_amount = max(0, round(offer.offer_price * 0.05), min_hold_amount(db))      # minimum hold on every booking, Drop Bid included
     from app.crud.trip_otp import ensure_order_otps
     start_otp, end_otp = ensure_order_otps(db, db.query(Order).filter(Order.id == master_order_id).first())
     assignment = OrderAssignment(

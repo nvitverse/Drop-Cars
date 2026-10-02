@@ -226,17 +226,15 @@ def start_monthly_subscription(db: Session, vehicle_owner_id) -> dict:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Monthly plan is not available right now")
 
-    min_required = settings["monthly_min_wallet_floor"] + fee
+    # Owner rule (2026-10-02): the plan is activated by paying its fee. The old extra "minimum balance" floor (Rs 500 on top
+    # of the fee) made a driver who paid Rs 199 get "recharge to Rs 699" and no subscription.
+    min_required = fee
     current_balance = details.wallet_balance or 0
     if current_balance < min_required:
         from fastapi import HTTPException
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Recharge your wallet to at least Rs.{min_required} "
-                f"(Rs.{settings['monthly_min_wallet_floor']} minimum balance + Rs.{fee} first month's fee) "
-                f"before starting the Monthly plan. Current balance: Rs.{current_balance}."
-            ),
+            detail=f"Add Rs.{min_required - current_balance} to your wallet to start the Monthly plan (fee Rs.{fee}, balance Rs.{current_balance}).",
         )
 
     from app.crud.wallet import debit_wallet_allow_negative
@@ -520,6 +518,83 @@ def activate_membership(db: Session, details: VehicleOwnerDetails, start: Option
 
 
 
+def activate_plan_from_payment(db: Session, vehicle_owner_id, plan: str) -> Optional[str]:
+    """The driver tapped Subscribe, paid in Razorpay and the money is in the wallet: buy the plan right now, so a payment
+    always ends in an active subscription (no second tap). Returns a short result text, or None if nothing was needed.
+    Called from the payment verify endpoint and from the payment recovery sweep. Commits."""
+    plan = (plan or "").upper()
+    details = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).with_for_update().first()
+    if details is None or plan not in ("MONTHLY", "YEARLY"):
+        return None
+    settings = get_billing_settings(db)
+    today = date.today()
+    active = details.billing_next_date is not None and details.billing_next_date >= today
+    from app.crud.wallet import debit_wallet_allow_negative
+    if plan == "MONTHLY":
+        fee = int(settings["monthly_fee"])
+        if fee <= 0 or (details.subscription_type == "MONTHLY" and active):
+            return None
+        debit_wallet_allow_negative(db, vehicle_owner_id=str(vehicle_owner_id), amount=fee, reference_id=None,
+                                    reference_type="MONTHLY_SUBSCRIPTION_FEE", notes=f"Monthly subscription Rs.{fee} - activated by your payment")
+        details.subscription_type = "MONTHLY"
+        details.billing_next_date = today + timedelta(days=MONTHLY_CYCLE_DAYS)
+    else:
+        fee = int(settings["yearly_fee"])
+        if fee <= 0 or (details.subscription_type == "YEARLY" and active):
+            return None
+        debit_wallet_allow_negative(db, vehicle_owner_id=str(vehicle_owner_id), amount=fee, reference_id=None,
+                                    reference_type="YEARLY_UPGRADE_FEE", notes=f"Yearly subscription Rs.{fee} - activated by your payment")
+        details.subscription_type = "YEARLY"
+        details.billing_next_date = today + timedelta(days=BILLING_CYCLE_DAYS)
+    details.auto_renew_from_wallet = True
+    details.registration_fee_paid_at = details.registration_fee_paid_at or datetime.now(timezone.utc)
+    details.billing_suspended = False
+    details.billing_last_charged_at = datetime.now(timezone.utc)
+    db.add(details)
+    db.commit()
+    return plan
+
+
+def run_monthly_auto_renewals(db: Session) -> dict:
+    """Monthly subscribers are renewed from their wallet the day the month ends: wallet >= the fee -> the fee is debited
+    (ledger MONTHLY_SUBSCRIPTION_FEE) and the next 30 days start; wallet too low -> nothing is taken and the plan simply lapses
+    to Standard (tier follows the due date) until money is added and the plan is bought again. A renewed plan's date moves
+    ahead, so running this repeatedly never double-charges."""
+    fee = int(get_billing_settings(db).get("monthly_fee") or 0)
+    out = {"renewed": 0, "wallet_too_low": 0, "checked": 0}
+    if fee <= 0:
+        return out
+    today = date.today()
+    rows = (
+        db.query(VehicleOwnerDetails)
+        .filter(VehicleOwnerDetails.subscription_type == "MONTHLY")
+        .filter(VehicleOwnerDetails.billing_next_date.isnot(None))
+        .filter(VehicleOwnerDetails.billing_next_date <= today)
+        .filter(VehicleOwnerDetails.billing_suspended.is_(False))
+        .filter(VehicleOwnerDetails.auto_renew_from_wallet.isnot(False))
+        .all()
+    )
+    for d in rows:
+        out["checked"] += 1
+        before = d.wallet_balance or 0
+        if before < fee:
+            out["wallet_too_low"] += 1
+            continue
+        d.wallet_balance = before - fee
+        d.billing_next_date = today + timedelta(days=MONTHLY_CYCLE_DAYS)
+        d.billing_last_charged_at = datetime.now(timezone.utc)
+        db.add(d)
+        db.add(WalletLedger(
+            vehicle_owner_id=d.vehicle_owner_id, reference_id=str(uuid.uuid4()), reference_type="MONTHLY_SUBSCRIPTION_FEE",
+            entry_type=WalletEntryTypeEnum.DEBIT, amount=fee, balance_before=before, balance_after=before - fee,
+            notes=f"Monthly subscription renewed automatically from your wallet (valid until {d.billing_next_date})",
+        ))
+        out["renewed"] += 1
+    if out["renewed"]:
+        db.commit()
+    return out
+
+
 def run_member_auto_renewals(db: Session) -> dict:
     """Yearly members whose year has run out are renewed AUTOMATICALLY from their wallet (no reminders, no opt-in).
 
@@ -532,6 +607,12 @@ def run_member_auto_renewals(db: Session) -> dict:
     settings = get_billing_settings(db)
     fee = int(settings.get("yearly_fee") or 0)
     out = {"renewed": 0, "wallet_too_low": 0, "checked": 0}
+    try:                                   # monthly plans renew in the same 3-hourly pass (their own function, own fee)
+        m = run_monthly_auto_renewals(db)
+        for k in out:
+            out[k] += m.get(k, 0)
+    except Exception:  # noqa: BLE001
+        db.rollback()
     if fee <= 0:
         return out
     today = date.today()

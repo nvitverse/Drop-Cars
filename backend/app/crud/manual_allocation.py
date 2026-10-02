@@ -65,13 +65,23 @@ def commission_hold(estimated_price, vendor_price, cost_per_km=None, trip_distan
 def hold_for_order(db: Session, order) -> int:
     from app.models.new_orders import NewOrder
 
+    from app.utils.commission import estimate_split_for_order, expected_hold, min_hold_amount
+
     source = getattr(order.source, "value", order.source)
+    if source != "HOURLY_RENTAL":
+        # same amount the driver app's own Accept holds: commission + what is owed at close, never below the minimum
+        try:
+            return expected_hold(estimate_split_for_order(db, order), int(getattr(order, "advance_received", 0) or 0))
+        except Exception as e:  # noqa: BLE001
+            print(f"hold_for_order: split failed for order {getattr(order, 'id', '?')}: {e}")
+    legacy = 0
     if source == "NEW_ORDERS":
         row = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
         if row:
-            return commission_hold(order.estimated_price, order.vendor_price, row.cost_per_km, row.trip_distance)
-        return 0
-    return commission_hold(order.estimated_price, order.vendor_price)
+            legacy = commission_hold(order.estimated_price, order.vendor_price, row.cost_per_km, row.trip_distance)
+    else:
+        legacy = commission_hold(order.estimated_price, order.vendor_price)
+    return max(legacy, min_hold_amount(db))
 
 
 def low_balance_response(vehicle_owner, balance: int, required: int, can_use_credit: bool) -> dict:
@@ -142,7 +152,7 @@ def allocate_to_fleet_owner(
             amount=held_now,
             reference_id=str(order.id),
             reference_type="TRIP_HOLD",
-            notes=f"Held (not final) for Booking ID {order.id} - refunded if it is cancelled; any unused part is returned when the trip completes",
+            notes=f"Held for Booking ID {order.id} - the commission is deducted when the trip completes and the rest is refunded to your wallet (full refund if the booking is cancelled)",
         )
 
     try:

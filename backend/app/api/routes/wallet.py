@@ -61,7 +61,10 @@ def create_rp_order(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Razorpay error: {str(e)}")
 
-    create_rp_transaction(db, vehicle_owner_id, order.get("id"), order.get("amount"))
+    # "I am paying to buy a subscription": remembered on the transaction so the payment itself activates the plan
+    _purpose = str((payload.notes or {}).get("purpose") or "").lower()
+    create_rp_transaction(db, vehicle_owner_id, order.get("id"), order.get("amount"),
+                          notes=_purpose if _purpose in ("subscription_monthly", "subscription_yearly") else None)
     db.commit()
 
     return CreateRazorpayOrderResponse(rp_order_id=order.get("id"), amount=order.get("amount"), currency=order.get("currency", "INR"))
@@ -127,6 +130,17 @@ def verify_rp_payment(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+    # The payment was for a subscription: activate it now. The money is already safely in the wallet, so if this step
+    # fails the recovery sweep / the next Subscribe tap still finishes it.
+    _purpose = str(getattr(txn, "notes", "") or "").lower()
+    if _purpose.startswith("subscription_"):
+        try:
+            from app.crud.billing import activate_plan_from_payment
+            activate_plan_from_payment(db, vehicle_owner_id, _purpose.split("_", 1)[1])
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            print(f"subscription activation after payment failed (will retry): {e}")
 
     return txn
 
@@ -269,7 +283,7 @@ def get_ledger(
 # Plain-language titles/explanations for every kind of wallet entry (no technical words for the driver).
 _LEDGER_INFO = {
     "TRIP_HOLD": ("Security amount held for a trip",
-                  "This amount was set aside from your wallet when you accepted the booking. It is a safety deposit - after the trip is completed the part that is not needed is returned to your wallet."),
+                  "This amount was set aside from your wallet when you accepted the booking (at least the minimum security hold, or the commission with extras if that is more). When the trip is completed the commission is deducted from it and the rest is refunded to your wallet. If the booking is cancelled the full amount comes back; it is kept only if the trip is not executed."),
     "TRIP_COMPLETION": ("Trip settlement",
                         "The final settlement after the trip was completed: what the customer paid, what you keep, and what was passed on to the booking owner and Drop Cars. The held amount is adjusted here."),
     "AUTO_CANCELLATION_PENALTY": ("Booking cancelled - not assigned in time",

@@ -305,8 +305,9 @@ async def accept_order(
         else:
             # Hourly Rental keeps the formula above, plus the convenience fee: the driver collects it from the
             # customer in cash and it is settled to the platform out of his wallet at trip close (end_records.py)
-            from app.utils.commission import convenience_fee_amount
+            from app.utils.commission import convenience_fee_amount, min_hold_amount
             hold_amount += convenience_fee_amount(db)
+            hold_amount = max(hold_amount, min_hold_amount(db))      # the minimum hold applies to every booking
 
         # Check if fleet owner has sufficient balance for the hold
         if hold_amount > 0 and not check_vehicle_owner_balance(db, vehicle_owner_id, hold_amount):
@@ -349,7 +350,7 @@ async def accept_order(
                 amount=hold_amount,
                 reference_id=str(order.id),
                 reference_type="TRIP_HOLD",
-                notes=f"Held (not final) for Booking ID {order.id} - refunded if it is cancelled; any unused part is returned when the trip completes",
+                notes=f"Held for Booking ID {order.id} - the commission is deducted when the trip completes and the rest is refunded to your wallet (full refund if the booking is cancelled)",
             )
 
         db.commit()

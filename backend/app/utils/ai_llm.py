@@ -186,7 +186,7 @@ def _rules_text(db: Session) -> str:
 - A Rs {fee} convenience fee is added to EVERY customer bill. The driver collects it in cash from the customer and it is settled from the driver wallet with the platform's share.
 - Minimum billing at trip close: One-way 130 km; Round trip / Multi-city 250 km per day. Distance far from the real route (over about 20%) needs a reason when closing the trip; it is not blocked.
 - Trip flow: accept booking -> assign driver + car (must be done in time; deadline shown on the card) -> at pickup ask customer for the START OTP -> drive -> at drop enter END OTP / close trip -> customer bill (no driver fare shown) -> mark completed -> rate customer and enter cash collected.
-- A security hold (min Rs {hold}) is kept from the accepting owner's wallet when a booking is accepted and released when the trip completes. It is forfeited as a penalty only if the trip is not executed.
+- A hold of at least Rs {hold} (on every booking; more if the commission with extras is higher) is kept from the accepting owner's wallet when a booking is accepted. When the trip completes the commission is deducted from the hold and the rest is refunded to the wallet. Cancelled booking: full refund. It is forfeited as a penalty only if the trip is not executed.
 - Customer rating bonus: after a customer rates the trip through the QR / link, 3 stars and above pays Rs 10 per star to the owner's wallet after 24 hours.
 - Wallet rows can be tapped for a plain-language explanation of that entry.
 - Support: a person from Drop Cars support can join the chat; booking questions go to the booking's own chat with its poster first, and support joins if there is no reply within 10 minutes."""

@@ -69,6 +69,10 @@ def reconcile_razorpay_payments(db: Session) -> dict:
                               notes="Wallet top-up via Razorpay (recovered automatically)")
                 out["wallet_credited"] += 1
             db.commit()
+            if purpose.startswith("subscription_"):          # the payment was a subscription purchase: finish that too
+                from app.crud.billing import activate_plan_from_payment
+                if activate_plan_from_payment(db, txn.vehicle_owner_id, purpose.split("_", 1)[1]):
+                    out["membership_activated"] += 1
         except Exception as e:  # noqa: BLE001
             db.rollback()
             out["errors"] += 1
