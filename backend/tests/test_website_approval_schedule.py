@@ -89,3 +89,25 @@ def test_customize_posts_exactly_the_staff_numbers_and_keeps_the_customer_total(
     assert (p["cost_per_km"], p["extra_cost_per_km"], p["driver_allowance"], p["extra_driver_allowance"]) == (14, 2, 350, 50) and r.custom_driver_fare
     out = wbs.customize(r.id, wbs.CustomizeBody(reset=True), pg_session, admin)
     assert not r.custom_driver_fare and out["post_preview"]["cost_per_km"] == 15         # back to the driver tariff
+
+
+def test_a_booking_quoted_from_the_backend_rate_card_is_repaired_with_the_fare_the_customer_confirmed(pg_session):
+    from app.crud.website_quote import apply_quote_to_request
+    from app.crud.customer_booking_request import posted_fare_split
+    r = _request(pg_session, quoted_cost_per_km=14, quoted_driver_allowance=300, quoted_total_amount=2540, quoted_driver_amount=2540)
+    assert posted_fare_split(pg_session, r)["cost_per_km"] == 14                                    # what Admin App showed: 14 | 0, 300 | 0
+    assert apply_quote_to_request(r, {"per_km_rate": 15, "driver_bata": 400, "billable_km": 160, "total_fare": 2800})
+    p = posted_fare_split(pg_session, r)
+    assert (p["cost_per_km"], p["extra_cost_per_km"], p["driver_allowance"], p["extra_driver_allowance"]) == (15, 0, 300, 100)   # 15 | 0, 300 | 100
+    assert r.quoted_total_amount == 2800
+
+
+def test_the_repair_never_touches_an_edited_or_posted_booking(pg_session):
+    from app.crud.website_quote import apply_quote_to_request
+    q = {"per_km_rate": 15, "driver_bata": 400, "billable_km": 160, "total_fare": 2800}
+    edited = _request(pg_session, quoted_cost_per_km=14, quoted_driver_allowance=300, quoted_total_amount=2540, admin_total_amount=2600)
+    assert not apply_quote_to_request(edited, q) and edited.quoted_total_amount == 2540
+    done = _request(pg_session, quoted_cost_per_km=14, quoted_driver_allowance=300, quoted_total_amount=2540, status="APPROVED")
+    assert not apply_quote_to_request(done, q)
+    crazy = _request(pg_session, quoted_cost_per_km=14, quoted_driver_allowance=300, quoted_total_amount=2540)
+    assert not apply_quote_to_request(crazy, {**q, "total_fare": 90000})                             # nonsense numbers are ignored

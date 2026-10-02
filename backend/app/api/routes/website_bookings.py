@@ -340,6 +340,25 @@ class WebsiteBookingRatesUpdate(BaseModel):
     gst_amount: Optional[int] = None
 
 
+class WebsiteQuoteRepair(BaseModel):
+    quoted_fare: Dict[str, Any]
+
+
+@router.put("/website/bookings/{id}/quote", dependencies=[Depends(require_website_key)])
+def repair_website_booking_quote(id: UUID, body: WebsiteQuoteRepair, db: Session = Depends(get_db)):
+    """The website's Sync tool: a booking that reached the backend without the customer's confirmed fare gets that fare as its quote
+    (only while PENDING and not edited by staff). Returns {updated: bool}."""
+    from app.models.customer_booking_request import CustomerBookingRequest
+    from app.crud.website_quote import apply_quote_to_request
+    request = db.query(CustomerBookingRequest).filter(CustomerBookingRequest.id == id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    updated = apply_quote_to_request(request, body.quoted_fare)
+    if updated:
+        db.commit()
+    return {"updated": updated, "quoted_total_amount": request.quoted_total_amount, "quoted_cost_per_km": request.quoted_cost_per_km}
+
+
 @router.patch("/website/bookings/{id}/rates", dependencies=[Depends(require_website_key)])
 def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate, db: Session = Depends(get_db)):
     """Lets the website's Enquiry "Customize" action set the DRIVER-facing

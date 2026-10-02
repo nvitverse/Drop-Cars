@@ -69,3 +69,37 @@ def apply_website_quote(backend_fare: Dict[str, Any], quote: Optional[WebsiteQuo
         "driver_amount": km_charge + quote.driver_bata + toll + permit,
         "total_km": quote.billable_km,
     }
+
+
+def apply_quote_to_request(request, quoted_fare: Dict[str, Any]) -> bool:
+    """Replace the quote of a booking request that is still PENDING with the fare the customer really confirmed on the website.
+
+    For bookings that reached the backend WITHOUT the website's fare (they were quoted from the backend's own rate card, e.g. 14/km
+    + Rs 300 when the customer confirmed 15/km + Rs 400). Never touches a request staff already edited or customized. Returns True
+    when the quote was replaced."""
+    if getattr(request, "status", None) != "PENDING":
+        return False
+    if request.admin_total_amount is not None or getattr(request, "custom_driver_fare", False):
+        return False
+    try:
+        quote = WebsiteQuotedFare(**quoted_fare)
+    except Exception:  # noqa: BLE001
+        return False
+    q = apply_website_quote({"total_km": request.quoted_trip_distance, "total_amount": request.quoted_total_amount}, quote)
+    if not q:
+        return False
+    request.quoted_cost_per_km = q["cost_per_km"]
+    request.quoted_driver_allowance = q["driver_allowance"]
+    request.quoted_extra_driver_allowance = 0
+    request.quoted_permit_charges = q["permit_charges"]
+    request.quoted_extra_permit_charges = 0
+    request.quoted_hill_charges = 0
+    request.quoted_toll_charges = q["toll_charges"]
+    request.quoted_extra_cost_per_km = 0
+    request.quoted_night_charges = 0
+    request.quoted_total_amount = q["total_amount"]
+    request.quoted_driver_amount = q["driver_amount"]
+    request.quoted_trip_distance = q["total_km"]
+    request.gst_included = bool(q["gst_amount"])
+    request.gst_amount = q["gst_amount"]
+    return True

@@ -31,6 +31,50 @@ if (empty($_SESSION['admin_id']) || !isset($pdo) || $_SERVER['REQUEST_METHOD'] !
 $tripTypeMap = ['ONE_WAY' => 'Oneway', 'ROUND_TRIP' => 'Round Trip', 'LOCAL_PACKAGE' => 'Hourly Rental', 'MULTI_CITY' => 'Multy City'];
 $carTypeMap = ['SEDAN' => 'SEDAN_4_PLUS_1', 'SUV' => 'SUV', 'INNOVA' => 'INNOVA', 'CRYSTA' => 'INNOVA_CRYSTA'];
 
+// the fare the customer confirmed, from the stored fare breakdown (the same fields confirm_booking.php sends)
+$buildQuote = function (array $b, string $mappedKey, string $backendTripType) {
+    $quotedFare = null;
+    $fb = json_decode((string) ($b['fare_breakdown'] ?? ''), true);
+    $finalFare = (int) ($b['final_fare'] ?? 0);
+    if (is_array($fb) && $mappedKey !== '' && $backendTripType !== 'Hourly Rental' && $finalFare > 0
+        && isset($fb['vehicles'][$mappedKey]) && is_array($fb['vehicles'][$mappedKey])) {
+        $qv = $fb['vehicles'][$mappedKey];
+        $includeTolls = isset($fb['includeTolls']) ? (bool) $fb['includeTolls'] : false;
+        $includeTaxes = isset($fb['includeTaxes']) ? (bool) $fb['includeTaxes'] : false;
+        if (!empty($qv['perKmRate']) && !empty($qv['effectiveBillableKm'])) {
+            $quotedFare = [
+                'per_km_rate' => (float) (!empty($qv['discountedRate']) ? $qv['discountedRate'] : $qv['perKmRate']),
+                'driver_bata' => (int) (isset($qv['driverBataTotal']) ? $qv['driverBataTotal'] : (isset($qv['driverBata']) ? $qv['driverBata'] : 0)),
+                'billable_km' => (float) $qv['effectiveBillableKm'],
+                'total_fare' => $finalFare,
+                'include_taxes' => $includeTaxes,
+                'include_tolls' => $includeTolls,
+            ];
+            if (function_exists('dropcars_fare_breakdown_included_extras')) {
+                $extras = dropcars_fare_breakdown_included_extras($fb, $qv, $mappedKey, $includeTolls, $includeTaxes);
+                $quotedFare['toll_amount'] = $extras['toll'];
+                $quotedFare['permit_amount'] = $extras['permit'];
+            }
+        }
+    }
+    return $quotedFare;
+};
+
+// which website vehicle tier a booking row is
+$vehicleKeyOf = function (array $b) {
+    $vehicleText = strtoupper(trim((string) (($b['vehicle_type'] ?? '') !== '' ? $b['vehicle_type'] : ($b['car_name'] ?? ''))));
+    foreach (['SEDAN', 'SUV', 'INNOVA', 'CRYSTA'] as $k) {
+        if (stripos($vehicleText, $k) !== false) {
+            return $k;
+        }
+    }
+    return '';
+};
+$tripTypeOf = function (array $b) use ($tripTypeMap) {
+    $typeKey = strtoupper(str_replace([' ', '-'], '_', (string) ($b['trip_type'] ?? 'ONE_WAY')));
+    return $tripTypeMap[$typeKey] ?? ((strpos(strtolower((string) ($b['trip_type'] ?? '')), 'round') !== false) ? 'Round Trip' : 'Oneway');
+};
+
 $stmt = $pdo->query(
     "SELECT b.*, c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email
        FROM `bookings` b JOIN `customers` c ON b.customer_id = c.id
@@ -71,31 +115,7 @@ foreach ($rows as $b) {
     $ts = strtotime(($b['pickup_date'] ?: date('Y-m-d')) . ' ' . ($b['pickup_time'] ?: '10:00:00'));
     $startDateTime = $ts !== false ? date('c', $ts) : date('c');
 
-    // the fare the customer confirmed, from the stored breakdown (same fields confirm_booking.php sends)
-    $quotedFare = null;
-    $fb = json_decode((string) ($b['fare_breakdown'] ?? ''), true);
-    $finalFare = (int) ($b['final_fare'] ?? 0);
-    if (is_array($fb) && $mappedKey !== '' && $backendTripType !== 'Hourly Rental' && $finalFare > 0
-        && isset($fb['vehicles'][$mappedKey]) && is_array($fb['vehicles'][$mappedKey])) {
-        $qv = $fb['vehicles'][$mappedKey];
-        $includeTolls = isset($fb['includeTolls']) ? (bool) $fb['includeTolls'] : false;
-        $includeTaxes = isset($fb['includeTaxes']) ? (bool) $fb['includeTaxes'] : false;
-        if (!empty($qv['perKmRate']) && !empty($qv['effectiveBillableKm'])) {
-            $quotedFare = [
-                'per_km_rate' => (float) (!empty($qv['discountedRate']) ? $qv['discountedRate'] : $qv['perKmRate']),
-                'driver_bata' => (int) (isset($qv['driverBataTotal']) ? $qv['driverBataTotal'] : (isset($qv['driverBata']) ? $qv['driverBata'] : 0)),
-                'billable_km' => (float) $qv['effectiveBillableKm'],
-                'total_fare' => $finalFare,
-                'include_taxes' => $includeTaxes,
-                'include_tolls' => $includeTolls,
-            ];
-            if (function_exists('dropcars_fare_breakdown_included_extras')) {
-                $extras = dropcars_fare_breakdown_included_extras($fb, $qv, $mappedKey, $includeTolls, $includeTaxes);
-                $quotedFare['toll_amount'] = $extras['toll'];
-                $quotedFare['permit_amount'] = $extras['permit'];
-            }
-        }
-    }
+    $quotedFare = $buildQuote($b, $mappedKey, $backendTripType);
 
     $res = dropcars_backend_request('POST', '/api/website/bookings', [
         'customer_name' => ($b['customer_name'] ?? '') !== '' ? $b['customer_name'] : 'Guest',
@@ -122,4 +142,25 @@ foreach ($rows as $b) {
     }
 }
 
-$back('synced_' . $synced . '_failed_' . $failed);
+// Bookings the Admin App already has, but that were quoted from the backend's own rate card (no confirmed fare): give them the fare the
+// customer really confirmed. The backend only accepts this while the booking is still waiting and staff have not edited it.
+$repaired = 0;
+$rep = $pdo->query(
+    "SELECT b.* FROM `bookings` b
+      WHERE b.status IN ('pending','confirmed') AND b.pickup_date >= CURDATE()
+        AND b.backend_request_id IS NOT NULL AND b.backend_request_id <> ''
+        AND (b.posting_status IS NULL OR b.posting_status NOT IN ('APPROVED','REJECTED','CANCELLED'))
+      ORDER BY b.pickup_date ASC LIMIT 200"
+)->fetchAll(PDO::FETCH_ASSOC);
+foreach ($rep as $b) {
+    $q = $buildQuote($b, $vehicleKeyOf($b), $tripTypeOf($b));
+    if ($q === null) {
+        continue;
+    }
+    $res = dropcars_backend_request('PUT', '/api/website/bookings/' . rawurlencode((string) $b['backend_request_id']) . '/quote', ['quoted_fare' => $q]);
+    if ($res['ok'] && is_array($res['data']) && !empty($res['data']['updated'])) {
+        $repaired++;
+    }
+}
+
+$back('synced_' . $synced . '_failed_' . $failed . '_fare_corrected_' . $repaired);
