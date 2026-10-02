@@ -74,3 +74,35 @@ def test_a_long_lapsed_monthly_plan_is_not_charged_behind_the_owners_back(pg_ses
     billing.run_monthly_auto_renewals(pg_session)
     pg_session.refresh(d)
     assert d.wallet_balance == 1000
+
+
+# ---- the owner's driver tariff (2026-10-02) ----
+def _split(car, trip, km, bata, permit, stops=("Chennai", "Madurai")):
+    from app.crud import driver_tariff as DT
+    loc = {str(i): s for i, s in enumerate(stops)}
+    return DT.split_fare(DT.default_config(), car_type=car, pickup_drop_location=loc, customer_km_rate=km, customer_bata=bata, customer_permit=permit, trip_type=trip)
+
+
+def test_owner_driver_rates_per_vehicle_and_trip_type():
+    r = _split("SEDAN_4_PLUS_1", "Oneway", 15, 400, 500)
+    assert (r["cost_per_km"], r["extra_cost_per_km"], r["driver_allowance"], r["extra_driver_allowance"], r["permit_charges"], r["extra_permit_charges"]) == (15, 0, 300, 100, 400, 100)
+    r = _split("SEDAN_4_PLUS_1", "Round Trip", 16, 300, 0)
+    assert (r["cost_per_km"], r["extra_cost_per_km"]) == (13, 3)
+    assert _split("SUV", "Oneway", 20, 500, 0)["extra_driver_allowance"] == 200                      # SUV bata 300, the rest is extra
+    assert [_split("SUV_6_PLUS_1", t, 25, 300, 0)["cost_per_km"] for t in ("Oneway", "Round Trip")] == [20, 18]
+    assert [_split("INNOVA", t, 25, 400, 0)["cost_per_km"] for t in ("Oneway", "Round Trip")] == [20, 19]
+    assert [_split("INNOVA_CRYSTA", t, 30, 400, 0)["cost_per_km"] for t in ("Oneway", "Round Trip")] == [24, 22]
+    assert _split("INNOVA", "Oneway", 25, 450, 0)["driver_allowance"] == 400                          # innova / crysta bata 400
+    assert _split("HATCHBACK", "Oneway", 11, 300, 0)["cost_per_km"] == 11                              # not in the tariff: customer's rate
+    assert _split("SEDAN_4_PLUS_1", "Oneway", 12, 300, 0)["cost_per_km"] == 12                         # never above what the customer pays
+
+
+def test_owner_permit_rules():
+    p = lambda car, *stops: _split(car, "Oneway", 20, 300, 3000, ("Chennai",) + stops)["permit_charges"]
+    assert p("SEDAN_4_PLUS_1", "Bangalore") == 400 and p("NEW_SEDAN_2022_MODEL", "Pondicherry") == 400
+    assert p("SUV_6_PLUS_1", "Bangalore") == 1000 and p("INNOVA_CRYSTA_6_PLUS_1", "Kochi") == 1000
+    assert p("SUV_6_PLUS_1", "Pondicherry") == 800 and p("INNOVA_7_PLUS_1", "Puducherry") == 800     # Pondicherry only 800, 7+1 too
+    assert p("SUV_6_PLUS_1", "Tirupati") == 1000                                                      # AP is 1000 for 6+1 ...
+    assert p("SUV_7_PLUS_1", "Tirupati") == 2000 and p("INNOVA_CRYSTA_7_PLUS_1", "Vijayawada") == 2000   # ... and 2000 only for 7+1
+    assert p("SUV_7_PLUS_1", "Bangalore") == 1000                                                     # 7+1 otherwise same as 6+1
+    assert _split("SUV_6_PLUS_1", "Oneway", 20, 300, 1500, ("Chennai", "Kochi"))["extra_permit_charges"] == 500   # the rest of what the customer paid is extra

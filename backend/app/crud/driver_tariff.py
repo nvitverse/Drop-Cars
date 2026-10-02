@@ -10,7 +10,8 @@ so the Driver / Vendor app shows e.g. "15 | 0", "300 | 100", "400 | 0", and driv
 Nothing is ever taken from the driver below what the tariff says, and the driver is never shown more than the customer pays.
 
 Stored as ONE platform setting (`driver_tariff`, JSON), edited from Admin App > Tariffs > Driver:
-  vehicles  {car_type: {km_rate, bata}}   km_rate blank = the same as the customer's rate (extra 0); bata default 300
+  vehicles  {car_type: {km_rate, km_rate_round, bata}}   km_rate = One-way driver rate, km_rate_round = Round-trip (and Multi-city) driver
+            rate; blank = the same as the customer's rate (extra 0); bata default 300
   permits   [{label, keywords, vehicles, driver}]   first matching rule wins. A rule matches when the vehicle is listed (or "*") and
             any stop AFTER the pickup contains one of the keywords (e.g. Pondicherry / Puducherry); the keyword * means any place. No rule = the driver gets the
             customer's permit amount (extra 0).
@@ -38,9 +39,33 @@ SUGGESTED_REGIONS = {
 }
 
 
+# Owner's driver tariff (2026-10-02). Per vehicle group: (one-way km rate, round-trip km rate, driver bata). Everything above these
+# numbers that the customer pays goes to the extra fields. Vehicles not listed (hatchback, tempo, urbania) keep the customer's rate.
+_SEDANS = ("SEDAN_4_PLUS_1", "NEW_SEDAN_2022_MODEL", "ETIOS_4_PLUS_1")
+_SUVS = ("SUV", "SUV_6_PLUS_1", "SUV_7_PLUS_1")
+_INNOVAS = ("INNOVA", "INNOVA_6_PLUS_1", "INNOVA_7_PLUS_1")
+_CRYSTAS = ("INNOVA_CRYSTA", "INNOVA_CRYSTA_6_PLUS_1", "INNOVA_CRYSTA_7_PLUS_1")
+_SEVEN_PLUS_ONE = ("SUV_7_PLUS_1", "INNOVA_7_PLUS_1", "INNOVA_CRYSTA_7_PLUS_1")
+_OWNER_RATES = {_SEDANS: (15, 13, 300), _SUVS: (20, 18, 300), _INNOVAS: (20, 19, 400), _CRYSTAS: (24, 22, 400)}
+
+
+def default_permits() -> List[Dict[str, Any]]:
+    big = list(_SUVS + _INNOVAS + _CRYSTAS)
+    return [
+        {"label": "7+1 Andhra Pradesh", "keywords": list(SUGGESTED_REGIONS["Andhra Pradesh"]), "vehicles": list(_SEVEN_PLUS_ONE), "driver": 2000},
+        {"label": "Pondicherry", "keywords": list(SUGGESTED_REGIONS["Pondicherry"]), "vehicles": big, "driver": 800},
+        {"label": "Sedan permit", "keywords": ["*"], "vehicles": list(_SEDANS), "driver": 400},
+        {"label": "SUV / Innova / Crysta permit", "keywords": ["*"], "vehicles": big, "driver": 1000},
+    ]
+
+
 def default_config() -> Dict[str, Any]:
     from app.models.new_orders import CarTypeEnum
-    return {"vehicles": {c.value: {"km_rate": None, "bata": DEFAULT_BATA} for c in CarTypeEnum}, "permits": []}
+    vehicles = {c.value: {"km_rate": None, "km_rate_round": None, "bata": DEFAULT_BATA} for c in CarTypeEnum}
+    for group, (one_way, round_trip, bata) in _OWNER_RATES.items():
+        for car in group:
+            vehicles[car] = {"km_rate": one_way, "km_rate_round": round_trip, "bata": bata}
+    return {"vehicles": vehicles, "permits": default_permits()}
 
 
 def _int(v: Any, lo: int, hi: int, field: str, allow_none: bool = False) -> Optional[int]:
@@ -60,11 +85,13 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     from app.models.new_orders import CarTypeEnum
     valid_types = {c.value for c in CarTypeEnum}
     out = default_config()
+    out["permits"] = []
     for car, row in (cfg.get("vehicles") or {}).items():
         if car not in valid_types:
             raise ValueError(f"Unknown vehicle {car}")
         row = row or {}
-        out["vehicles"][car] = {"km_rate": _int(row.get("km_rate"), 1, 200, f"{car} km rate", True),
+        out["vehicles"][car] = {"km_rate": _int(row.get("km_rate"), 1, 200, f"{car} one-way km rate", True),
+                                "km_rate_round": _int(row.get("km_rate_round"), 1, 200, f"{car} round-trip km rate", True),
                                 "bata": _int(row.get("bata", DEFAULT_BATA), 0, 5000, f"{car} bata")}
     rules = cfg.get("permits") or []
     if len(rules) > MAX_RULES:
@@ -87,8 +114,10 @@ def load(db: Session) -> Dict[str, Any]:
         row = db.query(PlatformSetting).filter(PlatformSetting.key == SETTING_KEY).first()
         if row and row.value:
             saved = json.loads(row.value)
-            cfg["vehicles"].update({k: v for k, v in (saved.get("vehicles") or {}).items() if k in cfg["vehicles"]})
-            cfg["permits"] = saved.get("permits") or []
+            for k, v in (saved.get("vehicles") or {}).items():
+                if k in cfg["vehicles"]:
+                    cfg["vehicles"][k] = {**cfg["vehicles"][k], **(v or {})}      # an older save without km_rate_round keeps the default one
+            cfg["permits"] = saved.get("permits") or cfg["permits"]
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logger.warning("driver tariff unreadable, using defaults: %s", type(e).__name__)
@@ -123,10 +152,13 @@ def permit_rule_for(cfg: Dict[str, Any], car_type: str, pickup_drop_location: An
     return None
 
 
-def split_fare(cfg: Dict[str, Any], *, car_type: str, pickup_drop_location: Any, customer_km_rate: int, customer_bata: int, customer_permit: int) -> Dict[str, Any]:
+def split_fare(cfg: Dict[str, Any], *, car_type: str, pickup_drop_location: Any, customer_km_rate: int, customer_bata: int, customer_permit: int,
+               trip_type: Optional[str] = None) -> Dict[str, Any]:
     """The DRIVER part and the EXTRA part of each fare component. driver + extra == what the customer pays, driver <= customer."""
     veh = (cfg.get("vehicles") or {}).get(car_type) or {}
-    km_rate = veh.get("km_rate")
+    # One-way uses the one-way rate, Round trip / Multi-city the round-trip rate; any other trip type keeps the customer's rate
+    tt = str(getattr(trip_type, "value", trip_type) or "").lower()
+    km_rate = veh.get("km_rate_round") if tt in ("round trip", "multy city", "multi city") else veh.get("km_rate") if tt in ("oneway", "one way", "") else None
     drv_km = min(int(km_rate), customer_km_rate) if km_rate else customer_km_rate
     bata_cfg = veh.get("bata")
     drv_bata = min(int(DEFAULT_BATA if bata_cfg is None else bata_cfg), customer_bata)

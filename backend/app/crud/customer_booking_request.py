@@ -174,7 +174,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         split = driver_tariff.split_fare(
             driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
             customer_km_rate=int(orig_cost_per_km) + int(customer_extra_km), customer_bata=int(orig_driver_allowance or 0) + int(orig_extra_driver_allowance or 0),
-            customer_permit=int(customer_permit),
+            customer_permit=int(customer_permit), trip_type=request.trip_type,
         )
         posted_cost_per_km = split["cost_per_km"]
         posted_extra_cost_per_km = split["extra_cost_per_km"]
