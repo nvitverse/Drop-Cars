@@ -28,6 +28,7 @@ from app.main import app
 #    emergency must never fail closed.
 PUBLIC_BY_DESIGN = {
     "GET /api/notification-sounds/file/{filename}",
+    "GET /api/conversations/media/{folder}/{filename}",
     "POST /api/admin/signin",
     "POST /api/users/cardriver/signin",
     "POST /api/users/cardriver/firebase/verify",

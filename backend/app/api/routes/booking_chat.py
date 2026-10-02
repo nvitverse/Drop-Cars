@@ -17,6 +17,7 @@ from app.models.booking_chat import BookingChatMessage
 from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 from app.crud import booking_chat as chat
 from app.utils.gcs import upload_image_to_gcs
+from app.utils.chat_media import media_url
 
 router = APIRouter(prefix="/booking-chat", tags=["Booking Chat"], dependencies=[Depends(get_current_user_flexible)])
 
@@ -80,7 +81,7 @@ def _load(request: Request, db: Session, order_id: int):
 def _msg_out(m: BookingChatMessage, me: str, by_id: Optional[dict] = None, options: Optional[list] = None) -> dict:
     out = {
         "id": m.id, "side": m.sender_side, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": m.voice_url,
+        "kind": m.kind, "quick_key": m.quick_key, "text": m.text, "voice_url": media_url(m.voice_url),
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
         "reply_to": None,

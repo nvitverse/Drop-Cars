@@ -421,3 +421,45 @@ def test_the_admin_can_release_or_extend_one_bookings_preference(pg_session, cli
     assert r.status_code == 200 and r.json()["priority_for_paid"] is False
     pg_session.refresh(o)
     assert o.priority_for_paid is False and o.priority_cutoff_at is None
+
+
+# ------------------------------------------------------------------ voice messages could not be played (private storage bucket)
+def test_chat_voice_links_go_through_the_api_and_the_file_plays(client_with_db, monkeypatch):
+    """The bucket is private: the raw storage link gave 403 to the sender and to the admin. Chat messages now carry an API link."""
+    from app.utils import chat_media
+    raw = "https://storage.googleapis.com/drop-cars-production-bucket/chat_voice_notes/0a1b2c3d-1111-2222-3333-444455556666.m4a"
+    assert chat_media.media_url(raw) == f"{chat_media.MEDIA_PREFIX}chat_voice_notes/0a1b2c3d-1111-2222-3333-444455556666.m4a"
+    assert chat_media.media_url("https://example.com/x.m4a") == "https://example.com/x.m4a"          # anything else is left alone
+
+    class Blob:
+        content_type = None
+
+        @staticmethod
+        def download_as_bytes():
+            return b"voice-bytes"
+
+    class Bucket:
+        @staticmethod
+        def blob(name):
+            assert name == "chat_voice_notes/0a1b2c3d-1111-2222-3333-444455556666.m4a"
+            return Blob()
+
+    monkeypatch.setattr("app.utils.gcs.bucket", Bucket())
+    r = client_with_db.get("/api/conversations/media/chat_voice_notes/0a1b2c3d-1111-2222-3333-444455556666.m4a")
+    assert r.status_code == 200 and r.content == b"voice-bytes" and r.headers["content-type"].startswith("audio/")
+    for bad in ("/api/conversations/media/other_folder/0a1b2c3d-1111-2222-3333-444455556666.m4a", "/api/conversations/media/chat_voice_notes/..%2Fsecret.txt",
+                "/api/conversations/media/chat_voice_notes/notes.txt"):
+        assert client_with_db.get(bad).status_code == 404
+
+
+def test_support_and_booking_chat_messages_carry_the_playable_link_and_a_read_flag(pg_session):
+    from app.api.routes.booking_chat import _msg_out as booking_msg
+    from app.api.routes.support import _msg_out as support_msg
+    from app.models.booking_chat import BookingChatMessage
+    from app.models.support_message import SupportMessage
+    raw = "https://storage.googleapis.com/drop-cars-production-bucket/chat_voice_notes/0a1b2c3d-1111-2222-3333-444455556666.m4a"
+    s = SupportMessage(thread_key="k", thread_role="OWNER", thread_name="N", sender_side="DRIVER_OWNER", sender_name="N", text="v", voice_url=raw)
+    out = support_msg(s, "DRIVER_OWNER")
+    assert "/api/conversations/media/chat_voice_notes/" in out["voice_url"] and out["mine"] is True and out["read"] is False
+    b = BookingChatMessage(order_id=1, sender_side="DRIVER", sender_id="x", sender_name="N", kind="VOICE", text="v", voice_url=raw)
+    assert "/api/conversations/media/chat_voice_notes/" in booking_msg(b, "DRIVER")["voice_url"]

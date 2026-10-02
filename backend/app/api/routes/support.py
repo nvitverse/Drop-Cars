@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.security import get_current_driver, get_current_user, get_current_admin, get_current_user_flexible
 from app.models.support_message import SupportMessage
+from app.utils.chat_media import media_url
 from app.models.admin import Admin
 
 router = APIRouter(prefix="/support", tags=["Support"])
@@ -115,7 +116,7 @@ def _notify_driver_owner_of_admin_reply(db: Session, thread_key: str, text: str)
 def _msg_out(m: SupportMessage, me: str) -> dict:
     return {
         "id": m.id, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "text": m.text, "voice_url": m.voice_url, "created_at": m.created_at.isoformat() if m.created_at else None,
+        "text": m.text, "voice_url": media_url(m.voice_url), "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
     }
 
