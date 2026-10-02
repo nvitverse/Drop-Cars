@@ -21,6 +21,7 @@ import app.models.vehicle_owner
 import app.models.vehicle_owner_details
 import app.models.booking_chat
 import app.models.support_message
+import app.models.guest_help_token
 import app.models.trip_review
 import app.models.stale_document_file
 import app.models.car_details
