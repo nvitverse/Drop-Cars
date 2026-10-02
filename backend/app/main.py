@@ -438,6 +438,8 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS post_at_override TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS custom_driver_fare BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS language VARCHAR(2)',
+        'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS reason VARCHAR(100)',
         # Trusted Partner (tier=PREFERRED) - two extra grant paths alongside
         # the yearly-billing evidence above (2026-09-30)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS admin_trusted_override BOOLEAN NOT NULL DEFAULT false',
