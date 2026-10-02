@@ -190,6 +190,8 @@ from app.api.routes import workers as workers_router
 app.include_router(workers_router.router, prefix="/api", tags=["Workers & Operations Hub"])
 from app.api.routes import driver_tours as driver_tours_router
 app.include_router(driver_tours_router.router, tags=["Driver Tours & Running Ledger"])
+from app.api.routes import chat_media_public as chat_media_public_router
+app.include_router(chat_media_public_router.router, prefix="/api", tags=["Chat media"])
 from app.api.routes import driver_tariff as driver_tariff_router
 app.include_router(driver_tariff_router.router, prefix="/api", tags=["Driver Tariff"])    # before admin.router (its catch-all /admin/{id})
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
