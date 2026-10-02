@@ -380,3 +380,44 @@ def test_blocking_route_handlers_do_not_run_on_the_event_loop():
                     offenders.append(f"{path}:{node.name}")
     # driver_cancel_order_endpoint stays async on purpose: it schedules a push with asyncio.create_task (needs the loop)
     assert [o for o in offenders if not o.endswith("driver_cancel_order_endpoint")] == [], offenders[:10]
+
+
+# ------------------------------------------------------------------ the admin can change the booking acceptance preference (owner, 2026-10-02)
+def test_the_saved_priority_rule_decides_how_long_trusted_partners_are_preferred(pg_session):
+    """Admin App > Assignment & Priority Rules was stored but never read. Not saved = the built-in rule (midpoint); saved = hours / percent."""
+    from app.crud.new_orders import _default_priority_cutoff
+    from app.utils.assignment_priority_config import update_assignment_priority_config
+    now = datetime(2026, 10, 2, 3, 0, tzinfo=timezone.utc)                       # 08:30 IST: every result below lands in the daytime (no night shift)
+    far, near = now + timedelta(hours=12), now + timedelta(hours=4)
+    assert _default_priority_cutoff(far, pg_session, now=now) == now + timedelta(hours=6)                 # midpoint, nothing saved
+    update_assignment_priority_config(pg_session, {"priority_cutoff_hours": 4, "priority_cutoff_pct": 30})
+    assert _default_priority_cutoff(far, pg_session, now=now) == far - timedelta(hours=4)                 # > 6 h away: 4 h before pickup
+    assert _default_priority_cutoff(near, pg_session, now=now) == now + timedelta(hours=4) * 0.3          # closer: 30% of the time left
+    update_assignment_priority_config(pg_session, {"priority_cutoff_hours": 1, "priority_cutoff_pct": 100})
+    assert _default_priority_cutoff(near, pg_session, now=now) == near                                      # 100% = reserved until pickup
+    assert _default_priority_cutoff(now + timedelta(minutes=1), pg_session, now=now) <= now + timedelta(minutes=6)
+
+
+def test_a_posted_booking_follows_the_saved_rule(pg_session, quiet):
+    from app.utils.assignment_priority_config import update_assignment_priority_config
+    update_assignment_priority_config(pg_session, {"priority_cutoff_hours": 10, "priority_cutoff_pct": 50})
+    o = _posted_order(pg_session, 30)
+    cutoff = (o.priority_cutoff_at if o.priority_cutoff_at.tzinfo else o.priority_cutoff_at.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+    pickup = o.start_date_time.astimezone(timezone.utc)
+    ist = cutoff + timedelta(hours=5, minutes=30)
+    ten_hours_before = abs((pickup - cutoff).total_seconds() - 10 * 3600) < 5
+    shifted_to_7am = (ist.hour, ist.minute) == (7, 0)                                                      # night protection moved it to 7 AM IST
+    assert ten_hours_before or shifted_to_7am
+
+
+def test_the_admin_can_release_or_extend_one_bookings_preference(pg_session, client_with_db, quiet):
+    """Existing endpoints, now reachable from a card in the booking details: release = open to all drivers now, update = reserve until a time."""
+    o = _posted_order(pg_session, 30)
+    owner = _admin(pg_session, "Owner")
+    until = (datetime.now(timezone.utc) + timedelta(hours=20)).isoformat()
+    r = client_with_db.post(f"/api/orders/orders/{o.id}/update-priority", json={"priority_for_paid": True, "priority_cutoff_at": until}, headers=_auth("admin", owner))
+    assert r.status_code == 200 and r.json()["priority_for_paid"] is True
+    r = client_with_db.post(f"/api/orders/orders/{o.id}/release-priority", headers=_auth("admin", owner))
+    assert r.status_code == 200 and r.json()["priority_for_paid"] is False
+    pg_session.refresh(o)
+    assert o.priority_for_paid is False and o.priority_cutoff_at is None

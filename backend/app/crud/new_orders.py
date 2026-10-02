@@ -324,20 +324,56 @@ def calculate_multisegment_fare(pickup_drop_location: Dict[str, str], cost_per_k
     }
 
 
-def _default_priority_cutoff(start_date_time) -> datetime:
-    """Scheduled bookings: midpoint between now and pickup. Immediate
+def _saved_priority_rules(db) -> Optional[Tuple[int, int]]:
+    """(hours, pct) the admin SAVED in Admin App > Assignment & Priority Rules, or None when nothing was ever saved (then the built-in
+    rule below applies, exactly as before). Those two fields used to be stored and shown but never read, so editing them did nothing."""
+    if db is None:
+        return None
+    try:
+        from app.models.platform_setting import PlatformSetting
+        from app.utils.assignment_priority_config import SETTING_KEY_PREFIX, get_assignment_priority_config
+        keys = [f"{SETTING_KEY_PREFIX}PRIORITY_CUTOFF_HOURS", f"{SETTING_KEY_PREFIX}PRIORITY_CUTOFF_PCT"]
+        if not db.query(PlatformSetting).filter(PlatformSetting.key.in_(keys)).count():
+            return None
+        cfg = get_assignment_priority_config(db)
+        return int(cfg["priority_cutoff_hours"]), int(cfg["priority_cutoff_pct"])
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        return None
+
+
+def _default_priority_cutoff(start_date_time, db=None, now=None) -> datetime:
+    """Until when a new booking is reserved for Trusted Partners.
+
+    If the admin saved the rule (Assignment & Priority Rules): pickup more than 6 h away = `hours` before pickup; closer = `pct`% of the
+    time left from now to pickup. Night protection (10 PM - 7 AM IST pushed to 7 AM) and the 5-minute floor still apply; never later
+    than pickup. Otherwise the built-in rule: Scheduled bookings: midpoint between now and pickup. Immediate
     bookings: a 5-minute floor, but never later than pickup itself.
     Night Sleep Protection (10:00 PM - 7:00 AM IST): If priority lock cutoff
     would expire overnight while trusted drivers are asleep, extend the lock
     to 7:00 AM IST so trusted drivers can view & accept when waking up.
     Safety Buffer: Priority lock ALWAYS expires at least 2 hours before pickup time
     so standard drivers get ample lead time to accept early morning pickups."""
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     start_at = start_date_time
     if start_at is not None and start_at.tzinfo is None:
         start_at = start_at.replace(tzinfo=timezone.utc)
     if start_at is None or start_at <= now:
         return now + timedelta(minutes=5)
+
+    saved = _saved_priority_rules(db)
+    if saved is not None:
+        hours, pct = saved
+        left = start_at - now
+        raw = (start_at - timedelta(hours=hours)) if left > timedelta(hours=6) else (now + left * (pct / 100.0))
+        floor = now + timedelta(minutes=5)
+        candidate = min(max(raw, floor), start_at)
+        ist = timedelta(hours=5, minutes=30)
+        cand_ist = candidate + ist
+        if cand_ist.hour >= 22 or cand_ist.hour < 7:                      # night protection, same as the built-in rule
+            morning = ((cand_ist + timedelta(days=1)) if cand_ist.hour >= 22 else cand_ist).replace(hour=7, minute=0, second=0, microsecond=0)
+            candidate = morning - ist
+        return min(max(candidate, floor), start_at)
 
     midpoint = now + (start_at - now) / 2
     floor = now + timedelta(minutes=5)
@@ -418,7 +454,7 @@ def create_oneway_order(
     skip_broadcast: bool = False,
 ) -> Tuple[NewOrder, int]:
     if priority_for_paid and priority_cutoff_at is None:
-        priority_cutoff_at = _default_priority_cutoff(start_date_time)
+        priority_cutoff_at = _default_priority_cutoff(start_date_time, db)
 
     # All-Inclusive: the poster typed one flat driver amount + their own
     # markup instead of the itemized km/allowance fields - override the

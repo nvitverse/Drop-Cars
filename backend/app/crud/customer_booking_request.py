@@ -247,7 +247,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         vendor_price=vendor_price_val,
         is_urgent=is_urgent_booking,
         priority_for_paid=True,
-        priority_cutoff_at=_default_priority_cutoff(request.start_date_time),
+        priority_cutoff_at=_default_priority_cutoff(request.start_date_time, db),
         distance_edited=False,
         calculated_trip_distance=request.quoted_trip_distance,
         advance_received=request.advance_amount,
