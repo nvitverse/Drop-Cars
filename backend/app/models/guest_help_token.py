@@ -15,3 +15,5 @@ class GuestHelpToken(Base):
     primary_number = Column(String(10), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    language = Column(String(2), nullable=True)           # en | ta | te | hi | kn - chosen in the chat, answers come in it
+    reason = Column(String(100), nullable=True)           # what the person asked for in the help form

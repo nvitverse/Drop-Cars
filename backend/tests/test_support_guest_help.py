@@ -41,9 +41,9 @@ def test_guest_can_chat_and_sees_admin_reply_read(pg_session, account):
     assert sup.guest_support_send(sup.GuestSendPayload(help_token=tok, text="please reset"), pg_session)["success"]
     pg_session.add(SupportMessage(thread_key=str(account.id), thread_role="OWNER", sender_side="ADMIN", sender_name="Admin", text="done"))
     pg_session.flush()
-    assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 2}      # the auto reply + the admin message
+    assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 3}      # the language prompt twice (the guest has not chosen yet) + the admin message
     msgs = sup.guest_support_thread(sup.GuestThreadPayload(help_token=tok), pg_session)["messages"]
-    assert [m["text"] for m in msgs][-2:] == ["please reset", "done"] and [m["mine"] for m in msgs][-2:] == [True, False]
+    assert [m["text"] for m in msgs if m["text"] in ("please reset", "done")] == ["please reset", "done"]
     assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 0}
 
 
@@ -62,7 +62,52 @@ def test_request_gets_an_auto_reply_no_email_and_repeat_taps_do_not_flood(pg_ses
     r2 = _request(pg_session, account, r1["help_token"])           # same person taps Submit again
     msgs = pg_session.query(SupportMessage).filter(SupportMessage.thread_key == str(account.id)).order_by(SupportMessage.id).all()
     assert [m.sender_side for m in msgs] == ["DRIVER_OWNER", "ADMIN"]       # one request + one automatic first reply
-    assert "Reply here" in msgs[1].text or "reply here" in msgs[1].text
+    assert "Select your language" in msgs[1].text                      # the first automatic message asks for a language
     assert msgs[1].sender_name == sup.AUTO_REPLY_SENDER and msgs[0].thread_role == "OWNER"
     assert r2["help_token"] == r1["help_token"] and "already" in r2["message"]
     assert sent == []                                              # SMTP daily limit: chat + push only
+
+
+def _send(db, tok, text):
+    sup.guest_support_send(sup.GuestSendPayload(help_token=tok, text=text), db)
+
+
+def _texts(db, account):
+    return [(m.sender_name, m.text) for m in db.query(SupportMessage).filter(SupportMessage.thread_key == str(account.id)).order_by(SupportMessage.id).all()]
+
+
+def test_language_choice_then_answers_in_that_language_and_menu(pg_session, account):
+    tok = _request(pg_session, account)["help_token"]
+    _send(pg_session, tok, "hello")                                        # not a language: the prompt again
+    assert _texts(pg_session, account)[-1][1].startswith("🌐")
+    _send(pg_session, tok, "2")                                            # Tamil
+    last = _texts(pg_session, account)[-1][1]
+    assert "Drop Cars Admin" in last and "Forgot password" in last or "Forgot password" in last      # the answer for the request's reason, in Tamil
+    assert "உங்கள்" in last
+    _send(pg_session, tok, "menu")
+    assert "1 - Password மறந்துவிட்டது" in _texts(pg_session, account)[-1][1]
+    _send(pg_session, tok, "3")
+    assert "பதிவு செய்த எண்" in _texts(pg_session, account)[-1][1]
+    before = len(_texts(pg_session, account))
+    _send(pg_session, tok, "9047075148 SANTHOSH P")                        # details: one short acknowledgement, no topic guessing
+    after = _texts(pg_session, account)
+    assert len(after) == before + 2 and "நன்றி" in after[-1][1]
+    _send(pg_session, tok, "9047075148 SANTHOSH P again")                  # not repeated within 10 minutes
+    assert len(_texts(pg_session, account)) == before + 3
+
+
+def test_the_guests_own_messages_carry_the_guests_name_not_the_auto_reply_name(pg_session, account):
+    tok = _request(pg_session, account)["help_token"]
+    _send(pg_session, tok, "1")
+    mine = [m for m in pg_session.query(SupportMessage).filter(SupportMessage.thread_key == str(account.id), SupportMessage.sender_side == "DRIVER_OWNER")]
+    assert all(m.sender_name != sup.AUTO_REPLY_SENDER for m in mine)
+
+
+def test_a_person_replying_switches_the_bot_off(pg_session, account):
+    tok = _request(pg_session, account)["help_token"]
+    _send(pg_session, tok, "1")
+    pg_session.add(SupportMessage(thread_key=str(account.id), thread_role="OWNER", sender_side="ADMIN", sender_name="Staff", text="I am checking"))
+    pg_session.flush()
+    n = len(_texts(pg_session, account))
+    _send(pg_session, tok, "menu")
+    assert len(_texts(pg_session, account)) == n + 1                       # only the guest's own message was added

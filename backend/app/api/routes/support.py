@@ -142,7 +142,7 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _issue_guest_token(db: Session, thread_key: str, role: str, number: str, reuse: Optional[str]) -> str:
+def _issue_guest_token(db: Session, thread_key: str, role: str, number: str, reuse: Optional[str], reason: Optional[str] = None) -> str:
     """Hand back the caller's existing token if it is still valid for this same account, else mint a new one."""
     import secrets
     from app.models.guest_help_token import GuestHelpToken
@@ -151,11 +151,13 @@ def _issue_guest_token(db: Session, thread_key: str, role: str, number: str, reu
         row = db.query(GuestHelpToken).filter(GuestHelpToken.token_hash == _hash_token(reuse)).first()
         if row and row.thread_key == thread_key and row.expires_at > now:
             row.expires_at = now + timedelta(days=GUEST_HELP_TOKEN_DAYS)
+            if reason:
+                row.reason = reason[:100]
             db.commit()
             return reuse
     token = secrets.token_urlsafe(32)
     db.add(GuestHelpToken(token_hash=_hash_token(token), thread_key=thread_key, role=role, primary_number=number,
-                          expires_at=now + timedelta(days=GUEST_HELP_TOKEN_DAYS)))
+                          reason=(reason or "")[:100] or None, expires_at=now + timedelta(days=GUEST_HELP_TOKEN_DAYS)))
     db.commit()
     return token
 
@@ -264,13 +266,15 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
     db.refresh(m)
 
     # 4. Automatic first reply (shows in the sender's chat), then a push to the admins. No email: it used up the SMTP
-    # daily limit; Admin App > Chats + the push are the channel.
+    # daily limit; Admin App > Chats + the push are the channel. First the person picks a language (crud/support_autoreply.py).
+    token = _issue_guest_token(db, thread_key, "OWNER" if role == "vehicle_owner" else "DRIVER", number, payload.help_token, reason)
     try:
-        db.add(SupportMessage(
-            thread_key=thread_key, thread_role="OWNER" if role == "vehicle_owner" else "DRIVER", thread_name=f"{name} ({number})",
-            sender_side="ADMIN", sender_name=AUTO_REPLY_SENDER, text=_auto_reply_for_reason(reason),
-        ))
-        db.commit()
+        from app.crud import support_autoreply as ar
+        row = _guest_from_token(db, token)
+        if row.language in ar.T:
+            ar._post(db, row, ar.T[row.language]['received'] + chr(10) * 2 + ar._topic_text(db, row, row.language, ar.topic_for_reason(reason)))
+        else:
+            ar.first_reply(db, row)
     except Exception:
         db.rollback()
 
@@ -280,7 +284,7 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
         "success": True,
         "message": f"Support request submitted to Drop Cars Admin for account +91 {number}. Admin has been notified.",
         "thread_key": thread_key,
-        "help_token": _issue_guest_token(db, thread_key, "OWNER" if role == "vehicle_owner" else "DRIVER", number, payload.help_token),
+        "help_token": token,
         "role": role,
         "primary_number": number,
     }
@@ -324,16 +328,23 @@ def guest_support_send(payload: GuestSendPayload, db: Session = Depends(get_db))
     text = (payload.text or "").strip() or ("🎤 Voice message" if voice_url else "")
     if not text:
         raise HTTPException(status_code=422, detail="Message can't be empty.")
-    prior = db.query(SupportMessage).filter(SupportMessage.thread_key == g.thread_key).order_by(SupportMessage.id.desc()).first()
+    prior = db.query(SupportMessage).filter(SupportMessage.thread_key == g.thread_key).order_by(SupportMessage.id.asc()).first()
+    mine = db.query(SupportMessage).filter(SupportMessage.thread_key == g.thread_key, SupportMessage.sender_side == "DRIVER_OWNER").order_by(SupportMessage.id.asc()).first()
     name = (prior.thread_name if prior and prior.thread_name else f"+91 {g.primary_number}")
     m = SupportMessage(
         thread_key=g.thread_key, thread_role=g.role, thread_name=name, sender_side="DRIVER_OWNER",
-        sender_name=prior.sender_name if prior and prior.sender_name else name, text=text, voice_url=voice_url,
-    )
+        sender_name=mine.sender_name if mine and mine.sender_name else name, text=text, voice_url=voice_url,
+    )          # the person's own name - not whoever wrote last in the thread (an auto reply was shown as the sender)
     db.add(m)
     db.commit()
     db.refresh(m)
     _notify_admins_of_support_message(db, m.sender_name or name, text)
+    if not voice_url:
+        try:
+            from app.crud import support_autoreply as ar
+            ar.on_guest_message(db, g, text)
+        except Exception:  # noqa: BLE001
+            db.rollback()
     return {"success": True, "id": m.id}
 
 
