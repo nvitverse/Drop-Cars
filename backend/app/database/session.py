@@ -38,7 +38,9 @@ engine = create_engine(
     connect_args={"options": "-c search_path=drop-cars"},
     # Cloud SQL (db-g1-small) allows 50 connections in total. maxScale=3 instances x (5 + 5) = 30 max, leaving room for the
     # scheduler sweep, admin scripts and migrations. (It used to be 20 + 10 per instance = 90, which could exceed the limit.)
-    pool_size=5,
+    # Now 8 + 5 = 13 per instance (39 at maxScale 3): the request handlers run in a thread pool, and 10 connections made the Admin App's
+    # polling queue up and time out right after a deploy ("QueuePool limit of size 5 overflow 5 reached").
+    pool_size=8,
     max_overflow=5,
     pool_timeout=20,
     pool_pre_ping=True,

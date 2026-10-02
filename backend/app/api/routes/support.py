@@ -506,19 +506,23 @@ def admin_duty_heartbeat(db: Session = Depends(get_db), current_admin=Depends(ge
 def list_support_threads_for_admin(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     """Admin App > Chats - one row per driver/owner who has messaged
     Support, newest activity first."""
-    keys = [r[0] for r in db.query(SupportMessage.thread_key).distinct().all()]
+    # three queries for the whole inbox (it used to be two per thread, on every 10 second refresh of the Admin App)
+    newest = [r[0] for r in db.query(func.max(SupportMessage.id)).group_by(SupportMessage.thread_key).all()]
+    lasts = db.query(SupportMessage).filter(SupportMessage.id.in_(newest)).all() if newest else []
+    unread_by = dict(
+        db.query(SupportMessage.thread_key, func.count(SupportMessage.id))
+        .filter(SupportMessage.sender_side == "DRIVER_OWNER", SupportMessage.read_at.is_(None))
+        .group_by(SupportMessage.thread_key).all()
+    )
+    # people who could not log in and asked for help from the forgot-password screen get their own group in the Admin App
+    help_keys = {r[0] for r in db.query(SupportMessage.thread_key).filter(SupportMessage.text.like("%Password Reset Support Request%")).distinct().all()}
     out = []
-    for key in keys:
-        last = db.query(SupportMessage).filter(SupportMessage.thread_key == key).order_by(SupportMessage.id.desc()).first()
-        if not last:
-            continue
-        unread = db.query(func.count(SupportMessage.id)).filter(
-            SupportMessage.thread_key == key, SupportMessage.sender_side == "DRIVER_OWNER", SupportMessage.read_at.is_(None)
-        ).scalar() or 0
+    for last in lasts:
+        key = last.thread_key
         out.append({
             "thread_key": key, "thread_name": last.thread_name, "thread_role": last.thread_role,
             "last_text": last.text, "last_at": last.created_at.isoformat() if last.created_at else None,
-            "unread": int(unread),
+            "unread": int(unread_by.get(key, 0)), "help_request": key in help_keys,
         })
     out.sort(key=lambda t: t["last_at"] or "", reverse=True)
     return out

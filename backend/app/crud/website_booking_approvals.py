@@ -21,6 +21,8 @@ def list_pending_website_bookings(db) -> list:
     from app.crud.website_post_rules import describe_pending, any_staff_present, get_rules
 
     rules = get_rules(db)
+    from app.crud import driver_tariff
+    tariff_cfg = driver_tariff.load(db)           # once for the whole list (the Admin App polls this every few seconds)
     requests = (
         db.query(CustomerBookingRequest)
         .filter(CustomerBookingRequest.status == "PENDING")
@@ -57,7 +59,7 @@ def list_pending_website_bookings(db) -> list:
             "rule_text": rule_text(r, plan, rules),
             "customer_total": r.admin_total_amount if r.admin_total_amount is not None else r.quoted_total_amount,
             "custom_driver_fare": bool(r.custom_driver_fare),
-            "post_preview": preview_for(db, r),
+            "post_preview": preview_for(db, r, tariff_cfg),
             "trip_distance": r.quoted_trip_distance,
         })
     return out
@@ -85,10 +87,10 @@ def rule_text(r, plan, rules) -> str:
     return plan.get("reason") or ""
 
 
-def preview_for(db, r):
+def preview_for(db, r, tariff_cfg=None):
     try:
         from app.crud.customer_booking_request import posted_fare_split
-        return posted_fare_split(db, r)
+        return posted_fare_split(db, r, tariff_cfg)
     except Exception:  # noqa: BLE001
         return None
 

@@ -143,7 +143,7 @@ def complete_admin_fare(request) -> None:
         request.admin_driver_amount = (request.quoted_driver_amount or 0) + driver_move
 
 
-def posted_fare_split(db: Session, request) -> dict:
+def posted_fare_split(db: Session, request, tariff_cfg: dict | None = None) -> dict:
     """The driver / extra numbers this booking is posted with: exactly what staff typed in Customize, else the driver tariff split of
     the customer's fare. Does not change the request (the Admin App list shows it as a preview)."""
     orig_cost_per_km = request.admin_cost_per_km if request.admin_cost_per_km is not None else request.quoted_cost_per_km
@@ -160,7 +160,7 @@ def posted_fare_split(db: Session, request) -> dict:
         }
     from app.crud import driver_tariff
     return driver_tariff.split_fare(
-        driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
+        tariff_cfg if tariff_cfg is not None else driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
         customer_km_rate=int(orig_cost_per_km or 0) + int(customer_extra_km),
         customer_bata=int(orig_driver_allowance or 0) + int(orig_extra_driver_allowance or 0),
         customer_permit=int(drv_permit) + int(extra_permit), trip_type=request.trip_type,

@@ -111,3 +111,13 @@ def test_a_person_replying_switches_the_bot_off(pg_session, account):
     n = len(_texts(pg_session, account))
     _send(pg_session, tok, "menu")
     assert len(_texts(pg_session, account)) == n + 1                       # only the guest's own message was added
+
+
+def test_admin_thread_list_flags_help_requests_and_counts_unread(pg_session, account):
+    tok = _request(pg_session, account)["help_token"]
+    _send(pg_session, tok, "hello")
+    rows = sup.list_support_threads_for_admin(pg_session, None)
+    mine = next(r for r in rows if r["thread_key"] == str(account.id))
+    assert mine["help_request"] is True and mine["thread_role"] == "OWNER"
+    assert mine["unread"] == 2                                       # the request + "hello" are unread for Admin
+    assert sum(1 for r in rows if r["thread_key"] == str(account.id)) == 1
