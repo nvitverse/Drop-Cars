@@ -65,3 +65,12 @@ def test_monthly_plan_renews_from_wallet_or_lapses(pg_session):
     assert (rich.wallet_balance, rich.billing_next_date) == (201, date.today() + timedelta(days=30))
     assert (poor.wallet_balance, poor.billing_next_date) == (100, date.today() - timedelta(days=1))      # nothing taken, plan lapses
     assert billing.run_monthly_auto_renewals(pg_session)["renewed"] == 0                                 # idempotent
+
+
+def test_a_long_lapsed_monthly_plan_is_not_charged_behind_the_owners_back(pg_session):
+    d = _owner(pg_session, 1000)
+    d.subscription_type, d.billing_next_date, d.auto_renew_from_wallet = "MONTHLY", date.today() - timedelta(days=40), True
+    pg_session.flush()
+    billing.run_monthly_auto_renewals(pg_session)
+    pg_session.refresh(d)
+    assert d.wallet_balance == 1000

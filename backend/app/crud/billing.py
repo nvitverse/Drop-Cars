@@ -25,6 +25,7 @@ from app.models.wallet_ledger import WalletLedger, WalletEntryTypeEnum
 BILLING_CYCLE_DAYS = 365
 
 MONTHLY_CYCLE_DAYS = 30
+MONTHLY_RENEWAL_GRACE_DAYS = 3      # a monthly plan is auto-renewed up to this many days after its date; older ones stay lapsed
 
 DEFAULTS = {
     "billing_enabled": "false",
@@ -570,6 +571,7 @@ def run_monthly_auto_renewals(db: Session) -> dict:
         .filter(VehicleOwnerDetails.subscription_type == "MONTHLY")
         .filter(VehicleOwnerDetails.billing_next_date.isnot(None))
         .filter(VehicleOwnerDetails.billing_next_date <= today)
+        .filter(VehicleOwnerDetails.billing_next_date >= today - timedelta(days=MONTHLY_RENEWAL_GRACE_DAYS))   # long-lapsed plans are not charged behind the owner's back
         .filter(VehicleOwnerDetails.billing_suspended.is_(False))
         .filter(VehicleOwnerDetails.auto_renew_from_wallet.isnot(False))
         .all()
