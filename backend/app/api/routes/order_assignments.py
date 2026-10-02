@@ -1472,6 +1472,7 @@ class UpdateAdvanceReceivedPayload(BaseModel):
 
 
 @router.put("/orders/{order_id}/advance-received", dependencies=[Depends(get_current_user_flexible)])
+@router.put("/{order_id}/advance-received", dependencies=[Depends(get_current_user_flexible)], include_in_schema=False)   # what the Admin App calls: /api/orders/{id}/advance-received
 def update_order_advance_received(
     order_id: str,
     payload: UpdateAdvanceReceivedPayload,

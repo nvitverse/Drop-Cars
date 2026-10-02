@@ -20,10 +20,11 @@ functional harm in leaving them, and they were already built + tested.
 """
 import random
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
+from app.core.limiter import limiter
 from app.database.session import get_db
 from app.core.security import create_access_token, get_current_customer, CUSTOMER_ACCESS_TOKEN_EXPIRE_MINUTES
 from app.schemas.customer import CustomerTokenResponse, CustomerOut
@@ -131,7 +132,8 @@ class PhoneOtpVerify(BaseModel):
 
 
 @router.post("/auth/phone/request-otp")
-async def phone_request_otp(body: PhoneOtpRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def phone_request_otp(request: Request, body: PhoneOtpRequest, db: Session = Depends(get_db)):
     if not sms_gateway_configured(db):
         raise HTTPException(status_code=503, detail="Phone sign-in isn't available yet. Please use email/password or contact support.")
 
@@ -152,7 +154,8 @@ async def phone_request_otp(body: PhoneOtpRequest, db: Session = Depends(get_db)
 
 
 @router.post("/auth/phone/verify-otp", response_model=CustomerTokenResponse)
-def phone_verify_otp(body: PhoneOtpVerify, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def phone_verify_otp(request: Request, body: PhoneOtpVerify, db: Session = Depends(get_db)):
     number = body.primary_number.strip()
     otp = (
         db.query(PhoneOtp)

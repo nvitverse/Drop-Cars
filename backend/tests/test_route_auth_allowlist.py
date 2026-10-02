@@ -48,6 +48,13 @@ PUBLIC_BY_DESIGN = {
     "POST /api/users/vehicleowner/verify-email-otp",
     # Forgot-password help for someone who can't log in, and the support phone number.
     "POST /api/support/public-request-admin-help",
+    # Customer App sign-in, mounted at /api (the app calls /api/customer/* and /api/auth/*); credentials are the request itself
+    "POST /api/customer/signin",
+    "POST /api/customer/signup",
+    "POST /api/auth/firebase/verify",
+    "POST /api/auth/google/verify",
+    "POST /api/auth/phone/request-otp",   # rate limited 5/min
+    "POST /api/auth/phone/verify-otp",    # rate limited 10/min, 5 wrong codes burn the OTP
     "POST /api/support/guest/thread",   # help_token (random, hashed in DB) is the credential
     "POST /api/support/guest/send",
     "POST /api/support/guest/unread",
