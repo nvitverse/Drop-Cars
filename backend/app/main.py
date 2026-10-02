@@ -195,6 +195,8 @@ from app.api.routes import chat_media_public as chat_media_public_router
 app.include_router(chat_media_public_router.router, prefix="/api", tags=["Chat media"])
 from app.api.routes import driver_tariff as driver_tariff_router
 app.include_router(driver_tariff_router.router, prefix="/api", tags=["Driver Tariff"])    # before admin.router (its catch-all /admin/{id})
+from app.api.routes import website_booking_schedule as website_booking_schedule_router
+app.include_router(website_booking_schedule_router.router, prefix="/api", tags=["Website Approvals"])
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 from app.api.routes import system_health as _system_health_routes
@@ -434,6 +436,8 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE admin ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS hold_until TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ',
+        'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS post_at_override TIMESTAMPTZ',
+        'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS custom_driver_fare BOOLEAN NOT NULL DEFAULT false',
         # Trusted Partner (tier=PREFERRED) - two extra grant paths alongside
         # the yearly-billing evidence above (2026-09-30)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS admin_trusted_override BOOLEAN NOT NULL DEFAULT false',
