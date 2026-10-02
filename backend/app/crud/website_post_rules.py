@@ -143,9 +143,12 @@ def compute_post_plan(request, *, now: datetime, staff_on: bool, rules: dict, mo
             plan = {"deadline": created + timedelta(seconds=rules["website_off_duty_delay_seconds"]), "tier": "OFF_DUTY",
                     "reason": "No staff on duty"}
 
+    override = _aware(getattr(request, "post_at_override", None))
+    if override is not None and plan["deadline"] is not None:
+        plan = {"deadline": override, "tier": "SCHEDULED", "reason": "Scheduled by staff"}
     hold = _aware(getattr(request, "hold_until", None))
     if hold is not None and plan["deadline"] is not None and hold > plan["deadline"]:
-        plan = {**plan, "deadline": hold, "reason": "Held by staff"}
+        plan = {**plan, "deadline": hold, "reason": "Held by staff - posts by itself 2 hrs before pickup", "held": True}
     return plan
 
 
@@ -173,6 +176,47 @@ def set_hold(db: Session, request, minutes: int, rules: Optional[dict] = None, n
     request.hold_until = until
     db.commit()
     return until
+
+
+def hold_to_last_window(db: Session, request, rules: Optional[dict] = None, now: Optional[datetime] = None) -> datetime:
+    """Pause the auto-post until the last window (pickup - 2 hrs). From then the normal rule posts it, and the staff alarm rings."""
+    from fastapi import HTTPException
+
+    now = now or datetime.now(timezone.utc)
+    rules = rules or get_rules(db)
+    if request.status != "PENDING":
+        raise HTTPException(status_code=400, detail="Only a pending booking can be held")
+    cap = hold_cap(request, rules)
+    if cap is None or cap <= now:
+        raise HTTPException(status_code=400, detail="Too close to pickup to hold - confirm or post it now")
+    request.hold_until = cap
+    db.commit()
+    return cap
+
+
+def set_post_time(db: Session, request, post_at: Optional[datetime], rules: Optional[dict] = None, now: Optional[datetime] = None) -> Optional[datetime]:
+    """Staff choose when this booking posts (None = back to the rule's own time). Must be in the future and not later than pickup - 2 hrs."""
+    from fastapi import HTTPException
+
+    now = now or datetime.now(timezone.utc)
+    rules = rules or get_rules(db)
+    if request.status != "PENDING":
+        raise HTTPException(status_code=400, detail="Only a pending booking can be rescheduled")
+    if post_at is None:
+        request.post_at_override = None
+        db.commit()
+        return None
+    post_at = _aware(post_at)
+    if post_at <= now:
+        raise HTTPException(status_code=400, detail="Choose a time in the future (or use Approve Now to post it immediately)")
+    cap = hold_cap(request, rules)
+    if cap is not None and post_at > cap:
+        raise HTTPException(status_code=400, detail=f"Latest allowed is 2 hrs before pickup ({cap.isoformat()})")
+    request.post_at_override = post_at
+    if request.hold_until is not None and request.hold_until > post_at:      # an explicit time replaces an earlier hold
+        request.hold_until = None
+    db.commit()
+    return post_at
 
 
 def describe_pending(db: Session, requests: list, *, now: Optional[datetime] = None) -> list:

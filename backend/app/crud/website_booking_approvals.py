@@ -20,6 +20,7 @@ from app.models.customer_booking_request import CustomerBookingRequest
 def list_pending_website_bookings(db) -> list:
     from app.crud.website_post_rules import describe_pending, any_staff_present, get_rules
 
+    rules = get_rules(db)
     requests = (
         db.query(CustomerBookingRequest)
         .filter(CustomerBookingRequest.status == "PENDING")
@@ -47,8 +48,49 @@ def list_pending_website_bookings(db) -> list:
             "auto_post_reason": plan["reason"],
             "hold_until": r.hold_until,
             "can_hold": plan["deadline"] is not None,
+            # what the Admin App card shows: when it was confirmed, when it will post and why, the latest time staff may schedule/hold to,
+            # and the exact driver | extra numbers it will be posted with
+            "confirmed_at": r.created_at,
+            "post_at_override": r.post_at_override,
+            "is_held": bool(plan.get("held")),
+            "latest_post_time": cap_for(r, rules),
+            "rule_text": rule_text(r, plan, rules),
+            "customer_total": r.admin_total_amount if r.admin_total_amount is not None else r.quoted_total_amount,
+            "custom_driver_fare": bool(r.custom_driver_fare),
+            "post_preview": preview_for(db, r),
+            "trip_distance": r.quoted_trip_distance,
         })
     return out
+
+
+def cap_for(r, rules):
+    from app.crud.website_post_rules import hold_cap
+    return hold_cap(r, rules)
+
+
+def rule_text(r, plan, rules) -> str:
+    """One plain sentence on WHY the booking posts at that time."""
+    tier = plan.get("tier")
+    adv, wait = int(rules["website_advance_post_hours"]), int(rules["website_staff_wait_until_hours"])
+    if tier == "SCHEDULED":
+        return "Posting time chosen by staff"
+    if plan.get("held"):
+        return f"Held by staff. It posts by itself {wait} hrs before pickup and the alarm rings then"
+    if tier == "ADVANCE":
+        return f"Booked more than {adv} hrs ahead: posts {adv} hrs before pickup (staff can post earlier any time)"
+    if tier == "STAFF_WAIT":
+        return f"Staff on duty: waits for staff, at most until {wait} hrs before pickup"
+    if tier == "MANUAL":
+        return "Waits for staff to confirm (never posts by itself)"
+    return plan.get("reason") or ""
+
+
+def preview_for(db, r):
+    try:
+        from app.crud.customer_booking_request import posted_fare_split
+        return posted_fare_split(db, r)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def bulk_approve_website_bookings(db, ids: list, decided_by: str) -> dict:

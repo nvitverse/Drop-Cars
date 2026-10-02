@@ -68,6 +68,10 @@ class CustomerBookingRequest(Base):
 
     # Staff paused the auto-post of this booking until this moment (never past pickup - 2 hrs).
     hold_until = Column(TIMESTAMP(timezone=True), nullable=True)
+    # Staff chose WHEN this booking posts (instead of the rule's time). Never past pickup - 2 hrs.
+    post_at_override = Column(TIMESTAMP(timezone=True), nullable=True)
+    # Staff customized the driver fare in the Admin App: post exactly those numbers, do not re-split with the driver tariff.
+    custom_driver_fare = Column(Boolean, nullable=False, default=False, server_default="false")
     # Set once when the Owner was alerted that this booking has been waiting on staff too long.
     escalated_at = Column(TIMESTAMP(timezone=True), nullable=True)
 

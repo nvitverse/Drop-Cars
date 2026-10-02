@@ -143,6 +143,30 @@ def complete_admin_fare(request) -> None:
         request.admin_driver_amount = (request.quoted_driver_amount or 0) + driver_move
 
 
+def posted_fare_split(db: Session, request) -> dict:
+    """The driver / extra numbers this booking is posted with: exactly what staff typed in Customize, else the driver tariff split of
+    the customer's fare. Does not change the request (the Admin App list shows it as a preview)."""
+    orig_cost_per_km = request.admin_cost_per_km if request.admin_cost_per_km is not None else request.quoted_cost_per_km
+    orig_driver_allowance = request.admin_driver_allowance if request.admin_driver_allowance is not None else request.quoted_driver_allowance
+    orig_extra_driver_allowance = request.admin_extra_driver_allowance if request.admin_extra_driver_allowance is not None else request.quoted_extra_driver_allowance
+    customer_extra_km = _pick(request.admin_extra_cost_per_km, request.quoted_extra_cost_per_km) or 0
+    drv_permit = _pick(request.admin_permit_charges, request.quoted_permit_charges) or 0
+    extra_permit = _pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges) or 0
+    if getattr(request, "custom_driver_fare", False):
+        return {
+            "cost_per_km": int(orig_cost_per_km or 0), "extra_cost_per_km": int(customer_extra_km),
+            "driver_allowance": int(orig_driver_allowance or 0), "extra_driver_allowance": int(orig_extra_driver_allowance or 0),
+            "permit_charges": int(drv_permit), "extra_permit_charges": int(extra_permit), "permit_rule": "Set by staff",
+        }
+    from app.crud import driver_tariff
+    return driver_tariff.split_fare(
+        driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
+        customer_km_rate=int(orig_cost_per_km or 0) + int(customer_extra_km),
+        customer_bata=int(orig_driver_allowance or 0) + int(orig_extra_driver_allowance or 0),
+        customer_permit=int(drv_permit) + int(extra_permit), trip_type=request.trip_type,
+    )
+
+
 def approve_customer_booking_request(db: Session, request: CustomerBookingRequest, decided_by: str) -> Order:
     """Turn a PENDING request into a real NewOrder + master Order (which itself
     fires the Telegram alert and vehicle-owner push fan-out - see
@@ -168,14 +192,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     orig_total_amount = request.admin_total_amount if request.admin_total_amount is not None else request.quoted_total_amount
 
     if orig_cost_per_km and orig_cost_per_km > 0:
-        from app.crud import driver_tariff
-        customer_extra_km = _pick(request.admin_extra_cost_per_km, request.quoted_extra_cost_per_km) or 0
-        customer_permit = (_pick(request.admin_permit_charges, request.quoted_permit_charges) or 0) + (_pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges) or 0)
-        split = driver_tariff.split_fare(
-            driver_tariff.load(db), car_type=request.car_type, pickup_drop_location=request.pickup_drop_location,
-            customer_km_rate=int(orig_cost_per_km) + int(customer_extra_km), customer_bata=int(orig_driver_allowance or 0) + int(orig_extra_driver_allowance or 0),
-            customer_permit=int(customer_permit), trip_type=request.trip_type,
-        )
+        split = posted_fare_split(db, request)
         posted_cost_per_km = split["cost_per_km"]
         posted_extra_cost_per_km = split["extra_cost_per_km"]
         posted_driver_allowance = split["driver_allowance"]
