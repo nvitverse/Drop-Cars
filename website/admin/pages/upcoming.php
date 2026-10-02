@@ -436,6 +436,17 @@ if ($isAjax) {
             <span style="background: <?php echo $category == 'assigned' ? '#dcfce7' : '#e2e8f0'; ?>; color: <?php echo $category == 'assigned' ? '#166534' : '#64748b'; ?>; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; transition: all 0.3s;"><?php echo $counts['assigned']; ?></span>
         </a>
     </div>
+<form method="POST" action="actions/sync-upcoming-to-approvals.php" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:16px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+    <div>
+        <strong style="color:#166534;font-size:0.95rem;display:flex;align-items:center;gap:6px;">
+            <i class="fa fa-rotate" style="color:#16a34a;"></i> Sync Upcoming Bookings to Admin App Approvals
+        </strong>
+        <span style="color:#15803d;font-size:0.8rem;font-weight:600;">Copies every upcoming confirmed booking the Admin App does not have yet (with its confirmed fare). Nothing is posted to drivers; the Admin App then schedules it by the auto-post rule.</span>
+    </div>
+    <button type="submit" onclick="return confirm('Copy all upcoming confirmed bookings that are missing in the Admin App into Website Approvals?');" style="background:#16a34a;color:#ffffff;border:none;padding:0.65rem 1.25rem;border-radius:10px;font-weight:800;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <i class="fa fa-rotate"></i> Sync to Admin App
+    </button>
+</form>
 <form method="POST" action="actions/post-upcoming-to-app.php" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
     <input type="hidden" name="post_all_upcoming" value="1">
     <div>
