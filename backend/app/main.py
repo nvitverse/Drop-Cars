@@ -210,6 +210,9 @@ app.include_router(geocode_router.router, prefix="/api", tags=["Geocode"])
 from app.api.routes import subscriptions as subscriptions_router
 app.include_router(subscriptions_router.router, prefix="/api", tags=["Subscriptions"])
 app.include_router(customer.router, prefix="/api/users", tags=["Customer"])
+# The Customer App calls /api/customer/* and /api/auth/* (no /users): same handlers, mounted where the app looks.
+app.include_router(customer.router, prefix="/api", include_in_schema=False)
+app.include_router(hybrid_auth_router.router, prefix="/api", tags=["CustomerAuth"])
 app.include_router(customer_bookings.router, prefix="/api", tags=["CustomerBookings"])
 app.include_router(website_bookings.router, prefix="/api", tags=["WebsiteBookings"])
 from app.api.routes import chat as chat_router
