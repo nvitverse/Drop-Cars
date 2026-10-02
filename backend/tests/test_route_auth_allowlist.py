@@ -48,6 +48,9 @@ PUBLIC_BY_DESIGN = {
     "POST /api/users/vehicleowner/verify-email-otp",
     # Forgot-password help for someone who can't log in, and the support phone number.
     "POST /api/support/public-request-admin-help",
+    "POST /api/support/guest/thread",   # help_token (random, hashed in DB) is the credential
+    "POST /api/support/guest/send",
+    "POST /api/support/guest/unread",
     "GET /api/support/on-duty-contact",
     # Published app content: OTA manifest (checked before login), terms, cards, GST details.
     "GET /api/app-updates/{app}/manifest",

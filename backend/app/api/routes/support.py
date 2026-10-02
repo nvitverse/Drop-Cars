@@ -131,6 +131,41 @@ class PublicAdminHelpRequest(BaseModel):
     primary_number: str = Field(..., min_length=10, max_length=10)
     reason: str = Field(..., min_length=2, max_length=100)
     message: Optional[str] = Field(None, max_length=1000)
+    help_token: Optional[str] = Field(None, max_length=200)
+
+
+GUEST_HELP_TOKEN_DAYS = 14
+
+
+def _hash_token(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _issue_guest_token(db: Session, thread_key: str, role: str, number: str, reuse: Optional[str]) -> str:
+    """Hand back the caller's existing token if it is still valid for this same account, else mint a new one."""
+    import secrets
+    from app.models.guest_help_token import GuestHelpToken
+    now = datetime.now(timezone.utc)
+    if reuse:
+        row = db.query(GuestHelpToken).filter(GuestHelpToken.token_hash == _hash_token(reuse)).first()
+        if row and row.thread_key == thread_key and row.expires_at > now:
+            row.expires_at = now + timedelta(days=GUEST_HELP_TOKEN_DAYS)
+            db.commit()
+            return reuse
+    token = secrets.token_urlsafe(32)
+    db.add(GuestHelpToken(token_hash=_hash_token(token), thread_key=thread_key, role=role, primary_number=number,
+                          expires_at=now + timedelta(days=GUEST_HELP_TOKEN_DAYS)))
+    db.commit()
+    return token
+
+
+def _guest_from_token(db: Session, token: str):
+    from app.models.guest_help_token import GuestHelpToken
+    row = db.query(GuestHelpToken).filter(GuestHelpToken.token_hash == _hash_token((token or "").strip())).first() if token else None
+    if not row or row.expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Help session expired. Please submit a new help request.")
+    return row
 
 
 @router.post("/public-request-admin-help")
@@ -174,7 +209,7 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
     # 3. Create SupportMessage row for Admin App > Chats
     m = SupportMessage(
         thread_key=thread_key,
-        thread_role=role.upper(),
+        thread_role="OWNER" if role == "vehicle_owner" else "DRIVER",
         thread_name=f"{name} ({number})",
         sender_side="DRIVER_OWNER",
         sender_name=name,
@@ -206,7 +241,70 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
         "success": True,
         "message": f"Support request submitted to Drop Cars Admin for account +91 {number}. Admin has been notified.",
         "thread_key": thread_key,
+        "help_token": _issue_guest_token(db, thread_key, "OWNER" if role == "vehicle_owner" else "DRIVER", number, payload.help_token),
+        "role": role,
+        "primary_number": number,
     }
+
+
+class GuestThreadPayload(BaseModel):
+    help_token: str = Field(..., min_length=10, max_length=200)
+    after_id: int = 0
+
+
+class GuestSendPayload(BaseModel):
+    help_token: str = Field(..., min_length=10, max_length=200)
+    text: Optional[str] = Field(None, max_length=1000)
+    voice_url: Optional[str] = Field(None, max_length=1000)
+
+
+class GuestTokenPayload(BaseModel):
+    help_token: str = Field(..., min_length=10, max_length=200)
+
+
+@router.post("/guest/thread")
+def guest_support_thread(payload: GuestThreadPayload, db: Session = Depends(get_db)):
+    """Someone locked out of their account reading Admin's replies; marks Admin messages read (the 2nd tick)."""
+    g = _guest_from_token(db, payload.help_token)
+    all_msgs = db.query(SupportMessage).filter(SupportMessage.thread_key == g.thread_key).order_by(SupportMessage.id.asc()).all()
+    now = datetime.now(timezone.utc)
+    changed = False
+    for m in all_msgs:
+        if m.sender_side == "ADMIN" and m.read_at is None:
+            m.read_at = now
+            changed = True
+    if changed:
+        db.commit()
+    return {"messages": [_msg_out(m, "DRIVER_OWNER") for m in all_msgs if m.id > payload.after_id]}
+
+
+@router.post("/guest/send", status_code=status.HTTP_201_CREATED)
+def guest_support_send(payload: GuestSendPayload, db: Session = Depends(get_db)):
+    g = _guest_from_token(db, payload.help_token)
+    voice_url = (payload.voice_url or "").strip() or None
+    text = (payload.text or "").strip() or ("🎤 Voice message" if voice_url else "")
+    if not text:
+        raise HTTPException(status_code=422, detail="Message can't be empty.")
+    prior = db.query(SupportMessage).filter(SupportMessage.thread_key == g.thread_key).order_by(SupportMessage.id.desc()).first()
+    name = (prior.thread_name if prior and prior.thread_name else f"+91 {g.primary_number}")
+    m = SupportMessage(
+        thread_key=g.thread_key, thread_role=g.role, thread_name=name, sender_side="DRIVER_OWNER",
+        sender_name=prior.sender_name if prior and prior.sender_name else name, text=text, voice_url=voice_url,
+    )
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    _notify_admins_of_support_message(db, m.sender_name or name, text)
+    return {"success": True, "id": m.id}
+
+
+@router.post("/guest/unread")
+def guest_support_unread(payload: GuestTokenPayload, db: Session = Depends(get_db)):
+    g = _guest_from_token(db, payload.help_token)
+    unread = db.query(func.count(SupportMessage.id)).filter(
+        SupportMessage.thread_key == g.thread_key, SupportMessage.sender_side == "ADMIN", SupportMessage.read_at.is_(None)
+    ).scalar() or 0
+    return {"unread": int(unread)}
 
 
 @router.post("/dispatch-message", dependencies=[Depends(get_current_user_flexible)])
