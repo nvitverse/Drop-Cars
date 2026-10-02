@@ -168,6 +168,33 @@ def _guest_from_token(db: Session, token: str):
     return row
 
 
+AUTO_REPLY_SENDER = "Drop Cars Support (auto)"
+DUPLICATE_REQUEST_MINUTES = 10
+
+
+def _auto_reply_for_reason(reason: str) -> str:
+    """First answer a locked-out driver/owner gets at once, before a person is free. Tamil + English, no phone numbers."""
+    r = (reason or "").lower()
+    if "identity" in r or "aadhaar" in r:
+        body = ("Please reply here with your full name, vehicle number and a clear photo (or voice note) of your DL / Aadhaar. "
+                "Admin will verify and correct it.\n\nஉங்கள் முழுப் பெயர், வாகன எண் மற்றும் DL / ஆதார் தெளிவான படத்தை இங்கே அனுப்புங்கள். Admin சரிபார்த்து சரி செய்வார்.")
+    elif "no email" in r:
+        body = ("Your account has no email, so the reset code cannot reach you. Reply here with your full name, vehicle number and the "
+                "email you want linked. Admin will verify and link it.\n\nஉங்கள் கணக்கில் email இல்லை. பெயர், வாகன எண் மற்றும் இணைக்க வேண்டிய email-ஐ இங்கே அனுப்புங்கள்.")
+    elif "otp" in r or "inbox" in r or "spam" in r:
+        body = ("Please check Spam / Promotions, wait 2 minutes and request the code only once (many requests block it). "
+                "Still nothing? Reply here and Admin will help.\n\nSpam / Promotions folder-ஐ பாருங்கள், 2 நிமிடம் காத்திருந்து ஒரு முறை மட்டும் கேளுங்கள். வரவில்லை என்றால் இங்கே பதில் அனுப்புங்கள்.")
+    elif "mobile" in r or "number" in r:
+        body = ("Reply here with your registered mobile number, the new number and your full name. Admin will verify and update it.\n\n"
+                "பதிவு செய்த எண், புதிய எண் மற்றும் உங்கள் பெயரை இங்கே அனுப்புங்கள். Admin சரிபார்த்து மாற்றுவார்.")
+    elif "password" in r or "locked" in r or "forgot" in r:
+        body = ("Tap Forgot password and enter the code sent to your email. If the account is locked or you cannot get the code, reply here "
+                "with your full name and vehicle number, and Admin will verify you.\n\nForgot password-ஐ தொட்டு email-க்கு வந்த code-ஐ உள்ளிடுங்கள். முடியவில்லை என்றால் பெயர் மற்றும் வாகன எண்ணை இங்கே அனுப்புங்கள்.")
+    else:
+        body = "Please write your problem here in one message (text or voice). Admin will reply in this chat.\n\nஉங்கள் பிரச்சனையை இங்கே எழுதுங்கள் அல்லது voice அனுப்புங்கள். Admin இங்கேயே பதில் அளிப்பார்."
+    return "👋 " + body + "\n\n✅ Your request reached Drop Cars Admin. Replies will appear in this chat."
+
+
 @router.post("/public-request-admin-help")
 def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Depends(get_db)):
     """Allow an existing driver/owner on the password reset screen to submit a
@@ -197,8 +224,25 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
             detail=f"No {role.replace('_', ' ')} account found registered with mobile number +91 {number}. Please check your mobile number.",
         )
 
-    name = getattr(account, "full_name", None) or f"{role.capitalize()} (+91 {number})"
+    name = getattr(account, "full_name", None) or ("Fleet Owner" if role == "vehicle_owner" else "Driver")      # the number is added to the title below
     thread_key = str(getattr(account, "id", f"guest_{number}"))
+
+    # 1b. The same person tapping Submit again and again used to flood the inbox (and the mailbox): one request per
+    # DUPLICATE_REQUEST_MINUTES, the repeat just gets the same session back.
+    recent = datetime.now(timezone.utc) - timedelta(minutes=DUPLICATE_REQUEST_MINUTES)
+    already = db.query(SupportMessage.id).filter(
+        SupportMessage.thread_key == thread_key, SupportMessage.sender_side == "DRIVER_OWNER",
+        SupportMessage.text.like("%Password Reset Support Request%"), SupportMessage.created_at >= recent,
+    ).first()
+    if already:
+        return {
+            "success": True,
+            "message": "Your request is already with Drop Cars Admin. Please wait for the reply in the chat.",
+            "thread_key": thread_key,
+            "help_token": _issue_guest_token(db, thread_key, "OWNER" if role == "vehicle_owner" else "DRIVER", number, payload.help_token),
+            "role": role,
+            "primary_number": number,
+        }
 
     # 2. Format support message for Admin inbox
     formatted_text = f"🔑 Password Reset Support Request\n\n📌 Reason: {reason}"
@@ -219,21 +263,16 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
     db.commit()
     db.refresh(m)
 
-    # 4. Best-effort email & push notification to Admins
+    # 4. Automatic first reply (shows in the sender's chat), then a push to the admins. No email: it used up the SMTP
+    # daily limit; Admin App > Chats + the push are the channel.
     try:
-        from app.utils.emailer import send_email, smtp_configured, get_smtp_settings
-        if smtp_configured(db):
-            from app.models.platform_setting import PlatformSetting
-            row = db.query(PlatformSetting).filter(PlatformSetting.key == "support_notify_email").first()
-            to_email = (row.value if row and row.value else None) or get_smtp_settings(db)["smtp_user"]
-            send_email(
-                db,
-                to_email,
-                f"Drop Cars Reset Support Request from {name}",
-                f"Password Reset Support Request\nFrom: {name} (+91 {number})\nReason: {reason}\n\nNote:\n{custom_msg}\n\nReply in Admin App > Chats."
-            )
+        db.add(SupportMessage(
+            thread_key=thread_key, thread_role="OWNER" if role == "vehicle_owner" else "DRIVER", thread_name=f"{name} ({number})",
+            sender_side="ADMIN", sender_name=AUTO_REPLY_SENDER, text=_auto_reply_for_reason(reason),
+        ))
+        db.commit()
     except Exception:
-        pass
+        db.rollback()
 
     _notify_admins_of_support_message(db, name, formatted_text)
 
@@ -330,19 +369,7 @@ def send_support_message(payload: SupportMessagePayload, request: Request, db: S
     db.commit()
     db.refresh(m)
 
-    # Best-effort email nudge so a real person notices quickly even before
-    # opening the Admin App - never blocks/fails the chat message itself.
-    try:
-        from app.utils.emailer import send_email, smtp_configured, get_smtp_settings
-        if smtp_configured(db):
-            from app.models.platform_setting import PlatformSetting
-            row = db.query(PlatformSetting).filter(PlatformSetting.key == "support_notify_email").first()
-            to_email = (row.value if row and row.value else None) or get_smtp_settings(db)["smtp_user"]
-            send_email(db, to_email, f"Drop Cars Support message from {name}",
-                       f"From: {name} ({number})\nRole: {role}\n\nMessage:\n{text}\n\nReply from the Admin App > Chats.")
-    except Exception:
-        pass
-
+    # No email: support chat used up the SMTP daily limit. Admin gets a push notification and the Chats inbox.
     _notify_admins_of_support_message(db, name, text)
 
     return {

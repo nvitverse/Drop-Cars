@@ -41,7 +41,7 @@ def test_guest_can_chat_and_sees_admin_reply_read(pg_session, account):
     assert sup.guest_support_send(sup.GuestSendPayload(help_token=tok, text="please reset"), pg_session)["success"]
     pg_session.add(SupportMessage(thread_key=str(account.id), thread_role="OWNER", sender_side="ADMIN", sender_name="Admin", text="done"))
     pg_session.flush()
-    assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 1}
+    assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 2}      # the auto reply + the admin message
     msgs = sup.guest_support_thread(sup.GuestThreadPayload(help_token=tok), pg_session)["messages"]
     assert [m["text"] for m in msgs][-2:] == ["please reset", "done"] and [m["mine"] for m in msgs][-2:] == [True, False]
     assert sup.guest_support_unread(sup.GuestTokenPayload(help_token=tok), pg_session) == {"unread": 0}
@@ -52,3 +52,17 @@ def test_bad_token_is_401(pg_session, account):
         with pytest.raises(HTTPException) as e:
             fn(body(help_token="x" * 20), pg_session)
         assert e.value.status_code == 401
+
+
+def test_request_gets_an_auto_reply_no_email_and_repeat_taps_do_not_flood(pg_session, account, monkeypatch):
+    from app.utils import emailer
+    sent = []
+    monkeypatch.setattr(emailer, "send_email", lambda *a, **k: sent.append(a))
+    r1 = _request(pg_session, account)
+    r2 = _request(pg_session, account, r1["help_token"])           # same person taps Submit again
+    msgs = pg_session.query(SupportMessage).filter(SupportMessage.thread_key == str(account.id)).order_by(SupportMessage.id).all()
+    assert [m.sender_side for m in msgs] == ["DRIVER_OWNER", "ADMIN"]       # one request + one automatic first reply
+    assert "Reply here" in msgs[1].text or "reply here" in msgs[1].text
+    assert msgs[1].sender_name == sup.AUTO_REPLY_SENDER and msgs[0].thread_role == "OWNER"
+    assert r2["help_token"] == r1["help_token"] and "already" in r2["message"]
+    assert sent == []                                              # SMTP daily limit: chat + push only
