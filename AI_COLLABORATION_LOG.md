@@ -98,3 +98,8 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ## 2026-10-06 (Claude) — LIVE: revision 00294, commit 4f0b2ff320 (branch deploy/merged-2026-10-06)
 First deploy through scripts/deploy-backend.ps1. Cloud Run service label `git-sha` = 4f0b2ff320e6f857e5f652eb6e8c6bfe8c2482ae; every later deploy must contain it. Contents: everything listed in the entry above (both tools' backend work, no password in source).
+
+## 2026-10-06 (Claude) — LIVE: revision 00298 (commit 8affc12fa5, memory 1 GiB)
+- Cloud Run was killing the API: "Memory limit of 512 MiB exceeded with 602 MiB used" (restarts + 100 s+ stalls). Memory raised to 1 GiB (also in scripts/deploy-backend.ps1).
+- The scheduler sweep (`/api/internal/sweep`) used to block the event loop for up to ~2 min; now runs in a worker thread, never overlaps itself.
+- Ported from Antigravity's backend clone: admin account creation endpoints, /admin/vehicle-owners route aliases + tier filter, ai_training_rules.json.

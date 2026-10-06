@@ -79,7 +79,7 @@ if ($DryRun) { Write-Host "`nDry run finished: every check passed." -ForegroundC
 # 5. deploy and remember the commit
 Push-Location backend
 $env:TEMP = "C:\gtmp"; $env:TMP = "C:\gtmp"
-gcloud run deploy $Service --source . --region $Region --project $Project --min-instances=1 --quiet --update-labels "git-sha=$sha,git-branch=$($branch -replace '[^a-z0-9-]','-')"
+gcloud run deploy $Service --source . --region $Region --project $Project --min-instances=1 --memory=1Gi --quiet --update-labels "git-sha=$sha,git-branch=$($branch -replace '[^a-z0-9-]','-')"
 $code = $LASTEXITCODE
 Pop-Location
 if ($code -ne 0) { Fail "gcloud deploy failed." }
