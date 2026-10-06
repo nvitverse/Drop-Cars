@@ -1229,6 +1229,24 @@ async def cancel_expired_assignments_task() -> None:
     await _run_assignment_sweep()
 
 
+_SWEEP_RUNNING = False
+
+
+async def _run_off_loop(coro_fn):
+    """Run one of the sweeps in a worker thread with its own event loop.
+
+    The sweeps are `async def` but do blocking work (database queries, Razorpay / Expo / SMTP calls) between their awaits. Run
+    directly on the server's event loop they froze EVERY request for as long as the sweep took (observed 2026-10-06: a
+    /internal/sweep of 122 s made every other request wait 100-140 s and exhausted the database pool). In a worker thread the
+    server keeps answering while the sweep works."""
+    import asyncio
+    from starlette.concurrency import run_in_threadpool
+
+    def _runner():
+        return asyncio.run(coro_fn())
+    return await run_in_threadpool(_runner)
+
+
 @app.post("/api/internal/sweep")
 async def internal_sweep_endpoint(request: Request):
     """Endpoint for Cloud Scheduler: runs the same sweep as the internal timer.
@@ -1236,7 +1254,18 @@ async def internal_sweep_endpoint(request: Request):
     once per day. Safe to call repeatedly (all sweeps are idempotent).
     Requires X-Internal-Secret (the drop-cars-sweep scheduler job sends it)."""
     _require_internal_secret(request)
-    result = await _run_assignment_sweep()
+    global _SWEEP_RUNNING
+    if _SWEEP_RUNNING:                       # the scheduler fires every minute; never stack a second sweep on a running one
+        return {"skipped": "previous sweep still running"}
+    _SWEEP_RUNNING = True
+    try:
+        import time as _t
+        _started = _t.time()
+        result = await _run_off_loop(_run_assignment_sweep)
+        if isinstance(result, dict):
+            result["seconds"] = round(_t.time() - _started, 1)
+    finally:
+        _SWEEP_RUNNING = False
 
     # Daily billing sweep piggybacks on the scheduler too (replaces the
     # 86400s internal timer when internal sweeps are disabled).
@@ -1245,11 +1274,11 @@ async def internal_sweep_endpoint(request: Request):
     today = _date.today()
     if _INTERNAL_SWEEPS_DISABLED and _LAST_BILLING_SWEEP_DATE != today:
         _LAST_BILLING_SWEEP_DATE = today
-        await _run_billing_sweep()
+        await _run_off_loop(_run_billing_sweep)
         result["billing_sweep"] = "ran"
     if _INTERNAL_SWEEPS_DISABLED and _LAST_EXPIRY_SWEEP_DATE != today:
         _LAST_EXPIRY_SWEEP_DATE = today
-        await _run_document_expiry_sweep()
+        await _run_off_loop(_run_document_expiry_sweep)
         result["document_expiry_sweep"] = "ran"
     return result
 
