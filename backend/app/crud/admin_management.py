@@ -108,23 +108,10 @@ def update_vendor_document_status(db: Session, vendor_id: str, document_status: 
 
 # ============ VEHICLE OWNER MANAGEMENT ============
 
-def get_all_vehicle_owners(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, status_filter: Optional[str] = None) -> Tuple[List[dict], int]:
-    """Get all fleet owners with pagination.
-
-    Three fixes bundled in here together, all hit by the same admin screen:
-    1. No ORDER BY meant Postgres didn't guarantee stable row order across
-       separate paginated calls - accounts could silently be skipped or
-       duplicated between pages (reported as "active accounts missing").
-    2. car_count/driver_count are now computed here via aggregated
-       subqueries instead of the caller firing one detail request PER OWNER
-       just to get counts (was an N+1 - a page of 50 owners fired 50 extra
-       API calls, the actual cause of the slow page load).
-    3. account_status lives on VehicleOwnerCredentials, a different table
-       from VehicleOwnerDetails that this query never joined - the field
-       was always silently absent from the response despite the frontend
-       already expecting and using it.
-    """
+def get_all_vehicle_owners(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, status_filter: Optional[str] = None, tier_filter: Optional[str] = None) -> Tuple[List[dict], int]:
+    """Get all fleet owners with pagination and optional tier/subscription filter."""
     from sqlalchemy import func, or_ as _or
+    from datetime import date as _date, datetime as _datetime, timezone as _timezone
 
     car_counts = dict(
         db.query(CarDetails.vehicle_owner_id, func.count(CarDetails.id))
@@ -140,11 +127,6 @@ def get_all_vehicle_owners(db: Session, skip: int = 0, limit: int = 100, search:
     )
 
     if search and search.strip():
-        # Server-side search so ANY fleet/driver is findable, not just
-        # whatever happens to be on the currently-loaded page. Drivers
-        # aren't separately browsable at the top level (you drill into
-        # their fleet owner), so a driver's own phone/licence number also
-        # matches - it just surfaces the OWNER that driver belongs to.
         term = search.strip()
         like = f"%{term}%"
         driver_owner_ids = db.query(CarDriver.vehicle_owner_id).filter(_or(
@@ -163,6 +145,40 @@ def get_all_vehicle_owners(db: Session, skip: int = 0, limit: int = 100, search:
         status_upper = status_filter.strip().upper()
         if status_upper in ("ACTIVE", "INACTIVE", "PENDING"):
             query = query.filter(VehicleOwnerCredentials.account_status == VehicleOwnerAccountStatusEnum[status_upper])
+
+    if tier_filter and tier_filter.strip():
+        tf = tier_filter.strip().upper()
+        if tf == "STANDARD":
+            query = query.filter(
+                VehicleOwnerDetails.admin_trusted_override == False,
+                _or(
+                    VehicleOwnerDetails.driver_pro_trusted_until.is_(None),
+                    VehicleOwnerDetails.driver_pro_trusted_until <= _datetime.now(_timezone.utc),
+                ),
+                VehicleOwnerDetails.registration_fee_paid_at.is_(None),
+                _or(
+                    VehicleOwnerDetails.billing_next_date.is_(None),
+                    VehicleOwnerDetails.billing_next_date < _date.today(),
+                ),
+            )
+        elif tf in ("PREFERRED", "TRUSTED"):
+            query = query.filter(
+                _or(
+                    VehicleOwnerDetails.admin_trusted_override == True,
+                    VehicleOwnerDetails.driver_pro_trusted_until > _datetime.now(_timezone.utc),
+                    VehicleOwnerDetails.registration_fee_paid_at.isnot(None),
+                    VehicleOwnerDetails.billing_next_date >= _date.today(),
+                )
+            )
+        elif tf == "MONTHLY":
+            query = query.filter(VehicleOwnerDetails.subscription_type == "MONTHLY")
+        elif tf == "YEARLY":
+            query = query.filter(
+                _or(
+                    VehicleOwnerDetails.subscription_type == "YEARLY",
+                    (VehicleOwnerDetails.registration_fee_paid_at.isnot(None) & (VehicleOwnerDetails.subscription_type != "MONTHLY")),
+                )
+            )
 
     total_count = query.count()
     rows = query.order_by(VehicleOwnerDetails.created_at.desc()).offset(skip).limit(limit).all()
@@ -183,6 +199,8 @@ def get_all_vehicle_owners(db: Session, skip: int = 0, limit: int = 100, search:
             "pincode": owner.pincode,
             "created_at": owner.created_at,
             "tier": owner.tier,
+            "subscription_type": getattr(owner, "subscription_type", None),
+            "admin_trusted_override": getattr(owner, "admin_trusted_override", False),
             "account_status": account_status.value if account_status else None,
             "car_count": car_counts.get(owner.vehicle_owner_id, 0),
             "driver_count": driver_counts.get(owner.vehicle_owner_id, 0),

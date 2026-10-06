@@ -54,3 +54,12 @@ def test_the_admin_app_filters_with_driver_type_and_typing_a_place_finds_vacant_
     assert not [r for r in rows if r["fleet_driver_name"] == o.full_name and r["kind"] == "FLEET" and not r.get("fleet_phone")]
     typed = ops.search_drivers(q="qqto", city=None, type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session)
     assert [r for r in typed if r["fleet_driver_name"] == o.full_name]
+
+
+def test_fleet_directory_and_account_creation_routes_the_admin_app_calls_exist():
+    from app.main import app
+    paths = {(m, r.path) for r in app.routes for m in (getattr(r, "methods", None) or [])}
+    for p in ("/api/admin/vehicle-owners", "/api/admin-vehicle-owner/vehicle-owners"):
+        assert ("GET", p) in paths, p
+    for p in ("create-fleet-owner", "create-vendor", "create-customer", "upload-doc"):
+        assert ("POST", f"/api/admin/accounts/{p}") in paths, p

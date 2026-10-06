@@ -97,6 +97,8 @@ class VehicleOwnerListResponse(BaseModel):
     pincode: Optional[str] = None
     created_at: Optional[datetime] = None
     tier: Optional[str] = None
+    subscription_type: Optional[str] = None
+    admin_trusted_override: Optional[bool] = False
     account_status: Optional[str] = None
     car_count: int = 0
     driver_count: int = 0

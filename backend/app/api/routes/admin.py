@@ -2868,11 +2868,14 @@ def update_vendor_document_status_route(
 # ============ VEHICLE OWNER MANAGEMENT ENDPOINTS ============
 
 @router.get("/admin-vehcile-owner/vehicle-owners", response_model=VehicleOwnerListOut)
+@router.get("/admin-vehicle-owner/vehicle-owners", response_model=VehicleOwnerListOut)
+@router.get("/admin/vehicle-owners", response_model=VehicleOwnerListOut)
 def list_all_vehicle_owners(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     search: Optional[str] = Query(None, description="Match fleet name/phone/city, or a driver's name/phone/licence number"),
     status: Optional[str] = Query(None, description="Filter by account_status: ACTIVE, INACTIVE, or PENDING"),
+    tier: Optional[str] = Query(None, description="Filter by tier/plan: STANDARD, TRUSTED, PREFERRED, MONTHLY, YEARLY"),
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -2888,7 +2891,7 @@ def list_all_vehicle_owners(
         - Total count of fleet owners
     """
     try:
-        vehicle_owners, total_count = get_all_vehicle_owners(db, skip, limit, search, status)
+        vehicle_owners, total_count = get_all_vehicle_owners(db, skip, limit, search, status, tier)
         return VehicleOwnerListOut(
             vehicle_owners=vehicle_owners,
             total_count=total_count
@@ -7320,6 +7323,462 @@ def delete_maps_api_key(
     if not success:
         raise HTTPException(status_code=404, detail="API key ID not found.")
     return {"status": "SUCCESS", "message": f"API key {key_id} removed."}
+
+
+# ============================================================================
+# ADMIN MANUAL ONBOARDING & ACCOUNT CREATION (FLEET, DRIVERS, VENDORS, B2B)
+# ============================================================================
+
+class AdminCreateFleetOwnerPayload(BaseModel):
+    full_name: str
+    primary_number: str
+    secondary_number: Optional[str] = None
+    city: str
+    address: Optional[str] = ""
+    pincode: Optional[str] = ""
+    aadhar_number: Optional[str] = ""
+    pan_number: Optional[str] = None
+    password: Optional[str] = None
+    initial_wallet_balance: Optional[float] = 0.0
+    account_status: Optional[str] = "ACTIVE"
+    tier: Optional[str] = "STANDARD"  # STANDARD, PREFERRED
+    # Optional nested Car to attach immediately
+    car_name: Optional[str] = None
+    car_type: Optional[str] = None
+    car_number: Optional[str] = None
+    year_of_the_car: Optional[str] = None
+    # Optional nested Driver to attach immediately
+    driver_name: Optional[str] = None
+    driver_primary_number: Optional[str] = None
+    driver_licence_number: Optional[str] = None
+    is_owner_driver: Optional[bool] = True
+
+
+@router.post("/admin/accounts/create-fleet-owner")
+def admin_create_fleet_owner(
+    payload: AdminCreateFleetOwnerPayload,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin manually onboards a Fleet Owner (Vehicle Owner) and optionally attaches their first Car & Driver."""
+    from app.models.vehicle_owner import VehicleOwnerCredentials
+    from app.models.vehicle_owner_details import VehicleOwnerDetails
+    from app.core.security import get_password_hash
+    from app.utils.reg_id import assign_reg_id
+    from app.models.car_details import CarDetails
+    from app.models.car_driver import CarDriver, AccountStatusEnum as DriverAccountStatus
+
+    p_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")
+    if len(p_num) < 10:
+        raise HTTPException(status_code=400, detail="Primary mobile number must be at least 10 digits")
+    p_num = p_num[-10:]
+
+    # Check duplicates
+    existing = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.primary_number == p_num).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Mobile number {p_num} is already registered as a Fleet Owner.")
+
+    raw_pw = payload.password.strip() if payload.password and payload.password.strip() else f"DropCars@{p_num[-4:]}"
+    hashed_pw = get_password_hash(raw_pw)
+
+    # 1. Create Credentials
+    owner_cred = VehicleOwnerCredentials(
+        primary_number=p_num,
+        hashed_password=hashed_pw,
+        account_status=payload.account_status or "ACTIVE",
+    )
+    db.add(owner_cred)
+    db.flush()
+
+    # 2. Create Details
+    owner_details = VehicleOwnerDetails(
+        vehicle_owner_id=owner_cred.id,
+        full_name=payload.full_name.strip(),
+        primary_number=p_num,
+        secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
+        address=payload.address or "",
+        city=payload.city.strip(),
+        pincode=payload.pincode or "",
+        aadhar_number=payload.aadhar_number or "",
+        pan_number=payload.pan_number or None,
+        wallet_balance=float(payload.initial_wallet_balance or 0.0),
+        tier=payload.tier or "STANDARD",
+        aadhar_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
+    )
+    assign_reg_id(db, owner_details)
+    db.add(owner_details)
+    db.flush()
+
+    car_res = None
+    driver_res = None
+
+    # 3. Optional Car Creation
+    if payload.car_number and payload.car_name and payload.car_type:
+        clean_car_num = payload.car_number.strip().upper().replace(" ", "")
+        exist_car = db.query(CarDetails).filter(CarDetails.car_number == clean_car_num).first()
+        if exist_car:
+            raise HTTPException(status_code=400, detail=f"Car number {clean_car_num} is already registered.")
+        new_car = CarDetails(
+            vehicle_owner_id=owner_cred.id,
+            car_name=payload.car_name.strip(),
+            car_type=payload.car_type.strip(),
+            car_number=clean_car_num,
+            year_of_the_car=payload.year_of_the_car or None,
+            car_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
+        )
+        db.add(new_car)
+        db.flush()
+        car_res = {
+            "car_id": str(new_car.id),
+            "car_name": new_car.car_name,
+            "car_type": new_car.car_type,
+            "car_number": new_car.car_number,
+        }
+
+    # 4. Optional Driver Creation
+    if payload.driver_name and payload.driver_primary_number:
+        d_num = payload.driver_primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+        exist_driver = db.query(CarDriver).filter(CarDriver.primary_number == d_num).first()
+        if exist_driver:
+            raise HTTPException(status_code=400, detail=f"Driver mobile {d_num} is already registered.")
+        lic_num = payload.driver_licence_number.strip() if payload.driver_licence_number else f"DL-{d_num}"
+        new_driver = CarDriver(
+            vehicle_owner_id=owner_cred.id,
+            full_name=payload.driver_name.strip(),
+            primary_number=d_num,
+            hashed_password=hashed_pw,
+            licence_number=lic_num,
+            address=payload.address or "",
+            city=payload.city.strip(),
+            pincode=payload.pincode or "",
+            driver_status=DriverAccountStatus.ACTIVE if payload.account_status == "ACTIVE" else DriverAccountStatus.PROCESSING,
+            is_owner_driver=payload.is_owner_driver if payload.is_owner_driver is not None else True,
+        )
+        db.add(new_driver)
+        db.flush()
+        driver_res = {
+            "driver_id": str(new_driver.id),
+            "full_name": new_driver.full_name,
+            "primary_number": new_driver.primary_number,
+            "licence_number": new_driver.licence_number,
+        }
+
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "message": "Fleet owner account created successfully",
+        "credentials": {
+            "id": str(owner_cred.id),
+            "primary_number": p_num,
+            "temporary_password": raw_pw,
+            "reg_id": getattr(owner_details, "reg_id", None),
+            "full_name": owner_details.full_name,
+            "city": owner_details.city,
+            "wallet_balance": float(owner_details.wallet_balance or 0),
+        },
+        "car": car_res,
+        "driver": driver_res,
+    }
+
+
+class AdminCreateVendorPayload(BaseModel):
+    full_name: str
+    primary_number: str
+    secondary_number: Optional[str] = None
+    city: str
+    address: Optional[str] = ""
+    pincode: Optional[str] = ""
+    aadhar_number: Optional[str] = ""
+    gpay_number: Optional[str] = None
+    password: Optional[str] = None
+    business_name: Optional[str] = None
+    account_status: Optional[str] = "ACTIVE"
+
+
+@router.post("/admin/accounts/create-vendor")
+def admin_create_vendor(
+    payload: AdminCreateVendorPayload,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin manually onboards a Vendor / Travel Desk Partner."""
+    from app.models.vendor import VendorCredentials, VendorDetails
+    from app.core.security import get_password_hash
+    from app.utils.reg_id import assign_reg_id
+
+    p_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+    existing = db.query(VendorCredentials).filter(VendorCredentials.primary_number == p_num).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Mobile number {p_num} is already registered as a Vendor.")
+
+    raw_pw = payload.password.strip() if payload.password and payload.password.strip() else f"Vendor@{p_num[-4:]}"
+    hashed_pw = get_password_hash(raw_pw)
+
+    cred = VendorCredentials(
+        primary_number=p_num,
+        hashed_password=hashed_pw,
+        account_status=payload.account_status or "ACTIVE",
+    )
+    db.add(cred)
+    db.flush()
+
+    details = VendorDetails(
+        vendor_id=cred.id,
+        full_name=payload.full_name.strip(),
+        primary_number=p_num,
+        secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
+        address=payload.address or "",
+        city=payload.city.strip(),
+        pincode=payload.pincode or "",
+        aadhar_number=payload.aadhar_number or "",
+        gpay_number=payload.gpay_number or p_num,
+        aadhar_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
+    )
+    assign_reg_id(db, details)
+    db.add(details)
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "message": "Vendor account created successfully",
+        "credentials": {
+            "id": str(cred.id),
+            "primary_number": p_num,
+            "temporary_password": raw_pw,
+            "reg_id": getattr(details, "reg_id", None),
+            "full_name": details.full_name,
+            "city": details.city,
+        }
+    }
+
+
+class AdminCreateB2BCustomerPayload(BaseModel):
+    full_name: str
+    primary_number: str
+    email: Optional[str] = None
+    city: Optional[str] = None
+    password: Optional[str] = None
+    company_name: Optional[str] = None
+    gstin: Optional[str] = None
+    customer_segment: Optional[str] = "B2B"  # B2B, CORPORATE, RETAIL
+
+
+@router.post("/admin/accounts/create-customer")
+def admin_create_customer(
+    payload: AdminCreateB2BCustomerPayload,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin manually onboards a B2B / Corporate / Retail Customer."""
+    from app.models.customer import CustomerCredentials, CustomerDetails
+    from app.core.security import get_password_hash
+
+    p_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+    existing = db.query(CustomerCredentials).filter(CustomerCredentials.primary_number == p_num).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Mobile number {p_num} is already registered as a Customer.")
+
+    raw_pw = payload.password.strip() if payload.password and payload.password.strip() else f"DropCars@{p_num[-4:]}"
+    hashed_pw = get_password_hash(raw_pw)
+
+    cred = CustomerCredentials(
+        primary_number=p_num,
+        hashed_password=hashed_pw,
+        email=payload.email.strip() if payload.email else None,
+    )
+    db.add(cred)
+    db.flush()
+
+    details = CustomerDetails(
+        customer_id=cred.id,
+        full_name=payload.full_name.strip(),
+        primary_number=p_num,
+        city=payload.city.strip() if payload.city else None,
+        segment=payload.customer_segment or "B2B",
+    )
+    db.add(details)
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "message": "Customer/B2B account created successfully",
+        "credentials": {
+            "id": str(cred.id),
+            "primary_number": p_num,
+            "temporary_password": raw_pw,
+            "full_name": details.full_name,
+            "city": details.city,
+            "segment": details.segment,
+        }
+    }
+
+
+class AdminAddCarToFleetPayload(BaseModel):
+    car_name: str
+    car_type: str
+    car_number: str
+    year_of_the_car: Optional[str] = None
+    rc_expiry_date: Optional[str] = None
+    insurance_expiry_date: Optional[str] = None
+    fc_expiry_date: Optional[str] = None
+    car_status: Optional[str] = "ACTIVE"
+    rc_front_img_url: Optional[str] = None
+    rc_back_img_url: Optional[str] = None
+    insurance_img_url: Optional[str] = None
+    fc_img_url: Optional[str] = None
+    car_img_url: Optional[str] = None
+    permit_img_url: Optional[str] = None
+
+
+@router.post("/admin/accounts/fleet/{vehicle_owner_id}/add-car")
+def admin_add_car_to_fleet(
+    vehicle_owner_id: str,
+    payload: AdminAddCarToFleetPayload,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin adds a Car with full document attachments to a specific Fleet Owner."""
+    from app.models.car_details import CarDetails, CarStatusEnum, DocumentStatusEnum as CarDocStatus
+    clean_car_num = payload.car_number.strip().upper().replace(" ", "")
+    exist_car = db.query(CarDetails).filter(CarDetails.car_number == clean_car_num).first()
+    if exist_car:
+        raise HTTPException(status_code=400, detail=f"Car number {clean_car_num} is already registered.")
+
+    car = CarDetails(
+        vehicle_owner_id=UUID(vehicle_owner_id),
+        car_name=payload.car_name.strip(),
+        car_type=payload.car_type.strip(),
+        car_number=clean_car_num,
+        year_of_the_car=payload.year_of_the_car or None,
+        rc_expiry_date=payload.rc_expiry_date or None,
+        insurance_expiry_date=payload.insurance_expiry_date or None,
+        fc_expiry_date=payload.fc_expiry_date or None,
+        rc_front_img_url=payload.rc_front_img_url or None,
+        rc_front_status=CarDocStatus.VERIFIED if payload.rc_front_img_url else CarDocStatus.PENDING,
+        rc_back_img_url=payload.rc_back_img_url or None,
+        rc_back_status=CarDocStatus.VERIFIED if payload.rc_back_img_url else CarDocStatus.PENDING,
+        insurance_img_url=payload.insurance_img_url or None,
+        insurance_status=CarDocStatus.VERIFIED if payload.insurance_img_url else CarDocStatus.PENDING,
+        fc_img_url=payload.fc_img_url or None,
+        fc_status=CarDocStatus.VERIFIED if payload.fc_img_url else CarDocStatus.PENDING,
+        car_img_url=payload.car_img_url or None,
+        car_img_status=CarDocStatus.VERIFIED if payload.car_img_url else CarDocStatus.PENDING,
+        permit_img_url=payload.permit_img_url or None,
+        permit_status=CarDocStatus.VERIFIED if payload.permit_img_url else CarDocStatus.PENDING,
+        car_status=CarStatusEnum.ONLINE if payload.car_status == "ACTIVE" else CarStatusEnum.PROCESSING,
+    )
+    db.add(car)
+    db.commit()
+    db.refresh(car)
+
+    return {
+        "status": "SUCCESS",
+        "message": "Car added to fleet successfully",
+        "car": {
+            "id": str(car.id),
+            "car_name": car.car_name,
+            "car_type": car.car_type,
+            "car_number": car.car_number,
+            "car_status": str(car.car_status),
+        }
+    }
+
+
+class AdminAddDriverToFleetPayload(BaseModel):
+    full_name: str
+    primary_number: str
+    secondary_number: Optional[str] = None
+    licence_number: str
+    city: Optional[str] = None
+    address: Optional[str] = None
+    pincode: Optional[str] = None
+    password: Optional[str] = None
+    is_owner_driver: Optional[bool] = False
+    driver_status: Optional[str] = "ACTIVE"
+    licence_front_img: Optional[str] = None
+    licence_back_img: Optional[str] = None
+    profile_img: Optional[str] = None
+
+
+@router.post("/admin/accounts/fleet/{vehicle_owner_id}/add-driver")
+def admin_add_driver_to_fleet(
+    vehicle_owner_id: str,
+    payload: AdminAddDriverToFleetPayload,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin adds a Driver with full document attachments to a specific Fleet Owner."""
+    from app.models.car_driver import CarDriver, AccountStatusEnum as DriverAccountStatus, DocumentStatusEnum as DriverDocStatus
+    from app.core.security import get_password_hash
+
+    d_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+    exist_driver = db.query(CarDriver).filter(CarDriver.primary_number == d_num).first()
+    if exist_driver:
+        raise HTTPException(status_code=400, detail=f"Driver mobile {d_num} is already registered.")
+
+    raw_pw = payload.password.strip() if payload.password and payload.password.strip() else f"Driver@{d_num[-4:]}"
+    hashed_pw = get_password_hash(raw_pw)
+
+    driver = CarDriver(
+        vehicle_owner_id=UUID(vehicle_owner_id),
+        full_name=payload.full_name.strip(),
+        primary_number=d_num,
+        secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
+        hashed_password=hashed_pw,
+        licence_number=payload.licence_number.strip(),
+        address=payload.address or "",
+        city=payload.city.strip() if payload.city else "",
+        pincode=payload.pincode or "",
+        driver_status=DriverAccountStatus.ACTIVE if payload.driver_status == "ACTIVE" else DriverAccountStatus.PROCESSING,
+        is_owner_driver=payload.is_owner_driver or False,
+        licence_front_img=payload.licence_front_img or None,
+        licence_front_status=DriverDocStatus.VERIFIED if payload.licence_front_img else DriverDocStatus.PENDING,
+        licence_back_img=payload.licence_back_img or None,
+        licence_back_status=DriverDocStatus.VERIFIED if payload.licence_back_img else DriverDocStatus.PENDING,
+        profile_img=payload.profile_img or None,
+    )
+    db.add(driver)
+    db.commit()
+    db.refresh(driver)
+
+    return {
+        "status": "SUCCESS",
+        "message": "Driver added to fleet successfully",
+        "driver": {
+            "id": str(driver.id),
+            "full_name": driver.full_name,
+            "primary_number": driver.primary_number,
+            "licence_number": driver.licence_number,
+            "driver_status": str(driver.driver_status.value if hasattr(driver.driver_status, 'value') else driver.driver_status),
+            "temporary_password": raw_pw,
+        }
+    }
+
+
+@router.post("/admin/accounts/upload-doc")
+def admin_upload_account_document(
+    file: UploadFile = File(..., description="Document image"),
+    doc_type: str = Form("general", description="Type of document (e.g., rc_front, rc_back, licence_front, licence_back, insurance, fc, profile)"),
+    current_admin=Depends(get_current_admin),
+):
+    """Admin uploads a document/photo directly to cloud storage and returns the public URL."""
+    from app.utils.gcs import upload_image_to_gcs
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Please upload an image file (JPEG, PNG, etc.)"
+        )
+    if file.size and file.size > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Image file is too large. Please upload an image smaller than 10MB"
+        )
+    try:
+        url = upload_image_to_gcs(file, folder=f"admin_uploads/docs/{doc_type}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload image to cloud storage: {str(e)}")
+    return {"status": "SUCCESS", "url": url, "doc_type": doc_type}
 
 
 

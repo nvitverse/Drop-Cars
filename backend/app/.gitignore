@@ -6,3 +6,5 @@ __pycache__/
 test/
 *.json
 *.env
+# the AI training rules ship with the API (the knowledge engine reads them at start)
+!data/ai_training_rules.json
