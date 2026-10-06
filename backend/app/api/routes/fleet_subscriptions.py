@@ -195,6 +195,50 @@ def get_fleet_subscriptions(
     }
 
 
+class PaymentLinkRequest(BaseModel):
+    plan_type: str = Field(..., description="MONTHLY or YEARLY")
+    amount: Optional[int] = Field(None, gt=0, description="Whole rupees; blank = the plan fee from billing settings")
+
+
+@router.get("/options")
+def get_upgrade_options(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Plans + fees (billing settings), allowed payment channels, WhatsApp message and whether payment links work.
+    The Admin App draws the Standard -> Trusted screen from this, so nothing is hardcoded in the app."""
+    from app.crud.fleet_payment_links import get_options
+    return get_options(db)
+
+
+@router.post("/{vehicle_owner_id}/payment-link")
+def create_subscription_payment_link(
+    vehicle_owner_id: uuid.UUID,
+    payload: PaymentLinkRequest,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Creates a Razorpay payment link for the plan and returns the text + wa.me URL staff tap to share it on WhatsApp.
+    The plan is activated automatically when the link is paid (checked from the app and from the scheduler sweep)."""
+    from app.crud.fleet_payment_links import create_payment_link
+    return create_payment_link(db, vehicle_owner_id, payload.plan_type, payload.amount, current_admin)
+
+
+@router.post("/{vehicle_owner_id}/payment-link/check")
+def check_subscription_payment_link(
+    vehicle_owner_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Asks Razorpay about the latest link for this partner and activates the plan if it was paid. Idempotent."""
+    from app.crud.fleet_payment_links import latest_link_for_owner, check_link
+    row = latest_link_for_owner(db, vehicle_owner_id)
+    if not row:
+        return {"status": "NONE"}
+    try:
+        return check_link(db, row)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"Could not reach Razorpay: {e}")
+
+
 @router.post("/{vehicle_owner_id}/manual-payment")
 def record_manual_subscription_payment(
     vehicle_owner_id: uuid.UUID,
@@ -237,76 +281,13 @@ def record_manual_subscription_payment(
                      reference_type="SUBSCRIPTION_FEE_WALLET",
                      notes=f"{plan.title()} partner subscription paid from wallet (recorded by {admin_name})")
 
-    start_date = today
-    # If currently active and paid in future, extend from future date
-    if details.billing_next_date and details.billing_next_date > today:
-        end_date = details.billing_next_date + timedelta(days=duration)
-    else:
-        end_date = today + timedelta(days=duration)
-
+    from app.crud.fleet_payment_links import apply_subscription_payment
+    end_date = apply_subscription_payment(
+        db, details, vehicle_owner_id, plan, payload.amount, payload.payment_channel, payload.payment_ref,
+        payload.notes, duration, payload.mark_as_trusted, current_admin.id, admin_name, current_admin.role,
+    )
     clean_channel = payload.payment_channel.strip()
     clean_ref = (payload.payment_ref or "").strip() or None
-    clean_notes = (payload.notes or "").strip() or f"Manual {plan} payment via {clean_channel}"
-
-    # Update VehicleOwnerDetails
-    details.subscription_type = plan
-    details.registration_fee_paid_at = now_utc
-    details.subscription_paid_at = now_utc
-    details.subscription_paid_amount = payload.amount
-    details.subscription_payment_channel = clean_channel
-    details.subscription_payment_ref = clean_ref
-    details.billing_next_date = end_date
-    details.billing_last_charged_at = now_utc
-    details.billing_suspended = False
-    details.billing_suspended_at = None
-    details.billing_suspended_by = None
-    details.billing_suspended_reason = None
-
-    if payload.mark_as_trusted:
-        details.admin_trusted_override = True
-        details.trusted_override_by = admin_name
-        details.trusted_override_reason = f"Verified manual subscription payment via {clean_channel} (Ref: {clean_ref or 'Direct'})"
-        details.trusted_override_at = now_utc
-
-    # Log to FleetSubscriptionHistory
-    history_entry = FleetSubscriptionHistory(
-        id=uuid.uuid4(),
-        vehicle_owner_id=vehicle_owner_id,
-        event_type="MANUAL_PAYMENT",
-        payment_channel=clean_channel,
-        payment_ref=clean_ref,
-        amount=payload.amount,
-        plan_type=plan,
-        duration_days=duration,
-        period_start=start_date,
-        period_end=end_date,
-        is_trusted=payload.mark_as_trusted,
-        reason=clean_notes,
-        admin_id=current_admin.id,
-        admin_username=admin_name,
-        created_at=now_utc,
-    )
-    db.add(history_entry)
-
-    # Activity log
-    log_admin_action(
-        db,
-        admin_id=str(current_admin.id),
-        admin_username=admin_name,
-        admin_role=current_admin.role,
-        action="FLEET_SUBSCRIPTION_MANUAL_PAY",
-        target_type="vehicle_owner",
-        target_id=str(vehicle_owner_id),
-        target_name=details.full_name,
-        details={
-            "channel": clean_channel,
-            "ref": clean_ref,
-            "amount": payload.amount,
-            "plan": plan,
-            "valid_until": end_date.isoformat(),
-            "marked_trusted": payload.mark_as_trusted,
-        },
-    )
 
     db.commit()
 

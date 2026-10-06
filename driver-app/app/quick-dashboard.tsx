@@ -95,7 +95,7 @@ interface DriverOrder {
 
 export default function QuickDashboardScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { user, logout } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const { t } = useLanguage();
   const router = useRouter();
   const { tripJustCompleted } = useLocalSearchParams<{ tripJustCompleted?: string }>();
@@ -182,8 +182,8 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
   // Real Driver Profile state
   const [driverProfile, setDriverProfile] = useState<any>(null);
 
-  // Tabs state: Upcoming Trips (1st) vs Assigned Bookings (2nd)
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'assigned'>('upcoming');
+  // Tabs state: Upcoming Trips vs Running vs Completed Duties
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'running' | 'completed'>('upcoming');
 
   // History search, filter & detail view state
   const [historySearch, setHistorySearch] = useState('');
@@ -864,20 +864,52 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
     } finally { setHistoryLoading(false); }
   };
 
-  // Filter upcoming orders for next 6 hours tab
-  const upcomingOrders = useMemo(() => {
-    const now = Date.now();
-    const sixHoursMs = 6 * 60 * 60 * 1000;
+  // Running active trips currently driving / started
+  const runningOrders = useMemo(() => {
     return driverOrders.filter((order: DriverOrder) => {
-      const isDriving = String(order.assignment_status).toUpperCase() === 'DRIVING';
-      if (isDriving) return true;
-      const rawTime = order.scheduled_at || order.start_date_time;
-      if (!rawTime) return false;
-      const timeMs = new Date(rawTime).getTime();
-      if (isNaN(timeMs)) return false;
-      return timeMs <= (now + sixHoursMs) && timeMs >= (now - 45 * 60 * 1000);
+      const aStatus = String(order.assignment_status || '').toUpperCase();
+      const tStatus = String((order as any).trip_status || '').toUpperCase();
+      return (
+        aStatus === 'DRIVING' ||
+        aStatus === 'STARTED' ||
+        aStatus === 'RUNNING' ||
+        tStatus === 'STARTED' ||
+        tStatus === 'RUNNING' ||
+        (activeTrip && activeTrip.order_id === order.order_id)
+      );
     });
-  }, [driverOrders]);
+  }, [driverOrders, activeTrip]);
+
+  // Upcoming assigned trips waiting to start (not yet started or completed)
+  const upcomingOrders = useMemo(() => {
+    return driverOrders.filter((order: DriverOrder) => {
+      const aStatus = String(order.assignment_status || '').toUpperCase();
+      const tStatus = String((order as any).trip_status || '').toUpperCase();
+      const isRunning =
+        aStatus === 'DRIVING' ||
+        aStatus === 'STARTED' ||
+        aStatus === 'RUNNING' ||
+        tStatus === 'STARTED' ||
+        tStatus === 'RUNNING' ||
+        (activeTrip && activeTrip.order_id === order.order_id);
+      const isCompleted = aStatus === 'COMPLETED' || tStatus === 'COMPLETED';
+      return !isRunning && !isCompleted;
+    });
+  }, [driverOrders, activeTrip]);
+
+  // Automatically fetch history when Completed tab is opened
+  useEffect(() => {
+    if (activeTab === 'completed') {
+      fetchOrderHistory();
+    }
+  }, [activeTab]);
+
+  // If there's an active running trip on initial load, default to running tab
+  useEffect(() => {
+    if (runningOrders.length > 0 && activeTab === 'upcoming') {
+      setActiveTab('running');
+    }
+  }, [runningOrders.length]);
 
   // History filtering & search
   const filteredOrderHistory = useMemo(() => {
@@ -1056,7 +1088,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
         </View>
       )}
 
-      {/* Main Tabs Header: Upcoming Trips (1st) vs Assigned Bookings (2nd) */}
+      {/* 3 Duty Execution Tabs: Upcoming (1st) | Running (2nd) | Completed (3rd) */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[
@@ -1066,9 +1098,9 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
           onPress={() => setActiveTab('upcoming')}
           activeOpacity={0.7}
         >
-          <Clock size={16} color={activeTab === 'upcoming' ? '#D97706' : colors.textSecondary} />
+          <Clock size={15} color={activeTab === 'upcoming' ? '#D97706' : colors.textSecondary} />
           <Text style={[styles.tabText, { color: activeTab === 'upcoming' ? '#D97706' : colors.textSecondary }]}>
-            {t('quickDashboard.upcomingTrips', { count: upcomingOrders.length })}
+            Upcoming
           </Text>
           <View style={[styles.tabBadge, { backgroundColor: activeTab === 'upcoming' ? '#F59E0B' : '#E5E7EB' }]}>
             <Text style={[styles.tabBadgeText, { color: activeTab === 'upcoming' ? '#FFFFFF' : '#4B5563' }]}>
@@ -1080,18 +1112,37 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
         <TouchableOpacity
           style={[
             styles.tabButton,
-            activeTab === 'assigned' && styles.tabButtonActive,
+            activeTab === 'running' && styles.tabButtonActive,
           ]}
-          onPress={() => setActiveTab('assigned')}
+          onPress={() => setActiveTab('running')}
           activeOpacity={0.7}
         >
-          <Car size={16} color={activeTab === 'assigned' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabText, { color: activeTab === 'assigned' ? colors.primary : colors.textSecondary }]}>
-            {t('quickDashboard.assignedTrips', { count: driverOrders.length })}
+          <Navigation size={15} color={activeTab === 'running' ? '#059669' : (runningOrders.length > 0 ? '#059669' : colors.textSecondary)} />
+          <Text style={[styles.tabText, { color: activeTab === 'running' ? '#059669' : (runningOrders.length > 0 ? '#059669' : colors.textSecondary) }]}>
+            Running
           </Text>
-          <View style={[styles.tabBadge, { backgroundColor: activeTab === 'assigned' ? colors.primary : '#E5E7EB' }]}>
-            <Text style={[styles.tabBadgeText, { color: activeTab === 'assigned' ? '#FFFFFF' : '#4B5563' }]}>
-              {driverOrders.length}
+          <View style={[styles.tabBadge, { backgroundColor: runningOrders.length > 0 ? '#10B981' : (activeTab === 'running' ? '#10B981' : '#E5E7EB') }]}>
+            <Text style={[styles.tabBadgeText, { color: (runningOrders.length > 0 || activeTab === 'running') ? '#FFFFFF' : '#4B5563' }]}>
+              {runningOrders.length}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'completed' && styles.tabButtonActive,
+          ]}
+          onPress={() => setActiveTab('completed')}
+          activeOpacity={0.7}
+        >
+          <CheckCircle size={15} color={activeTab === 'completed' ? colors.primary : colors.textSecondary} />
+          <Text style={[styles.tabText, { color: activeTab === 'completed' ? colors.primary : colors.textSecondary }]}>
+            Completed
+          </Text>
+          <View style={[styles.tabBadge, { backgroundColor: activeTab === 'completed' ? colors.primary : '#E5E7EB' }]}>
+            <Text style={[styles.tabBadgeText, { color: activeTab === 'completed' ? '#FFFFFF' : '#4B5563' }]}>
+              {filteredOrderHistory.length}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1099,261 +1150,473 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
 
       {/* Orders Section */}
       <View style={styles.ordersSection}>
-        <View style={styles.ordersHeader}>
-          <Text style={[styles.ordersTitle, { color: colors.text }]}>
-            {activeTab === 'upcoming' 
-              ? t('quickDashboard.upcomingTrips', { count: upcomingOrders.length })
-              : t('quickDashboard.assignedBookings', { count: driverOrders.length })}
-          </Text>
-          <View style={styles.headerButtons}>
-          </View>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              {t('quickDashboard.loadingBookings')}
-            </Text>
-          </View>
-        ) : (activeTab === 'upcoming' ? upcomingOrders : driverOrders).length === 0 ? (
-          <EmptyState
-            icon={activeTab === 'upcoming' ? Clock : Car}
-            title={activeTab === 'upcoming' ? t('quickDashboard.noUpcomingBookingsTitle') : t('quickDashboard.noAssignedBookingsTitle')}
-          />
-        ) : (
+        {activeTab === 'completed' ? (
+          /* COMPLETED DUTY TRIPS VIEW */
           <ScrollView
             showsVerticalScrollIndicator={false}
             refreshControl={
               <FreshRefreshControl
                 refreshing={refreshing}
-                onRefresh={handleRefresh}
+                onRefresh={async () => {
+                  setRefreshing(true);
+                  await fetchOrderHistory();
+                  setRefreshing(false);
+                }}
                 colors={[colors.primary]}
                 tintColor={colors.primary}
               />
             }
           >
-            {(activeTab === 'upcoming' ? upcomingOrders : driverOrders).map((order, index) => {
-              const isActiveTrip = !!activeTrip && activeTrip.order_id === order.order_id;
-              const hasSomeActiveTrip = !!activeTrip;
-              const isOtherOrderWhileActive = hasSomeActiveTrip && !isActiveTrip;
+            {/* Summary Stats Cards */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1, backgroundColor: '#EFF6FF', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                <Text style={{ fontSize: 12, color: '#1E40AF', fontFamily: 'Inter-Medium' }}>
+                  Completed Trips
+                </Text>
+                <Text style={{ fontSize: 20, color: '#1E3A8A', fontFamily: 'Inter-Bold', marginTop: 4 }}>
+                  {filteredOrderHistory.length}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#ECFDF5', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#A7F3D0' }}>
+                <Text style={{ fontSize: 12, color: '#065F46', fontFamily: 'Inter-Medium' }}>
+                  Total Cash Collected
+                </Text>
+                <Text style={{ fontSize: 20, color: '#064E3B', fontFamily: 'Inter-Bold', marginTop: 4 }}>
+                  ₹{totalCashCollected.toLocaleString()}
+                </Text>
+              </View>
+            </View>
 
-              return (
+            {/* Search Input Bar */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 }}>
+              <Search color="#9CA3AF" size={18} style={{ marginRight: 8 }} />
+              <TextInput
+                style={{ flex: 1, fontSize: 14, color: colors.text, paddingVertical: 2 }}
+                placeholder="Search ID, customer, location..."
+                placeholderTextColor="#9CA3AF"
+                value={historySearch}
+                onChangeText={setHistorySearch}
+              />
+              {historySearch.length > 0 && (
+                <TouchableOpacity onPress={() => setHistorySearch('')}>
+                  <X color="#9CA3AF" size={16} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filter Pills */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'today', label: 'Today' },
+                { key: 'this_week', label: 'This Week' },
+              ].map((chip) => (
                 <TouchableOpacity
-                  key={`${order.order_id}-${index}`}
-                  style={[
-                    styles.orderCard,
-                    { backgroundColor: colors.surface, opacity: isOtherOrderWhileActive ? 0.5 : 1 }
-                  ]}
-                  disabled={isOtherOrderWhileActive}
-                  onPress={() => {
-                    if (isOtherOrderWhileActive) return; // Block tap when another order is active
-                    navigateToTrip(order);
+                  key={chip.key}
+                  onPress={() => setHistoryTimeFilter(chip.key as any)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    backgroundColor: historyTimeFilter === chip.key ? colors.primary : '#F3F4F6',
                   }}
                 >
-                  {/* Upcoming Banner Highlight for Next 6h Tab */}
-                  {activeTab === 'upcoming' && (
-                    <View style={styles.upcomingTimeBanner}>
-                      <Clock size={14} color="#B45309" />
-                      <Text style={styles.upcomingTimeText}>
-                        ⏰ Scheduled Pickup: {formatDateTime(order.scheduled_at || order.start_date_time).date} at {formatDateTime(order.scheduled_at || order.start_date_time).time}
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontFamily: 'Inter-Medium',
+                      color: historyTimeFilter === chip.key ? '#FFFFFF' : '#4B5563',
+                    }}
+                  >
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* History List */}
+            {historyLoading ? (
+              <ActivityIndicator color={colors.primary} size="large" style={{ marginVertical: 40 }} />
+            ) : historyError ? (
+              <Text style={{ color: colors.error, textAlign: 'center', marginVertical: 30 }}>{historyError}</Text>
+            ) : filteredOrderHistory.length === 0 ? (
+              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                <Car size={40} color="#D1D5DB" />
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 12, fontSize: 14 }}>
+                  No completed duty trips found
+                </Text>
+              </View>
+            ) : (
+              filteredOrderHistory.map((order: any, idx: number) => {
+                const bookingIdDisplay = formatBookingId((order as any).id ?? order.order_id ?? (order as any).source_order_id);
+
+                return (
+                  <TouchableOpacity
+                    key={(order as any).id || order.order_id || idx}
+                    onPress={() => setSelectedHistoryOrder(order)}
+                    activeOpacity={0.7}
+                    style={{
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      borderColor: '#E5E7EB',
+                      backgroundColor: colors.surface,
+                      marginBottom: 12,
+                      padding: 14,
+                      elevation: 1,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                    }}
+                  >
+                    {/* Top Header of Card */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 10, marginBottom: 10 }}>
+                      <View style={{ flexShrink: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginRight: 8 }}>
+                        <Text style={{ fontFamily: 'Inter-Bold', fontSize: 15, color: colors.primary }}>
+                          Booking ID: {bookingIdDisplay}
+                        </Text>
+                        <View style={{ backgroundColor: '#DEF7EC', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ color: '#03543F', fontSize: 11, fontFamily: 'Inter-SemiBold' }}>Completed</Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: '#059669', fontSize: 16, fontFamily: 'Inter-Bold' }}>
+                        ₹{order.closed_vendor_price || 0}
                       </Text>
                     </View>
-                  )}
 
-                  <View style={styles.orderHeader}>
-                    <View style={styles.orderInfo}>
-                      <Text style={styles.orderId}>{t('quickDashboard.bookingPrefix', { id: formatBookingId(order.order_id ?? (order as any).id ?? (order as any).source_order_id) })}</Text>
-                      <View style={styles.statusBadge}>
-                        {getStatusIcon(order.assignment_status)}
-                        <Text style={{ ...styles.statusText, color: getStatusColor(order.assignment_status) }}>{getBookingStatusLabel(order)}</Text>
+                    {/* Customer & Vendor Snippet */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View style={{ flex: 1, paddingRight: 6 }}>
+                        <Text style={{ fontSize: 12, color: colors.textSecondary }}>Customer</Text>
+                        <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.text }} numberOfLines={1}>
+                          {order.customer_name || 'Customer'}
+                        </Text>
                       </View>
-                    </View>
-                    <ArrowRight size={20} color={colors.textSecondary} />
-                  </View>
-
-                  <View style={styles.routeInfo}>
-                    <View style={styles.locationRow}>
-                      <View style={[styles.locationDot, { backgroundColor: '#10B981' }]} />
-                      <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={1}>{order.pickup}</Text>
-                    </View>
-                    {!String(order.trip_type || '').toLowerCase().includes('hour') && (
-                      <View style={styles.locationRow}>
-                        <View style={[styles.locationDot, { backgroundColor: '#EF4444' }]} />
-                        <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={1}>{order.drop}</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={styles.orderDetails}>
-                    <View style={styles.detailRow}>
-                      <User size={16} color={colors.textSecondary} />
-                      <Text style={[styles.detailText, { color: colors.text }]}>{order.customer_name}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      {/* Driver taps to call the customer directly */}
-                      {(order as any).customer_number_revealed === false && Number((order as any).customer_number_reveal_in_seconds) > 0 ? (
-                        <CustomerNumberCountdown seconds={Number((order as any).customer_number_reveal_in_seconds)} onUnlock={loadDriverData} />
-                      ) : (
-                        <CallButton phoneNumber={order.customer_mobile} variant="inline" />
+                      {order.vendor_name && (
+                        <View style={{ flex: 1, paddingLeft: 6, alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 12, color: colors.textSecondary }}>Vendor</Text>
+                          <Text style={{ fontSize: 13, fontFamily: 'Inter-Medium', color: colors.text }} numberOfLines={1}>
+                            {order.vendor_name}
+                          </Text>
+                        </View>
                       )}
                     </View>
 
-                    {/* Vendor Information */}
-                    {order.vendor_name && (
-                      <View style={styles.detailRow}>
-                        <User size={16} color={colors.primary} />
-                        <Text style={[styles.detailText, { color: colors.primary }]}>{t('quickDashboard.vendorPrefix', { name: order.vendor_name })}</Text>
+                    {/* Route text */}
+                    <View style={{ gap: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' }} />
+                        <Text style={{ fontSize: 13, color: colors.text, flex: 1 }} numberOfLines={1}>
+                          {(order.pickup_drop_location && order.pickup_drop_location['0']) || order.pickup || '-'}
+                        </Text>
                       </View>
-                    )}
-                    
-                    {order.vendor_primary_number && (
-                      <View style={styles.detailRow}>
-                        {/* Before trip start the driver can reach the vendor too - tappable. */}
-                        <CallButton phoneNumber={order.vendor_primary_number} label={t('quickDashboard.vendorLabel')} variant="inline" />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#EF4444' }} />
+                        <Text style={{ fontSize: 13, color: colors.text, flex: 1 }} numberOfLines={1}>
+                          {(order.pickup_drop_location && order.pickup_drop_location['1']) || order.drop || '-'}
+                        </Text>
                       </View>
-                    )}
-
-                    {order.vendor_secondary_number && order.vendor_secondary_number !== order.vendor_primary_number && (
-                      <View style={styles.detailRow}>
-                        <CallButton phoneNumber={order.vendor_secondary_number} label={t('quickDashboard.vendorAltLabel')} variant="inline" />
-                      </View>
-                    )}
-                    <View style={styles.detailRow}>
-                      <Car size={16} color={colors.textSecondary} />
-                      <Text style={[styles.detailText, { color: colors.text }]}>{formatCarType(order.car_type)} • {order.trip_type}</Text>
                     </View>
-                    <View style={styles.detailRow}>
-                      <Clock size={16} color={colors.textSecondary} />
-                      <Text style={[styles.detailText, { color: colors.text }]}>{formatDateTime(order.scheduled_at || order.start_date_time).date} at {formatDateTime(order.scheduled_at || order.start_date_time).time}</Text>
-                    </View>
-                    {order.waiting_time !== undefined && order.waiting_time !== null && (
-                      <View style={styles.detailRow}>
-                        <IndianRupee size={16} color={colors.textSecondary} />
-                        <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.waitingChargeAmount', { amount: order.waiting_time })}</Text>
-                      </View>
-                    )}
-                    {order.waiting_charge !== undefined && order.waiting_charge !== null && (
-                      <View style={styles.detailRow}>
-                        <IndianRupee size={16} color={colors.textSecondary} />
-                        <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.waitingChargeAmount', { amount: order.waiting_charge })}</Text>
-                      </View>
-                    )}
-                    {order.night_charges !== undefined && order.night_charges !== null && (
-                      <View style={styles.detailRow}>
-                        <Moon size={16} color={colors.textSecondary} />
-                        <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.nightChargesAmount', { amount: order.night_charges })}</Text>
-                      </View>
-                    )}
-                    {/* Pickup Notes */}
-                    {order.pickup_notes && order.pickup_notes !== 'NILL' && order.pickup_notes !== 'null' && (
-                      <View style={styles.detailRow}>
-                        <FileText size={16} color="#EF4444" />
-                        <Text style={[styles.detailText, { color: '#EF4444' }]}>{t('quickDashboard.pickupNotesAmount', { notes: order.pickup_notes })}</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Fare: the booking's total (what the customer pays) with what it INCLUDES and what is charged on actuals.
-                      The driver's own rates / commission are never shown here. */}
-                  <TouchableOpacity
-                    style={[styles.seeMoreButton, { backgroundColor: colors.background, borderColor: colors.border }]}
-                    onPress={() => setExpandedOrderId(expandedOrderId === order.order_id ? null : order.order_id)}
-                  >
-                    <Text style={[styles.seeMoreText, { color: colors.primary }]}>
-                      {expandedOrderId === order.order_id ? 'Hide fare details' : 'Fare details'}
-                    </Text>
                   </TouchableOpacity>
-                  {expandedOrderId === order.order_id && (() => {
-                    const items = Array.isArray(order.charge_items) ? order.charge_items : [];
-                    const included = items.filter((c) => c && c.included !== false);
-                    const excluded = items.filter((c) => c && c.included === false);
-                    const total = Number((order as any).closed_vendor_price ?? (order as any).vendor_price ?? (order as any).total_fare ?? 0);
-                    return (
-                      <View style={[styles.expandedDetails, { borderTopColor: colors.border }]}>
-                        <View style={styles.expandedRow}>
-                          <Text style={[styles.expandedLabel, { color: colors.textSecondary }]}>Trip fare</Text>
-                          <Text style={[styles.expandedValue, { color: colors.text, fontFamily: 'Inter-Bold' }]}>₹{total}</Text>
-                        </View>
-                        {included.length > 0 && (
-                          <>
-                            <Text style={{ marginTop: 10, marginBottom: 6, fontSize: 12.5, fontFamily: 'Inter-Bold', color: '#059669' }}>Included in the fare</Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                              {included.map((c, i) => (
-                                <View key={`i${i}`} style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
-                                  <Text style={{ color: '#065F46', fontSize: 12, fontFamily: 'Inter-Medium' }}>✓ {c.label}</Text>
-                                </View>
-                              ))}
-                            </View>
-                          </>
-                        )}
-                        {excluded.length > 0 && (
-                          <>
-                            <Text style={{ marginTop: 10, marginBottom: 6, fontSize: 12.5, fontFamily: 'Inter-Bold', color: '#B45309' }}>Not in the fare - charged on actuals</Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                              {excluded.map((c, i) => (
-                                <View key={`e${i}`} style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
-                                  <Text style={{ color: '#92400E', fontSize: 12, fontFamily: 'Inter-Medium' }}>+ {c.label}</Text>
-                                </View>
-                              ))}
-                            </View>
-                          </>
-                        )}
-                        {items.length === 0 && (
-                          <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginTop: 8 }}>
-                            Toll, parking, permit and waiting are charged on actuals unless the booking says they are included.
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })()}
+                );
+              })
+            )}
+          </ScrollView>
+        ) : (
+          /* UPCOMING OR RUNNING ORDERS VIEW */
+          <>
+            <View style={styles.ordersHeader}>
+              <Text style={[styles.ordersTitle, { color: colors.text }]}>
+                {activeTab === 'upcoming' 
+                  ? `Upcoming Duties (${upcomingOrders.length})`
+                  : `Running Duty (${runningOrders.length})`}
+              </Text>
+            </View>
 
-                  <View style={styles.orderFooter}>
-                    {/* Show start/end buttons based on trip state */}
-                    {(activeTrip && activeTrip.order_id === order.order_id) || order.assignment_status === 'DRIVING' ? (
-                      <TouchableOpacity 
-                        style={[styles.endTripButton, { backgroundColor: '#EF4444' }]}
-                        onPress={() => handleEndTrip(order)}
-                        disabled={tripActionLoading === order.order_id}
-                      >
-                        {tripActionLoading === order.order_id ? (
-                          <ActivityIndicator size="small" color="white" />
-                        ) : (
-                          <>
-                            <CheckCircle size={16} color="white" />
-                            <Text style={styles.endTripText}>{t('quickDashboard.endTrip')}</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    ) : activeTrip ? (
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                  {t('quickDashboard.loadingBookings')}
+                </Text>
+              </View>
+            ) : (activeTab === 'upcoming' ? upcomingOrders : runningOrders).length === 0 ? (
+              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                {activeTab === 'upcoming' ? (
+                  <EmptyState
+                    icon={Clock}
+                    title="No Upcoming Duties"
+                  />
+                ) : (
+                  <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
+                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                      <Navigation size={32} color={colors.primary} />
+                    </View>
+                    <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.text, textAlign: 'center', marginBottom: 6 }}>
+                      No Duty Currently Running
+                    </Text>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 18 }}>
+                      You have no active ride in progress. Start an upcoming duty to activate live navigation and meter tracking.
+                    </Text>
+                    {upcomingOrders.length > 0 && (
                       <TouchableOpacity
-                        style={[styles.startTripButton, { backgroundColor: '#9CA3AF' }]}
-                        disabled={true}
+                        style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+                        onPress={() => setActiveTab('upcoming')}
+                        activeOpacity={0.8}
                       >
-                        <AlertCircle size={16} color="white" />
-                        <Text style={styles.startTripText}>{t('quickDashboard.tripActive')}</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.startTripButton, { backgroundColor: colors.primary }]}
-                        onPress={() => handleStartTrip(order)}
-                        disabled={tripActionLoading === order.order_id}
-                      >
-                        {tripActionLoading === order.order_id ? (
-                          <ActivityIndicator size="small" color="white" />
-                        ) : (
-                          <>
-                            <Navigation size={16} color="white" />
-                            <Text style={styles.startTripText}>{t('quickDashboard.startTrip')}</Text>
-                          </>
-                        )}
+                        <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: 'Inter-Bold' }}>
+                          View Upcoming Duties ({upcomingOrders.length})
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                )}
+              </View>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <FreshRefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[colors.primary]}
+                    tintColor={colors.primary}
+                  />
+                }
+              >
+                {(activeTab === 'upcoming' ? upcomingOrders : runningOrders).map((order, index) => {
+                  const isActiveTrip = !!activeTrip && activeTrip.order_id === order.order_id;
+                  const isDriving = String(order.assignment_status).toUpperCase() === 'DRIVING' || isActiveTrip;
+
+                  return (
+                    <TouchableOpacity
+                      key={`${order.order_id}-${index}`}
+                      style={[
+                        styles.orderCard,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: isDriving ? '#10B981' : colors.border,
+                          borderWidth: isDriving ? 2 : 1,
+                        }
+                      ]}
+                      onPress={() => navigateToTrip(order)}
+                    >
+                      {/* Active Running Banner for Running Tab */}
+                      {isDriving && (
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: '#ECFDF5',
+                          borderWidth: 1,
+                          borderColor: '#A7F3D0',
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          marginBottom: 12,
+                        }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                          <Text style={{ color: '#065F46', fontSize: 13, fontFamily: 'Inter-Bold', flex: 1 }}>
+                            🔒 Trip Running • Driver & Cab Locked
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Upcoming Banner for Upcoming Tab */}
+                      {activeTab === 'upcoming' && !isDriving && (
+                        <View style={styles.upcomingTimeBanner}>
+                          <Clock size={14} color="#B45309" />
+                          <Text style={styles.upcomingTimeText}>
+                            ⏰ Scheduled Pickup: {formatDateTime(order.scheduled_at || order.start_date_time).date} at {formatDateTime(order.scheduled_at || order.start_date_time).time}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.orderHeader}>
+                        <View style={styles.orderInfo}>
+                          <Text style={styles.orderId}>{t('quickDashboard.bookingPrefix', { id: formatBookingId(order.order_id ?? (order as any).id ?? (order as any).source_order_id) })}</Text>
+                          <View style={styles.statusBadge}>
+                            {getStatusIcon(order.assignment_status)}
+                            <Text style={{ ...styles.statusText, color: getStatusColor(order.assignment_status) }}>{getBookingStatusLabel(order)}</Text>
+                          </View>
+                        </View>
+                        <ArrowRight size={20} color={colors.textSecondary} />
+                      </View>
+
+                      <View style={styles.routeInfo}>
+                        <View style={styles.locationRow}>
+                          <View style={[styles.locationDot, { backgroundColor: '#10B981' }]} />
+                          <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={1}>{order.pickup}</Text>
+                        </View>
+                        {!String(order.trip_type || '').toLowerCase().includes('hour') && (
+                          <View style={styles.locationRow}>
+                            <View style={[styles.locationDot, { backgroundColor: '#EF4444' }]} />
+                            <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={1}>{order.drop}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.orderDetails}>
+                        <View style={styles.detailRow}>
+                          <User size={16} color={colors.textSecondary} />
+                          <Text style={[styles.detailText, { color: colors.text }]}>{order.customer_name}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          {/* Driver taps to call the customer directly */}
+                          {(order as any).customer_number_revealed === false && Number((order as any).customer_number_reveal_in_seconds) > 0 ? (
+                            <CustomerNumberCountdown seconds={Number((order as any).customer_number_reveal_in_seconds)} onUnlock={loadDriverData} />
+                          ) : (
+                            <CallButton phoneNumber={order.customer_mobile} variant="inline" />
+                          )}
+                        </View>
+
+                        {/* Vendor Information */}
+                        {order.vendor_name && (
+                          <View style={styles.detailRow}>
+                            <User size={16} color={colors.primary} />
+                            <Text style={[styles.detailText, { color: colors.primary }]}>{t('quickDashboard.vendorPrefix', { name: order.vendor_name })}</Text>
+                          </View>
+                        )}
+                        
+                        {order.vendor_primary_number && (
+                          <View style={styles.detailRow}>
+                            <CallButton phoneNumber={order.vendor_primary_number} label={t('quickDashboard.vendorLabel')} variant="inline" />
+                          </View>
+                        )}
+
+                        {order.vendor_secondary_number && order.vendor_secondary_number !== order.vendor_primary_number && (
+                          <View style={styles.detailRow}>
+                            <CallButton phoneNumber={order.vendor_secondary_number} label={t('quickDashboard.vendorAltLabel')} variant="inline" />
+                          </View>
+                        )}
+                        <View style={styles.detailRow}>
+                          <Car size={16} color={colors.textSecondary} />
+                          <Text style={[styles.detailText, { color: colors.text }]}>{formatCarType(order.car_type)} • {order.trip_type}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Clock size={16} color={colors.textSecondary} />
+                          <Text style={[styles.detailText, { color: colors.text }]}>{formatDateTime(order.scheduled_at || order.start_date_time).date} at {formatDateTime(order.scheduled_at || order.start_date_time).time}</Text>
+                        </View>
+                        {order.waiting_time !== undefined && order.waiting_time !== null && (
+                          <View style={styles.detailRow}>
+                            <IndianRupee size={16} color={colors.textSecondary} />
+                            <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.waitingChargeAmount', { amount: order.waiting_time })}</Text>
+                          </View>
+                        )}
+                        {order.waiting_charge !== undefined && order.waiting_charge !== null && (
+                          <View style={styles.detailRow}>
+                            <IndianRupee size={16} color={colors.textSecondary} />
+                            <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.waitingChargeAmount', { amount: order.waiting_charge })}</Text>
+                          </View>
+                        )}
+                        {order.night_charges !== undefined && order.night_charges !== null && (
+                          <View style={styles.detailRow}>
+                            <Moon size={16} color={colors.textSecondary} />
+                            <Text style={[styles.detailText, { color: colors.text }]}>{t('quickDashboard.nightChargesAmount', { amount: order.night_charges })}</Text>
+                          </View>
+                        )}
+                        {/* Pickup Notes */}
+                        {order.pickup_notes && order.pickup_notes !== 'NILL' && order.pickup_notes !== 'null' && (
+                          <View style={styles.detailRow}>
+                            <FileText size={16} color="#EF4444" />
+                            <Text style={[styles.detailText, { color: '#EF4444' }]}>{t('quickDashboard.pickupNotesAmount', { notes: order.pickup_notes })}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Fare details */}
+                      <TouchableOpacity
+                        style={[styles.seeMoreButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                        onPress={() => setExpandedOrderId(expandedOrderId === order.order_id ? null : order.order_id)}
+                      >
+                        <Text style={[styles.seeMoreText, { color: colors.primary }]}>
+                          {expandedOrderId === order.order_id ? 'Hide fare details' : 'Fare details'}
+                        </Text>
+                      </TouchableOpacity>
+                      {expandedOrderId === order.order_id && (() => {
+                        const items = Array.isArray(order.charge_items) ? order.charge_items : [];
+                        const included = items.filter((c) => c && c.included !== false);
+                        const excluded = items.filter((c) => c && c.included === false);
+                        const total = Number((order as any).closed_vendor_price ?? (order as any).vendor_price ?? (order as any).total_fare ?? 0);
+                        return (
+                          <View style={[styles.expandedDetails, { borderTopColor: colors.border }]}>
+                            <View style={styles.expandedRow}>
+                              <Text style={[styles.expandedLabel, { color: colors.textSecondary }]}>Trip fare</Text>
+                              <Text style={[styles.expandedValue, { color: colors.text, fontFamily: 'Inter-Bold' }]}>₹{total}</Text>
+                            </View>
+                            {included.length > 0 && (
+                              <>
+                                <Text style={{ marginTop: 10, marginBottom: 6, fontSize: 12.5, fontFamily: 'Inter-Bold', color: '#059669' }}>Included in the fare</Text>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                  {included.map((c, i) => (
+                                    <View key={`i${i}`} style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+                                      <Text style={{ color: '#065F46', fontSize: 12, fontFamily: 'Inter-Medium' }}>✓ {c.label}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </>
+                            )}
+                            {excluded.length > 0 && (
+                              <>
+                                <Text style={{ marginTop: 10, marginBottom: 6, fontSize: 12.5, fontFamily: 'Inter-Bold', color: '#B45309' }}>Not in the fare - charged on actuals</Text>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                  {excluded.map((c, i) => (
+                                    <View key={`e${i}`} style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+                                      <Text style={{ color: '#92400E', fontSize: 12, fontFamily: 'Inter-Medium' }}>+ {c.label}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </>
+                            )}
+                            {items.length === 0 && (
+                              <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginTop: 8 }}>
+                                Toll, parking, permit and waiting are charged on actuals unless the booking says they are included.
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })()}
+
+                      <View style={styles.orderFooter}>
+                        {/* Show start/end buttons based on trip state */}
+                        {isDriving ? (
+                          <TouchableOpacity 
+                            style={[styles.endTripButton, { backgroundColor: '#EF4444' }]}
+                            onPress={() => handleEndTrip(order)}
+                            disabled={tripActionLoading === order.order_id}
+                          >
+                            {tripActionLoading === order.order_id ? (
+                              <ActivityIndicator size="small" color="white" />
+                            ) : (
+                              <>
+                                <CheckCircle size={16} color="white" />
+                                <Text style={styles.endTripText}>{t('quickDashboard.endTrip')}</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={[styles.startTripButton, { backgroundColor: colors.primary }]}
+                            onPress={() => handleStartTrip(order)}
+                            disabled={tripActionLoading === order.order_id}
+                          >
+                            {tripActionLoading === order.order_id ? (
+                              <ActivityIndicator size="small" color="white" />
+                            ) : (
+                              <>
+                                <Navigation size={16} color="white" />
+                                <Text style={styles.startTripText}>{t('quickDashboard.startTrip')}</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </>
         )}
       </View>
 

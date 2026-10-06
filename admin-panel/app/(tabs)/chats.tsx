@@ -76,18 +76,98 @@ interface Msg {
   read?: boolean;
 }
 
-function VoiceMessageBubble({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
+function WebVoicePlayer({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && uri) {
+      try {
+        const audio = new window.Audio(uri);
+        audioRef.current = audio;
+        const onLoaded = () => setDuration(audio.duration || 0);
+        const onTime = () => setCurrentTime(audio.currentTime || 0);
+        const onEnded = () => { setPlaying(false); setCurrentTime(0); };
+        const onError = () => { setPlaying(false); };
+
+        audio.addEventListener('loadedmetadata', onLoaded);
+        audio.addEventListener('timeupdate', onTime);
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('error', onError);
+
+        return () => {
+          audio.pause();
+          audio.removeEventListener('loadedmetadata', onLoaded);
+          audio.removeEventListener('timeupdate', onTime);
+          audio.removeEventListener('ended', onEnded);
+          audio.removeEventListener('error', onError);
+          audio.src = '';
+          audioRef.current = null;
+        };
+      } catch (e) {
+        console.warn('Web audio init error:', e);
+      }
+    }
+  }, [uri]);
+
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      if (audioRef.current.ended || audioRef.current.currentTime >= (duration || 0)) {
+        audioRef.current.currentTime = 0;
+      }
+      audioRef.current.play().then(() => setPlaying(true)).catch((e: any) => {
+        console.warn('Audio play failed:', e);
+        setPlaying(false);
+      });
+    }
+  };
+
+  const total = duration || 0;
+  const pos = Math.min(currentTime || 0, total);
+  const pct = total > 0 ? pos / total : 0;
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  return (
+    <TouchableOpacity onPress={toggle} activeOpacity={0.75} style={voiceStyles.row}>
+      <View style={[voiceStyles.playBtn, { backgroundColor: mine ? 'rgba(255,255,255,0.25)' : tint + '22' }]}>
+        {playing ? (
+          <Pause size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
+        ) : (
+          <Play size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
+        )}
+      </View>
+      <View style={[voiceStyles.track, { backgroundColor: mine ? 'rgba(255,255,255,0.3)' : '#E2E8F0' }]}>
+        <View style={[voiceStyles.trackFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: mine ? '#FFFFFF' : tint }]} />
+      </View>
+      <Text style={[voiceStyles.time, { color: mine ? 'rgba(255,255,255,0.85)' : '#64748B' }]}>
+        {fmt(playing || pos > 0 ? pos : total)}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function NativeVoicePlayer({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
 
   const toggle = () => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      if (status.didJustFinish || status.currentTime >= (status.duration || 0)) {
-        player.seekTo(0);
+    try {
+      if (status.playing) {
+        player.pause();
+      } else {
+        if (status.didJustFinish || status.currentTime >= (status.duration || 0)) {
+          player.seekTo(0);
+        }
+        player.play();
       }
-      player.play();
+    } catch (e) {
+      console.warn('Native audio play error:', e);
     }
   };
 
@@ -113,6 +193,13 @@ function VoiceMessageBubble({ uri, mine, tint }: { uri: string; mine: boolean; t
       </Text>
     </TouchableOpacity>
   );
+}
+
+function VoiceMessageBubble(props: { uri: string; mine: boolean; tint: string }) {
+  if (Platform.OS === 'web') {
+    return <WebVoicePlayer {...props} />;
+  }
+  return <NativeVoicePlayer {...props} />;
 }
 
 const voiceStyles = StyleSheet.create({
@@ -146,6 +233,8 @@ const timeLabel = (iso?: string | null) => {
     ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
     : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
+
+const isMsgRead = (m: any) => Boolean(m?.read || m?.read_at || m?.is_read || m?.seen || m?.status === 'READ');
 
 // Ready replies for the Chats inbox (support threads and booking chats)
 const QUICK_REPLIES = [
@@ -181,7 +270,10 @@ export default function AdminChatsScreen() {
 
   const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceRecorderState = useAudioRecorderState(voiceRecorder);
+  const [isRecordingWeb, setIsRecordingWeb] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
+  const webMediaRecorderRef = useRef<any>(null);
+  const webAudioChunksRef = useRef<Blob[]>([]);
 
   const lastSupport = useRef<any[] | null>(null);
   const lastBooking = useRef<any[] | null>(null);
@@ -221,9 +313,15 @@ export default function AdminChatsScreen() {
         unread: t.unread || 0,
         stage: String(t.assignment_status || '').toUpperCase(),
       }));
-      const all = [...supportRows, ...bookingRows].sort(
-        (a, b) => new Date(b.last_at || 0).getTime() - new Date(a.last_at || 0).getTime()
-      );
+
+      // Unread / Needs-Reply chats ALWAYS sorted to the very top with priority
+      const all = [...supportRows, ...bookingRows].sort((a, b) => {
+        const aUrgent = (a.unread > 0 || a.help) ? 1 : 0;
+        const bUrgent = (b.unread > 0 || b.help) ? 1 : 0;
+        if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+        if (a.unread !== b.unread) return b.unread - a.unread;
+        return new Date(b.last_at || 0).getTime() - new Date(a.last_at || 0).getTime();
+      });
       setRows(all);
     } catch {
     } finally {
@@ -248,7 +346,7 @@ export default function AdminChatsScreen() {
       try {
         if (openRow.kind === 'SUPPORT') {
           const res = await supportApi.getSupportThread(openRow.key);
-          const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}` }));
+          const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}`, read: isMsgRead(m) }));
           setMessages((prev) => {
             const known = new Set(prev.map((p) => String(p.id)));
             const add = fresh.filter((m: Msg) => !known.has(String(m.id)));
@@ -258,7 +356,7 @@ export default function AdminChatsScreen() {
           });
         } else if (openRow.order_id) {
           const res = await apiService.getBookingChat(openRow.order_id);
-          const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}` }));
+          const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}`, read: isMsgRead(m) }));
           setMessages((prev) => {
             const known = new Set(prev.map((p) => String(p.id)));
             const add = fresh.filter((m: Msg) => !known.has(String(m.id)));
@@ -278,10 +376,10 @@ export default function AdminChatsScreen() {
     try {
       if (row.kind === 'SUPPORT') {
         const res = await supportApi.getSupportThread(row.key);
-        setMessages((res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}` })));
+        setMessages((res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}`, read: isMsgRead(m) })));
       } else if (row.order_id) {
         const res = await apiService.getBookingChat(row.order_id);
-        setMessages((res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}` })));
+        setMessages((res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}`, read: isMsgRead(m) })));
       }
     } catch {}
   };
@@ -305,7 +403,7 @@ export default function AdminChatsScreen() {
     if (!text || !openRow || sending) return;
     setSending(true);
     setInput('');
-    const optimistic: Msg = { id: `tmp-${Date.now()}`, mine: true, sender_name: 'You', text, created_at: new Date().toISOString() };
+    const optimistic: Msg = { id: `tmp-${Date.now()}`, mine: true, sender_name: 'You', text, created_at: new Date().toISOString(), read: false };
     setMessages((prev) => [...prev, optimistic]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     try {
@@ -325,24 +423,55 @@ export default function AdminChatsScreen() {
 
   const startVoiceRecording = async () => {
     try {
+      if (Platform.OS === 'web') {
+        if (navigator?.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new (window as any).MediaRecorder(stream);
+          webMediaRecorderRef.current = mediaRecorder;
+          webAudioChunksRef.current = [];
+          mediaRecorder.ondataavailable = (e: any) => {
+            if (e.data.size > 0) webAudioChunksRef.current.push(e.data);
+          };
+          mediaRecorder.start();
+          setIsRecordingWeb(true);
+        }
+        return;
+      }
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) return;
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await voiceRecorder.prepareToRecordAsync();
       voiceRecorder.record();
-    } catch {}
+    } catch (e) {
+      console.warn('Start voice recording error:', e);
+    }
   };
 
   const stopAndSendVoiceRecording = async () => {
     if (!openRow) return;
     try {
-      await voiceRecorder.stop();
-      const uri = voiceRecorder.uri;
+      let uri = '';
+      if (Platform.OS === 'web') {
+        setIsRecordingWeb(false);
+        if (webMediaRecorderRef.current) {
+          const mr = webMediaRecorderRef.current;
+          await new Promise<void>((resolve) => {
+            mr.onstop = () => resolve();
+            mr.stop();
+          });
+          if (mr.stream) mr.stream.getTracks().forEach((t: any) => t.stop());
+          const blob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
+          uri = URL.createObjectURL(blob);
+        }
+      } else {
+        await voiceRecorder.stop();
+        uri = voiceRecorder.uri || '';
+      }
       if (!uri) return;
       setUploadingVoice(true);
-      const upload = await apiService.uploadChatVoiceNote(uri, 'audio/m4a');
-      const voiceUrl = upload.voice_url;
-      const optimistic: Msg = { id: `tmp-${Date.now()}`, mine: true, sender_name: 'You', text: '🎤 Voice message', voice_url: voiceUrl, created_at: new Date().toISOString() };
+      const upload = await apiService.uploadChatVoiceNote(uri, Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a');
+      const voiceUrl = upload.voice_url || uri;
+      const optimistic: Msg = { id: `tmp-${Date.now()}`, mine: true, sender_name: 'You', text: '🎤 Voice message', voice_url: voiceUrl, created_at: new Date().toISOString(), read: false };
       setMessages((prev) => [...prev, optimistic]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       if (openRow.kind === 'SUPPORT') {
@@ -351,11 +480,14 @@ export default function AdminChatsScreen() {
         await apiService.sendBookingChatMessage(openRow.order_id, undefined, voiceUrl);
       }
       load();
-    } catch {
+    } catch (e) {
+      console.warn('Send voice recording error:', e);
     } finally {
       setUploadingVoice(false);
     }
   };
+
+  const isRecordingActive = Platform.OS === 'web' ? isRecordingWeb : voiceRecorderState.isRecording;
 
   const toggleOnDuty = async () => {
     const next = !(onDuty ?? false);
@@ -741,9 +873,9 @@ export default function AdminChatsScreen() {
           showsVerticalScrollIndicator={true}
           ListHeaderComponent={
             <View style={{ gap: 10, marginBottom: 8 }}>
-              {/* 1. CHATS & SUPPORT LIVE SNAPSHOT */}
+              {/* 1. CHATS & SUPPORT LIVE SNAPSHOT (Single Line) */}
               <View style={{ marginTop: 2 }}>
-                <View style={{ paddingHorizontal: 16, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ paddingHorizontal: 16, marginBottom: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
                     <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textSecondary }}>
@@ -756,35 +888,51 @@ export default function AdminChatsScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
+
                 <KpiStrip
                   items={[
                     {
                       label: 'Needs Reply',
                       value: needsReplyCount,
-                      tone: needsReplyCount > 0 ? '#DC2626' : themeColors.text,
+                      tone: needsReplyCount > 0 ? '#EF4444' : '#10B981',
                       delta: needsReplyCount > 0 ? 'Urgent' : 'Clear',
                       isPositive: needsReplyCount === 0,
+                      onPress: () => {
+                        setActiveTab('SUPPORT');
+                        setOpenGroups((prev) => new Set([...prev, 'reply']));
+                      },
                     },
                     {
                       label: 'Login Help',
                       value: loginHelpCount,
-                      tone: loginHelpCount > 0 ? '#EA580C' : themeColors.text,
-                      delta: loginHelpCount > 0 ? 'OTP / Pass' : 'Clear',
+                      tone: loginHelpCount > 0 ? '#F59E0B' : '#64748B',
+                      delta: loginHelpCount > 0 ? 'OTP' : 'Clear',
                       isPositive: loginHelpCount === 0,
+                      onPress: () => {
+                        setActiveTab('SUPPORT');
+                        setOpenGroups((prev) => new Set([...prev, 'help']));
+                      },
                     },
                     {
                       label: 'Trip Chats',
                       value: activeTripsCount,
-                      tone: '#10B981',
-                      delta: activeTripsCount > 0 ? 'On Road' : 'Standby',
+                      tone: activeTripsCount > 0 ? '#10B981' : '#64748B',
+                      delta: activeTripsCount > 0 ? 'Live' : 'Standby',
                       isPositive: true,
+                      onPress: () => {
+                        setActiveTab('TRIPS');
+                        setOpenGroups((prev) => new Set([...prev, 'live']));
+                      },
                     },
                     {
                       label: 'Total Active',
                       value: rows.length,
-                      tone: themeColors.primary,
+                      tone: '#8B5CF6',
                       delta: 'Active',
                       isPositive: true,
+                      onPress: () => {
+                        setActiveTab('ALL');
+                      },
                     },
                   ]}
                 />
@@ -974,9 +1122,12 @@ export default function AdminChatsScreen() {
       )}
 
       {/* Thread Chat Modal */}
-      <Modal visible={Boolean(openRow)} animationType="fade" onRequestClose={() => setOpenRow(null)}>
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.background }]}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Modal visible={Boolean(openRow)} animationType="slide" onRequestClose={() => setOpenRow(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View style={[styles.chatHeader, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
               <TouchableOpacity onPress={() => setOpenRow(null)} style={{ padding: 6, marginRight: 6 }}>
                 <ArrowLeft size={20} color={themeColors.text} />
@@ -1017,7 +1168,15 @@ export default function AdminChatsScreen() {
                       <Text style={{ color: item.mine ? 'rgba(255,255,255,0.7)' : themeColors.textMuted, fontSize: 10 }}>
                         {timeLabel(item.created_at)}
                       </Text>
-                      {item.mine ? (item.read ? <CheckCheck size={13} color="#BFDBFE" /> : <Check size={13} color="rgba(255,255,255,0.75)" />) : null}
+                      {item.mine ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 2 }}>
+                          {item.read ? (
+                            <CheckCheck size={14} color="#38BDF8" strokeWidth={2.4} />
+                          ) : (
+                            <CheckCheck size={14} color="rgba(255,255,255,0.6)" strokeWidth={2} />
+                          )}
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -1055,10 +1214,10 @@ export default function AdminChatsScreen() {
                 onSubmitEditing={send}
               />
               <TouchableOpacity
-                onPress={voiceRecorderState.isRecording ? stopAndSendVoiceRecording : startVoiceRecording}
-                style={[styles.actionBtn, { backgroundColor: voiceRecorderState.isRecording ? themeColors.error : themeColors.surfaceAlt }]}
+                onPress={isRecordingActive ? stopAndSendVoiceRecording : startVoiceRecording}
+                style={[styles.actionBtn, { backgroundColor: isRecordingActive ? themeColors.error : themeColors.surfaceAlt }]}
               >
-                {voiceRecorderState.isRecording ? (
+                {isRecordingActive ? (
                   <Square size={16} color="#FFFFFF" />
                 ) : (
                   <Mic size={16} color={uploadingVoice ? themeColors.textMuted : themeColors.primary} />
@@ -1189,6 +1348,59 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontFamily: 'Inter-Bold',
     fontWeight: '800',
+  },
+  snapshotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  snapshotCard: {
+    width: '48.8%',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'space-between',
+    minHeight: 110,
+  },
+  snapshotCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  snapshotIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  snapshotBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  snapshotBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  snapshotStatValue: {
+    fontSize: 18,
+    fontFamily: 'Inter-ExtraBold',
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  snapshotTitle: {
+    fontSize: 12.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  snapshotSubtitle: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 1,
   },
   searchBox: {
     flexDirection: 'row',

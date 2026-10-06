@@ -1417,6 +1417,21 @@ export default function FleetOwnerDetailScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Upgrade the proper way: choose Monthly/Yearly and take payment (wallet, UPI/bank/cash, or a WhatsApp payment link) */}
+            {selectedTierTarget === 'PREFERRED' && (
+              <TouchableOpacity
+                style={{ marginBottom: 14, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#10B981', backgroundColor: isDark ? '#064E3B33' : '#ECFDF5' }}
+                onPress={() => {
+                  setTierModalVisible(false);
+                  router.push({ pathname: '/fleet-subscriptions', params: { search: owner?.primary_number || '', openPay: '1' } } as any);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontWeight: '800', fontSize: 13, color: '#047857' }}>Upgrade with payment (Monthly / Yearly)</Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>Wallet, UPI / bank / cash, or send a payment link on WhatsApp. Activates automatically.</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Reason Input */}
             <Text style={[styles.fieldLabel, { color: themeColors.text }]}>Reason for Update <Text style={{ color: themeColors.error }}>*</Text></Text>
             <TextInput

@@ -32,7 +32,16 @@ const PERMISSION_OPTIONS: { key: string; label: string; icon: any }[] = [
   { key: 'customers', label: 'Customers', icon: UserCheck },
   { key: 'fleet', label: 'Fleet', icon: Users },
   { key: 'finance', label: 'Finance', icon: Wallet },
+  { key: 'chats', label: 'Chats', icon: MessageSquare },
+  { key: 'tasks', label: 'Tasks', icon: ClipboardCheck },
 ];
+
+// Keys the server allows that this screen has no built-in label for (owner adds them in Settings -> `staff_permission_keys`).
+const KNOWN_PERMISSION_KEYS = new Set<string>([
+  'enquiries', 'bookings', 'customers', 'fleet', 'finance', 'chats', 'tasks',
+  'approvals', 'verifications', 'account_activations', 'payment_release',
+  'tax_accounts', 'trusted_partner_management', 'support', 'accounts',
+]);
 
 // Finer-grained action permissions, anticipating a future "Accounts
 // Manager" role that needs some-but-not-all of a section's actions.
@@ -82,6 +91,7 @@ export default function StaffManagementScreen() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extraPermKeys, setExtraPermKeys] = useState<string[]>([]);
   const [pendingPermKey, setPendingPermKey] = useState<string | null>(null);
 
   const [newUsername, setNewUsername] = useState('');
@@ -159,8 +169,19 @@ export default function StaffManagementScreen() {
       setLoading(true);
       const list = await apiService.getAdminsList();
       setStaff(Array.isArray(list) ? list : []);
-      const targetData = await apiService.getStaffTodayTarget();
-      setDailyTarget(String(targetData.target));
+      try {
+        const targetData = await apiService.getStaffTodayTarget();
+        setDailyTarget(String(targetData.target));
+      } catch (e) {
+        // the daily-target box is optional - never block the staff list on it
+      }
+      try {
+        const rbac: any = await apiService.getRbacRoles();
+        const keys: string[] = Array.isArray(rbac?.available_permissions) ? rbac.available_permissions : [];
+        setExtraPermKeys(keys.filter((k) => !KNOWN_PERMISSION_KEYS.has(k)));
+      } catch (e) {
+        // older backend without the list - built-in options still work
+      }
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to load staff list');
     } finally {
@@ -360,12 +381,24 @@ export default function StaffManagementScreen() {
       Alert.alert('Missing details', 'Fill in username, email, phone and password.');
       return;
     }
+    // Backend wants exactly 10 digits starting 6-9: strip spaces, +91 / 91 / 0 prefix the owner may type.
+    let phoneDigits = newPhone.replace(/\D/g, '');
+    if (phoneDigits.length > 10 && phoneDigits.startsWith('91')) phoneDigits = phoneDigits.slice(-10);
+    if (phoneDigits.length === 11 && phoneDigits.startsWith('0')) phoneDigits = phoneDigits.slice(1);
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      Alert.alert('Check phone', 'Phone must be a 10-digit Indian mobile number (starts with 6, 7, 8 or 9).');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Check password', 'Password must be at least 6 characters.');
+      return;
+    }
     setSaving(true);
     try {
       await apiService.createStaff({
         username: newUsername.trim(),
-        email: newEmail.trim(),
-        phone: newPhone.trim(),
+        email: newEmail.trim().toLowerCase(),
+        phone: phoneDigits,
         password: newPassword,
         permissions: newPermissions,
       });
@@ -518,7 +551,7 @@ export default function StaffManagementScreen() {
                 </View>
                 <Text style={[styles.permLabel, { color: themeColors.textSecondary }]}>Can access:</Text>
                 <View style={styles.permRow}>
-                  {PERMISSION_OPTIONS.map((opt) => {
+                  {[...PERMISSION_OPTIONS, ...extraPermKeys.map((k) => ({ key: k, label: k.replace(/_/g, ' '), icon: Shield }))].map((opt) => {
                     const active = member.permissions.includes(opt.key);
                     const Icon = opt.icon;
                     return (
@@ -642,7 +675,7 @@ export default function StaffManagementScreen() {
 
             <Text style={[styles.inputLabel, { color: themeColors.textSecondary, marginTop: 8 }]}>Sections this staff member can access</Text>
             <View style={styles.permRow}>
-              {PERMISSION_OPTIONS.map((opt) => {
+              {[...PERMISSION_OPTIONS, ...extraPermKeys.map((k) => ({ key: k, label: k.replace(/_/g, ' '), icon: Shield }))].map((opt) => {
                 const active = newPermissions.includes(opt.key);
                 const Icon = opt.icon;
                 return (

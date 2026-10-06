@@ -1,20 +1,21 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Zap, Users } from 'lucide-react-native';
+import { Zap, Users, Radio } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
 /**
- * Edge-to-edge "Drop Market" top segment switcher (Drop Bid | Drop Connect).
+ * Edge-to-edge "Drop Market" top segment switcher (Drop Bid | Drop Connect | Live Radar).
  * Uses underline indicator tabs that span the full screen width.
  */
-export default function DropMarketSwitcher({ active }: { active: 'bid' | 'connect' }) {
+export default function DropMarketSwitcher({ active }: { active: 'bid' | 'connect' | 'radar' }) {
   const { colors, isDarkMode } = useTheme();
   const router = useRouter();
 
   const tabs = [
     { key: 'bid' as const, label: 'Drop Bid', Icon: Zap, route: '/drop-bid', activeColor: colors.primary },
     { key: 'connect' as const, label: 'Drop Connect', Icon: Users, route: '/drop-connect', activeColor: '#10B981' },
+    { key: 'radar' as const, label: 'Live Radar', Icon: Radio, route: '/drop-radar', activeColor: '#3B82F6' },
   ];
 
   return (

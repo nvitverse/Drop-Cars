@@ -663,6 +663,14 @@ export default function DashboardScreen() {
   
   // Determine button status for an order
   const getOrderButtonStatus = (order: PendingOrder): { disabled: boolean; buttonText: string; priorityBlockedUntil?: string | null; amountNeeded?: number } => {
+    // Check if order was already taken by another partner within last 5 minutes
+    if ((order as any).is_accepted_by_other || (order as any).trip_status === 'ACCEPTED_BY_OTHER') {
+      return {
+        disabled: true,
+        buttonText: 'Accepted by another partner',
+      };
+    }
+
     // Check if order limit reached (3 orders already accepted)
     if (acceptedOrdersCount >= MAX_ACCEPTED_ORDERS) {
       return {

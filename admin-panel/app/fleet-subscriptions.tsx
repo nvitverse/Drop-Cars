@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,10 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
   Search,
@@ -44,6 +45,9 @@ import Toast, { useToast } from '@/components/Toast';
 // The first one takes the money from the partner's own wallet (the server debits it in the same step). All others mean the money
 // already arrived outside the app (UPI / bank / cash) and staff only record it.
 const WALLET_CHANNEL = 'Wallet (deduct from partner wallet)';
+// Share a Razorpay payment link on WhatsApp: the partner pays by UPI/card and the plan activates by itself.
+const LINK_CHANNEL = 'Payment Link (share on WhatsApp)';
+// Fallback only - the real list (and the plan fees) come from the server (/admin/fleet-subscriptions/options), which the owner can change.
 const PAYMENT_CHANNELS = [
   WALLET_CHANNEL,
   'GPay (Google Pay)',
@@ -59,6 +63,8 @@ const PAYMENT_CHANNELS = [
 
 export default function FleetSubscriptionsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ search?: string; openPay?: string }>();
+  const openedFromLink = useRef(false);
   const { isDark } = useTheme();
   const { toast, showToast } = useToast();
 
@@ -74,7 +80,7 @@ export default function FleetSubscriptionsScreen() {
   });
 
   const [activeTab, setActiveTab] = useState<'ALL' | 'PAID' | 'OVERDUE' | 'PAUSED' | 'TRUSTED'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(typeof params.search === 'string' ? params.search : '');
 
   // Modals state
   const [payModalVisible, setPayModalVisible] = useState(false);
@@ -91,6 +97,9 @@ export default function FleetSubscriptionsScreen() {
   const [markTrusted, setMarkTrusted] = useState(true);
   const [payNotes, setPayNotes] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
+  const [opts, setOpts] = useState<any>(null);                       // plans / fees / channels from the server
+  const [linkInfo, setLinkInfo] = useState<any>(null);               // the payment link just created
+  const [checkingLink, setCheckingLink] = useState(false);
 
   // Form states - Pause
   const [pauseReason, setPauseReason] = useState('');
@@ -119,19 +128,90 @@ export default function FleetSubscriptionsScreen() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    apiService.getFleetUpgradeOptions().then(setOpts).catch(() => setOpts(null));
+  }, []);
+
+  const planFeeFor = (plan: string, fallback: number) => {
+    const fee = Number(opts?.plans?.find((x: any) => x.key === plan)?.fee || 0);
+    return fee > 0 ? fee : fallback;
+  };
+  const channelList: string[] = (() => {
+    if (!opts?.channels?.length) return PAYMENT_CHANNELS;
+    const others = opts.channels.filter((c: string) => !/^wallet/i.test(c));
+    return [...(opts.payment_link_enabled ? [LINK_CHANNEL] : []), WALLET_CHANNEL, ...others];
+  })();
+
   // Open Payment Modal
   const openPayModal = (fleet: any) => {
     setSelectedFleet(fleet);
-    const planFee = fleet.subscription_type === 'YEARLY' ? 1000 : 199;
-    setPayChannel(Number(fleet.wallet_balance || 0) >= planFee ? WALLET_CHANNEL : PAYMENT_CHANNELS[1]);   // wallet first when it can pay
+    const planFee = fleet.subscription_type === 'YEARLY' ? planFeeFor('YEARLY', 0) : planFeeFor('MONTHLY', 0);
+    const canLink = !!opts?.payment_link_enabled;
+    setLinkInfo(null);
+    // wallet when it can pay, else a shareable payment link (if Razorpay is set up), else just record the payment
+    setPayChannel(planFee > 0 && Number(fleet.wallet_balance || 0) >= planFee ? WALLET_CHANNEL : canLink ? LINK_CHANNEL : (channelList.find((c) => c !== WALLET_CHANNEL && c !== LINK_CHANNEL) || WALLET_CHANNEL));
     setPayRef('');
-    setPayAmount(String(planFee));
+    setPayAmount(planFee > 0 ? String(planFee) : '');
     setPayPlan(fleet.subscription_type === 'YEARLY' ? 'YEARLY' : 'MONTHLY');
     setPayDurationDays(fleet.subscription_type === 'YEARLY' ? '365' : '30');
     setMarkTrusted(true);
     setPayNotes('');
     setPayModalVisible(true);
   };
+
+  const sendPaymentLink = async () => {
+    if (!selectedFleet) return;
+    if (payPlan === 'CUSTOM') {
+      Alert.alert('Choose Monthly or Yearly', 'A payment link works for the Monthly or Yearly plan.');
+      return;
+    }
+    const amountNum = parseInt(payAmount, 10);
+    setSubmittingAction(true);
+    try {
+      const res = await apiService.createFleetPaymentLink(selectedFleet.id, { plan_type: payPlan, amount: amountNum > 0 ? amountNum : undefined });
+      setLinkInfo(res);
+      if (res.whatsapp_url) {
+        Linking.openURL(res.whatsapp_url).catch(() => Share.share({ message: res.message }));
+      } else {
+        await Share.share({ message: res.message });
+      }
+    } catch (e: any) {
+      Alert.alert('Could not create the link', e?.message || 'Try again in a minute.');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  const checkPaymentLink = async () => {
+    if (!selectedFleet) return;
+    setCheckingLink(true);
+    try {
+      const res = await apiService.checkFleetPaymentLink(selectedFleet.id);
+      if (res.status === 'PAID') {
+        showToast('Payment received. Partner is now Trusted.', 'success');
+        setPayModalVisible(false);
+        setLinkInfo(null);
+        loadData();
+      } else if (res.status === 'EXPIRED') {
+        showToast('That link expired. Create a new one.', 'error');
+        setLinkInfo(null);
+      } else {
+        showToast('Not paid yet. It activates automatically once the partner pays.', 'info');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Could not check the payment', 'error');
+    } finally {
+      setCheckingLink(false);
+    }
+  };
+
+  // Arrived from a partner's page ("Upgrade to Trusted"): open the payment sheet for the one matching partner.
+  useEffect(() => {
+    if (params.openPay && !openedFromLink.current && !loading && fleets.length > 0 && opts !== null) {
+      openedFromLink.current = true;
+      openPayModal(fleets[0]);
+    }
+  }, [loading, fleets, opts, params.openPay]);
 
   const submitManualPayment = async () => {
     if (!selectedFleet) return;
@@ -527,7 +607,7 @@ export default function FleetSubscriptionsScreen() {
               {/* Payment Channel (Where they paid) */}
               <Text style={[styles.fieldLabel, { color: textCol }]}>Payment Channel (Where they paid) *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {PAYMENT_CHANNELS.map((ch) => {
+                {channelList.map((ch) => {
                   const isSel = payChannel === ch;
                   return (
                     <TouchableOpacity
@@ -548,7 +628,11 @@ export default function FleetSubscriptionsScreen() {
                   );
                 })}
               </ScrollView>
-              {payChannel === WALLET_CHANNEL ? (
+              {payChannel === LINK_CHANNEL ? (
+                <Text style={{ fontSize: 12, marginBottom: 12, color: subText }}>
+                  Creates a secure Razorpay link and opens WhatsApp with the message ready to send. When the partner pays, the plan activates and the partner becomes Trusted automatically.
+                </Text>
+              ) : payChannel === WALLET_CHANNEL ? (
                 <Text style={{ fontSize: 12, fontWeight: '700', marginBottom: 12, color: Number(selectedFleet?.wallet_balance || 0) >= (parseFloat(payAmount) || 0) ? '#047857' : '#B91C1C' }}>
                   Wallet ₹{selectedFleet?.wallet_balance || 0}
                   {(parseFloat(payAmount) || 0) > 0 ? `  →  after payment ₹${Number(selectedFleet?.wallet_balance || 0) - (parseFloat(payAmount) || 0)}` : ''}
@@ -594,6 +678,8 @@ export default function FleetSubscriptionsScreen() {
                       onPress={() => {
                         setPayPlan(p.plan as any);
                         setPayDurationDays(p.days);
+                        const fee = p.plan === 'CUSTOM' ? 0 : planFeeFor(p.plan, 0);
+                        if (fee > 0) setPayAmount(String(fee));
                       }}
                       style={[
                         styles.planBtn,
@@ -647,6 +733,20 @@ export default function FleetSubscriptionsScreen() {
                 value={payNotes}
                 onChangeText={setPayNotes}
               />
+              {payChannel === LINK_CHANNEL && linkInfo ? (
+                <View style={[styles.checkRow, { backgroundColor: isDark ? '#12261C' : '#ECFDF5', borderColor: '#10B981', flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#047857' }}>Link created: ₹{linkInfo.amount} {String(linkInfo.plan).toLowerCase()} plan</Text>
+                  <Text selectable style={{ fontSize: 12, color: textCol, marginVertical: 6 }}>{linkInfo.short_url}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => (linkInfo.whatsapp_url ? Linking.openURL(linkInfo.whatsapp_url) : Share.share({ message: linkInfo.message }))} style={[styles.planBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Send on WhatsApp again</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => Share.share({ message: linkInfo.message })} style={[styles.planBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: textCol }}>Share…</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -654,17 +754,19 @@ export default function FleetSubscriptionsScreen() {
                 onPress={() => setPayModalVisible(false)}
                 style={[styles.modalCancelBtn, { borderColor: borderCol }]}
               >
-                <Text style={{ fontWeight: '700', color: textCol }}>Cancel</Text>
+                <Text style={{ fontWeight: '700', color: textCol }}>{payChannel === LINK_CHANNEL && linkInfo ? 'Close' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={submitManualPayment}
-                disabled={submittingAction}
+                onPress={payChannel === LINK_CHANNEL ? (linkInfo ? checkPaymentLink : sendPaymentLink) : submitManualPayment}
+                disabled={submittingAction || checkingLink}
                 style={[styles.modalConfirmBtn, { backgroundColor: '#0D47A1' }]}
               >
-                {submittingAction ? (
+                {submittingAction || checkingLink ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>Confirm Payment & Activate</Text>
+                  <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>
+                    {payChannel === LINK_CHANNEL ? (linkInfo ? 'Check payment' : 'Create link & share on WhatsApp') : 'Confirm Payment & Activate'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>

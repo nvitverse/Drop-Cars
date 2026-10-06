@@ -190,6 +190,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen name="drop-connect" options={{ href: null }} />
+      <Tabs.Screen name="drop-radar" options={{ href: null }} />
 
       <Tabs.Screen name="my-bookings" options={{ href: null }} />
 

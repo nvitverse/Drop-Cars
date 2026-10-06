@@ -21,7 +21,7 @@ class ApiService {
     try {
       return await AsyncStorage.getItem('auth_token');
     } catch {
-      return null;           // a storage hiccup is not a logout; the request just goes out without a token
+      return null;
     }
   }
 
@@ -35,6 +35,11 @@ class ApiService {
       return;
     }
     this.sessionExpiredShown = true;
+    if (Platform.OS === 'web') {
+      this.sessionExpiredShown = false;
+      router.replace('/login');
+      return;
+    }
     Alert.alert('Session Expired', 'Please sign in again.', [
       {
         text: 'Sign In',
@@ -145,18 +150,6 @@ class ApiService {
         });
         }
 
-        // Only 401 (missing/invalid/expired token) means the session itself
-        // is dead - force logout there. 403 means the token is still valid
-        // but this admin lacks permission for this specific action (e.g. a
-        // Staff account hitting an Owner-only route) - that's not a session
-        // problem, so let the calling screen's own error handling (its
-        // "forbidden" UI, an Alert, etc.) deal with it instead of yanking
-        // the user back to the login screen for a perfectly live session.
-        // 403 here is FastAPI's own default HTTPBearer "Not authenticated"
-        // (no/garbage Authorization header) - same dead-end as an expired
-        // 401 token from this app's point of view, so it needs the same
-        // clear-and-redirect handling instead of being left as a generic
-        // "Failed to load" error with no way back to the login screen.
         // A failed background / secondary call must NEVER sign the admin out by itself: several endpoints answer 401/403 for reasons
         // that have nothing to do with the session (an owner-only route, a route that checks another role, a deploy in progress).
         // Only the profile check (app start) may end the session directly; any other 401 / "not authenticated" is first CONFIRMED
@@ -259,6 +252,10 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ ...data, role: 'Staff' }),
     });
+  }
+
+  async getRbacRoles(): Promise<{ roles: any; available_permissions: string[] }> {
+    return this.makeRequest('/admin/rbac/roles', { method: 'GET' });
   }
 
   async updateStaffPermissions(adminId: string, permissions: string[]): Promise<any> {
@@ -716,7 +713,15 @@ class ApiService {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
     const statusParam = status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : '';
     const tierParam = tier && tier !== 'all' ? `&tier=${encodeURIComponent(tier)}` : '';
-    return this.makeRequest(`/admin-vehcile-owner/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}${tierParam}`);
+    try {
+      return await this.makeRequest(`/admin-vehcile-owner/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}${tierParam}`);
+    } catch {
+      try {
+        return await this.makeRequest(`/admin/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}${tierParam}`);
+      } catch {
+        return await this.makeRequest(`/admin-vehicle-owner/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}${tierParam}`);
+      }
+    }
   }
 
   async getVehicleOwnerDetails(vehicleOwnerId: string): Promise<any> {
@@ -1207,8 +1212,17 @@ class ApiService {
   }
 
   // --- Driver lookup (server-side search + full live detail) ---
-  async searchDriverLookup(q: string): Promise<any[]> {
-    return this.makeRequest(`/admin/driver-lookup/search?q=${encodeURIComponent(q.trim())}`);
+  async searchDriverLookup(params?: { q?: string; city?: string; driverType?: 'ALL' | 'DUTY' | 'FLEET' } | string): Promise<any[]> {
+    const qParams = new URLSearchParams();
+    if (typeof params === 'string') {
+      if (params.trim()) qParams.set('q', params.trim());
+    } else if (params) {
+      if (params.q?.trim()) qParams.set('q', params.q.trim());
+      if (params.city?.trim()) qParams.set('city', params.city.trim());
+      if (params.driverType && params.driverType !== 'ALL') qParams.set('driver_type', params.driverType);
+    }
+    const qs = qParams.toString();
+    return this.makeRequest(`/admin/driver-lookup/search${qs ? `?${qs}` : ''}`);
   }
   async getDriverLookup(driverId: string): Promise<any> {
     return this.makeRequest(`/admin/driver-lookup/${driverId}`);
@@ -1522,6 +1536,21 @@ class ApiService {
   }> {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
     return this.makeRequest(`/admin/fleet-subscriptions?status=${encodeURIComponent(status)}&skip=${skip}&limit=${limit}${searchParam}`);
+  }
+
+  async getFleetUpgradeOptions(): Promise<any> {
+    return this.makeRequest('/admin/fleet-subscriptions/options', { method: 'GET' });
+  }
+
+  async createFleetPaymentLink(vehicleOwnerId: string, data: { plan_type: string; amount?: number }): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/payment-link`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async checkFleetPaymentLink(vehicleOwnerId: string): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/payment-link/check`, { method: 'POST' });
   }
 
   async recordManualFleetPayment(vehicleOwnerId: string, data: {
@@ -2411,6 +2440,22 @@ class ApiService {
         Alert.alert('Export', 'Please open this link in your browser to download the CSV: ' + exportUrl);
       }
     }
+  }
+
+  // Business Profile & Invoicing Branding Settings
+  async getBusinessProfileSettings(): Promise<any> {
+    try {
+      const raw = await AsyncStorage.getItem('@dropcars_business_profile_settings');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  }
+
+  async updateBusinessProfileSettings(settings: any): Promise<any> {
+    try {
+      await AsyncStorage.setItem('@dropcars_business_profile_settings', JSON.stringify(settings));
+    } catch {}
+    return settings;
   }
 
   // --- Chats: general driver/owner Support threads (no order_id) ---

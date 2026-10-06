@@ -46,6 +46,11 @@ SYSTEM_SETTING_DEFAULTS = {
     "gst_number": "33BBVPN8562P1ZJ",
     "gst_business_name": "Drop Cars",
     "gst_business_address": "",
+    # Standard -> Trusted upgrade screen + staff accounts (crud/fleet_payment_links.py, api/routes/admin.py) - Owner-editable text
+    "fleet_payment_channels": "Wallet,GPay,PhonePe,Paytm,Bank Transfer,Cash in Hand",   # comma separated; "Wallet" debits the partner's wallet
+    "fleet_payment_link_message": "Hello {name}, please pay Rs.{amount} for your Drop Cars {plan} Trusted Partner plan using this secure link:\n{link}\nYour account is upgraded automatically as soon as the payment is done. - Drop Cars",
+    "fleet_payment_link_expiry_hours": "48",
+    "staff_permission_keys": "",                                                         # extra staff permission keys, comma separated
 }
 
 

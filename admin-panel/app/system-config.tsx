@@ -114,6 +114,36 @@ export default function SystemConfigScreen() {
   const [gstValues, setGstValues] = useState({ gst_number: '', gst_business_name: '', gst_business_address: '' });
   const [gstOriginal, setGstOriginal] = useState({ gst_number: '', gst_business_name: '', gst_business_address: '' });
   const [gstSaving, setGstSaving] = useState(false);
+  // Owner-editable text settings for the Standard -> Trusted upgrade screen and staff permissions (kept out of the numeric map).
+  const TEXT_SETTING_FIELDS = [
+    { key: 'fleet_payment_channels', label: 'Payment channels', hint: 'Comma separated. "Wallet" debits the partner wallet.', placeholder: 'Wallet,GPay,PhonePe,Bank Transfer,Cash in Hand' },
+    { key: 'fleet_payment_link_message', label: 'WhatsApp link message', hint: 'Use {name} {plan} {amount} {link}. {link} is required.', placeholder: 'Hello {name}, please pay Rs.{amount} ... {link}' },
+    { key: 'fleet_payment_link_expiry_hours', label: 'Link valid for (hours)', hint: '1 to 720', placeholder: '48' },
+    { key: 'staff_permission_keys', label: 'Extra staff permission keys', hint: 'Comma separated. Lets a new section be granted to staff without an app update.', placeholder: 'reports,audit' },
+  ] as const;
+  const TEXT_SETTING_KEYS = new Set<string>(TEXT_SETTING_FIELDS.map((f) => f.key));
+  const [txtValues, setTxtValues] = useState<Record<string, string>>({});
+  const [txtOriginal, setTxtOriginal] = useState<Record<string, string>>({});
+  const [txtSaving, setTxtSaving] = useState(false);
+  const txtHasChanges = TEXT_SETTING_FIELDS.some((f) => (txtValues[f.key] ?? '') !== (txtOriginal[f.key] ?? ''));
+  const handleSaveTxt = async () => {
+    setTxtSaving(true);
+    try {
+      const updates: Record<string, string> = {};
+      TEXT_SETTING_FIELDS.forEach((f) => { if ((txtValues[f.key] ?? '') !== (txtOriginal[f.key] ?? '')) updates[f.key] = (txtValues[f.key] ?? '').trim(); });
+      const res = await apiService.updateSystemSettings(updates);
+      const next: Record<string, string> = {};
+      TEXT_SETTING_FIELDS.forEach((f) => { next[f.key] = String((res.settings as any)[f.key] ?? ''); });
+      setTxtOriginal(next);
+      setTxtValues(next);
+      showToast('Saved', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to save', 'error');
+    } finally {
+      setTxtSaving(false);
+    }
+  };
+
   const gstHasChanges = gstValues.gst_number !== gstOriginal.gst_number
     || gstValues.gst_business_name !== gstOriginal.gst_business_name
     || gstValues.gst_business_address !== gstOriginal.gst_business_address;
@@ -155,10 +185,14 @@ export default function SystemConfigScreen() {
       // gst_number/business_name/address are text, not numbers - kept out
       // of this numeric-only values map so the main "Save All Changes"
       // button's number validation never rejects them.
-      const GST_TEXT_KEYS = new Set(['gst_number', 'gst_business_name', 'gst_business_address']);
+      const GST_TEXT_KEYS = new Set(['gst_number', 'gst_business_name', 'gst_business_address', ...Array.from(TEXT_SETTING_KEYS)]);
       const strMap: Record<string, string> = {};
       Object.entries(data).forEach(([k, v]) => { if (!GST_TEXT_KEYS.has(k)) strMap[k] = String(v); });
       setValues(strMap);
+      const txtNext: Record<string, string> = {};
+      TEXT_SETTING_FIELDS.forEach((f) => { txtNext[f.key] = String((data as any)[f.key] ?? ''); });
+      setTxtOriginal(txtNext);
+      setTxtValues(txtNext);
       const gstNext = {
         gst_number: String((data as any).gst_number ?? ''),
         gst_business_name: String((data as any).gst_business_name ?? ''),
@@ -196,7 +230,7 @@ export default function SystemConfigScreen() {
       try {
         const res = await apiService.updateSystemSettings(updates);
         setOriginal(res.settings as SystemSettings);
-        const GST_TEXT_KEYS = new Set(['gst_number', 'gst_business_name', 'gst_business_address']);
+        const GST_TEXT_KEYS = new Set(['gst_number', 'gst_business_name', 'gst_business_address', ...Array.from(TEXT_SETTING_KEYS)]);
         const strMap: Record<string, string> = {};
         Object.entries(res.settings).forEach(([k, v]) => { if (!GST_TEXT_KEYS.has(k)) strMap[k] = String(v); });
         setValues(strMap);
@@ -289,6 +323,37 @@ export default function SystemConfigScreen() {
             {gstHasChanges && (
               <TouchableOpacity onPress={handleSaveGst} disabled={gstSaving} style={[styles.saveBtn, { alignSelf: 'flex-end', margin: 12 }]}>
                 {gstSaving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <><Save size={16} color="#FFFFFF" /><Text style={styles.saveBtnText}> Save GST Details</Text></>}
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>PARTNER UPGRADE & STAFF</Text>
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            {TEXT_SETTING_FIELDS.map((f, idx, arr) => {
+              const changed = (txtValues[f.key] ?? '') !== (txtOriginal[f.key] ?? '');
+              return (
+                <View key={f.key} style={[{ padding: 12 }, idx < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border }]}>
+                  <Text style={[styles.fieldLabel, { color: themeColors.text }]}>{f.label}{changed ? '  •' : ''}</Text>
+                  <Text style={[styles.fieldHint, { color: themeColors.textSecondary, marginBottom: 6 }]}>{f.hint}</Text>
+                  <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: changed ? '#6366F1' : themeColors.border }]}>
+                    <TextInput
+                      value={txtValues[f.key] ?? ''}
+                      onChangeText={(v) => setTxtValues((prev) => ({ ...prev, [f.key]: v }))}
+                      placeholder={f.placeholder}
+                      placeholderTextColor={themeColors.textSecondary}
+                      multiline={f.key === 'fleet_payment_link_message'}
+                      autoCapitalize="none"
+                      style={[styles.input, { color: changed ? '#6366F1' : themeColors.text }]}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+            {txtHasChanges && (
+              <TouchableOpacity onPress={handleSaveTxt} disabled={txtSaving} style={[styles.saveBtn, { alignSelf: 'flex-end', margin: 12 }]}>
+                {txtSaving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <><Save size={16} color="#FFFFFF" /><Text style={styles.saveBtnText}> Save</Text></>}
               </TouchableOpacity>
             )}
           </View>

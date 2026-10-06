@@ -1109,6 +1109,20 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"payment reconcile failed (continuing): {_e}")
+            # Payment links staff shared on WhatsApp for Standard -> Trusted upgrades: activate whichever were paid
+            try:
+                from app.crud.fleet_payment_links import reconcile_pending_links
+                _lnk = reconcile_pending_links(db)
+                if _lnk.get("activated"):
+                    print(f"Activated {_lnk['activated']} partner plan(s) from paid payment links")
+                    try:
+                        from app.crud.notification import send_push_notification_to_admin
+                        await send_push_notification_to_admin(db, "Payment link paid", f"{_lnk['activated']} partner(s) upgraded to Trusted automatically.")
+                    except Exception:
+                        pass
+            except Exception as _e:
+                db.rollback()
+                print(f"payment link reconcile failed (continuing): {_e}")
         # Driver asked the booking's poster something and got no answer for 10 minutes -> Drop Cars support joins the chat
         try:
             from app.crud.booking_chat import escalate_unanswered_chats

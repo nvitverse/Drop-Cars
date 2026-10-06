@@ -227,6 +227,7 @@ export interface KpiItem {
   isPositive?: boolean;
   tone?: string;
   sparklineData?: number[];
+  onPress?: () => void;
 }
 
 export function KpiStrip({ items }: { items: KpiItem[] }) {
@@ -246,10 +247,13 @@ export function KpiStrip({ items }: { items: KpiItem[] }) {
         {items.map((item, idx) => {
           const isLast = idx === items.length - 1;
           const toneColor = item.tone || (item.isPositive ? '#10B981' : '#EF4444');
+          const ContainerComp = item.onPress ? TouchableOpacity : View;
 
           return (
-            <View
+            <ContainerComp
               key={item.label + idx}
+              activeOpacity={0.75}
+              onPress={item.onPress}
               style={[
                 kpiStyles.stripSegment,
                 {
@@ -300,7 +304,7 @@ export function KpiStrip({ items }: { items: KpiItem[] }) {
               ) : (
                 <View style={kpiStyles.deltaPlaceholder} />
               )}
-            </View>
+            </ContainerComp>
           );
         })}
       </View>

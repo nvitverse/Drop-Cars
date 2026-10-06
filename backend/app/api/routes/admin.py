@@ -82,7 +82,23 @@ ALLOWED_STAFF_PERMISSIONS = {
     # posting bookings to the whole driver network and holding customer
     # advances (2026-09-30, per owner: "only some selected staffs").
     "trusted_partner_management",
+    # Sections the Admin App already hides/shows per staff member (canSee / permissions.includes) - these used to be missing
+    # here, so ticking "Leads/CRM" when adding staff was rejected with 400 "Invalid permissions" and no staff could be added.
+    "enquiries", "chats", "tasks", "support", "accounts",
 }
+STAFF_PERMISSION_EXTRA_KEY = "staff_permission_keys"
+
+
+def allowed_staff_permissions(db) -> set:
+    """Built-in keys plus any extra keys the owner adds in platform setting `staff_permission_keys` (comma separated),
+    so a new section can be granted to staff without a backend deploy."""
+    try:
+        from app.crud.customer_booking_request import get_platform_setting_value
+        raw = get_platform_setting_value(db, STAFF_PERMISSION_EXTRA_KEY, "")
+    except Exception:
+        raw = ""
+    extra = {x.strip().lower() for x in str(raw or "").split(",") if x.strip()}
+    return set(ALLOWED_STAFF_PERMISSIONS) | extra
 
 
 def require_payment_release_permission(admin) -> None:
@@ -167,11 +183,12 @@ def admin_signup(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="role must be 'Owner' or 'Staff'",
             )
-        invalid_perms = set(admin_data.permissions) - ALLOWED_STAFF_PERMISSIONS
+        _allowed = allowed_staff_permissions(db)
+        invalid_perms = set(admin_data.permissions) - _allowed
         if invalid_perms:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid permissions: {sorted(invalid_perms)}. Allowed: {sorted(ALLOWED_STAFF_PERMISSIONS)}",
+                detail=f"Invalid permissions: {sorted(invalid_perms)}. Allowed: {sorted(_allowed)}",
             )
 
         # Check if admin already exists with the same username
@@ -509,11 +526,12 @@ def update_staff_permissions(
     if target.role == "Owner":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change an Owner's permissions this way")
 
-    invalid_perms = set(body.permissions) - ALLOWED_STAFF_PERMISSIONS
+    _allowed = allowed_staff_permissions(db)
+    invalid_perms = set(body.permissions) - _allowed
     if invalid_perms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid permissions: {sorted(invalid_perms)}. Allowed: {sorted(ALLOWED_STAFF_PERMISSIONS)}",
+            detail=f"Invalid permissions: {sorted(invalid_perms)}. Allowed: {sorted(_allowed)}",
         )
 
     updated = update_admin(db, admin_id, permissions=body.permissions)
@@ -6977,6 +6995,10 @@ class SystemSettingsUpdateSchema(BaseModel):
     ai_bot_global_daily_limit: Optional[int] = None  # AI answers for everyone per day (cost guard)
     doc_ai_enabled: Optional[int] = None             # 1 = AI (Gemini vision) reads uploaded document photos; sends the photo to Google - paid tier only
     doc_ai_daily_limit: Optional[int] = None
+    fleet_payment_channels: Optional[str] = None
+    fleet_payment_link_message: Optional[str] = None
+    fleet_payment_link_expiry_hours: Optional[str] = None
+    staff_permission_keys: Optional[str] = None
 
 
 @router.get("/admin/settings/system")
@@ -7013,6 +7035,7 @@ def update_system_settings_endpoint(
         "platform_share_pct", "platform_share_min", "commission_min", "convenience_fee", "website_booking_post_mode",
         "ai_bot_enabled", "ai_bot_daily_limit", "ai_bot_global_daily_limit", "doc_ai_enabled", "doc_ai_daily_limit",
         "gst_number", "gst_business_name", "gst_business_address",
+        "fleet_payment_channels", "fleet_payment_link_message", "fleet_payment_link_expiry_hours", "staff_permission_keys",
     }
     if any(k in updates for k in _owner_only):
         require_owner(current_admin)
@@ -7029,6 +7052,14 @@ def update_system_settings_endpoint(
             if mode not in ("MANUAL", "AUTO", "AUTO_IF_NO_STAFF"):
                 raise HTTPException(status_code=400, detail="website_booking_post_mode must be MANUAL, AUTO or AUTO_IF_NO_STAFF")
             updates["website_booking_post_mode"] = mode
+        if updates.get("fleet_payment_link_message") is not None and "{link}" not in str(updates["fleet_payment_link_message"]):
+            raise HTTPException(status_code=400, detail="The WhatsApp message must contain {link} where the payment link goes")
+        if updates.get("fleet_payment_link_expiry_hours") is not None:
+            try:
+                if not (1 <= int(str(updates["fleet_payment_link_expiry_hours"]).strip()) <= 720):
+                    raise ValueError
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Link expiry must be a whole number of hours between 1 and 720")
         if updates.get("gst_number"):
             gstin = str(updates["gst_number"]).strip().upper()
             import re as _re
@@ -7069,11 +7100,11 @@ NAMED_ROLES = {
 
 
 @router.get("/admin/rbac/roles")
-def get_rbac_roles_endpoint(current_admin = Depends(get_current_admin)):
+def get_rbac_roles_endpoint(current_admin = Depends(get_current_admin), db: Session = Depends(get_db)):
     """Retrieve all defined named roles and available permissions for RBAC management."""
     return {
         "roles": NAMED_ROLES,
-        "available_permissions": list(ALLOWED_STAFF_PERMISSIONS)
+        "available_permissions": sorted(allowed_staff_permissions(db))
     }
 
 

@@ -66,4 +66,32 @@ class RazorpayClient:
         resp.raise_for_status()
         return resp.json()
 
+    def create_payment_link(self, amount_rupees: int, description: str, reference_id: str,
+                            customer_name: Optional[str] = None, customer_contact: Optional[str] = None,
+                            notes: Optional[Dict[str, Any]] = None, expire_in_hours: int = 48) -> Dict[str, Any]:
+        """A Razorpay Payment Link: a short URL the payer opens to pay by UPI / card / netbanking. We send the link ourselves
+        (WhatsApp), so Razorpay's own SMS/e-mail notification is switched off. Amount is whole rupees."""
+        import time as _time
+        payload: Dict[str, Any] = {
+            "amount": int(amount_rupees) * 100,
+            "currency": "INR",
+            "accept_partial": False,
+            "description": description[:2000],
+            "reference_id": reference_id[:40],
+            "expire_by": int(_time.time()) + max(1, int(expire_in_hours)) * 3600,
+            "notify": {"sms": False, "email": False},
+            "reminder_enable": False,
+            "notes": notes or {},
+        }
+        if customer_name or customer_contact:
+            payload["customer"] = {k: v for k, v in {"name": customer_name, "contact": customer_contact}.items() if v}
+        resp = requests.post(f"{self.base_url}/payment_links", auth=self._auth(), json=payload, timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_payment_link(self, link_id: str) -> Dict[str, Any]:
+        resp = requests.get(f"{self.base_url}/payment_links/{link_id}", auth=self._auth(), timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+
 
