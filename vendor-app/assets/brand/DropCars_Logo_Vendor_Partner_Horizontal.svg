@@ -1,0 +1,22 @@
+<svg width="680" height="110" viewBox="0 0 680 110" xmlns="http://www.w3.org/2000/svg">
+  <!-- Trademark Squircle Icon -->
+  <g transform="translate(0, 0)">
+    <rect x="4" y="4" width="102" height="102" rx="24" fill="#0D47A1"/>
+    <path d="M46,31 L66,45 L46,59" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M64,51 L44,65 L64,79" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Trademark Brand Pill -->
+  <g transform="translate(125, 0)">
+    <rect x="0" y="0" width="340" height="110" rx="22" fill="#0D47A1" stroke="#0D47A1" stroke-width="3"/>
+    <path d="M170,0 H318 A22,22 0 0 1 340,22 V88 A22,22 0 0 1 318,110 H170 Z" fill="#FFFFFF" stroke="#0D47A1" stroke-width="3"/>
+    <text x="85" y="76" text-anchor="middle" font-family="'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="48" fill="#FFFFFF">DROP</text>
+    <text x="255" y="76" text-anchor="middle" font-family="'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="48" fill="#0D47A1">CARS</text>
+  </g>
+
+  <!-- Partner Badge -->
+  <g transform="translate(485, 30)">
+    <rect x="0" y="0" width="185" height="52" rx="16" fill="#D97706"/>
+    <text x="92" y="34" text-anchor="middle" font-family="'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="20" letter-spacing="2" fill="#FFFFFF">PARTNER</text>
+  </g>
+</svg>

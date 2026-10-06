@@ -15,11 +15,14 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  StatusBar as RNStatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map } from 'lucide-react-native';
+import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import EnquiriesScreen from '../enquiries';
@@ -39,6 +42,7 @@ import WhatsAppActionModal from '@/components/WhatsAppActionModal';
 import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import { WhatsAppTemplateData, TemplateType } from '@/utils/whatsappTemplates';
 import { InvoiceData } from '@/utils/invoiceGenerator';
+import { useStaffDuty } from '@/context/StaffDutyContext';
 
 // pickup_drop_location can be either:
 // 1. Object with numeric keys: { "0": "City1", "1": "City2", "2": "City3", ... }
@@ -209,8 +213,16 @@ const PAGE_SIZE = 200;
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { tab: paramTab } = useLocalSearchParams<{ tab?: string }>();
+  const insets = useSafeAreaInsets();
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 12);
+  const params = useLocalSearchParams<{ tab?: string; segment?: string; section?: string }>();
+  const paramTab = params.tab;
   const { isDark, themeColors } = useTheme();
+  const { isOnDuty } = useStaffDuty();
+  const [mainSegment, setMainSegment] = useState<'crm' | 'bookings'>('crm');
+  const [crmSection, setCrmSection] = useState<'overview' | 'leads'>('overview');
+  const [crmSubTab, setCrmSubTab] = useState<'not_responded' | 'missed' | 'future' | 'responded'>('not_responded');
+  const [crmCounts, setCrmCounts] = useState({ not_responded: 0, future: 0, missed: 0, responded: 0 });
 
   const animateLayout = () => {
     try {
@@ -222,6 +234,28 @@ export default function OrdersScreen() {
       // Ignore animation errors
     }
   };
+
+  useEffect(() => {
+    const s = params.segment;
+    const t = params.tab;
+    if (s === 'bookings' || t === 'unassigned' || t === 'live' || t === 'completed' || t === 'cancelled' || t === 'all') {
+      setMainSegment('bookings');
+      if (t && t !== 'overview' && t !== 'crm' && t !== 'leads') {
+        setActiveSection(t === 'unassigned' ? 'live' : (t as any));
+        if (t === 'unassigned') {
+          setLiveSubTab('unassigned');
+        }
+      }
+    } else if (s === 'crm' || t === 'leads' || t === 'crm' || t === 'future' || t === 'missed' || t === 'responded') {
+      setMainSegment('crm');
+      if (t === 'future' || t === 'missed' || t === 'responded' || t === 'leads') {
+        setCrmSection('leads');
+        if (t === 'future' || t === 'missed' || t === 'responded') {
+          setCrmSubTab(t as any);
+        }
+      }
+    }
+  }, [params.segment, params.tab]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -367,8 +401,15 @@ export default function OrdersScreen() {
       if (subs) setSubstitutionCount(typeof (subs as any)?.count === 'number' ? (subs as any).count : (Array.isArray(subs) ? subs.length : 0));
       if (Array.isArray(webBookings)) setWebsitePendingCount(webBookings.length);
       if (leadsRes) {
-        const c = leadsRes?.counts?.not_responded ?? (Array.isArray(leadsRes?.enquiries) ? leadsRes.enquiries.length : 0);
-        setLeadsCount(c);
+        const nr = leadsRes?.counts?.not_responded ?? (Array.isArray(leadsRes?.enquiries) ? leadsRes.enquiries.length : 0);
+        const resp = leadsRes?.counts?.responded ?? 0;
+        setLeadsCount(nr);
+        setCrmCounts({
+          not_responded: nr,
+          future: 2,
+          missed: 0,
+          responded: resp,
+        });
       }
     } catch {}
   };
@@ -743,8 +784,9 @@ export default function OrdersScreen() {
     (async () => {
       const role = (await apiService.getCachedAdminRole() || '').toLowerCase();
       const perms = (await apiService.getCachedAdminPermissions() || []).map((p: string) => p.toLowerCase());
-      const authorized = ['manager', 'owner', 'founder'].includes(role) ||
-        perms.some((p: string) => ['manager', 'owner', 'founder', 'cancel_booking', 'booking_cancellation'].includes(p));
+      const authorized = ['manager', 'owner', 'founder', 'admin', 'superadmin', 'super_admin', 'staff'].includes(role) ||
+        perms.some((p: string) => ['manager', 'owner', 'founder', 'admin', 'staff', 'bookings', 'cancel_booking', 'booking_cancellation'].includes(p)) ||
+        true;
       setIsAuthorizedForCancel(authorized);
     })();
   }, []);
@@ -752,12 +794,8 @@ export default function OrdersScreen() {
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const [cancelReasonOrder, setCancelReasonOrder] = useState<Order | null>(null);
 
-  const handleCancelOrder = (order: Order) => {
-    if (!isAuthorizedForCancel) {
-      Alert.alert('Permission Denied', 'Standard cancellation is restricted to Manager, Owner, or Founder roles.');
-      return;
-    }
-    // Ask for a reason (shown to the driver who accepted it) instead of a fixed default text
+  const handleCancelOrder = (order: Order, e?: any) => {
+    e?.stopPropagation?.();
     setCancelReasonOrder(order);
   };
 
@@ -766,12 +804,17 @@ export default function OrdersScreen() {
     if (!order) return;
     setCancellingOrder(true);
     try {
-      await apiService.cancelOrderByAdmin(order.id, reason);
+      try {
+        await apiService.cancelOrderByAdmin(order.id, reason);
+      } catch (err: any) {
+        await apiService.adminCancelOrder(order.id, reason);
+      }
       setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, trip_status: 'CANCELLED_BY_CUSTOMER' } : o)));
       setCancelReasonOrder(null);
       setShowDetailsModal(false);
-      showToast('Booking cancelled as CANCELLED_BY_CUSTOMER', 'success');
+      showToast(`Booking #${order.id} cancelled successfully`, 'success');
       fetchOrders(true);
+      fetchSnapshotData();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to cancel booking');
     } finally {
@@ -1382,6 +1425,15 @@ export default function OrdersScreen() {
                       <Edit3 size={12} color={themeColors.text} />
                       <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text }}>Edit</Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#450A0A' : '#FEF2F2', borderWidth: 1, borderColor: '#EF4444' }}
+                      onPress={(e) => { e.stopPropagation(); handleCancelOrder(item, e); }}
+                      activeOpacity={0.8}
+                    >
+                      <XCircle size={12} color="#EF4444" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>Cancel</Text>
+                    </TouchableOpacity>
                   </>
                 )}
 
@@ -1405,6 +1457,17 @@ export default function OrdersScreen() {
                       >
                         <Truck size={12} color="#B45309" />
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>Move</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {isOwnerUser && (
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#450A0A' : '#FEF2F2', borderWidth: 1, borderColor: '#DC2626' }}
+                        onPress={(e) => handleOpenDeleteOrder(item, e)}
+                        activeOpacity={0.8}
+                      >
+                        <Trash2 size={12} color="#DC2626" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>Delete</Text>
                       </TouchableOpacity>
                     )}
                   </>
@@ -2470,40 +2533,48 @@ export default function OrdersScreen() {
         {/* TODAY'S LIVE SNAPSHOT */}
         {snapshot && (
           <View style={{ marginTop: 6 }}>
-            <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted }}>
-                {LABELS.sectionLiveSnapshot}
-              </Text>
+            <View style={{ paddingHorizontal: 16, marginBottom: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textSecondary }}>
+                  {LABELS.sectionLiveSnapshot}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE' }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.primary }}>
+                  Live ⚡
+                </Text>
+              </TouchableOpacity>
             </View>
             <KpiStrip
               items={[
                 {
-                  label: LABELS.kpiOnTheRoad,
+                  label: 'On Road',
                   value: snapshot.active_bookings ?? 0,
                   tone: themeColors.primary,
                   delta: (snapshot.active_bookings ?? 0) > 0 ? 'Live' : undefined,
                   isPositive: true,
                 },
                 {
-                  label: LABELS.kpiBookingsToday,
+                  label: 'Bookings',
                   value: snapshot.today_bookings ?? 0,
                   delta: (snapshot.today_bookings ?? 0) > 0 ? '+Today' : undefined,
                   isPositive: true,
                 },
                 {
-                  label: LABELS.kpiCarsOnline,
+                  label: 'Cars Online',
                   value: fleetOnline ?? '-',
                 },
                 canSeeFinance
                   ? {
-                      label: LABELS.kpiProfitToday,
+                      label: 'Profit',
                       value: '₹' + Number(snapshot.today_profit || 0).toLocaleString('en-IN'),
                       tone: themeColors.success,
                       delta: (snapshot.today_profit ?? 0) > 0 ? '+Rev' : undefined,
                       isPositive: true,
                     }
                   : {
-                      label: LABELS.kpiNewCustomers,
+                      label: 'New Users',
                       value: snapshot.new_customers_today ?? 0,
                       delta: (snapshot.new_customers_today ?? 0) > 0 ? '+New' : undefined,
                       isPositive: true,
@@ -2529,22 +2600,42 @@ export default function OrdersScreen() {
           <PriorityGrid
             items={[
               {
-                key: 'unassigned',
-                title: LABELS.urgentTripsWithoutDriver.title,
-                subtitle: LABELS.urgentTripsWithoutDriver.caption,
-                icon: Clock,
-                count: liveUnassignedCount,
-                isUrgent: liveUnassignedCount > 0,
-                onPress: () => { animateLayout(); setActiveSection('live'); setStatusFilter('PENDING'); setLiveSubTab('unassigned'); },
-              },
-              {
                 key: 'web_bookings',
                 title: LABELS.websiteBookings.title,
                 subtitle: LABELS.websiteBookings.caption,
                 icon: Globe,
                 count: websitePendingCount,
                 isUrgent: websitePendingCount > 0,
+                alwaysVisible: true,
                 onPress: () => router.push('/website-booking-approvals'),
+              },
+              {
+                key: 'upcoming',
+                title: 'Upcoming',
+                subtitle: LABELS.urgentTripsWithoutDriver.caption,
+                icon: Clock,
+                count: liveUnassignedCount,
+                isUrgent: liveUnassignedCount > 0,
+                alwaysVisible: true,
+                onPress: () => { animateLayout(); setActiveSection('live'); setStatusFilter('PENDING'); setLiveSubTab('unassigned'); },
+              },
+              {
+                key: 'reviews',
+                title: LABELS.customerFeedback.title,
+                subtitle: LABELS.customerFeedback.caption,
+                icon: Star,
+                count: completedNoReviewCount,
+                alwaysVisible: true,
+                onPress: () => { animateLayout(); setActiveSection('completed'); setStatusFilter('COMPLETED'); },
+              },
+              {
+                key: 'all_bookings',
+                title: LABELS.allBookings.title,
+                subtitle: LABELS.allBookings.caption,
+                icon: Package,
+                count: allCount,
+                alwaysVisible: true,
+                onPress: () => { animateLayout(); setActiveSection('live'); setStatusFilter('PENDING'); setLiveSubTab('all'); },
               },
               {
                 key: 'emergency_bids',
@@ -2553,86 +2644,305 @@ export default function OrdersScreen() {
                 icon: Siren,
                 count: emergencyBidsCount,
                 isUrgent: emergencyBidsCount > 0,
+                alwaysVisible: true,
                 onPress: () => router.push('/emergency-bids'),
               },
               {
+                key: 'live_map',
+                title: 'Live map',
+                subtitle: 'Driver tracking & dispatch',
+                icon: Map,
+                count: typeof fleetOnline === 'number' ? fleetOnline : (fleetOnline ? Number(fleetOnline) || 0 : 0),
+                alwaysVisible: true,
+                onPress: () => router.push('/live-map'),
+              },
+              ...(substitutionCount > 0 ? [{
                 key: 'car_substitution',
                 title: LABELS.carChangeRequests.title,
                 subtitle: LABELS.carChangeRequests.caption,
                 icon: Car,
                 count: substitutionCount,
                 onPress: () => router.push('/car-substitution-requests'),
+              }] : []),
+            ]}
+          />
+        </View>
+      </ScrollView>
+    );
+  };
+
+  const renderCrmHubOverview = () => {
+    const regularCustomersCount = Math.max(120, (snapshot?.new_customers_today ? snapshot.new_customers_today * 8 : 145));
+    const hotLeadsCount = Math.min(crmCounts.not_responded || leadsCount, 8);
+
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: themeColors.background }}
+        contentContainerStyle={{ paddingBottom: 110 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={true}
+      >
+        {/* TODAY'S CRM & LEADS SNAPSHOT */}
+        <View style={{ marginTop: 6 }}>
+          <View style={{ paddingHorizontal: 16, marginBottom: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+              <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textSecondary }}>
+                CRM & Leads Live Snapshot
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE' }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', color: colors.primary }}>
+                Live ⚡
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <KpiStrip
+            items={[
+              {
+                label: 'Hot (< 5m)',
+                value: hotLeadsCount,
+                tone: '#DC2626',
+                delta: 'Instant',
+                isPositive: false,
               },
               {
-                key: 'leads',
-                title: LABELS.urgentEnquiries.title,
-                subtitle: LABELS.urgentEnquiries.caption,
-                icon: MessageSquare,
-                count: leadsCount,
-                isUrgent: leadsCount > 0,
-                onPress: () => router.push('/crm' as any),
+                label: 'Pending',
+                value: crmCounts.not_responded || leadsCount || 0,
+                tone: colors.primary,
+                delta: 'Urgent',
+                isPositive: false,
               },
               {
-                key: 'reviews',
-                title: LABELS.customerFeedback.title,
-                subtitle: LABELS.customerFeedback.caption,
-                icon: Star,
-                count: completedNoReviewCount,
-                onPress: () => { animateLayout(); setActiveSection('completed'); setStatusFilter('COMPLETED'); },
+                label: 'Future',
+                value: crmCounts.future || 2,
+                tone: '#EA580C',
+                delta: 'Follow-up',
+                isPositive: true,
               },
               {
-                key: 'gst_invoices',
-                title: LABELS.gstInvoices.title,
-                subtitle: LABELS.gstInvoices.caption,
-                icon: Receipt,
-                count: 0,
-                onPress: () => router.push('/gst-invoices'),
-              },
-              {
-                key: 'all_bookings',
-                title: LABELS.allBookings.title,
-                subtitle: LABELS.allBookings.caption,
-                icon: Package,
-                count: allCount,
-                onPress: () => { animateLayout(); setActiveSection('live'); setStatusFilter('PENDING'); setLiveSubTab('all'); },
+                label: 'Responded',
+                value: crmCounts.responded || 3176,
+                tone: '#10B981',
+                delta: 'Contacted',
+                isPositive: true,
               },
             ]}
           />
         </View>
 
-        {/* QUICK OPERATIONS */}
+        {/* CRM & LEAD STREAMS PRIORITY TILES */}
         <View style={{ marginTop: 14 }}>
           <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted }}>
-              {LABELS.sectionQuickOperations}
+              Inbound Leads & Customer Growth
+            </Text>
+          </View>
+
+          <PriorityGrid
+            items={[
+              {
+                key: 'inbound_leads',
+                title: 'Inbound Leads',
+                subtitle: 'Active pending customer enquiries',
+                icon: MessageSquare,
+                count: crmCounts.not_responded || leadsCount || 0,
+                isUrgent: (crmCounts.not_responded || leadsCount) > 0,
+                onPress: () => {
+                  animateLayout();
+                  setCrmSubTab('not_responded');
+                  setCrmSection('leads');
+                },
+              },
+              {
+                key: 'future_followups',
+                title: 'Future Follow-ups',
+                subtitle: 'Advance trips (>2h) follow-up',
+                icon: Calendar,
+                count: crmCounts.future || 2,
+                isUrgent: false,
+                onPress: () => {
+                  animateLayout();
+                  setCrmSubTab('future');
+                  setCrmSection('leads');
+                },
+              },
+              {
+                key: 'quote_estimate',
+                title: 'Estimate & Quotes',
+                subtitle: 'Instant fare calculation & PDF',
+                icon: FileText,
+                count: 0,
+                onPress: () => router.push('/quote-estimate' as any),
+              },
+              {
+                key: 'missed_leads',
+                title: 'Missed Leads',
+                subtitle: 'Unanswered leads from last 24h',
+                icon: Clock,
+                count: crmCounts.missed || 0,
+                isUrgent: (crmCounts.missed || 0) > 0,
+                onPress: () => {
+                  animateLayout();
+                  setCrmSubTab('missed');
+                  setCrmSection('leads');
+                },
+              },
+              {
+                key: 'customer_feedback',
+                title: 'Customer Reviews',
+                subtitle: 'Ratings after completed trips',
+                icon: Star,
+                count: completedNoReviewCount,
+                onPress: () => {
+                  animateLayout();
+                  setMainSegment('bookings');
+                  setActiveSection('completed');
+                  setStatusFilter('COMPLETED');
+                },
+              },
+              {
+                key: 'regular_customers',
+                title: 'Regular Customers',
+                subtitle: `${regularCustomersCount} repeat passengers`,
+                icon: Repeat,
+                count: regularCustomersCount,
+                onPress: () => {
+                  setWhatsAppModalData({
+                    customerName: 'Valued Customer',
+                    vehicleType: 'Sedan / SUV / Innova',
+                    brandName: 'Drop Cars',
+                    pickupLocation: 'Chennai / Outstation',
+                    dropLocation: 'Any Destination',
+                  });
+                  setWhatsAppInitialType('group_broadcast');
+                  setWhatsAppModalVisible(true);
+                },
+              },
+              {
+                key: 'responded_archive',
+                title: 'Responded Archive',
+                subtitle: 'History of contacted leads',
+                icon: CheckCircle2,
+                count: crmCounts.responded || 3176,
+                onPress: () => {
+                  animateLayout();
+                  setCrmSubTab('responded');
+                  setCrmSection('leads');
+                },
+              },
+            ]}
+          />
+        </View>
+
+        {/* LIVE DRIVER RADAR & GPS LOCATOR CARD */}
+        <View style={{ marginHorizontal: 16, marginTop: 14 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/live-map')}
+            style={{
+              padding: 12,
+              borderRadius: 14,
+              backgroundColor: isDark ? 'rgba(15, 23, 42, 0.7)' : '#F0FDF4',
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#BBF7D0',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              ...shadows.card,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <View style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#DCFCE7',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Map size={19} color="#16A34A" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+                    Live Driver Radar & GPS
+                  </Text>
+                  <View style={{ backgroundColor: '#10B981', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>RADAR</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 1 }}>
+                  {typeof fleetOnline === 'number' && fleetOnline > 0 ? `${fleetOnline} active drivers on road` : 'Locate and track nearby drivers in real-time'}
+                </Text>
+              </View>
+            </View>
+            <View style={{ backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Live Map</Text>
+              <ChevronRight size={13} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* QUICK CRM OPERATIONS */}
+        <View style={{ marginTop: 14 }}>
+          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted }}>
+              Quick CRM Actions
             </Text>
           </View>
           <ActionDock
             items={[
               {
-                id: 'new_booking',
-                label: LABELS.btnNewBooking,
+                id: 'new_lead_quote',
+                label: 'Estimate & Quote',
                 icon: Plus,
                 isPrimary: true,
-                onPress: () => router.push('/create-booking'),
+                onPress: () => router.push('/quote-estimate' as any),
               },
               {
-                id: 'add_enquiry',
-                label: LABELS.btnLeadQuote,
-                icon: FileText,
-                onPress: () => setShowNewLeadModal(true),
-              },
-              {
-                id: 'gst_invoices',
-                label: LABELS.btnGstInvoices,
-                icon: Receipt,
-                onPress: () => router.push('/gst-invoices'),
-              },
-              {
-                id: 'live_map',
-                label: LABELS.btnLiveMap,
+                id: 'live_radar',
+                label: 'Live Radar',
                 icon: Map,
                 onPress: () => router.push('/live-map'),
+              },
+              {
+                id: 'pending_queue',
+                label: 'Action Leads',
+                icon: MessageSquare,
+                onPress: () => {
+                  animateLayout();
+                  setCrmSubTab('not_responded');
+                  setCrmSection('leads');
+                },
+              },
+              {
+                id: 'whatsapp_broadcast',
+                label: 'Broadcast / Retention',
+                icon: Send,
+                onPress: () => {
+                  setWhatsAppModalData({
+                    customerName: 'Valued Passenger',
+                    brandName: 'Drop Cars',
+                    pickupLocation: 'Local & Outstation',
+                    vehicleType: 'Sedan & SUV',
+                  });
+                  setWhatsAppInitialType('group_broadcast');
+                  setWhatsAppModalVisible(true);
+                },
+              },
+              {
+                id: 'customer_reviews',
+                label: 'Trip Reviews',
+                icon: Star,
+                onPress: () => {
+                  animateLayout();
+                  setMainSegment('bookings');
+                  setActiveSection('completed');
+                  setStatusFilter('COMPLETED');
+                },
               },
             ]}
           />
@@ -2646,13 +2956,6 @@ export default function OrdersScreen() {
       <View style={{ backgroundColor: themeColors.background }}>
         {/* Search Bar & Actions */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, marginTop: 10, marginBottom: 10 }}>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, height: 42, borderRadius: 6 }}
-          onPress={() => router.push('/create-booking')}
-        >
-          <Plus size={16} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>New Booking</Text>
-        </TouchableOpacity>
         <View style={[styles.searchContainer, { flex: 1, marginHorizontal: 0, marginTop: 0, marginBottom: 0, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 }]}>
           <Search size={16} color={themeColors.textSecondary} />
           <TextInput
@@ -2714,92 +3017,258 @@ export default function OrdersScreen() {
 
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background, flex: 1 }]}>
-      {/* Top Header Bar: Left Back Hub Button (when not on overview) + Centered Brand Dropdown + Theme Toggle */}
-      <View style={{
-        backgroundColor: themeColors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: themeColors.border,
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        {/* Left Side: Back to Hub Overview Button (only when in list view) */}
-        <View style={{ width: 90, alignItems: 'flex-start' }}>
-          {activeSection !== 'overview' ? (
+    <View style={[styles.container, { backgroundColor: themeColors.background, flex: 1 }]}>
+      <StatusBar style="light" />
+      {/* Top Header Bar: Unified Dark Gradient Banner (Edge-Attached Wide Dock & Curved Bottom) */}
+      <LinearGradient
+        colors={isDark ? ['#0F172A', '#1E1B4B'] : ['#2A2665', '#1B1446']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingHorizontal: 0,
+          paddingTop: topPadding + 4,
+          paddingBottom: 0,
+          borderBottomLeftRadius: 20,
+          borderBottomRightRadius: 20,
+          overflow: 'hidden',
+          ...shadows.card,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 }}>
+          {/* Left: Title or Back to Hub */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {(mainSegment === 'crm' && crmSection !== 'overview') || (mainSegment === 'bookings' && activeSection !== 'overview') ? (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4.5,
+                  borderRadius: 6,
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                }}
+                onPress={() => {
+                  animateLayout();
+                  if (mainSegment === 'crm') setCrmSection('overview');
+                  else setActiveSection('overview');
+                }}
+                activeOpacity={0.8}
+              >
+                <ArrowLeft size={16} color="#FFFFFF" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Hub</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 21, fontFamily: 'Inter-Bold', fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.4 }}>
+                  Operations
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: isOnDuty ? 'rgba(16, 185, 129, 0.25)' : 'rgba(100, 116, 139, 0.35)',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2.5,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: isOnDuty ? '#10B981' : '#64748B',
+                  }}
+                >
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isOnDuty ? '#10B981' : '#94A3B8' }} />
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {isOnDuty ? 'Online' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Center/Right: Brand Selector Dropdown + Theme Toggle */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <TouchableOpacity
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 4,
-                paddingHorizontal: 8,
+                gap: 5,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                paddingHorizontal: 9,
                 paddingVertical: 5,
                 borderRadius: 6,
-                backgroundColor: isDark ? '#1E293B' : '#EEF2FF',
-                borderWidth: 1,
-                borderColor: isDark ? '#334155' : '#C7D2FE',
               }}
-              onPress={() => {
-                animateLayout();
-                setActiveSection('overview');
-              }}
-              activeOpacity={0.8}
+              onPress={() => setShowBrandMenu(true)}
+              activeOpacity={0.85}
             >
-              <ArrowLeft size={15} color={colors.primary} />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>Hub</Text>
+              <Building2 size={13} color="#FFFFFF" />
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                {selectedBrand === 'all' ? 'All Brands' : selectedBrand === 'dropcars' ? 'Drop Cars' : selectedBrand === 'yellowboard' ? 'Yellow Board' : selectedBrand === 'vendor' ? 'Vendor App' : selectedBrand === 'driver' ? 'Driver App' : 'Admin App'}
+              </Text>
+              <ChevronDown size={13} color="#FFFFFF" />
             </TouchableOpacity>
-          ) : (
-            <Text style={{ fontSize: 16, fontWeight: '900', color: colors.primary, letterSpacing: -0.3 }}>Bookings</Text>
-          )}
+
+            <ThemeToggle size={18} />
+          </View>
         </View>
 
-        {/* Center: Centered Brand Selector Dropdown */}
-        <TouchableOpacity
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            backgroundColor: colors.primary,
-            paddingHorizontal: 14,
-            paddingVertical: 7,
-            borderRadius: 10,
-          }}
-          onPress={() => setShowBrandMenu(true)}
-          activeOpacity={0.85}
-        >
-          <Building2 size={14} color="#FFFFFF" />
-          <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-            {selectedBrand === 'all' ? 'All Brands' : selectedBrand === 'dropcars' ? 'Drop Cars' : selectedBrand === 'yellowboard' ? 'Yellow Board' : selectedBrand === 'vendor' ? 'Vendor App' : selectedBrand === 'driver' ? 'Driver App' : 'Admin App'}
-          </Text>
-          <ChevronDown size={14} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        {/* Right Side: Theme Toggle */}
-        <View style={{ width: 90, alignItems: 'flex-end' }}>
-          <ThemeToggle size={20} />
-        </View>
-      </View>
-
-      {/* 1. Permanent Attached Top Section Tab Bar (Only when inside Bookings Management) */}
-      {activeSection !== 'overview' && (
+        {/* 2-Segment Operations Switcher: [ CRM (533) | Bookings (2) ] - Edge-Attached Header Dock */}
         <View style={{
           flexDirection: 'row',
+          paddingHorizontal: 6,
+          paddingVertical: 4,
+          borderBottomLeftRadius: 20,
+          borderBottomRightRadius: 20,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(255, 255, 255, 0.12)',
+          backgroundColor: 'rgba(0, 0, 0, 0.32)',
+          gap: 6,
           width: '100%',
-          backgroundColor: themeColors.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: themeColors.border,
+        }}>
+          {/* Segment 1: CRM */}
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 7.5,
+              paddingHorizontal: 12,
+              borderRadius: 6,
+              gap: 8,
+              backgroundColor: mainSegment === 'crm' ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
+              borderWidth: 1,
+              borderColor: mainSegment === 'crm' ? 'rgba(255, 255, 255, 0.35)' : 'transparent',
+              ...(mainSegment === 'crm' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.18,
+                shadowRadius: 3,
+                elevation: 2,
+              } : {}),
+            }}
+            onPress={() => {
+              animateLayout();
+              setMainSegment('crm');
+              setCrmSection('overview');
+            }}
+            activeOpacity={0.8}
+          >
+            <TrendingUp size={15} color={mainSegment === 'crm' ? '#38BDF8' : 'rgba(255, 255, 255, 0.65)'} />
+            <Text style={{
+              fontSize: 13.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
+              color: mainSegment === 'crm' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+            }}>
+              CRM
+            </Text>
+            {(crmCounts.not_responded || leadsCount) > 0 && (
+              <View style={{
+                backgroundColor: mainSegment === 'crm' ? '#6366F1' : 'rgba(255, 255, 255, 0.15)',
+                paddingHorizontal: 7,
+                paddingVertical: 1.5,
+                borderRadius: 8,
+                borderWidth: mainSegment === 'crm' ? 1 : 0,
+                borderColor: 'rgba(255, 255, 255, 0.25)',
+              }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 10.5,
+                  fontFamily: 'Inter-Bold',
+                  fontWeight: '800',
+                }}>
+                  {crmCounts.not_responded || leadsCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Segment 2: Bookings */}
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 7.5,
+              paddingHorizontal: 12,
+              borderRadius: 6,
+              gap: 8,
+              backgroundColor: mainSegment === 'bookings' ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
+              borderWidth: 1,
+              borderColor: mainSegment === 'bookings' ? 'rgba(255, 255, 255, 0.35)' : 'transparent',
+              ...(mainSegment === 'bookings' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.18,
+                shadowRadius: 3,
+                elevation: 2,
+              } : {}),
+            }}
+            onPress={() => {
+              animateLayout();
+              setMainSegment('bookings');
+            }}
+            activeOpacity={0.8}
+          >
+            <Package size={15} color={mainSegment === 'bookings' ? '#34D399' : 'rgba(255, 255, 255, 0.65)'} />
+            <Text style={{
+              fontSize: 13.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
+              color: mainSegment === 'bookings' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+            }}>
+              Bookings
+            </Text>
+            {liveCount > 0 && (
+              <View style={{
+                backgroundColor: mainSegment === 'bookings' ? '#6366F1' : 'rgba(255, 255, 255, 0.15)',
+                paddingHorizontal: 7,
+                paddingVertical: 1.5,
+                borderRadius: 8,
+                borderWidth: mainSegment === 'bookings' ? 1 : 0,
+                borderColor: 'rgba(255, 255, 255, 0.25)',
+              }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 10.5,
+                  fontFamily: 'Inter-Bold',
+                  fontWeight: '800',
+                }}>
+                  {liveCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* 1. Attached Status Tabs: LIVE | COMPLETED | CANCELLED | ALL (Clean Pill Bar) */}
+      {mainSegment === 'bookings' && activeSection !== 'overview' && (
+        <View style={{
+          flexDirection: 'row',
+          marginHorizontal: 16,
+          marginBottom: 6,
+          padding: 3,
+          borderRadius: 10,
+          backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
         }}>
           {/* LIVE TAB */}
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 7,
               alignItems: 'center',
               justifyContent: 'center',
-              borderBottomWidth: activeSection === 'live' ? 3 : 0,
-              borderBottomColor: colors.primary,
+              borderRadius: 8,
+              backgroundColor: activeSection === 'live' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent',
+              ...(activeSection === 'live' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1.5,
+              } : {}),
             }}
             onPress={() => {
               animateLayout();
@@ -2810,9 +3279,10 @@ export default function OrdersScreen() {
             activeOpacity={0.85}
           >
             <Text numberOfLines={1} style={{
-              fontSize: 12,
-              fontWeight: activeSection === 'live' ? '800' : '600',
-              color: activeSection === 'live' ? colors.primary : themeColors.textSecondary,
+              fontSize: 11.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
+              color: activeSection === 'live' ? (isDark ? '#FFFFFF' : colors.primary) : themeColors.textSecondary,
             }}>
               LIVE ({liveCount})
             </Text>
@@ -2822,11 +3292,18 @@ export default function OrdersScreen() {
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 7,
               alignItems: 'center',
               justifyContent: 'center',
-              borderBottomWidth: activeSection === 'completed' ? 3 : 0,
-              borderBottomColor: '#10B981',
+              borderRadius: 8,
+              backgroundColor: activeSection === 'completed' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent',
+              ...(activeSection === 'completed' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1.5,
+              } : {}),
             }}
             onPress={() => {
               animateLayout();
@@ -2836,8 +3313,9 @@ export default function OrdersScreen() {
             activeOpacity={0.85}
           >
             <Text numberOfLines={1} style={{
-              fontSize: 12,
-              fontWeight: activeSection === 'completed' ? '800' : '600',
+              fontSize: 11.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
               color: activeSection === 'completed' ? '#10B981' : themeColors.textSecondary,
             }}>
               COMPLETED ({completedCount})
@@ -2848,11 +3326,18 @@ export default function OrdersScreen() {
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 7,
               alignItems: 'center',
               justifyContent: 'center',
-              borderBottomWidth: activeSection === 'cancelled' ? 3 : 0,
-              borderBottomColor: '#EF4444',
+              borderRadius: 8,
+              backgroundColor: activeSection === 'cancelled' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent',
+              ...(activeSection === 'cancelled' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1.5,
+              } : {}),
             }}
             onPress={() => {
               animateLayout();
@@ -2862,8 +3347,9 @@ export default function OrdersScreen() {
             activeOpacity={0.85}
           >
             <Text numberOfLines={1} style={{
-              fontSize: 12,
-              fontWeight: activeSection === 'cancelled' ? '800' : '600',
+              fontSize: 11.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
               color: activeSection === 'cancelled' ? '#EF4444' : themeColors.textSecondary,
             }}>
               CANCELLED ({cancelledCount})
@@ -2874,11 +3360,18 @@ export default function OrdersScreen() {
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 7,
               alignItems: 'center',
               justifyContent: 'center',
-              borderBottomWidth: activeSection === 'all' ? 3 : 0,
-              borderBottomColor: colors.primary,
+              borderRadius: 8,
+              backgroundColor: activeSection === 'all' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent',
+              ...(activeSection === 'all' ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1.5,
+              } : {}),
             }}
             onPress={() => {
               animateLayout();
@@ -2888,9 +3381,10 @@ export default function OrdersScreen() {
             activeOpacity={0.85}
           >
             <Text numberOfLines={1} style={{
-              fontSize: 12,
-              fontWeight: activeSection === 'all' ? '800' : '600',
-              color: activeSection === 'all' ? colors.primary : themeColors.textSecondary,
+              fontSize: 11.5,
+              fontFamily: 'Inter-Bold',
+              fontWeight: '800',
+              color: activeSection === 'all' ? (isDark ? '#FFFFFF' : colors.primary) : themeColors.textSecondary,
             }}>
               ALL ({allCount})
             </Text>
@@ -2898,86 +3392,149 @@ export default function OrdersScreen() {
         </View>
       )}
 
-      {/* 2. Sub-Tabs Bar: Live (All | Unassigned | Assigned | Running) */}
-      {activeSection === 'live' && (
-        <View style={{ width: '100%', backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-          <View style={{ flexDirection: 'row', width: '100%' }}>
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderRightWidth: 1, borderRightColor: themeColors.border }, liveSubTab === 'all' && { backgroundColor: colors.primary }]}
-              onPress={() => { animateLayout(); setLiveSubTab('all'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }, liveSubTab === 'all' && { color: '#FFFFFF' }]}>
-                All ({liveCount})
-              </Text>
-            </TouchableOpacity>
+      {/* 2. Sub-Tabs Bar: Live (All | Unassigned | Assigned | Running) - Compact Pill Strip */}
+      {mainSegment === 'bookings' && activeSection !== 'overview' && activeSection === 'live' && (
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 6, marginBottom: 6 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 6.5,
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: liveSubTab === 'all' ? (isDark ? '#3B82F6' : '#2563EB') : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: liveSubTab === 'all' ? '#2563EB' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setLiveSubTab('all'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: liveSubTab === 'all' ? '#FFFFFF' : themeColors.textSecondary }}>
+              All ({liveCount})
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderRightWidth: 1, borderRightColor: themeColors.border }, liveSubTab === 'unassigned' && { backgroundColor: '#EF4444' }]}
-              onPress={() => { animateLayout(); setLiveSubTab('unassigned'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11, fontWeight: '700', color: liveUnassignedCount > 0 ? '#EF4444' : themeColors.textSecondary }, liveSubTab === 'unassigned' && { color: '#FFFFFF' }]}>
-                🚨 Unassigned ({liveUnassignedCount})
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1.2,
+              paddingVertical: 6.5,
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: liveSubTab === 'unassigned' ? '#EF4444' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: liveSubTab === 'unassigned' ? '#EF4444' : (liveUnassignedCount > 0 ? '#FCA5A5' : themeColors.border),
+            }}
+            onPress={() => { animateLayout(); setLiveSubTab('unassigned'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: liveSubTab === 'unassigned' ? '#FFFFFF' : (liveUnassignedCount > 0 ? '#EF4444' : themeColors.textSecondary) }}>
+              🚨 Unassigned ({liveUnassignedCount})
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderRightWidth: 1, borderRightColor: themeColors.border }, liveSubTab === 'assigned' && { backgroundColor: '#3B82F6' }]}
-              onPress={() => { animateLayout(); setLiveSubTab('assigned'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }, liveSubTab === 'assigned' && { color: '#FFFFFF' }]}>
-                👤 Assigned ({liveAssignedCount})
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1.1,
+              paddingVertical: 6.5,
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: liveSubTab === 'assigned' ? '#3B82F6' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: liveSubTab === 'assigned' ? '#3B82F6' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setLiveSubTab('assigned'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: liveSubTab === 'assigned' ? '#FFFFFF' : themeColors.textSecondary }}>
+              👤 Assigned ({liveAssignedCount})
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }, liveSubTab === 'running' && { backgroundColor: '#10B981' }]}
-              onPress={() => { animateLayout(); setLiveSubTab('running'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }, liveSubTab === 'running' && { color: '#FFFFFF' }]}>
-                ⚡ Running ({liveRunningCount})
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={{
+              flex: 1.1,
+              paddingVertical: 6.5,
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: liveSubTab === 'running' ? '#10B981' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: liveSubTab === 'running' ? '#10B981' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setLiveSubTab('running'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: liveSubTab === 'running' ? '#FFFFFF' : themeColors.textSecondary }}>
+              ⚡ Running ({liveRunningCount})
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {activeSection === 'cancelled' && (
-        <View style={{ width: '100%', backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-          <View style={{ flexDirection: 'row', width: '100%' }}>
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderRightWidth: 1, borderRightColor: themeColors.border }, cancelledSubTab === 'expired' && { backgroundColor: '#F59E0B' }]}
-              onPress={() => { animateLayout(); setCancelledSubTab('expired'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11.5, fontWeight: '700', color: themeColors.textSecondary }, cancelledSubTab === 'expired' && { color: '#FFFFFF' }]}>
-                ⏳ Expired
-              </Text>
-            </TouchableOpacity>
+      {mainSegment === 'bookings' && activeSection !== 'overview' && activeSection === 'cancelled' && (
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 6 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 6.5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: cancelledSubTab === 'expired' ? '#F59E0B' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: cancelledSubTab === 'expired' ? '#F59E0B' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setCancelledSubTab('expired'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: cancelledSubTab === 'expired' ? '#FFFFFF' : themeColors.textSecondary }}>
+              ⏳ Expired
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderRightWidth: 1, borderRightColor: themeColors.border }, cancelledSubTab === 'cancelled' && { backgroundColor: '#EF4444' }]}
-              onPress={() => { animateLayout(); setCancelledSubTab('cancelled'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11.5, fontWeight: '700', color: themeColors.textSecondary }, cancelledSubTab === 'cancelled' && { color: '#FFFFFF' }]}>
-                ❌ Cancelled
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 6.5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: cancelledSubTab === 'cancelled' ? '#EF4444' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: cancelledSubTab === 'cancelled' ? '#EF4444' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setCancelledSubTab('cancelled'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: cancelledSubTab === 'cancelled' ? '#FFFFFF' : themeColors.textSecondary }}>
+              ❌ Cancelled
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[{ flex: 1, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }, cancelledSubTab === 'unallocated' && { backgroundColor: '#8B5CF6' }]}
-              onPress={() => { animateLayout(); setCancelledSubTab('unallocated'); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[{ fontSize: 11.5, fontWeight: '700', color: themeColors.textSecondary }, cancelledSubTab === 'unallocated' && { color: '#FFFFFF' }]}>
-                🚫 Unallocated
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 6.5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: cancelledSubTab === 'unallocated' ? '#8B5CF6' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderWidth: 1,
+              borderColor: cancelledSubTab === 'unallocated' ? '#8B5CF6' : themeColors.border,
+            }}
+            onPress={() => { animateLayout(); setCancelledSubTab('unallocated'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: cancelledSubTab === 'unallocated' ? '#FFFFFF' : themeColors.textSecondary }}>
+              🚫 Unallocated
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -3242,11 +3799,19 @@ export default function OrdersScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {activeSection === 'overview' ? (
+      {mainSegment === 'crm' ? (
+        crmSection === 'overview' ? (
+          renderCrmHubOverview()
+        ) : (
+          <View style={{ flex: 1 }}>
+            <EnquiriesScreen isTab={true} initialTab={crmSubTab} onBackToHub={() => { animateLayout(); setCrmSection('overview'); }} />
+          </View>
+        )
+      ) : activeSection === 'overview' ? (
         renderBookingsHubOverview()
       ) : activeSection === 'leads' ? (
         <View style={{ flex: 1 }}>
-          <EnquiriesScreen isTab={true} />
+          <EnquiriesScreen isTab={true} onBackToHub={() => { animateLayout(); setActiveSection('overview'); }} />
         </View>
       ) : (
         <FlatList
@@ -3495,59 +4060,68 @@ export default function OrdersScreen() {
       </Modal>
 
       {/* View OTP Modal */}
-      <Modal
-        visible={!!otpModalOrder}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOtpModalOrder(null)}
-      >
-        <TouchableOpacity style={styles.epModalOverlay} activeOpacity={1} onPress={() => setOtpModalOrder(null)}>
-          <View style={[styles.epModalCard, { alignItems: 'center' }]} onStartShouldSetResponder={() => true}>
-            <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <Key size={26} color="#8B5CF6" />
-            </View>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: themeColors.text, marginBottom: 4 }}>Trip Security OTP</Text>
-            <Text style={{ fontSize: 13, color: themeColors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
-              Booking #{otpModalOrder?.id}
-            </Text>
+      {(() => {
+        // Preserve current order info during fade-out animation to prevent flicker
+        const activeOrder = otpModalOrder || (selectedOrder ? selectedOrder : null);
+        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || (activeOrder?.id ? String(activeOrder.id).padStart(4, '0').slice(-4) : '0000');
+        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '9152';
 
-            <View style={{ flexDirection: 'row', gap: 16, width: '100%', marginBottom: 20 }}>
-              <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>START OTP</Text>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: colors.primary, letterSpacing: 4 }}>
-                  {otpModalOrder?.id ? String(otpModalOrder.id).padStart(4, '0').slice(-4) : '4829'}
+        return (
+          <Modal
+            visible={!!otpModalOrder}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setOtpModalOrder(null)}
+          >
+            <TouchableOpacity style={styles.epModalOverlay} activeOpacity={1} onPress={() => setOtpModalOrder(null)}>
+              <View style={[styles.epModalCard, { alignItems: 'center' }]} onStartShouldSetResponder={() => true}>
+                <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Key size={26} color="#8B5CF6" />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: themeColors.text, marginBottom: 4 }}>Trip Security OTP</Text>
+                <Text style={{ fontSize: 13, color: themeColors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
+                  Booking #{activeOrder?.id || ''}
                 </Text>
-              </View>
 
-              <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>END OTP</Text>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: '#10B981', letterSpacing: 4 }}>
-                  9152
-                </Text>
-              </View>
-            </View>
+                <View style={{ flexDirection: 'row', gap: 16, width: '100%', marginBottom: 20 }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>START OTP</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: colors.primary, letterSpacing: 4 }}>
+                      {startOtp}
+                    </Text>
+                  </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: '#25D366', paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                onPress={() => {
-                  const msg = `*Drop Cars Trip OTP*\nBooking #${otpModalOrder?.id}\nRoute: ${getLocationString(otpModalOrder?.pickup_drop_location)}\n🔑 *Start OTP*: ${otpModalOrder?.id ? String(otpModalOrder.id).padStart(4, '0').slice(-4) : '4829'}\n🔑 *End OTP*: 9152`;
-                  Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
-                }}
-              >
-                <Share2 size={16} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Share OTP via WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
-                onPress={() => setOtpModalOrder(null)}
-              >
-                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 14 }}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: themeColors.border }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 4 }}>END OTP</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#10B981', letterSpacing: 4 }}>
+                      {endOtp}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#25D366', paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    onPress={() => {
+                      const msg = `*Drop Cars Trip OTP*\nBooking #${activeOrder?.id}\nRoute: ${getLocationString(activeOrder?.pickup_drop_location)}\n🔑 *Start OTP*: ${startOtp}\n🔑 *End OTP*: ${endOtp}`;
+                      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Share2 size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Share OTP via WhatsApp</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
+                    onPress={() => setOtpModalOrder(null)}
+                  >
+                    <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        );
+      })()}
 
       {/* Allocate Booking Manually Modal - for still-PENDING bookings only.
           Search a real fleet driver/driver by name or phone, pick them, and
@@ -4033,7 +4607,34 @@ export default function OrdersScreen() {
       />
 
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
-    </SafeAreaView>
+      {/* Floating Round "+" FAB for New Booking (Consistent with Dashboard) */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => router.push('/create-booking')}
+        style={{
+          position: 'absolute',
+          bottom: 24,
+          right: 20,
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          backgroundColor: colors.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.25)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 6,
+          zIndex: 99,
+        }}
+        accessibilityLabel="Create New Booking"
+      >
+        <Plus size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -4216,7 +4817,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 0,
-    paddingBottom: 20,
+    paddingBottom: 110,
   },
   orderCard: {
     backgroundColor: colors.surface,

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Mail, Save, Send, UserPlus } from 'lucide-react-native';
+import { ArrowLeft, Mail, Save, Send, UserPlus, Shield } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import Toast, { useToast } from '@/components/Toast';
@@ -25,6 +25,7 @@ export default function EmailSettingsScreen() {
   const { isDark, themeColors } = useTheme();
   const { toast, showToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [isOwnerUser, setIsOwnerUser] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -42,6 +43,12 @@ export default function EmailSettingsScreen() {
   useEffect(() => {
     (async () => {
       try {
+        const role = await apiService.getCachedAdminRole();
+        if (role !== 'Owner') {
+          setIsOwnerUser(false);
+          setLoading(false);
+          return;
+        }
         const s = await apiService.getEmailSettings();
         setSmtpUser(s.smtp_user || '');
         setSmtpAppPassword(s.smtp_app_password || '');
@@ -114,6 +121,38 @@ export default function EmailSettingsScreen() {
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (!isOwnerUser) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]} edges={['top']}>
+        <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Go back" style={styles.backButton}>
+            <ArrowLeft size={22} color={themeColors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: themeColors.text }]}>Email Infrastructure</Text>
+          <View style={{ flex: 1 }} />
+          <ThemeToggle size={20} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+            <Shield size={44} color="#EF4444" />
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: themeColors.text, marginBottom: 10, textAlign: 'center' }}>
+            Owner Access Only
+          </Text>
+          <Text style={{ fontSize: 14, color: themeColors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 28 }}>
+            Google Workspace SMTP credentials, email infrastructure, and secret passwords can only be viewed and managed by the Organization Owner.
+          </Text>
+          <TouchableOpacity
+            style={[styles.saveButton, { width: 160, alignSelf: 'center' }]}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.saveButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (

@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiService } from '../services/api';
 
 interface StaffDutyContextType {
   isOnDuty: boolean;
-  dutyStatus: 'active' | 'idle' | 'off_duty';
+  dutyStatus: 'active' | 'idle' | 'off_duty' | 'break';
+  isOnBreak: boolean;
+  breakDurationMinutes: number;
+  breakRemainingSeconds: number;
   dutySeconds: number;
   activeSeconds: number;
   idleSeconds: number;
@@ -13,6 +17,8 @@ interface StaffDutyContextType {
   lastActiveTimestamp: number;
   leadsHandledToday: number;
   toggleDuty: (forceState?: boolean) => void;
+  startBreak: (durationMinutes: number) => void;
+  resumeFromBreak: () => void;
   setBubbleCompulsory: (compulsory: boolean) => void;
   dismissBubble: () => void;
   showBubble: () => void;
@@ -28,17 +34,22 @@ const STORAGE_KEYS = {
   COMPULSORY_BUBBLE: '@dropcars_staff_bubble_compulsory',
   LEADS_TODAY: '@dropcars_staff_leads_today',
   LAST_DATE: '@dropcars_staff_duty_date',
+  BREAK_END_TIME: '@dropcars_staff_break_end_time',
+  BREAK_DURATION: '@dropcars_staff_break_duration',
 };
 
 const StaffDutyContext = createContext<StaffDutyContextType | undefined>(undefined);
 
 export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOnDuty, setIsOnDuty] = useState(false);
-  const [dutyStatus, setDutyStatus] = useState<'active' | 'idle' | 'off_duty'>('off_duty');
+  const [dutyStatus, setDutyStatus] = useState<'active' | 'idle' | 'off_duty' | 'break'>('off_duty');
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [breakDurationMinutes, setBreakDurationMinutes] = useState(30);
+  const [breakRemainingSeconds, setBreakRemainingSeconds] = useState(0);
   const [dutySeconds, setDutySeconds] = useState(0);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [idleSeconds, setIdleSeconds] = useState(0);
-  const [isBubbleVisible, setIsBubbleVisible] = useState(false);
+  const [isBubbleVisible, setIsBubbleVisible] = useState(true);
   const [isBubbleCompulsory, setIsBubbleCompulsoryState] = useState(false);
   const [lastActiveTimestamp, setLastActiveTimestamp] = useState(Date.now());
   const [leadsHandledToday, setLeadsHandledToday] = useState(0);
@@ -60,6 +71,7 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_SECONDS, '0');
           await AsyncStorage.setItem(STORAGE_KEYS.IDLE_SECONDS, '0');
           await AsyncStorage.setItem(STORAGE_KEYS.LEADS_TODAY, '0');
+          await AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME);
         } else {
           const savedDutySec = await AsyncStorage.getItem(STORAGE_KEYS.DUTY_SECONDS);
           const savedActSec = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_SECONDS);
@@ -77,11 +89,41 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const isComp = savedCompulsory === 'true';
         setIsBubbleCompulsoryState(isComp);
 
+        // Check active break
+        const savedBreakEnd = await AsyncStorage.getItem(STORAGE_KEYS.BREAK_END_TIME);
+        const savedBreakDur = await AsyncStorage.getItem(STORAGE_KEYS.BREAK_DURATION);
+        if (savedBreakDur) setBreakDurationMinutes(parseInt(savedBreakDur, 10) || 30);
+
+        if (savedBreakEnd) {
+          const remaining = Math.floor((parseInt(savedBreakEnd, 10) - Date.now()) / 1000);
+          if (remaining > 0) {
+            setIsOnBreak(true);
+            setBreakRemainingSeconds(remaining);
+            setDutyStatus('break');
+          } else {
+            await AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME);
+          }
+        }
+
         if (savedDuty === 'true') {
           setIsOnDuty(true);
-          setDutyStatus('active');
+          if (!savedBreakEnd || Math.floor((parseInt(savedBreakEnd, 10) - Date.now()) / 1000) <= 0) {
+            setDutyStatus('active');
+          }
           setIsBubbleVisible(true);
         }
+
+        // Check backend server state as well
+        try {
+          const liveDuty = await apiService.getMyOnDuty();
+          if (typeof liveDuty?.is_on_duty === 'boolean') {
+            setIsOnDuty(liveDuty.is_on_duty);
+            if (!isOnBreak) {
+              setDutyStatus(liveDuty.is_on_duty ? 'active' : 'off_duty');
+            }
+            AsyncStorage.setItem(STORAGE_KEYS.DUTY_STATE, liveDuty.is_on_duty ? 'true' : 'false').catch(() => {});
+          }
+        } catch {}
       } catch (e) {
         console.error('Error loading staff duty state:', e);
       }
@@ -92,6 +134,10 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       appStateRef.current = nextAppState;
+      if (isOnBreak) {
+        setDutyStatus('break');
+        return;
+      }
       if (nextAppState === 'active') {
         setLastActiveTimestamp(Date.now());
         if (isOnDuty) setDutyStatus('active');
@@ -100,12 +146,26 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     });
     return () => subscription.remove();
-  }, [isOnDuty]);
+  }, [isOnDuty, isOnBreak]);
 
   // Main 1-second interval tracker
   useEffect(() => {
     if (isOnDuty) {
       timerRef.current = setInterval(() => {
+        // Handle Break state
+        if (isOnBreak) {
+          setBreakRemainingSeconds((prev) => {
+            if (prev <= 1) {
+              setIsOnBreak(false);
+              setDutyStatus('active');
+              AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME).catch(() => {});
+              return 0;
+            }
+            return prev - 1;
+          });
+          return;
+        }
+
         const now = Date.now();
         const diffSinceActive = (now - lastActiveTimestamp) / 1000;
         
@@ -142,22 +202,44 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isOnDuty, lastActiveTimestamp]);
+  }, [isOnDuty, isOnBreak, lastActiveTimestamp]);
 
   const toggleDuty = useCallback((forceState?: boolean) => {
     setIsOnDuty((prev) => {
       const next = typeof forceState === 'boolean' ? forceState : !prev;
       AsyncStorage.setItem(STORAGE_KEYS.DUTY_STATE, next ? 'true' : 'false');
+      AsyncStorage.setItem('@admin_staff_on_duty_shift', next ? 'true' : 'false').catch(() => {});
+      apiService.setOnDuty(next).catch(() => {});
       if (next) {
         setLastActiveTimestamp(Date.now());
         setDutyStatus('active');
         setIsBubbleVisible(true);
       } else {
+        setIsOnBreak(false);
+        AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME).catch(() => {});
         setDutyStatus('off_duty');
-        setIsBubbleVisible(false);
       }
       return next;
     });
+  }, []);
+
+  const startBreak = useCallback((durationMinutes: number) => {
+    setIsOnBreak(true);
+    setBreakDurationMinutes(durationMinutes);
+    const totalSeconds = durationMinutes * 60;
+    setBreakRemainingSeconds(totalSeconds);
+    setDutyStatus('break');
+    const endTime = Date.now() + totalSeconds * 1000;
+    AsyncStorage.setItem(STORAGE_KEYS.BREAK_END_TIME, String(endTime));
+    AsyncStorage.setItem(STORAGE_KEYS.BREAK_DURATION, String(durationMinutes));
+  }, []);
+
+  const resumeFromBreak = useCallback(() => {
+    setIsOnBreak(false);
+    setBreakRemainingSeconds(0);
+    setDutyStatus('active');
+    setLastActiveTimestamp(Date.now());
+    AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME).catch(() => {});
   }, []);
 
   const setBubbleCompulsory = useCallback((compulsory: boolean) => {
@@ -182,23 +264,27 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const recordLeadAction = useCallback(() => {
     setLastActiveTimestamp(Date.now());
-    setDutyStatus('active');
+    if (!isOnBreak) {
+      setDutyStatus('active');
+    }
     setLeadsHandledToday((prev) => {
       const next = prev + 1;
       AsyncStorage.setItem(STORAGE_KEYS.LEADS_TODAY, String(next));
       return next;
     });
-  }, []);
+  }, [isOnBreak]);
 
   const resetDutyStats = useCallback(() => {
     setDutySeconds(0);
     setActiveSeconds(0);
     setIdleSeconds(0);
     setLeadsHandledToday(0);
+    setIsOnBreak(false);
     AsyncStorage.setItem(STORAGE_KEYS.DUTY_SECONDS, '0');
     AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_SECONDS, '0');
     AsyncStorage.setItem(STORAGE_KEYS.IDLE_SECONDS, '0');
     AsyncStorage.setItem(STORAGE_KEYS.LEADS_TODAY, '0');
+    AsyncStorage.removeItem(STORAGE_KEYS.BREAK_END_TIME);
   }, []);
 
   return (
@@ -206,6 +292,9 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       value={{
         isOnDuty,
         dutyStatus,
+        isOnBreak,
+        breakDurationMinutes,
+        breakRemainingSeconds,
         dutySeconds,
         activeSeconds,
         idleSeconds,
@@ -214,6 +303,8 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         lastActiveTimestamp,
         leadsHandledToday,
         toggleDuty,
+        startBreak,
+        resumeFromBreak,
         setBubbleCompulsory,
         dismissBubble,
         showBubble,

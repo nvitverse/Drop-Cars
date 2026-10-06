@@ -1,0 +1,20 @@
+<svg width="520" height="110" viewBox="0 0 520 110" xmlns="http://www.w3.org/2000/svg">
+  <!-- Trademark Squircle Icon (110x110) -->
+  <g transform="translate(0, 0)">
+    <rect x="4" y="4" width="102" height="102" rx="24" fill="#0D47A1"/>
+    <!-- Top Chevron (pointing right) -->
+    <path d="M46,31 L66,45 L46,59" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Bottom Chevron (pointing left) -->
+    <path d="M64,51 L44,65 L64,79" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Trademark Brand Pill (380x110) -->
+  <g transform="translate(130, 0)">
+    <rect x="0" y="0" width="380" height="110" rx="22" fill="#0D47A1" stroke="#0D47A1" stroke-width="3"/>
+    <path d="M190,0 H358 A22,22 0 0 1 380,22 V88 A22,22 0 0 1 358,110 H190 Z" fill="#FFFFFF" stroke="#0D47A1" stroke-width="3"/>
+    <text x="95" y="76" text-anchor="middle" font-family="'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="52" fill="#FFFFFF">DROP</text>
+    <text x="285" y="76" text-anchor="middle" font-family="'Poppins', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="52" fill="#0D47A1">CARS</text>
+    <!-- Trademark Symbol -->
+    <text x="368" y="32" font-family="sans-serif" font-size="14" font-weight="700" fill="#0D47A1">®</text>
+  </g>
+</svg>

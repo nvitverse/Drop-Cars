@@ -250,25 +250,34 @@ export default function DutySignOffModal({
               {/* Action Buttons */}
               {!isViewOnly ? (
                 <View style={styles.actionRow}>
+                  {/* Left Button: I Acknowledge */}
                   <TouchableOpacity
-                    style={[styles.improveBtn, { borderColor: themeColors.border, backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                    onPress={() => handleAction('will_improve')}
+                    style={[styles.improveBtn, { borderColor: themeColors.border, backgroundColor: isDark ? '#334155' : '#FFFFFF' }]}
+                    onPress={() => handleAction('acknowledged')}
                     disabled={submitting}
                   >
-                    <Text style={[styles.improveBtnText, { color: themeColors.text }]}>I'll improve</Text>
+                    {submitting ? (
+                      <ActivityIndicator size="small" color={themeColors.text} />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} color={themeColors.textSecondary} />
+                        <Text style={[styles.improveBtnText, { color: themeColors.text, fontWeight: '700' }]}>I Acknowledge</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
 
+                  {/* Right Button: I Will Improve (Dark Green) */}
                   <TouchableOpacity
-                    style={[styles.ackBtn, { backgroundColor: '#10B981' }]}
-                    onPress={() => handleAction('acknowledged')}
+                    style={[styles.ackBtn, { backgroundColor: '#047857' }]}
+                    onPress={() => handleAction('will_improve')}
                     disabled={submitting}
                   >
                     {submitting ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <>
-                        <CheckCircle2 size={16} color="#FFFFFF" />
-                        <Text style={styles.ackBtnText}>I acknowledge</Text>
+                        <Sparkles size={16} color="#FFFFFF" />
+                        <Text style={[styles.ackBtnText, { color: '#FFFFFF', fontWeight: '800' }]}>I Will Improve</Text>
                       </>
                     )}
                   </TouchableOpacity>

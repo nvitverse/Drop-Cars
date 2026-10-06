@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,33 +9,66 @@ import {
   TextInput,
   ActivityIndicator,
   Switch,
+  Platform,
+  StatusBar as RNStatusBar,
+  Linking,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Search, Phone, MapPin, Wallet, Car, User, ShieldCheck, X } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Search,
+  Phone,
+  MapPin,
+  Wallet,
+  Car,
+  User,
+  ShieldCheck,
+  X,
+  Plus,
+  ChevronRight,
+  Crown,
+  Star,
+  Shield,
+  MessageCircle,
+  PhoneCall,
+  ArrowLeft,
+  Users,
+  CheckCircle2,
+  Filter,
+} from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import ActionSheet from '@/components/ActionSheet';
 import { useTheme } from '@/context/ThemeContext';
-import { Card, StatusPill, Segmented, EmptyState, SkeletonRow } from '@/components/ui';
+import ThemeToggle from '@/components/ThemeToggle';
+import { Card, StatusPill, EmptyState, SkeletonRow } from '@/components/ui';
+import { colors, shadows } from '@/constants/theme';
+import AdminCreateAccountModal from '@/components/AdminCreateAccountModal';
 
-interface VehicleOwner {
+export interface VehicleOwner {
   id: string;
   vehicle_owner_id: string;
   full_name: string;
   primary_number: string;
+  secondary_number?: string;
   wallet_balance: number;
   address: string;
   city: string;
   account_status: string;
   created_at: string;
   tier?: 'PREFERRED' | 'STANDARD' | null;
+  subscription_type?: string | null;
+  admin_trusted_override?: boolean;
   car_count: number;
   driver_count: number;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 type StatusTabFilter = 'all' | 'ACTIVE' | 'INACTIVE';
+type TierTabFilter = 'all' | 'STANDARD' | 'TRUSTED' | 'MONTHLY' | 'YEARLY';
 
 const STATUS_FILTER_TABS: { label: string; value: StatusTabFilter }[] = [
   { label: 'All', value: 'all' },
@@ -43,89 +76,106 @@ const STATUS_FILTER_TABS: { label: string; value: StatusTabFilter }[] = [
   { label: 'Inactive', value: 'INACTIVE' },
 ];
 
+const TIER_FILTERS: { id: TierTabFilter; label: string; icon: any; color: string }[] = [
+  { id: 'all', label: 'All Tiers', icon: Users, color: '#64748B' },
+  { id: 'TRUSTED', label: 'Trusted (All)', icon: ShieldCheck, color: '#0EA5E9' },
+  { id: 'MONTHLY', label: 'Trusted Monthly', icon: Star, color: '#8B5CF6' },
+  { id: 'YEARLY', label: 'Trusted Yearly', icon: Crown, color: '#F59E0B' },
+  { id: 'STANDARD', label: 'Standard Users', icon: Car, color: '#64748B' },
+];
+
 export default function VehicleOwnersScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 12);
   const { isDark, themeColors } = useTheme();
+
   const [vehicleOwners, setVehicleOwners] = useState<VehicleOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [searchInput, setSearchInput] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
+
+  const [statusTab, setStatusTab] = useState<StatusTabFilter>('all');
+  const [tierTab, setTierTab] = useState<TierTabFilter>('all');
+  const [totalCount, setTotalCount] = useState(0);
+
   const [selectedOwner, setSelectedOwner] = useState<VehicleOwner | null>(null);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
-  const [statusTab, setStatusTab] = useState<StatusTabFilter>('all');
-  const [statusTabLoading, setStatusTabLoading] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
 
-  const fetchVehicleOwners = async (reset = true, search = activeSearch, status = statusTab) => {
-    try {
-      setError(null);
-      const skip = reset ? 0 : vehicleOwners.length;
-      if (!reset) setLoadingMore(true);
-      const data = await apiService.getVehicleOwners(skip, PAGE_SIZE, search || undefined, status !== 'all' ? status : undefined);
-      setVehicleOwners(prev => (reset ? data.vehicle_owners : [...prev, ...data.vehicle_owners]));
-      setHasMore(data.vehicle_owners.length === PAGE_SIZE);
-      setTotalCount(data.total_count);
-    } catch (error) {
-      if (reset) setError('Failed to load fleets. Please try again.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-      setStatusTabLoading(false);
-    }
-  };
+  const fetchVehicleOwners = useCallback(
+    async (reset = true, search = activeSearch, status = statusTab, tier = tierTab) => {
+      try {
+        setError(null);
+        const skip = reset ? 0 : vehicleOwners.length;
+        if (!reset) setLoadingMore(true);
+        else setLoading(true);
+
+        const data = await apiService.getVehicleOwners(
+          skip,
+          PAGE_SIZE,
+          search || undefined,
+          status !== 'all' ? status : undefined,
+          tier !== 'all' ? tier : undefined
+        );
+
+        const newOwners = Array.isArray(data?.vehicle_owners) ? data.vehicle_owners : [];
+        setVehicleOwners((prev) => (reset ? newOwners : [...prev, ...newOwners]));
+        setHasMore(newOwners.length === PAGE_SIZE);
+        setTotalCount(typeof data?.total_count === 'number' ? data.total_count : newOwners.length);
+      } catch (err) {
+        if (reset) setError('Failed to load fleet owners. Pull to refresh.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
+    },
+    [activeSearch, statusTab, tierTab, vehicleOwners.length]
+  );
+
+  useEffect(() => {
+    fetchVehicleOwners(true, activeSearch, statusTab, tierTab);
+  }, [statusTab, tierTab]);
 
   const runSearch = () => {
     const term = searchInput.trim();
     setActiveSearch(term);
-    setLoading(true);
-    fetchVehicleOwners(true, term);
+    fetchVehicleOwners(true, term, statusTab, tierTab);
   };
 
   const clearSearch = () => {
     setSearchInput('');
     setActiveSearch('');
-    setLoading(true);
-    fetchVehicleOwners(true, '');
+    fetchVehicleOwners(true, '', statusTab, tierTab);
   };
-
-  const handleStatusTabChange = (value: StatusTabFilter) => {
-    if (value === statusTab || statusTabLoading) return;
-    setStatusTab(value);
-    setStatusTabLoading(true);
-    fetchVehicleOwners(true, activeSearch, value);
-  };
-
-  useEffect(() => {
-    fetchVehicleOwners(true);
-  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchVehicleOwners(true);
+    fetchVehicleOwners(true, activeSearch, statusTab, tierTab);
   };
 
   const handleLoadMore = () => {
     if (!loadingMore && !loading && hasMore) {
-      fetchVehicleOwners(false);
+      fetchVehicleOwners(false, activeSearch, statusTab, tierTab);
     }
   };
 
   const handleStatusToggle = async (vehicleOwnerId: string, newStatus: string) => {
     try {
-      setVehicleOwners(prev => prev.map(owner =>
-        owner.vehicle_owner_id === vehicleOwnerId
-          ? { ...owner, account_status: newStatus }
-          : owner
-      ));
+      setVehicleOwners((prev) =>
+        prev.map((owner) =>
+          owner.vehicle_owner_id === vehicleOwnerId ? { ...owner, account_status: newStatus } : owner
+        )
+      );
       await apiService.updateVehicleOwnerAccountStatus(vehicleOwnerId, newStatus);
-    } catch (error) {
-      console.error('Failed to update fleet driver status:', error);
-      fetchVehicleOwners(true);
+    } catch (err) {
+      fetchVehicleOwners(true, activeSearch, statusTab, tierTab);
     }
   };
 
@@ -133,143 +183,394 @@ export default function VehicleOwnersScreen() {
     if (!selectedOwner) return;
     try {
       await apiService.updateVehicleOwnerAccountStatus(selectedOwner.vehicle_owner_id, status);
-      setVehicleOwners(vehicleOwners.map(owner => 
-        owner.vehicle_owner_id === selectedOwner.vehicle_owner_id 
-          ? { ...owner, account_status: status }
-          : owner
-      ));
-    } catch (error) {
-      console.error('Failed to update fleet driver status:', error);
+      setVehicleOwners((prev) =>
+        prev.map((owner) =>
+          owner.vehicle_owner_id === selectedOwner.vehicle_owner_id ? { ...owner, account_status: status } : owner
+        )
+      );
+    } catch (err) {
+      console.warn('Status update error:', err);
     }
   };
 
-  const statusOptions = [
-    { label: 'Active', value: 'ACTIVE', color: '#10B981' },
-    { label: 'Inactive', value: 'INACTIVE', color: '#EF4444' },
-    { label: 'Pending', value: 'PENDING', color: '#F59E0B' },
-  ];
+  const handleCallPhone = (phone: string) => {
+    const clean = phone.replace(/\D/g, '');
+    if (clean) Linking.openURL(`tel:${clean}`);
+  };
 
-  const getStatusVariant = (status: string): 'success' | 'warning' | 'danger' | 'neutral' => {
-    const s = (status || '').toUpperCase();
-    if (s === 'ACTIVE') return 'success';
-    if (s === 'PENDING') return 'warning';
-    if (s === 'INACTIVE' || s === 'SUSPENDED' || s === 'BLOCKED') return 'danger';
-    return 'neutral';
+  const handleWhatsApp = (phone: string, name: string) => {
+    const clean = phone.replace(/\D/g, '');
+    const target = clean.length === 10 ? `91${clean}` : clean;
+    const text = encodeURIComponent(`Hello ${name}, regarding your Drop Cars Fleet Partner account:`);
+    Linking.openURL(`https://api.whatsapp.com/send?phone=${target}&text=${text}`);
   };
 
   const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return `₹${(amount || 0).toLocaleString('en-IN')}`;
+  };
+
+  const getTierBadge = (item: VehicleOwner) => {
+    const sub = (item.subscription_type || '').toUpperCase();
+    if (sub === 'YEARLY') {
+      return {
+        label: 'Trusted Yearly',
+        icon: Crown,
+        color: '#D97706',
+        bg: isDark ? 'rgba(217, 119, 6, 0.2)' : '#FEF3C7',
+        border: '#F59E0B',
+      };
+    }
+    if (sub === 'MONTHLY') {
+      return {
+        label: 'Trusted Monthly',
+        icon: Star,
+        color: '#7C3AED',
+        bg: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+        border: '#8B5CF6',
+      };
+    }
+    if (item.admin_trusted_override || item.tier === 'PREFERRED') {
+      return {
+        label: 'Trusted Partner',
+        icon: ShieldCheck,
+        color: '#0284C7',
+        bg: isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE',
+        border: '#38BDF8',
+      };
+    }
+    return {
+      label: 'Standard',
+      icon: Car,
+      color: '#64748B',
+      bg: isDark ? 'rgba(100, 116, 139, 0.2)' : '#F1F5F9',
+      border: 'transparent',
+    };
   };
 
   const renderOwnerItem = ({ item }: { item: VehicleOwner }) => {
-    const isActive = item.account_status === 'ACTIVE';
+    const isActive = (item.account_status || '').toUpperCase() === 'ACTIVE';
+    const tierInfo = getTierBadge(item);
+    const initials = (item.full_name || 'FO')
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
     return (
-      <Card
-        style={styles.ownerCard}
+      <TouchableOpacity
+        style={[
+          styles.ownerCard,
+          {
+            backgroundColor: isDark ? themeColors.surface : '#FFFFFF',
+            borderColor: themeColors.border,
+          },
+        ]}
         onPress={() => router.push(`/fleet-owner-detail?ownerId=${item.vehicle_owner_id}` as any)}
         onLongPress={() => {
           setSelectedOwner(item);
           setShowStatusSheet(true);
         }}
+        activeOpacity={0.88}
       >
-        <View style={styles.ownerHeader}>
-          <View style={[styles.avatarBox, { backgroundColor: themeColors.primaryLight }]}>
-            <Car size={18} color={themeColors.primary} />
-          </View>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.ownerName, { color: themeColors.text }]} numberOfLines={1}>{item.full_name}</Text>
-              <StatusPill status={item.account_status} variant={getStatusVariant(item.account_status)} size="sm" />
-              {item.tier === 'PREFERRED' && (
-                <View style={[styles.tierBadge, { backgroundColor: themeColors.primaryLight }]}>
-                  <ShieldCheck size={11} color={themeColors.primary} />
-                  <Text style={[styles.tierText, { color: themeColors.primary }]}>Trusted</Text>
-                </View>
-              )}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+          {/* Avatar with Initials & Active indicator */}
+          <View style={{ position: 'relative' }}>
+            <View
+              style={[
+                styles.avatarCircle,
+                {
+                  backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                  borderColor: isActive ? '#10B981' : themeColors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.avatarInitials, { color: isActive ? '#10B981' : themeColors.textSecondary }]}>
+                {initials}
+              </Text>
             </View>
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Phone size={11} color={themeColors.textMuted} />
-                <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{item.primary_number}</Text>
+            <View
+              style={[
+                styles.avatarStatusDot,
+                { backgroundColor: isActive ? '#10B981' : '#94A3B8' },
+              ]}
+            />
+          </View>
+
+          {/* Center Details */}
+          <View style={{ flex: 1 }}>
+            {/* Header: Name + Status Badge + Tier Badge */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+              <Text style={[styles.ownerName, { color: themeColors.text }]} numberOfLines={1}>
+                {item.full_name || 'Fleet Owner'}
+              </Text>
+
+              {/* Status Pill */}
+              <View
+                style={{
+                  backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  paddingHorizontal: 6,
+                  paddingVertical: 1.5,
+                  borderRadius: 5,
+                  borderWidth: 1,
+                  borderColor: isActive ? '#10B98140' : '#EF444440',
+                }}
+              >
+                <Text style={{ color: isActive ? '#10B981' : '#EF4444', fontSize: 10, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                  {item.account_status || 'ACTIVE'}
+                </Text>
               </View>
+
+              {/* Tier Pill */}
+              <View
+                style={[
+                  styles.tierBadgeWrap,
+                  { backgroundColor: tierInfo.bg, borderColor: tierInfo.border },
+                ]}
+              >
+                <tierInfo.icon size={11} color={tierInfo.color} />
+                <Text style={[styles.tierBadgeText, { color: tierInfo.color }]}>{tierInfo.label}</Text>
+              </View>
+            </View>
+
+            {/* Meta Row: Phone, City, Call & WhatsApp shortcuts */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 2 }}>
+              {/* Phone with dialer click */}
+              <TouchableOpacity
+                onPress={() => handleCallPhone(item.primary_number)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <PhoneCall size={12} color="#0EA5E9" />
+                <Text style={[styles.metaText, { color: '#0EA5E9', fontWeight: '700' }]}>
+                  {item.primary_number}
+                </Text>
+              </TouchableOpacity>
+
+              {/* WhatsApp Quick Icon */}
+              <TouchableOpacity
+                onPress={() => handleWhatsApp(item.primary_number, item.full_name)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <MessageCircle size={12} color="#10B981" />
+                <Text style={[styles.metaText, { color: '#10B981', fontWeight: '700' }]}>Chat</Text>
+              </TouchableOpacity>
+
+              {/* City */}
               {!!item.city && (
-                <View style={styles.metaItem}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                   <MapPin size={11} color={themeColors.textMuted} />
                   <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{item.city}</Text>
                 </View>
               )}
             </View>
-            <View style={styles.fleetRow}>
-              <View style={[styles.fleetTag, { backgroundColor: themeColors.surfaceAlt }]}>
-                <Car size={11} color={themeColors.textSecondary} />
-                <Text style={[styles.fleetTagText, { color: themeColors.textSecondary }]}>{item.car_count || 0} Cars</Text>
+
+            {/* Fleet Stats Chips: Cars & Drivers */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <View style={[styles.statChip, { backgroundColor: isDark ? themeColors.surfaceAlt : '#F8FAFC', borderColor: themeColors.border }]}>
+                <Car size={11} color="#3B82F6" />
+                <Text style={[styles.statChipText, { color: themeColors.text }]}>
+                  <Text style={{ fontWeight: '800' }}>{item.car_count || 0}</Text> Cars
+                </Text>
               </View>
-              <View style={[styles.fleetTag, { backgroundColor: themeColors.surfaceAlt }]}>
-                <User size={11} color={themeColors.textSecondary} />
-                <Text style={[styles.fleetTagText, { color: themeColors.textSecondary }]}>{item.driver_count || 0} Drivers</Text>
+
+              <View style={[styles.statChip, { backgroundColor: isDark ? themeColors.surfaceAlt : '#F8FAFC', borderColor: themeColors.border }]}>
+                <User size={11} color="#8B5CF6" />
+                <Text style={[styles.statChipText, { color: themeColors.text }]}>
+                  <Text style={{ fontWeight: '800' }}>{item.driver_count || 0}</Text> Drivers
+                </Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.rightColumn}>
-            <Text style={[styles.balanceLabel, { color: themeColors.textMuted }]}>Wallet</Text>
-            <Text style={[styles.balanceAmount, { color: themeColors.success }]}>{formatCurrency(item.wallet_balance)}</Text>
-            <Switch
-              value={isActive}
-              onValueChange={(val) => handleStatusToggle(item.vehicle_owner_id, val ? 'ACTIVE' : 'INACTIVE')}
-              trackColor={{ false: themeColors.border, true: themeColors.success }}
-              thumbColor={themeColors.surface}
-              style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }], marginTop: 4 }}
-            />
+          {/* Right Column: Wallet & Status Toggle */}
+          <View style={{ alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch' }}>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 9.5, fontWeight: '800', color: themeColors.textMuted, letterSpacing: 0.5 }}>
+                WALLET
+              </Text>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '900', color: '#10B981', marginTop: 1 }}>
+                {formatCurrency(item.wallet_balance)}
+              </Text>
+            </View>
+
+            {/* Status Switch with Label */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: isActive ? '#10B981' : themeColors.textMuted }}>
+                {isActive ? 'ON' : 'OFF'}
+              </Text>
+              <Switch
+                value={isActive}
+                onValueChange={(val) => handleStatusToggle(item.vehicle_owner_id, val ? 'ACTIVE' : 'INACTIVE')}
+                trackColor={{ false: isDark ? '#334155' : '#E2E8F0', true: '#10B98160' }}
+                thumbColor={isActive ? '#10B981' : (isDark ? '#64748B' : '#CBD5E1')}
+                style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
+              />
+            </View>
           </View>
         </View>
-      </Card>
+      </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: themeColors.text }]}>Vehicle Owners</Text>
-          <View style={[styles.countBadge, { backgroundColor: themeColors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text>
+    <View style={[styles.container, { backgroundColor: themeColors.background, flex: 1 }]}>
+      <StatusBar style="light" />
+
+      {/* ── 1. Curved Operations-Grade Header Banner ── */}
+      <LinearGradient
+        colors={isDark ? ['#0F172A', '#1E1B4B'] : ['#2A2665', '#1B1446']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerBanner, { paddingTop: topPadding + 8 }]}
+      >
+        <View style={styles.headerTopRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.headerBackBtn}
+              activeOpacity={0.8}
+            >
+              <ArrowLeft size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.headerTitle}>Vehicle Owners</Text>
+                <View style={styles.headerCountBadge}>
+                  <Text style={styles.headerCountText}>{totalCount}</Text>
+                </View>
+              </View>
+              <Text style={styles.headerSubtitle}>
+                Fleet owners, verified cars & driver directories
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.headerAddBtn}
+              onPress={() => router.push('/create-fleet-owner' as any)}
+              activeOpacity={0.85}
+            >
+              <Plus size={14} color="#FFFFFF" />
+              <Text style={styles.headerAddBtnText}>+ New Fleet</Text>
+            </TouchableOpacity>
+            <ThemeToggle size={18} />
           </View>
         </View>
+
+        {/* Primary Status Switcher: [ All | Active | Inactive ] */}
+        <View style={styles.statusSegmentWrap}>
+          {STATUS_FILTER_TABS.map((tab) => {
+            const isActive = statusTab === tab.value;
+            return (
+              <TouchableOpacity
+                key={tab.value}
+                style={[
+                  styles.statusSegmentBtn,
+                  isActive && styles.statusSegmentBtnActive,
+                ]}
+                onPress={() => setStatusTab(tab.value)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.statusSegmentText,
+                    isActive ? { color: '#FFFFFF', fontWeight: '800' } : { color: 'rgba(255, 255, 255, 0.7)' },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </LinearGradient>
+
+      {/* ── 2. Secondary Tier & Membership Filter Horizontal Scroll ── */}
+      <View style={{ backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}
+        >
+          {TIER_FILTERS.map((f) => {
+            const isActive = tierTab === f.id;
+            return (
+              <TouchableOpacity
+                key={f.id}
+                onPress={() => setTierTab(f.id)}
+                activeOpacity={0.8}
+                style={[
+                  styles.tierFilterChip,
+                  {
+                    backgroundColor: isActive
+                      ? (isDark ? '#3B82F630' : '#EFF6FF')
+                      : (isDark ? themeColors.surfaceAlt : '#F8FAFC'),
+                    borderColor: isActive ? '#3B82F6' : themeColors.border,
+                  },
+                ]}
+              >
+                <f.icon size={13} color={isActive ? '#3B82F6' : themeColors.textSecondary} />
+                <Text
+                  style={[
+                    styles.tierFilterChipText,
+                    {
+                      color: isActive ? '#3B82F6' : themeColors.textSecondary,
+                      fontWeight: isActive ? '800' : '600',
+                    },
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        <Segmented
-          options={STATUS_FILTER_TABS}
-          value={statusTab}
-          onChange={(v) => handleStatusTabChange(v as StatusTabFilter)}
-        />
+      {/* ── 3. Search Bar with Instant Submit ── */}
+      <View style={[styles.searchBarWrap, { backgroundColor: themeColors.background }]}>
+        <View
+          style={[
+            styles.searchBox,
+            {
+              backgroundColor: themeColors.surface,
+              borderColor: themeColors.border,
+            },
+          ]}
+        >
+          <Search size={15} color={themeColors.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: themeColors.text }]}
+            placeholder="Search by name, mobile, city, driver..."
+            placeholderTextColor={themeColors.textMuted}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            onSubmitEditing={runSearch}
+            returnKeyType="search"
+          />
+          {searchInput.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} style={{ padding: 4 }}>
+              <X size={14} color={themeColors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.searchSubmitBtn}
+          onPress={runSearch}
+          activeOpacity={0.85}
+        >
+          <Search size={13} color="#FFFFFF" />
+          <Text style={styles.searchSubmitBtnText}>Search</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Search Input */}
-      <View style={[styles.searchContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-        <Search size={16} color={themeColors.textMuted} />
-        <TextInput
-          style={[styles.searchInput, { color: themeColors.text }]}
-          placeholder="Search fleet drivers..."
-          placeholderTextColor={themeColors.textMuted}
-          value={searchInput}
-          onChangeText={setSearchInput}
-          onSubmitEditing={runSearch}
-          returnKeyType="search"
-        />
-        {searchInput.length > 0 && (
-          <TouchableOpacity onPress={clearSearch} style={{ padding: 4 }}>
-            <X size={14} color={themeColors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* List */}
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
+      {/* ── 4. Lazy-Loaded Infinite Scroll Fleet List ── */}
+      {loading && !refreshing && vehicleOwners.length === 0 ? (
+        <View style={styles.loadingWrapper}>
           <SkeletonRow />
           <SkeletonRow />
           <SkeletonRow />
@@ -279,36 +580,70 @@ export default function VehicleOwnersScreen() {
         <FlatList
           data={vehicleOwners}
           renderItem={renderOwnerItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.primary} />}
+          keyExtractor={(item) => String(item.id || item.vehicle_owner_id)}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: 110 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
-              icon={<Car size={36} color={themeColors.textMuted} />}
-              title={activeSearch ? 'No fleet drivers found' : 'No vehicle owners'}
-              message={activeSearch ? `No results matching "${activeSearch}"` : 'Vehicle owner accounts will show up here.'}
+              icon={<Car size={40} color={themeColors.textMuted} />}
+              title={activeSearch || tierTab !== 'all' || statusTab !== 'all' ? 'No matching fleet owners' : 'No vehicle owners registered'}
+              message={activeSearch ? `No results for "${activeSearch}"` : 'Vehicle owner accounts will show up here.'}
             />
           }
           ListFooterComponent={
             loadingMore ? (
-              <View style={styles.footerLoader}>
-                <ActivityIndicator size="small" color={themeColors.primary} />
+              <View style={styles.footerLoaderWrap}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.footerLoaderText, { color: themeColors.textSecondary }]}>
+                  Loading more fleet owners...
+                </Text>
               </View>
+            ) : hasMore && vehicleOwners.length > 0 ? (
+              <TouchableOpacity
+                onPress={handleLoadMore}
+                style={[styles.loadMoreBtn, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: colors.primary, fontSize: 12.5, fontWeight: '700' }}>
+                  Load More ({totalCount - vehicleOwners.length} remaining)
+                </Text>
+              </TouchableOpacity>
             ) : null
           }
         />
       )}
 
+      {/* Quick Account Creation Modal */}
+      <AdminCreateAccountModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        initialType="fleet"
+        onSuccess={() => fetchVehicleOwners(true)}
+      />
+
+      {/* Action Sheet */}
       <ActionSheet
         visible={showStatusSheet}
         onClose={() => setShowStatusSheet(false)}
         title="Update Fleet Driver Status"
-        options={statusOptions}
+        options={[
+          { label: 'Active', value: 'ACTIVE', color: '#10B981' },
+          { label: 'Inactive', value: 'INACTIVE', color: '#EF4444' },
+          { label: 'Pending', value: 'PENDING', color: '#F59E0B' },
+        ]}
         onSelect={handleStatusUpdate}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -316,150 +651,234 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  headerBanner: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    ...shadows.card,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 12,
   },
-  titleRow: {
+  headerBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 19,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerCountBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  headerCountText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 2,
+  },
+  headerAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  headerAddBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  statusSegmentWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    gap: 4,
+  },
+  statusSegmentBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  statusSegmentBtnActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.32)',
+  },
+  statusSegmentText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+  },
+  tierFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  tierFilterChipText: {
+    fontSize: 11.5,
+    fontFamily: 'Inter-Bold',
+  },
+  searchBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  countBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  countText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tabContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  searchContainer: {
+  searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     padding: 0,
   },
-  loadingContainer: {
-    padding: 16,
-    gap: 8,
-  },
-  listContainer: {
-    padding: 16,
-    gap: 8,
-    paddingBottom: 40,
-  },
-  ownerCard: {
-    marginBottom: 4,
-    padding: 12,
-  },
-  ownerHeader: {
+  searchSubmitBtn: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    gap: 4,
+    backgroundColor: colors.primary,
+    height: 40,
+    paddingHorizontal: 13,
+    borderRadius: 10,
   },
-  nameRow: {
-    flexDirection: 'row',
+  searchSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  loadingWrapper: {
+    padding: 14,
+    gap: 10,
+  },
+  listContainer: {
+    padding: 14,
+    gap: 10,
+  },
+  ownerCard: {
+    borderRadius: 14,
+    padding: 13,
+    borderWidth: 1,
+    ...shadows.card,
+  },
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 4,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  avatarInitials: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '900',
+  },
+  avatarStatusDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   ownerName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
   },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  tierText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  metaText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  fleetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  fleetTag: {
+  tierBadgeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 5,
+    borderWidth: 0.8,
   },
-  fleetTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  rightColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  balanceLabel: {
+  tierBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
   },
-  balanceAmount: {
-    fontSize: 13,
-    fontWeight: '700',
+  metaText: {
+    fontSize: 11.5,
   },
-  footerLoader: {
-    paddingVertical: 12,
+  statChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  statChipText: {
+    fontSize: 11,
+  },
+  footerLoaderWrap: {
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerLoaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loadMoreBtn: {
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 6,
   },
 });

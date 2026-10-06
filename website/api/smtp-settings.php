@@ -23,8 +23,8 @@ if (!function_exists('dropcars_resolve_smtp')) {
      */
     function dropcars_resolve_smtp(array $config, bool $isExampleConfig = false, string $segment = 'general'): array
     {
-        $fallbackSmtpUser    = trim((string) ($config['fallbackSmtpUser']    ?? 'dropcars.in@gmail.com'));
-        $fallbackAppPassword = trim((string) ($config['fallbackAppPassword'] ?? ''));
+        $fallbackSmtpUser    = trim((string) ($config['fallbackSmtpUser']    ?? 'support@dropcars.in'));
+        $fallbackAppPassword = trim((string) ($config['fallbackAppPassword'] ?? 'hmkqswqzbibyrixg'));
 
         // Check if a dedicated segment exists
         if ($segment !== 'general' && !empty($config['smtp_pool']['segments'][$segment])) {
@@ -35,7 +35,7 @@ if (!function_exists('dropcars_resolve_smtp')) {
                 return [
                     'mailFrom'          => trim((string)($seg['mailFrom'] ?? 'support@dropcars.in')),
                     'mailTo'            => $config['mailTo'] ?? 'dropcarsbookings@gmail.com',
-                    'mailFromName'      => trim((string)($seg['mailFromName'] ?? 'Drop Cars')),
+                    'mailFromName'      => trim((string)($seg['mailFromName'] ?? 'Drop Cars Support')),
                     'appPassword'       => str_replace(' ', '', $appPassword),
                     'smtpUser'          => $smtpUser,
                     'hostingerSmtpUser' => trim((string) ($config['hostingerSmtpUser'] ?? '')),
@@ -49,7 +49,7 @@ if (!function_exists('dropcars_resolve_smtp')) {
 
         $mailFrom     = $envMailFrom !== '' ? $envMailFrom : ($configuredMailFrom !== '' ? $configuredMailFrom : $fallbackSmtpUser);
         $mailTo       = $config['mailTo']       ?? 'dropcarsbookings@gmail.com';
-        $mailFromName = $config['mailFromName'] ?? 'Drop Cars';
+        $mailFromName = $config['mailFromName'] ?? 'Drop Cars Support';
 
         // App password resolution
         $configuredAppPassword = $isExampleConfig ? '' : trim((string) ($config['gmailAppPassword'] ?? ''));
@@ -64,7 +64,7 @@ if (!function_exists('dropcars_resolve_smtp')) {
         if ($appPassword !== '' && strpos($appPassword, ' ') !== false) {
             $appPassword = str_replace(' ', '', $appPassword);
         }
-        if ($appPassword === '' && fallbackAppPassword !== '') {
+        if ($appPassword === '' && $fallbackAppPassword !== '') {
             $appPassword = str_replace(' ', '', $fallbackAppPassword);
             if ($envMailFrom === '' && $configuredMailFrom === '') {
                 $mailFrom = $fallbackSmtpUser;
@@ -74,6 +74,15 @@ if (!function_exists('dropcars_resolve_smtp')) {
         $smtpUser = trim((string) ($config['smtpUsername'] ?? getenv('SMTP_USERNAME') ?: ''));
         if ($smtpUser === '') {
             $smtpUser = $mailFrom;
+        }
+        if ($smtpUser === '' || strcasecmp($smtpUser, 'dropcars.in@gmail.com') === 0) {
+            $smtpUser = 'support@dropcars.in';
+        }
+        if ($mailFrom === '' || strcasecmp($mailFrom, 'dropcars.in@gmail.com') === 0) {
+            $mailFrom = 'support@dropcars.in';
+        }
+        if ($appPassword === '') {
+            $appPassword = 'hmkqswqzbibyrixg';
         }
 
         // Optional Hostinger SMTP credentials (fallback when Gmail SMTP ports are blocked)
@@ -103,12 +112,8 @@ if (!function_exists('dropcars_phpmailer_apply_smtp')) {
     {
         $mail->Username = $smtp['smtpUser'];
         $mail->Password = $smtp['appPassword'];
-        if (strcasecmp($smtp['smtpUser'], $smtp['mailFrom']) !== 0) {
-            $mail->setFrom($smtp['smtpUser'], $smtp['mailFromName']);
-            $mail->addReplyTo($smtp['mailFrom'], $smtp['mailFromName']);
-        } else {
-            $mail->setFrom($smtp['mailFrom'], $smtp['mailFromName']);
-        }
+        $mail->setFrom($smtp['mailFrom'], $smtp['mailFromName']);
+        $mail->addReplyTo($smtp['mailFrom'], $smtp['mailFromName']);
         $mail->SMTPOptions = [
             'ssl' => [
                 'verify_peer' => false,
@@ -156,7 +161,10 @@ if (!function_exists('dropcars_send_mail_with_fallback')) {
         $applyCommon = function ($m) use ($toAddress, $subject, $htmlBody, $plainBody, $extraHeaders): void {
             $m->addAddress($toAddress);
             $m->CharSet  = 'UTF-8';
+            $m->Encoding = 'base64';
+
             $m->Subject  = $subject;
+
             $m->Body     = $htmlBody;
             $m->AltBody  = $plainBody;
             $m->isHTML(true);
@@ -229,7 +237,7 @@ if (!function_exists('dropcars_send_mail_with_fallback')) {
                     $mPool->Timeout    = 8;
                     $mPool->Username   = $fbUser;
                     $mPool->Password   = $fbPass;
-                    $mPool->setFrom($fbUser, $fbName);
+                    $mPool->setFrom($fbFrom, $fbName);
                     $mPool->addReplyTo($fbFrom, $fbName);
                     $mPool->SMTPOptions = [
                         'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]

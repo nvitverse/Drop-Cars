@@ -4,6 +4,7 @@
 // domain, different auth (a static shared key, not the admin JWT).
 
 import { alertHealth } from './alertHealth';
+import { isFutureLead } from '@/utils/performance';
 
 const WEBSITE_API_BASE = 'https://dropcars.in/api';
 // Must match ADMIN_APP_API_KEY in the website's config/env.php.
@@ -172,7 +173,11 @@ class EnquiriesApiService {
   async fetchUnacknowledgedResult(): Promise<{ success: boolean; enquiries: WebsiteEnquiry[]; error?: string }> {
     try {
       const res = await this.list({ tab: 'not_responded', page: 1 });
-      const unack = (res.enquiries || []).filter((e) => !e.is_touched && !e.acknowledged_at);
+      const unack = (res.enquiries || []).filter((e: any) => {
+        const isTouched = Boolean(e.is_touched) || e.is_touched === 1 || e.is_touched === '1' || String(e.is_touched).toLowerCase() === 'true';
+        const hasAck = !!e.acknowledged_at && e.acknowledged_at !== '0000-00-00 00:00:00' && e.acknowledged_at !== 'null';
+        return !isTouched && !hasAck;
+      });
       alertHealth.recordPollSuccess(unack.length);
       return { success: true, enquiries: unack };
     } catch (e: any) {
@@ -193,6 +198,35 @@ class EnquiriesApiService {
       method: 'POST',
       body: JSON.stringify({ action: 'register_push_token', token, device_label: deviceLabel }),
     });
+  }
+
+  // Fetch count of leads with future travel dates that require follow-up
+  async getFutureLeadsCount(): Promise<number> {
+    try {
+      const [notResp, resp] = await Promise.allSettled([
+        this.list({ tab: 'not_responded', page: 1 }),
+        this.list({ tab: 'responded', page: 1 }),
+      ]);
+      const notRespList = notResp.status === 'fulfilled' ? (notResp.value?.enquiries || []) : [];
+      const respList = resp.status === 'fulfilled' ? (resp.value?.enquiries || []) : [];
+
+      const combined = [...notRespList, ...respList];
+      const seen = new Set<number>();
+      let count = 0;
+
+      for (const e of combined) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id);
+          // Check if future travel date and not converted to booking
+          if (isFutureLead(e.travel_date) && !e.booking_id && e.lead_stage !== 'cancelled' && e.lead_stage !== 'fake') {
+            count++;
+          }
+        }
+      }
+      return count;
+    } catch {
+      return 0;
+    }
   }
 }
 

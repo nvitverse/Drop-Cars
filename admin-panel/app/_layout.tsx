@@ -9,6 +9,7 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import EnquiryAlarmHost from '@/components/EnquiryAlarmHost';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
+import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
 
 import { ThemeProvider } from '@/context/ThemeContext';
@@ -16,7 +17,6 @@ import { StaffDutyProvider } from '@/context/StaffDutyContext';
 import StaffDutyFloatingBubble from '@/components/StaffDutyFloatingBubble';
 import { CommandCenterProvider } from '@/context/CommandCenterContext';
 import CommandCenterModal from '@/components/CommandCenterModal';
-import CommandCenterFloatingButton from '@/components/CommandCenterFloatingButton';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -65,10 +65,11 @@ export default function RootLayout() {
               <StatusBar style="auto" />
               <WebAlertHost />
               {/* Alarms paused temporarily as requested to work freely in other sections */}
+              <AlarmDutyGate />
               <EnquiryAlarmHost />
               <BookingAlarmHost />
               <StaffDutyFloatingBubble />
-              <CommandCenterFloatingButton />
+              {/* The Command Centre floating button is gone: it opens from Chats > Command Centre */}
               <CommandCenterModal />
             </CommandCenterProvider>
           </StaffDutyProvider>

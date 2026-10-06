@@ -507,7 +507,7 @@ export default function DropBidScreen() {
         ]}
         tips={[
           'Track Bids: Track your pending bids under 📩 Offers and accepted trips under ✅ Confirmed.',
-          'Commission Hold: A 5% platform commission is automatically held from your wallet upon bid acceptance.',
+          'Commission Hold: When your bid is accepted, at least ₹500 (or the 5% commission, if more) is held from your wallet. After the trip the commission is deducted and the rest is refunded.',
         ]}
         onClose={() => setShowPageInfo(false)}
       />

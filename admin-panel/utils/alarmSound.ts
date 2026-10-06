@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { setAudioModeAsync } from 'expo-audio';
 
@@ -7,10 +7,36 @@ let alarmInterval: any = null;
 let isRinging = false;
 let safetyTimeout: any = null;
 
+let alarmsAllowed = true;
+
+export function setAlarmsAllowed(allowed: boolean) {
+  alarmsAllowed = allowed;
+  if (!allowed) {
+    forceStopAlarmSound();
+  }
+}
+
+export function areAlarmsAllowed(): boolean {
+  return alarmsAllowed;
+}
+
 // Reference-counted by caller (e.g. 'enquiry', 'booking')
 const activeSources = new Set<string>();
 
 const MAX_CONTINUOUS_RING_MS = 90000;
+
+// Helper to detect if user screen is OFF, app is backgrounded, or tab is hidden
+export function isScreenOffOrBackground(): boolean {
+  if (AppState.currentState !== 'active') {
+    return true;
+  }
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    if (document.hidden || document.visibilityState === 'hidden') {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Setup native audio session mode
 async function ensureAudioMode() {
@@ -23,40 +49,115 @@ async function ensureAudioMode() {
   }
 }
 
-// Single soft "ping"
-export function playMildNotificationSound() {
+export function unlockAudioContext() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    } catch {}
+  }
+}
+
+// Web Audio user-interaction unlock listener setup
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  ['click', 'touchstart', 'keydown', 'pointerdown'].forEach((evt) => {
+    window.addEventListener(evt, unlockAudioContext, { once: false, passive: true });
+  });
+}
+
+// Adaptive notification chime:
+// - Screen ON: Soft & gentle chime (0.16 volume) so staff is not startled/annoyed
+// - Screen OFF / Background: Louder & dual-burst chime (0.60 volume) so staff hears from distance/pocket
+export function playMildNotificationSound(forceLoud?: boolean) {
+  const isOffOrBg = forceLoud ?? isScreenOffOrBackground();
+
   try {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isOffOrBg) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   } catch (e) {}
 
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.25);
-      osc.onended = () => { try { ctx.close(); } catch (e) {} };
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new AudioContextClass();
+      }
+      const playTone = () => {
+        try {
+          const now = audioCtx.currentTime;
+          // Dynamic volume based on screen state
+          const baseGain1 = isOffOrBg ? 0.55 : 0.16;
+          const baseGain2 = isOffOrBg ? 0.65 : 0.20;
+
+          // Note 1: E5 (659.25 Hz)
+          const osc1 = audioCtx.createOscillator();
+          const gain1 = audioCtx.createGain();
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(659.25, now);
+          gain1.gain.setValueAtTime(baseGain1, now);
+          gain1.gain.exponentialRampToValueAtTime(0.001, now + (isOffOrBg ? 0.55 : 0.40));
+          osc1.connect(gain1);
+          gain1.connect(audioCtx.destination);
+          osc1.start(now);
+          osc1.stop(now + (isOffOrBg ? 0.55 : 0.40));
+
+          // Note 2: A5 (880 Hz) (Chime sustain)
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(880, now + 0.22);
+          gain2.gain.setValueAtTime(baseGain2, now + 0.22);
+          gain2.gain.exponentialRampToValueAtTime(0.001, now + (isOffOrBg ? 2.2 : 1.5));
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          osc2.start(now + 0.22);
+          osc2.stop(now + (isOffOrBg ? 2.2 : 1.5));
+
+          // If screen is OFF / background tab, play second confirmation note so it carries through
+          if (isOffOrBg) {
+            const now2 = now + 0.65;
+            const osc3 = audioCtx.createOscillator();
+            const gain3 = audioCtx.createGain();
+            osc3.type = 'sine';
+            osc3.frequency.setValueAtTime(987.77, now2); // B5 note
+            gain3.gain.setValueAtTime(0.50, now2);
+            gain3.gain.exponentialRampToValueAtTime(0.001, now2 + 1.2);
+            osc3.connect(gain3);
+            gain3.connect(audioCtx.destination);
+            osc3.start(now2);
+            osc3.stop(now2 + 1.2);
+          }
+        } catch {}
+      };
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(playTone).catch(() => {});
+      } else {
+        playTone();
+      }
     } catch (e) {}
   }
 }
 
-// Dual-tone emergency alarm synthesizer
+// Dual-tone emergency alarm synthesizer with screen-adaptive volume
 export function playAlarmSound(source: string = 'default') {
+  if (!alarmsAllowed) return;
   activeSources.add(source);
   if (isRinging) return;
   isRinging = true;
 
   ensureAudioMode();
+  unlockAudioContext();
 
   safetyTimeout = setTimeout(() => {
     console.warn('Alarm sound force-stopped by MAX_CONTINUOUS_RING_MS safety backstop.');
@@ -75,34 +176,46 @@ export function playAlarmSound(source: string = 'default') {
         if (!audioCtx || audioCtx.state === 'closed') {
           audioCtx = new AudioContextClass();
         }
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
 
         const triggerBeepPair = () => {
-          if (!isRinging || !audioCtx || audioCtx.state !== 'running') return;
+          if (!isRinging || !audioCtx) return;
+
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().then(() => {
+              if (isRinging && audioCtx && audioCtx.state === 'running') {
+                triggerBeepPair();
+              }
+            }).catch(() => {});
+            return;
+          }
+
+          if (audioCtx.state !== 'running') return;
 
           try {
             const now = audioCtx.currentTime;
+            const isOffOrBg = isScreenOffOrBackground();
+            // Adaptive volume: Low (0.16) if user looking at screen, Loud (0.45) if screen OFF/background
+            const tone1Gain = isOffOrBg ? 0.45 : 0.16;
+            const tone2Gain = isOffOrBg ? 0.35 : 0.12;
 
-            // Tone 1: High pitch alarm (880 Hz)
+            // Tone 1: High pitch siren (920 Hz)
             const osc1 = audioCtx.createOscillator();
             const gain1 = audioCtx.createGain();
             osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(880, now);
-            gain1.gain.setValueAtTime(0.3, now);
+            osc1.frequency.setValueAtTime(920, now);
+            gain1.gain.setValueAtTime(tone1Gain, now);
             gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
             osc1.connect(gain1);
             gain1.connect(audioCtx.destination);
             osc1.start(now);
             osc1.stop(now + 0.35);
 
-            // Tone 2: Secondary tone (660 Hz)
+            // Tone 2: Secondary siren tone (700 Hz)
             const osc2 = audioCtx.createOscillator();
             const gain2 = audioCtx.createGain();
-            osc2.type = 'square';
-            osc2.frequency.setValueAtTime(660, now + 0.15);
-            gain2.gain.setValueAtTime(0.2, now + 0.15);
+            osc2.type = 'sawtooth';
+            osc2.frequency.setValueAtTime(700, now + 0.15);
+            gain2.gain.setValueAtTime(tone2Gain, now + 0.15);
             gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
             osc2.connect(gain2);
             gain2.connect(audioCtx.destination);
@@ -111,7 +224,14 @@ export function playAlarmSound(source: string = 'default') {
           } catch (err) {}
         };
 
-        triggerBeepPair();
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().then(() => {
+            if (isRinging) triggerBeepPair();
+          }).catch(() => {});
+        } else {
+          triggerBeepPair();
+        }
+
         alarmInterval = setInterval(() => {
           if (isRinging) {
             triggerBeepPair();
@@ -121,7 +241,7 @@ export function playAlarmSound(source: string = 'default') {
           } else {
             clearInterval(alarmInterval);
           }
-        }, 800);
+        }, 750);
       }
     } catch (e) {
       console.warn('Alarm Audio Context initialization error:', e);

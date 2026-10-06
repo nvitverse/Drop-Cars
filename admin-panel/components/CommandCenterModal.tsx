@@ -302,6 +302,23 @@ export default function CommandCenterModal() {
           {/* Quick Command Suggestion Chips */}
           <View style={[styles.quickChipsRow, { borderTopColor: themeColors.border }]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
+              {/* live questions: answered from the real bookings / approvals / chats */}
+              {[
+                ['🔔 Needs attention', 'What needs attention'],
+                ['🌐 Pending approvals', 'Pending approvals'],
+                ['🚨 Unassigned', 'Unassigned bookings'],
+                ['📅 Today', 'Today pickups'],
+                ['⏸ Hold all', 'Hold all'],
+                ['💬 Support', 'Support chats'],
+              ].map(([label, command]) => (
+                <TouchableOpacity
+                  key={label}
+                  style={[styles.chipPill, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF', borderColor: themeColors.border }]}
+                  onPress={() => sendMessage(command)}
+                >
+                  <Text style={[styles.chipText, { color: themeColors.text }]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
               <TouchableOpacity
                 style={[styles.chipPill, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
                 onPress={() => sendMessage('Tiruvannamalai to Chennai, Sedan, 14, 1, 300, 100, Toll extra')}

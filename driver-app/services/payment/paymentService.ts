@@ -454,13 +454,14 @@ export const processWalletTopup = async (
     name: string;
     email: string;
     contact: string;
-  }
+  },
+  purpose: string = 'wallet_topup'          // 'subscription_monthly' | 'subscription_yearly': the payment itself then buys that plan
 ): Promise<PaymentResponse> => {
   try {
-    console.log('💰 Processing wallet top-up:', { amount, userData });
+    console.log('💰 Processing wallet top-up:', { amount, userData, purpose });
     
     // Step 1: Create Razorpay order
-    const orderResponse = await createRazorpayOrder(amount, 'INR', { purpose: 'wallet_topup' });
+    const orderResponse = await createRazorpayOrder(amount, 'INR', { purpose });
     
     if (!orderResponse.success || !orderResponse.razorpay_order_id) {
       throw new Error('Failed to create Razorpay order');

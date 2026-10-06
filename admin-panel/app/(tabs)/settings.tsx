@@ -656,6 +656,7 @@ export default function SettingsScreen() {
 
       <ScrollView
         style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >

@@ -22,6 +22,7 @@ import {
   Percent, StickyNote, Check, Info, Phone, ArrowUpDown, Globe, AlertCircle, GripVertical, ChevronUp,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
+import { enquiriesApi, WebsiteEnquiry } from '@/services/enquiriesApi';
 import { colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -114,8 +115,7 @@ const TRIP_TYPE_SUBTITLES: Record<TripType, string> = {
 
 const HOURLY_PACKAGES = [
   { hours: 5, km_range: 50 },
-  { hours: 10, km_range: 100 },
-  { hours: 12, km_range: 120 },
+  { hours: 8, km_range: 80 },
 ];
 
 const currentYear = new Date().getFullYear();
@@ -191,6 +191,16 @@ export default function CreateBookingScreen() {
   // Explanations live behind the small (i) dots, so the form itself stays
   // short: tapping one opens this popup.
   const [helpTip, setHelpTip] = useState<{ title: string; text: string } | null>(null);
+  // "From lead or booking": pick a website lead / booking, the form fills itself, and
+  // posting marks that lead confirmed.
+  const [linkQuery, setLinkQuery] = useState('');
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkResults, setLinkResults] = useState<WebsiteEnquiry[] | null>(null);
+  const [showLeadPickerModal, setShowLeadPickerModal] = useState(false);
+  const [leadTabFilter, setLeadTabFilter] = useState<'ALL' | 'OPEN' | 'CONFIRMED' | 'ORDER'>('ALL');
+  const [linkedLead, setLinkedLead] = useState<WebsiteEnquiry | null>(null);
+  const [leadConfirmed, setLeadConfirmed] = useState<'ok' | 'fail' | null>(null);
+  const pendingLeadRates = useRef<{ cpk?: number; ecpk?: number } | null>(null);
   // Quote review: which of the Inclusions / Exclusions lists is open.
   const [openFareList, setOpenFareList] = useState<'incl' | 'excl' | null>(null);
   // "Allocate manually" hit a low wallet: ask before allocating on credit.
@@ -332,6 +342,8 @@ export default function CreateBookingScreen() {
   })();
   const [endTime, setEndTime] = useState('');
   const [hourlyPackageIndex, setHourlyPackageIndex] = useState(0);
+  const [isCustomHourly, setIsCustomHourly] = useState(false);
+  const [customHourlyHours, setCustomHourlyHours] = useState('');
   const [pickupNotes, setPickupNotes] = useState('');
   const [tollChargeUpdate, setTollChargeUpdate] = useState(false);
 
@@ -493,10 +505,16 @@ export default function CreateBookingScreen() {
       setDriverAllowance(defs.driver_allowance);
       if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
       if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
+      const lr = pendingLeadRates.current;
+      if (lr) {
+        if (lr.cpk) setCostPerKm(String(lr.cpk));
+        if (lr.ecpk !== undefined && !isNaN(lr.ecpk)) setExtraCostPerKm(String(lr.ecpk));
+        pendingLeadRates.current = null;
+      }
     } else {
       if (!costPerHour || costPerHour === '0') setCostPerHour('250');
       if (!extraCostPerHour) setExtraCostPerHour('50');
-      if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('15');
+      if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('25');
       if (!extraCostForAddonKm) setExtraCostForAddonKm('5');
     }
   }, [carType, tripType]);
@@ -696,6 +714,206 @@ export default function CreateBookingScreen() {
   const editGst = (v: string) => {
     setGstTouched(true);
     setGstAmount(stripLeadingZero(v));
+  };
+
+  const getLocationStringForOrder = (location: any): string => {
+    if (!location) return '';
+    if (typeof location === 'object' && !('pickup' in location)) {
+      const keys = Object.keys(location).sort((a, b) => Number(a) - Number(b));
+      return keys.map((key) => location[key] || '').join(' ').toLowerCase();
+    }
+    const pickup = location.pickup?.address || location.pickup?.city || location.pickup || '';
+    const drop = location.drop?.address || location.drop?.city || location.drop || '';
+    const stops = Array.isArray(location.intermediate_stops) ? location.intermediate_stops : [];
+    const stopsText = stops.map((stop: any) => (typeof stop === 'string' ? stop : stop.address || stop.city || '')).join(' ');
+    return `${pickup} ${drop} ${stopsText}`.toLowerCase();
+  };
+
+  const mapOrderToLead = (o: any): WebsiteEnquiry => {
+    const loc = o.pickup_drop_location;
+    let pickup = '';
+    let drop = '';
+    if (loc) {
+      if (typeof loc === 'object') {
+        if ('pickup' in loc || 'drop' in loc) {
+          pickup = (loc as any).pickup?.address || (loc as any).pickup?.city || (typeof (loc as any).pickup === 'string' ? (loc as any).pickup : '');
+          drop = (loc as any).drop?.address || (loc as any).drop?.city || (typeof (loc as any).drop === 'string' ? (loc as any).drop : '');
+        } else {
+          const keys = Object.keys(loc).sort((a, b) => Number(a) - Number(b));
+          if (keys.length > 0) pickup = String(loc[keys[0]] || '');
+          if (keys.length > 1) drop = String(loc[keys[keys.length - 1]] || '');
+        }
+      } else if (typeof loc === 'string') {
+        const parts = loc.split(/->|→/);
+        pickup = parts[0]?.trim() || '';
+        drop = parts[1]?.trim() || '';
+      }
+    }
+
+    const startDt = o.start_date_time ? String(o.start_date_time) : '';
+    let travelDate = '';
+    let travelTime = '';
+    if (startDt.includes('T')) {
+      const [d, t] = startDt.split('T');
+      travelDate = d;
+      travelTime = (t || '').slice(0, 5);
+    } else if (startDt.includes(' ')) {
+      const [d, t] = startDt.split(' ');
+      travelDate = d;
+      travelTime = (t || '').slice(0, 5);
+    }
+
+    const bId = o.booking_id || (o.id ? (String(o.id).startsWith('C') || String(o.id).startsWith('E') ? String(o.id) : `C${o.id}`) : '');
+
+    return {
+      id: Number(o.id) || 0,
+      booking_id: bId,
+      name: o.customer_name || 'Customer',
+      phone: o.customer_number || '',
+      pickup: pickup || 'Pickup',
+      drop_location: drop || 'Drop',
+      trip_type: o.trip_type || 'oneway',
+      vehicle_type: o.car_type || 'SEDAN',
+      travel_date: travelDate || null,
+      travel_time: travelTime || null,
+      fare_estimate: Number(o.estimated_price || o.vendor_price) || null,
+      cost_per_km: Number(o.cost_per_km) || null,
+      extra_cost_per_km: Number(o.extra_cost_per_km) || null,
+      include_gst: Boolean(o.include_gst),
+      status: o.status || 'Confirmed',
+      booking_status: o.status || null,
+      website: o.source || 'Platform Booking',
+      source: 'Order / Booking',
+      dispatcher_notes: o.pickup_notes || o.special_instructions || o.notes || null,
+      assigned_dispatcher: null,
+      followup_time: null,
+      lead_stage: 'order',
+      is_touched: true,
+      created_at: o.created_at || null,
+    };
+  };
+
+  const searchLeads = async (customQ?: string) => {
+    const q = (typeof customQ === 'string' ? customQ : linkQuery).trim();
+    if (q.length < 1) {
+      // Empty search: load recent leads
+    }
+    setLinkSearching(true);
+    try {
+      // 1. Search website enquiries (both tabs in parallel)
+      const [openRes, respRes, ordersRes] = await Promise.allSettled([
+        enquiriesApi.list({ tab: 'not_responded', search: q || undefined, page: 1 }),
+        enquiriesApi.list({ tab: 'responded', search: q || undefined, page: 1 }),
+        apiService.getOrders(0, 100, 'newest').catch(() => ({ orders: [] })),
+      ]);
+
+      const openRows: WebsiteEnquiry[] = (openRes.status === 'fulfilled' ? (openRes.value?.enquiries || []) : [])
+        .map((e) => ({ ...e, lead_stage: 'not_responded' }));
+      const respRows: WebsiteEnquiry[] = (respRes.status === 'fulfilled' ? (respRes.value?.enquiries || []) : [])
+        .map((e) => ({ ...e, lead_stage: 'responded' }));
+
+      // 2. Search backend orders
+      const ordersList: any[] = ordersRes.status === 'fulfilled' ? ((ordersRes.value as any)?.orders || []) : [];
+      const qLower = q.toLowerCase();
+      const qDigits = q.replace(/[^0-9]/g, '');
+
+      const matchedOrders: WebsiteEnquiry[] = ordersList
+        .filter((o: any) => {
+          if (!o || !o.id) return false;
+          if (!q) return true;
+          const idStr = String(o.id).toLowerCase();
+          const bIdStr = String(o.booking_id || '').toLowerCase();
+          const nameStr = String(o.customer_name || '').toLowerCase();
+          const phoneStr = String(o.customer_number || '').replace(/[^0-9]/g, '');
+          const locStr = getLocationStringForOrder(o.pickup_drop_location);
+
+          return (
+            idStr.includes(qLower) ||
+            bIdStr.includes(qLower) ||
+            (qDigits.length >= 2 && idStr.includes(qDigits)) ||
+            nameStr.includes(qLower) ||
+            (qDigits.length >= 3 && phoneStr.includes(qDigits)) ||
+            locStr.includes(qLower)
+          );
+        })
+        .map(mapOrderToLead);
+
+      // 3. Direct ID lookup fallback if numeric and not matched yet
+      if (qDigits && matchedOrders.length === 0) {
+        try {
+          const singleOrder = await apiService.getOrder(qDigits);
+          if (singleOrder && singleOrder.id) {
+            matchedOrders.push(mapOrderToLead(singleOrder));
+          }
+        } catch {}
+      }
+
+      // Combine and deduplicate
+      const seen = new Set<string>();
+      const combined: WebsiteEnquiry[] = [];
+
+      for (const item of [...openRows, ...respRows, ...matchedOrders]) {
+        const key = item.booking_id ? `bid:${item.booking_id}` : `id:${item.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(item);
+        }
+      }
+
+      setLinkResults(combined);
+      setShowLeadPickerModal(true);
+    } catch (e: any) {
+      Alert.alert('Search failed', e?.message || 'Could not reach the enquiries service');
+      setLinkResults([]);
+    } finally {
+      setLinkSearching(false);
+    }
+  };
+
+  const applyLead = (e: WebsiteEnquiry) => {
+    const pickup = (e.pickup || '').trim();
+    const drop = (e.drop_location || '').trim();
+    const trip = String(e.trip_type || '').toLowerCase();
+    const nextTrip: TripType = trip.includes('round') ? 'roundtrip' : trip.includes('multi') ? 'multicity' : trip.includes('hour') ? 'hourly' : trip.includes('local') ? 'local' : 'oneway';
+    const v = String(e.vehicle_type || '').toLowerCase();
+    const nextCar = v.includes('crysta') ? 'INNOVA_CRYSTA' : v.includes('innova') ? 'INNOVA' : v.includes('suv') ? 'SUV' : v.includes('etios') ? 'ETIOS_4_PLUS_1' : v.includes('hatch') ? 'HATCHBACK' : 'SEDAN_4_PLUS_1';
+
+    setCustomerName((e.name || '').trim());
+    const digits = String(e.phone || '').replace(/[^0-9]/g, '');
+    setCustomerCountryCode('+91');
+    setCustomerPhone(digits.length > 10 ? digits.slice(-10) : digits);
+
+    setStops(nextTrip === 'roundtrip' ? [pickup, drop, pickup] : nextTrip === 'multicity' ? [pickup, drop, ''] : nextTrip === 'hourly' ? [pickup] : [pickup, drop]);
+    setLocationLinks({});
+    setMinKmTouched(false);
+    setFare(null);
+    setTripType(nextTrip);
+    setCarType(nextCar);
+
+    const d = String(e.travel_date || '').match(/^(\d{4}-\d{2}-\d{2})/);
+    if (d) setStartDate(d[1]);
+    const t = String(e.travel_time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (t) {
+      let h = Number(t[1]);
+      const ap = (t[3] || '').toUpperCase();
+      if (ap === 'PM' && h < 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      setStartTime(`${String(h).padStart(2, '0')}:${t[2]}`);
+    }
+    if (e.dispatcher_notes) setPickupNotes(String(e.dispatcher_notes));
+
+    // Driver rates the dispatcher already set on the lead win over the vehicle defaults
+    const cpk = Number(e.cost_per_km) || undefined;
+    const ecpk = e.extra_cost_per_km != null && e.extra_cost_per_km !== undefined ? Number(e.extra_cost_per_km) : undefined;
+    pendingLeadRates.current = { cpk, ecpk };
+    if (cpk) setCostPerKm(String(cpk));
+    if (ecpk !== undefined && !isNaN(ecpk)) { touchedRates.current.extraKm = true; setExtraCostPerKm(String(ecpk)); }
+    if (e.include_gst) { setGstTouched(false); setIncludeGst(true); }
+
+    setLinkedLead(e);
+    setShowLeadPickerModal(false);
+    setLinkResults(null);
+    setLeadConfirmed(null);
   };
 
   // Switching trip type keeps everything already filled in and reshapes the
@@ -912,6 +1130,9 @@ export default function CreateBookingScreen() {
       }
     } else {
       if (!stops[0]?.trim()) return 'Enter the pickup location';
+      if (isCustomHourly && (!customHourlyHours.trim() || Number(customHourlyHours) <= 0)) {
+        return 'Enter valid custom duration in hours (min 1 hour)';
+      }
       if (!costPerHour.trim()) return 'Enter the hourly driver rate';
     }
     if ((tripType === 'roundtrip' || tripType === 'multicity') && (!endDate || !endTime)) {
@@ -962,6 +1183,12 @@ export default function CreateBookingScreen() {
           .filter((r) => r.included && r.name.trim())
           .map((r) => `${r.name.trim()}${Number(r.allowance) > 0 ? ` (+₹${r.allowance})` : ''}`);
         if (customReqs.length > 0) parts.push(`Special Requests: ${customReqs.join(', ')}`);
+        const spotExclusions = customCharges
+          .filter((c) => !c.included && c.name.trim())
+          .map((c) => `${c.name.trim()}${Number(c.amount) > 0 ? ` (₹${c.amount})` : ''}`);
+        if (spotExclusions.length > 0) {
+          parts.push(`[Driver to collect on spot: ${spotExclusions.join(', ')}]`);
+        }
         if (custPhoneRevealMode === 'instant' && customerPhone.trim()) {
           parts.push(`[Customer Mobile: ${customerCountryCode} ${customerPhone.trim()} - Instant Contact]`);
         }
@@ -1059,7 +1286,12 @@ export default function CreateBookingScreen() {
       start_date_time: startIso,
       customer_name: customerName.trim(),
       customer_number: formattedPhone,
-      package_hours: HOURLY_PACKAGES[hourlyPackageIndex],
+      package_hours: isCustomHourly
+        ? (() => {
+            const h = Math.max(1, parseInt(customHourlyHours, 10) || 1);
+            return { hours: h, km_range: h * 10 };
+          })()
+        : (HOURLY_PACKAGES[hourlyPackageIndex] || HOURLY_PACKAGES[0]),
       cost_per_hour: Number(costPerHour) || 0,
       extra_cost_per_hour: Number(extraCostPerHour) || 0,
       cost_for_addon_km: Number(costForAddonKm) || 0,
@@ -1131,6 +1363,15 @@ export default function CreateBookingScreen() {
       setCreditPrompt(null);
       setAllocationResult(res?.allocation?.status === 'SUCCESS' ? res.allocation : null);
       setCreatedOrderId(res.order_id);
+      // Booking is posted: the linked lead becomes Confirmed automatically
+      if (linkedLead && String(linkedLead.status || '').toLowerCase() !== 'confirmed') {
+        try {
+          await enquiriesApi.action(linkedLead.id, 'confirm');
+          setLeadConfirmed('ok');
+        } catch {
+          setLeadConfirmed('fail');
+        }
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to confirm booking');
     } finally {
@@ -1139,6 +1380,11 @@ export default function CreateBookingScreen() {
   };
 
   const resetForm = () => {
+    setLinkedLead(null);
+    setLinkResults(null);
+    setLinkQuery('');
+    setLeadConfirmed(null);
+    pendingLeadRates.current = null;
     setCommissionTouched(false);
     setApplyCommission(true);
     setCustomCharges([]);
@@ -1202,7 +1448,7 @@ export default function CreateBookingScreen() {
         <View style={styles.successBox}>
           <CheckCircle2 size={48} color={colors.success} />
           <Text style={styles.successTitle}>Booking Created</Text>
-          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
+          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{leadConfirmed === 'ok' ? ' The lead is now marked Confirmed.' : leadConfirmed === 'fail' ? ' The lead could not be marked Confirmed - do it from Enquiries.' : ''}{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
 
           {customerPhone ? (
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: '#25D366', marginBottom: 10 }]} onPress={handleShareWhatsApp}>
@@ -1307,6 +1553,65 @@ export default function CreateBookingScreen() {
       />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: fare ? 100 : 60 }} keyboardShouldPersistTaps="handled">
+        {/* 0. From lead or booking: pick one and the form fills itself */}
+        <View style={[styles.sectionCard, cardShell, { marginTop: 0 }]}>
+          <View style={[styles.inlineField, { marginBottom: linkedLead ? 10 : 0 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>From lead or booking</Text>
+              {tip('From lead or booking', 'Search any booking ID, name, phone or location. Pick a lead from the dedicated picker sheet and the entire form auto-fills.\n\nPosting this booking automatically marks that lead Confirmed.')}
+            </View>
+          </View>
+          {linkedLead ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: themeColors.primaryTint, borderWidth: 1, borderColor: colors.primary, borderRadius: 6, padding: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: themeColors.text }} numberOfLines={1}>
+                  {linkedLead.name || 'Customer'}{linkedLead.booking_id ? ` · ${linkedLead.booking_id}` : ''}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                  {[linkedLead.pickup, linkedLead.drop_location].filter(Boolean).join(' → ')}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: colors.primary, marginTop: 2, fontWeight: '700' }}>
+                  {String(linkedLead.status || '').toLowerCase() === 'confirmed' ? 'Already confirmed' : 'Will be marked Confirmed when you post'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setLinkedLead(null)} accessibilityLabel="Unlink lead">
+                <X size={18} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 12, height: 42 }}
+              >
+                <Search size={15} color={themeColors.textMuted} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, minWidth: 0, fontSize: 13, color: themeColors.text, outlineStyle: 'none' } as any}
+                  placeholder="Booking ID (e.g. 0101, E2610), name, phone..."
+                  placeholderTextColor={themeColors.textMuted}
+                  value={linkQuery}
+                  onChangeText={setLinkQuery}
+                  onSubmitEditing={() => searchLeads()}
+                  returnKeyType="search"
+                  accessibilityLabel="Search lead or booking"
+                />
+              </View>
+              <TouchableOpacity
+                style={{ height: 42, paddingHorizontal: 14, borderRadius: 6, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onPress={() => searchLeads()}
+                disabled={linkSearching}
+                accessibilityLabel="Search leads"
+              >
+                {linkSearching ? <ActivityIndicator size="small" color="white" /> : (
+                  <>
+                    <Search size={16} color="white" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>Search</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         {/* 1. Vendor Assignment (optional, admin-only) */}
         <View style={[styles.sectionCard, cardShell]}>
           {selectedVendor ? (
@@ -1441,12 +1746,82 @@ export default function CreateBookingScreen() {
 
               <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary }]}>Package</Text>
               <View style={styles.chipRow}>
-                {HOURLY_PACKAGES.map((p, idx) => (
-                  <TouchableOpacity key={idx} style={[styles.chip, hourlyPackageIndex === idx && styles.chipActive]} onPress={() => setHourlyPackageIndex(idx)}>
-                    <Text style={[styles.chipText, hourlyPackageIndex === idx && styles.chipTextActive]}>{p.hours}h / {p.km_range}km</Text>
-                  </TouchableOpacity>
-                ))}
+                {HOURLY_PACKAGES.map((p, idx) => {
+                  const isSelected = !isCustomHourly && hourlyPackageIndex === idx;
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        setIsCustomHourly(false);
+                        setHourlyPackageIndex(idx);
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{p.hours}h / {p.km_range}km</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={[styles.chip, isCustomHourly && styles.chipActive]}
+                  onPress={() => setIsCustomHourly(true)}
+                >
+                  <Text style={[styles.chipText, isCustomHourly && styles.chipTextActive]}>Custom / Manual</Text>
+                </TouchableOpacity>
               </View>
+
+              {isCustomHourly && (
+                <View
+                  style={{
+                    marginTop: 10,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: themeColors.surface,
+                    borderWidth: 1,
+                    borderColor: themeColors.border,
+                  }}
+                >
+                  <Text style={[styles.fieldLabel, { marginBottom: 6, fontSize: 13, color: themeColors.text }]}>
+                    Enter Custom Hours *
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          flex: 1,
+                          paddingVertical: 10,
+                          height: 44,
+                          backgroundColor: themeColors.background,
+                          color: themeColors.text,
+                          borderColor: themeColors.border,
+                        },
+                      ]}
+                      value={customHourlyHours}
+                      onChangeText={(val) => setCustomHourlyHours(val.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="e.g. 6"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <View
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        backgroundColor: themeColors.primary + '18',
+                        borderWidth: 1,
+                        borderColor: themeColors.primary + '40',
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.primary }}>
+                        {(parseInt(customHourlyHours, 10) || 0) * 10} km (10 km/hr)
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>
+                    Kms auto-calculated at 10 kms/hr ({parseInt(customHourlyHours, 10) || 0} hrs × 10 km/hr = {(parseInt(customHourlyHours, 10) || 0) * 10} km)
+                  </Text>
+                </View>
+              )}
             </>
           ) : (
             <>
@@ -1819,8 +2194,75 @@ export default function CreateBookingScreen() {
             </View>
           ) : (
             <>
-              {fareType === 'ALL_INCLUSIVE' ? (
+              {fareType === 'ALL_INCLUSIVE' ? (() => {
+                const totalKm = Number(minKm) || autoKm || 130;
+                const defTariffs = getDefaultsForCarType(carType, tripType);
+                const activeDriverRate = Number(costPerKm) || Number(defTariffs.cost_per_km) || 13;
+                const activeVendorExtraRate = Number(extraCostPerKm) || Number(defTariffs.extra_cost_per_km) || 0;
+                const activeDriverBata = (Number(driverAllowance) > 0 ? Number(driverAllowance) : Number(defTariffs.driver_allowance) || 300) * (tripDays > 1 ? tripDays : 1);
+                const activeVendorExtraBata = (Number(extraDriverAllowance) > 0 ? Number(extraDriverAllowance) : Number(defTariffs.extra_driver_allowance) || 100) * (tripDays > 1 ? tripDays : 1);
+                const extraPermit = includePermit ? Number(extraPermitCharges) || 0 : 0;
+                const inclPermit = includePermit ? Number(permitCharges) || 0 : 0;
+                const inclHill = includeHill ? Number(hillCharges) || 0 : 0;
+                const inclToll = includeToll ? Number(tollCharges) || 0 : 0;
+
+                const suggestedDriverFare = Math.round(totalKm * activeDriverRate + activeDriverBata + inclPermit + inclHill + inclToll);
+                const suggestedVendorMarkup = Math.round(totalKm * activeVendorExtraRate + activeVendorExtraBata + extraPermit);
+
+                return (
                 <View>
+                  {/* Km limit for All Inclusive: editable row with auto route km calculation */}
+                  {hasMinKm && (
+                    <View style={[styles.inlineField, { marginBottom: 10 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>
+                          Km limit{tripDays > 1 ? ` (${tripDays} days)` : ''}
+                        </Text>
+                        {tip(
+                          'Km limit',
+                          `The included km for this all-inclusive package.\n\n${routeKm != null ? `Route distance: ${Math.round(routeKm)} km.\n` : 'Fill both locations to load the route distance.\n'}Minimum coverage: ${defaultMinKm} km${tripType === 'oneway' ? ' (Oneway)' : tripDays > 1 ? ` (${tripDays} days x ${tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day : fareRules.multicity_min_km_per_day} km)` : ' per day'}.\n\nExtra km driven beyond this limit will be charged at the extra km rate below.`,
+                        )}
+                      </View>
+                      {minKmTouched && (
+                        <TouchableOpacity
+                          onPress={() => { setMinKmTouched(false); if (fare) setRequoteTick((n) => n + 1); }}
+                          accessibilityLabel="Reset km limit to the automatic value"
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }}>Reset</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TextInput
+                        style={[styles.priceInput, { width: 96, textAlign: 'right' }]}
+                        value={minKm}
+                        onChangeText={(v) => { setMinKmTouched(true); setMinKm(v.replace(/[^0-9]/g, '')); }}
+                        onBlur={() => { if (fare && minKmTouched) setRequoteTick((n) => n + 1); }}
+                        keyboardType="numeric"
+                        placeholder={String(autoKm)}
+                        placeholderTextColor={colors.textMuted}
+                        accessibilityLabel="Km limit"
+                      />
+                    </View>
+                  )}
+
+                  {/* Standard Fare Calculation Suggestion Bar */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.primaryTint, borderWidth: 1, borderColor: colors.primary + '33', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 12 }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
+                        Standard suggestion: <Text style={{ fontWeight: '800', color: themeColors.text }}>₹{suggestedDriverFare.toLocaleString('en-IN')}</Text> (Driver) + <Text style={{ fontWeight: '800', color: colors.primary }}>₹{suggestedVendorMarkup.toLocaleString('en-IN')}</Text> (Markup)
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.primary, paddingHorizontal: 9, paddingVertical: 4.5, borderRadius: 4 }}
+                      onPress={() => {
+                        setDriverAllowance(String(suggestedDriverFare));
+                        setExtraAmount(String(suggestedVendorMarkup));
+                      }}
+                      accessibilityLabel="Apply suggested standard fare"
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Auto Fill</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <View style={styles.priceGrid}>
                     {/* Row 1: Driver Share & Vendor Extra (Markup) */}
                     <View style={styles.priceCell}>
@@ -1878,7 +2320,37 @@ export default function CreateBookingScreen() {
                       />
                     </View>
 
-                    {/* Row 3: GST 5% (of driver amount + vendor extra) */}
+                    {/* Row 3: Extra km rate (Driver) & Extra km rate (Vendor) */}
+                    <View style={styles.priceCell}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Driver extra fare /km (₹)</Text>
+                        {tip('Driver extra fare /km', 'Rate paid to driver for each additional km driven beyond the included Km limit.')}
+                      </View>
+                      <TextInput
+                        style={styles.priceInput}
+                        value={costPerKm}
+                        onChangeText={setCostPerKm}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+                    <View style={styles.priceCell}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Vendor extra /km (₹)</Text>
+                        {tip('Vendor extra /km', 'Additional markup billed to customer per extra km beyond the included Km limit.')}
+                      </View>
+                      <TextInput
+                        style={styles.priceInput}
+                        value={extraCostPerKm}
+                        onChangeText={(v) => { touchedRates.current.extraKm = true; setExtraCostPerKm(v); }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+
+                    {/* Row 4: GST 5% (of driver amount + vendor extra) */}
                     <View style={styles.priceCell}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                         <TouchableOpacity
@@ -1902,7 +2374,8 @@ export default function CreateBookingScreen() {
                     </View>
                   </View>
                 </View>
-              ) : (
+                );
+              })() : (
                 <View>
                   {/* Km limit: one editable row. Shows the real route km once the locations are filled. */}
                   {hasMinKm && (
@@ -2061,37 +2534,48 @@ export default function CreateBookingScreen() {
                 </TouchableOpacity>
               </View>
               {customCharges.map((item) => (
-                <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, backgroundColor: themeColors.surface, padding: 8, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
-                  <TouchableOpacity
-                    onPress={() => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)))}
-                    accessibilityLabel={`${item.name || 'Extra'} included in fare`}
-                  >
-                    <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#94A3B8', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                      {item.included && <Check size={12} color="#FFFFFF" />}
-                    </View>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={[styles.priceInput, { flex: 1, minWidth: 0, height: 38, marginBottom: 0 }]}
-                    placeholder="Extra name"
-                    value={item.name}
-                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)))}
-                    placeholderTextColor={colors.textMuted}
-                  />
-                  <TextInput
-                    style={[styles.priceInput, { width: 84, height: 38, marginBottom: 0 }]}
-                    placeholder="₹"
-                    value={item.amount}
-                    onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: stripLeadingZero(text) } : c)))}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel={`Remove ${item.name || 'extra'}`}
-                  >
-                    <X size={18} color="#EF4444" />
-                  </TouchableOpacity>
+                <View key={item.id} style={{ marginBottom: 8, backgroundColor: themeColors.surface, padding: 9, borderRadius: 6, borderWidth: 1, borderColor: item.included ? themeColors.border : '#F59E0B' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                      onPress={() => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, included: !c.included } : c)))}
+                      accessibilityLabel={`${item.name || 'Extra'} included in fare`}
+                    >
+                      <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: item.included ? colors.primary : '#F59E0B', backgroundColor: item.included ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.included && <Check size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: item.included ? colors.primary : '#D97706' }}>
+                        {item.included ? 'Included' : 'Excluded (Spot)'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.priceInput, { flex: 1, minWidth: 0, height: 36, marginBottom: 0 }]}
+                      placeholder="Extra / Exclusion name"
+                      value={item.name}
+                      onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, name: text } : c)))}
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <TextInput
+                      style={[styles.priceInput, { width: 80, height: 36, marginBottom: 0 }]}
+                      placeholder="₹"
+                      value={item.amount}
+                      onChangeText={(text) => setCustomCharges(customCharges.map((c) => (c.id === item.id ? { ...c, amount: stripLeadingZero(text) } : c)))}
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setCustomCharges(customCharges.filter((c) => c.id !== item.id))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={`Remove ${item.name || 'extra'}`}
+                    >
+                      <X size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                  {!item.included && (
+                    <Text style={{ fontSize: 11, color: '#D97706', marginTop: 4, marginLeft: 24, fontWeight: '600' }}>
+                      Driver to collect on spot directly from customer
+                    </Text>
+                  )}
                 </View>
               ))}
               {fareType === 'ALL_INCLUSIVE' && hasWaitingCharge && (
@@ -2476,80 +2960,56 @@ export default function CreateBookingScreen() {
           );
         })()}
 
-        {/* Broadcast To (admin-only broadcast targeting - Redesigned Premium Style) */}
+        {/* Broadcast To (admin-only broadcast targeting - Vertically Compact Segmented Bar) */}
         <View style={[styles.sectionCard, cardShell, { marginTop: 14 }, showNearCitySuggestions && { zIndex: 30, elevation: 30 }]}>
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 6,
-                borderWidth: 1.5,
-                borderColor: sendTo === 'ALL' ? colors.primary : themeColors.border,
-                backgroundColor: sendTo === 'ALL' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-              }}
-              onPress={() => setSendTo('ALL')}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'ALL' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                  <Globe size={14} color="#FFFFFF" />
-                </View>
-                {sendTo === 'ALL' && <CheckCircle2 size={16} color={colors.primary} />}
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>All Drivers Network</Text>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>All drivers & fleet owners</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 6,
-                borderWidth: 1.5,
-                borderColor: sendTo === 'NEAR_CITY' ? colors.primary : themeColors.border,
-                backgroundColor: sendTo === 'NEAR_CITY' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-              }}
-              onPress={() => setSendTo('NEAR_CITY')}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'NEAR_CITY' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                  <MapPin size={14} color="#FFFFFF" />
-                </View>
-                {sendTo === 'NEAR_CITY' && <CheckCircle2 size={16} color={colors.primary} />}
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>Near City Target</Text>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>Selected pickup hubs only</Text>
-            </TouchableOpacity>
+          <View style={[styles.inlineField, { marginBottom: 8 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.sectionTitleInline, { color: themeColors.text, marginRight: 0 }]}>Broadcast Audience</Text>
+              {tip('Broadcast Audience', 'Choose who receives this booking notification: All Drivers in network, Near City hubs only, or allocate directly to a specific fleet owner.')}
+            </View>
           </View>
 
-          {/* Allocate manually - hand this booking directly to one driver
-              instead of broadcasting it (backend: send_to "DRIVER" +
-              target_driver_id, already supported end to end). */}
-          <TouchableOpacity
-            style={{
-              marginTop: 10,
-              padding: 12,
-              borderRadius: 6,
-              borderWidth: 1.5,
-              borderColor: sendTo === 'DRIVER' ? colors.primary : themeColors.border,
-              backgroundColor: sendTo === 'DRIVER' ? (isDark ? '#1E1B4B' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
-            }}
-            onPress={() => setSendTo(sendTo === 'DRIVER' ? 'ALL' : 'DRIVER')}
-            activeOpacity={0.8}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sendTo === 'DRIVER' ? colors.primary : (isDark ? '#334155' : '#CBD5E1'), alignItems: 'center', justifyContent: 'center' }}>
-                <Send size={14} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>Allocate manually</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Give it directly to one fleet owner</Text>
-              </View>
-              {sendTo === 'DRIVER' && <CheckCircle2 size={16} color={colors.primary} />}
-            </View>
-          </TouchableOpacity>
+          {/* Compact 3-Segment Audience Selector */}
+          <View style={{ flexDirection: 'row', gap: 6, backgroundColor: isDark ? '#0F172A' : '#F1F5F9', padding: 4, borderRadius: 8, borderWidth: 1, borderColor: themeColors.border }}>
+            {[
+              { key: 'ALL', label: 'All Drivers', icon: Globe },
+              { key: 'NEAR_CITY', label: 'Near City', icon: MapPin },
+              { key: 'DRIVER', label: 'Allocate Direct', icon: Send },
+            ].map((item) => {
+              const isActive = sendTo === item.key;
+              const IconComp = item.icon;
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 4,
+                    borderRadius: 6,
+                    backgroundColor: isActive ? (isDark ? '#1E1B4B' : '#FFFFFF') : 'transparent',
+                    borderWidth: isActive ? 1.5 : 0,
+                    borderColor: isActive ? colors.primary : 'transparent',
+                    shadowColor: isActive ? '#000' : 'transparent',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isActive ? 0.08 : 0,
+                    shadowRadius: 2,
+                    elevation: isActive ? 2 : 0,
+                  }}
+                  onPress={() => setSendTo(item.key as any)}
+                  activeOpacity={0.8}
+                >
+                  <IconComp size={14} color={isActive ? colors.primary : themeColors.textSecondary} />
+                  <Text style={{ fontSize: 12, fontWeight: isActive ? '800' : '600', color: isActive ? colors.primary : themeColors.textSecondary }} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {sendTo === 'DRIVER' && (
             <View style={{ marginTop: 12 }}>
@@ -3600,7 +4060,7 @@ export default function CreateBookingScreen() {
         <TouchableOpacity style={styles.dialogBackdrop} activeOpacity={1} onPress={() => setShowAddExtraModal(false)}>
           <TouchableOpacity activeOpacity={1} style={[styles.dialogCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <Text style={{ fontSize: 15, fontWeight: '800', color: themeColors.text, marginBottom: 10 }}>Add extras</Text>
-            {['Night allowance', 'Parking', 'Waiting'].map((name) => {
+            {['Toll charges', 'Parking', 'State Permit', 'Night allowance', 'Waiting charges', 'Hill / Ghat charges'].map((name) => {
               const existing = customCharges.find((c) => c.name.trim().toLowerCase() === name.toLowerCase());
               return (
                 <TouchableOpacity
@@ -3635,6 +4095,186 @@ export default function CreateBookingScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Dedicated Lead & Booking Picker Sheet Modal */}
+      <Modal
+        visible={showLeadPickerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLeadPickerModal(false)}
+      >
+        <SafeAreaView style={[styles.pickerModalContainer, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.pickerModalHeader, { borderBottomColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Route size={20} color={colors.primary} />
+              <Text style={[styles.pickerModalTitle, { color: themeColors.text }]}>Select Lead or Booking</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowLeadPickerModal(false)} accessibilityLabel="Close">
+              <X size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Input Bar */}
+          <View style={{ padding: 14, paddingBottom: 10, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F3F4F6', borderRadius: 8, borderWidth: 1, borderColor: themeColors.border, paddingHorizontal: 12, height: 42 }}>
+              <Search size={16} color={themeColors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={{ flex: 1, fontSize: 13.5, color: themeColors.text, outlineStyle: 'none' } as any}
+                placeholder="Search booking ID (e.g. 0101, E2610), name, phone, city..."
+                placeholderTextColor={themeColors.textMuted}
+                value={linkQuery}
+                onChangeText={(v) => {
+                  setLinkQuery(v);
+                  searchLeads(v);
+                }}
+                onSubmitEditing={() => searchLeads()}
+                returnKeyType="search"
+                autoFocus
+                accessibilityLabel="Filter leads or bookings"
+              />
+              {linkQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setLinkQuery(''); searchLeads(''); }} style={{ padding: 4 }}>
+                  <X size={16} color={themeColors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filter Tabs: All, Open Leads, Confirmed, Orders */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              {[
+                { key: 'ALL', label: 'All' },
+                { key: 'OPEN', label: 'Open Leads' },
+                { key: 'CONFIRMED', label: 'Confirmed' },
+                { key: 'ORDER', label: 'Orders' },
+              ].map((tab) => {
+                const isActive = leadTabFilter === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={{
+                      paddingVertical: 5,
+                      paddingHorizontal: 11,
+                      borderRadius: 20,
+                      backgroundColor: isActive ? colors.primary : (isDark ? '#1E293B' : '#E5E7EB'),
+                    }}
+                    onPress={() => setLeadTabFilter(tab.key as any)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: isActive ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Results List */}
+          <ScrollView style={styles.pickerModalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
+            {linkSearching && (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 8 }}>Searching leads and bookings...</Text>
+              </View>
+            )}
+
+            {!linkSearching && (() => {
+              const allRows = linkResults || [];
+              const filtered = allRows.filter((r) => {
+                if (leadTabFilter === 'ALL') return true;
+                const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed';
+                const isOrder = String(r.lead_stage || '') === 'order';
+                if (leadTabFilter === 'OPEN') return !isConfirmed && !isOrder;
+                if (leadTabFilter === 'CONFIRMED') return isConfirmed && !isOrder;
+                if (leadTabFilter === 'ORDER') return isOrder;
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <View style={{ paddingVertical: 36, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: themeColors.text }}>No results found</Text>
+                    <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                      Try searching with different digits, names, or phone numbers.
+                    </Text>
+                  </View>
+                );
+              }
+
+              return (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 10 }}>
+                    Found {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+                  </Text>
+                  {filtered.map((r) => {
+                    const isConfirmed = String(r.status || '').toLowerCase() === 'confirmed';
+                    const isOrder = String(r.lead_stage || '') === 'order';
+                    const badgeBg = isOrder ? '#6366F118' : isConfirmed ? colors.success + '18' : colors.primary + '18';
+                    const badgeColor = isOrder ? '#4F46E5' : isConfirmed ? colors.success : colors.primary;
+                    const badgeLabel = isOrder ? 'Order' : isConfirmed ? 'Confirmed' : 'Open Lead';
+                    const dispVehicle = r.vehicle_type ? r.vehicle_type.replace(/_/g, ' ') : 'Sedan';
+                    const dispTrip = r.trip_type ? r.trip_type.replace(/_/g, ' ') : 'Oneway';
+
+                    return (
+                      <TouchableOpacity
+                        key={`${r.id}-${r.booking_id || ''}-${r.lead_stage || ''}`}
+                        style={{
+                          backgroundColor: themeColors.surface,
+                          borderWidth: 1,
+                          borderColor: themeColors.border,
+                          borderRadius: 8,
+                          padding: 12,
+                          marginBottom: 10,
+                        }}
+                        onPress={() => applyLead(r)}
+                        activeOpacity={0.75}
+                        accessibilityLabel={`Use ${r.name || 'lead'} ${r.booking_id || ''}`}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: themeColors.text }} numberOfLines={1}>
+                              {r.name || 'Customer'}
+                            </Text>
+                            {r.phone ? (
+                              <Text style={{ fontSize: 12, color: themeColors.textSecondary }} numberOfLines={1}>
+                                · {r.phone}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ backgroundColor: badgeBg, paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 10.5, fontWeight: '800', color: badgeColor }}>
+                                {badgeLabel}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                              {r.booking_id || `#${r.id}`}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text, marginTop: 6 }} numberOfLines={2}>
+                          {[r.pickup, r.drop_location].filter(Boolean).join(' → ')}
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: themeColors.border }}>
+                          <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
+                            {[dispVehicle, dispTrip].filter(Boolean).join(' · ')}{r.travel_date ? ` · ${r.travel_date}` : ''}{r.travel_time ? ` ${r.travel_time}` : ''}
+                          </Text>
+                          {r.fare_estimate ? (
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                              ₹{Number(r.fare_estimate).toLocaleString('en-IN')}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       {/* Explanation popup behind every (i) dot */}

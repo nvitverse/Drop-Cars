@@ -78,6 +78,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_fake_id'])) {
     exit;
 }
 
+if (!function_exists('dropcars_post_or_approve_booking_to_backend')) {
+    function dropcars_post_or_approve_booking_to_backend(PDO $pdo, int $id): array
+    {
+        require_once __DIR__ . '/../../api/includes/backend-client.php';
+        
+        $stmt = $pdo->prepare("SELECT b.*, c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email 
+                               FROM `bookings` b 
+                               LEFT JOIN `customers` c ON b.customer_id = c.id 
+                               WHERE b.id = ?");
+        $stmt->execute([$id]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$booking) {
+            return ['ok' => false, 'error' => 'Booking #' . $id . ' not found'];
+        }
+
+        // If booking already has a backend_request_id, try approving it
+        if (!empty($booking['backend_request_id'])) {
+            $approveResult = dropcars_backend_request('POST', '/api/website/bookings/' . rawurlencode((string)$booking['backend_request_id']) . '/approve');
+            if ($approveResult['ok']) {
+                $pdo->prepare("UPDATE `bookings` SET `posting_status` = 'APPROVED' WHERE `id` = ?")->execute([$id]);
+                return ['ok' => true, 'id' => $booking['backend_request_id'], 'action' => 'approved'];
+            }
+            if (($approveResult['status'] ?? 0) === 400 && stripos($approveResult['error'] ?? '', 'Only pending') !== false) {
+                $pdo->prepare("UPDATE `bookings` SET `posting_status` = 'APPROVED' WHERE `id` = ?")->execute([$id]);
+                return ['ok' => true, 'id' => $booking['backend_request_id'], 'action' => 'already_approved'];
+            }
+        }
+
+        // Create new backend booking request
+        $tripTypeRaw = strtoupper((string)($booking['trip_type'] ?? 'ONE_WAY'));
+        $backendTripType = (strpos($tripTypeRaw, 'ROUND') !== false) ? 'Round Trip' : ((strpos($tripTypeRaw, 'LOCAL') !== false || strpos($tripTypeRaw, 'HOUR') !== false) ? 'Hourly Rental' : 'Oneway');
+
+        $vType = strtoupper(trim((string)($booking['vehicle_type'] ?? 'SEDAN')));
+        $carTypeMap = [
+            'SEDAN' => 'SEDAN_4_PLUS_1',
+            'SUV' => 'SUV',
+            'INNOVA' => 'INNOVA',
+            'CRYSTA' => 'INNOVA_CRYSTA',
+        ];
+        $backendCarType = $carTypeMap[$vType] ?? 'SEDAN_4_PLUS_1';
+        $mappedKey = $vType;
+        if (!isset($carTypeMap[$mappedKey])) {
+            if (stripos($vType, 'CRYSTA') !== false) $mappedKey = 'CRYSTA';
+            elseif (stripos($vType, 'INNOVA') !== false) $mappedKey = 'INNOVA';
+            elseif (stripos($vType, 'SUV') !== false || stripos($vType, 'ERTIGA') !== false) $mappedKey = 'SUV';
+            else $mappedKey = 'SEDAN';
+            $backendCarType = $carTypeMap[$mappedKey] ?? 'SEDAN_4_PLUS_1';
+        }
+
+        $travelDate = $booking['travel_date'] ?? date('Y-m-d');
+        $travelTime = $booking['travel_time'] ?? '10:00:00';
+        $ts = strtotime($travelDate . ' ' . $travelTime);
+        $startDateTime = ($ts !== false) ? date('c', $ts) : date('c');
+
+        $fb = [];
+        if (!empty($booking['fare_breakdown'])) {
+            $fb = json_decode($booking['fare_breakdown'], true) ?: [];
+        }
+
+        $defaultRates = [
+            'SEDAN'  => ['cost_per_km' => ($backendTripType === 'Round Trip' ? 13 : 15), 'bata' => 400],
+            'SUV'    => ['cost_per_km' => ($backendTripType === 'Round Trip' ? 18 : 20), 'bata' => 500],
+            'INNOVA' => ['cost_per_km' => ($backendTripType === 'Round Trip' ? 19 : 20), 'bata' => 500],
+            'CRYSTA' => ['cost_per_km' => ($backendTripType === 'Round Trip' ? 22 : 24), 'bata' => 500],
+        ];
+        $rates = $defaultRates[$mappedKey] ?? $defaultRates['SEDAN'];
+        $perKmRate = (int)($rates['cost_per_km']);
+        $driverBata = (int)($rates['bata']);
+        $permitCharges = 0;
+        $tollCharges = 0;
+        $distanceKm = (float)($booking['total_km'] ?? $booking['distance'] ?? 0);
+        $fareEstimate = (int)($booking['fare_estimate'] ?? $booking['final_fare'] ?? 0);
+
+        if (!empty($fb['vehicles'][$mappedKey])) {
+            $vFb = $fb['vehicles'][$mappedKey];
+            if (!empty($vFb['perKmRate'])) $perKmRate = (int)$vFb['perKmRate'];
+            if (!empty($vFb['driverBata'])) $driverBata = (int)$vFb['driverBata'];
+            if (!empty($vFb['stateTax'])) $permitCharges += (int)$vFb['stateTax'];
+            if (!empty($vFb['permitCharges'])) $permitCharges += (int)$vFb['permitCharges'];
+            if (!empty($vFb['toll'])) $tollCharges = (int)$vFb['toll'];
+            if (!empty($vFb['totalFare'])) $fareEstimate = (int)$vFb['totalFare'];
+        }
+
+        if ($permitCharges === 0 && !empty($booking['pickup']) && !empty($booking['drop_location'])) {
+            require_once __DIR__ . '/../../api/fare-breakdown-format.php';
+            if (function_exists('dropcars_detect_border_transitions')) {
+                $transitions = dropcars_detect_border_transitions((string)$booking['pickup'], (string)$booking['drop_location']);
+                if (!empty($transitions)) {
+                    foreach ($transitions as $tr) {
+                        $toState = strtoupper($tr['to'] ?? '');
+                        if ($toState === 'PY' || $toState === 'PUDUCHERRY') {
+                            $permitCharges += ($mappedKey === 'SEDAN' ? 400 : ($mappedKey === 'SUV' ? 700 : 800));
+                        } else {
+                            $permitCharges += ($mappedKey === 'SEDAN' ? 800 : 1200);
+                        }
+                    }
+                }
+            }
+        }
+
+        $phone = preg_replace('/[^\d]/', '', (string)($booking['customer_phone'] ?? ''));
+        if (strlen($phone) > 10 && substr($phone, 0, 2) === '91') {
+            $phone = substr($phone, 2);
+        }
+
+        $payload = [
+            'customer_name'        => (string)($booking['customer_name'] ?: 'Guest'),
+            'customer_number'      => (string)$phone,
+            'customer_email'       => !empty($booking['customer_email']) ? (string)$booking['customer_email'] : null,
+            'pickup_drop_location' => (object) [
+                '0' => (string)($booking['pickup'] ?: 'Pickup'),
+                '1' => (string)($booking['drop_location'] ?: 'Drop'),
+            ],
+            'trip_type'            => $backendTripType,
+            'car_type'             => $backendCarType,
+            'start_date_time'      => $startDateTime,
+            'is_urgent'            => false,
+            'is_enquiry'           => false,
+            'quoted_total_amount'  => (int)$fareEstimate,
+            'quoted_cost_per_km'   => (int)$perKmRate,
+            'quoted_driver_allowance' => (int)$driverBata,
+            'quoted_permit_charges'=> (int)$permitCharges,
+            'quoted_toll_charges'  => (int)$tollCharges,
+            'quoted_trip_distance' => (float)$distanceKm,
+        ];
+
+        $createRes = dropcars_backend_request('POST', '/api/website/bookings', $payload);
+        if ($createRes['ok'] && isset($createRes['data']['id'])) {
+            $newBackendId = (string)$createRes['data']['id'];
+            $pdo->prepare("UPDATE `bookings` SET `backend_request_id` = ?, `posting_status` = 'PENDING' WHERE `id` = ?")
+                ->execute([$newBackendId, $id]);
+
+            $appr = dropcars_backend_request('POST', '/api/website/bookings/' . rawurlencode($newBackendId) . '/approve');
+            if ($appr['ok']) {
+                $pdo->prepare("UPDATE `bookings` SET `posting_status` = 'APPROVED' WHERE `id` = ?")
+                    ->execute([$id]);
+                return ['ok' => true, 'id' => $newBackendId, 'action' => 'created_and_approved'];
+            }
+            return ['ok' => true, 'id' => $newBackendId, 'action' => 'created_pending'];
+        }
+
+        return ['ok' => false, 'error' => $createRes['error'] ?? 'Backend creation failed'];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_confirmed_id'])) {
     $cId = (int) $_POST['mark_confirmed_id'];
     if ($cId > 0 && isset($pdo)) {
@@ -102,9 +247,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_confirmed_id']))
         if ($syncRow) {
             dropcars_admin_sync_booking_status_row($syncRow, 'confirmed');
         }
+        // Auto-post to backend marketplace when confirmed
+        dropcars_post_or_approve_booking_to_backend($pdo, $cId);
         header('Location: ' . admin_url('bookings', ['status' => 'confirmed', 'msg' => 'marked_confirmed']));
     }
     exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'bulk_auto_post') {
+    $ids = $_POST['selected_ids'] ?? [];
+    if (!empty($ids)) {
+        $postedCount = 0;
+        $failedCount = 0;
+        foreach ($ids as $bookingId) {
+            $res = dropcars_post_or_approve_booking_to_backend($pdo, (int)$bookingId);
+            if ($res['ok']) {
+                $postedCount++;
+            } else {
+                $failedCount++;
+            }
+        }
+        header('Location: ' . admin_url('bookings', [
+            'status' => $_GET['status'] ?? 'confirmed',
+            'msg' => 'bulk_posted',
+            'count' => $postedCount,
+            'failed' => $failedCount
+        ]));
+        exit;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'single_auto_post') {
+    $bId = (int)($_POST['booking_id'] ?? 0);
+    if ($bId > 0 && isset($pdo)) {
+        $res = dropcars_post_or_approve_booking_to_backend($pdo, $bId);
+        header('Location: ' . admin_url('bookings', [
+            'status' => $_GET['status'] ?? 'confirmed',
+            'msg' => $res['ok'] ? 'single_posted' : 'post_error',
+            'bid' => $bId,
+            'reason' => $res['error'] ?? ''
+        ]));
+        exit;
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_selected') {
@@ -362,6 +546,18 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
 } elseif (isset($_GET['msg']) && $_GET['msg'] === 'need_assignment') {
     $createdMsgClass = 'alert-warning';
     $createdMsg = 'This booking cannot be completed until you assign driver name, driver phone, vehicle model, and registration plate. Use <strong>Assign Cab &amp; Driver</strong> or <strong>Manage</strong>, then try again.';
+} elseif (isset($_GET['msg']) && $_GET['msg'] === 'bulk_posted') {
+    $count = (int) ($_GET['count'] ?? 0);
+    $failed = (int) ($_GET['failed'] ?? 0);
+    $createdMsg = "$count booking(s) posted to Driver/Vendor Marketplace." . ($failed > 0 ? " ($failed skipped/failed)" : "");
+} elseif (isset($_GET['msg']) && $_GET['msg'] === 'single_posted') {
+    $bId = (int) ($_GET['bid'] ?? 0);
+    $createdMsg = "Booking #$bId posted & approved in Driver Marketplace.";
+} elseif (isset($_GET['msg']) && $_GET['msg'] === 'post_error') {
+    $createdMsgClass = 'alert-warning';
+    $bId = (int) ($_GET['bid'] ?? 0);
+    $reason = htmlspecialchars($_GET['reason'] ?? 'Unknown error', ENT_QUOTES, 'UTF-8');
+    $createdMsg = "Could not post Booking #$bId: $reason";
 } elseif (isset($_GET['msg']) && $_GET['msg'] === 'deleted') {
     $count = (int) ($_GET['count'] ?? 1);
     $createdMsg = $count > 1 ? "$count bookings deleted successfully." : "Booking deleted successfully.";
@@ -693,9 +889,14 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
         <span style="width:1px; height:18px; background:#e2e8f0; display:inline-block;"></span>
         <span style="font-size:0.82rem; font-weight:700; color:#6366f1;"><span id="selected-count">0</span> selected</span>
     </div>
-    <button type="submit" form="bulk-delete-form" class="btn btn-danger" style="height:36px; padding:0 1.25rem; border-radius:10px; font-size:0.82rem; font-weight:800; background:#ef4444; border:none; box-shadow:0 3px 8px rgba(239,68,68,0.18); transition:all 0.2s; display:flex; align-items:center; gap:6px;">
-        <i class="fa-solid fa-trash-can" style="font-size:0.75rem;"></i> Batch Archive
-    </button>
+    <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" onclick="submitBulkBookingAction('bulk_auto_post')" class="btn" style="height:36px; padding:0 1.15rem; border-radius:10px; font-size:0.82rem; font-weight:800; background:#0ea5e9; color:#fff; border:none; box-shadow:0 3px 8px rgba(14,165,233,0.22); transition:all 0.2s; display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size:0.75rem;"></i> Auto Post / Add to Post List
+        </button>
+        <button type="button" onclick="submitBulkBookingAction('delete_selected')" class="btn btn-danger" style="height:36px; padding:0 1.15rem; border-radius:10px; font-size:0.82rem; font-weight:800; background:#ef4444; border:none; box-shadow:0 3px 8px rgba(239,68,68,0.18); transition:all 0.2s; display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <i class="fa-solid fa-trash-can" style="font-size:0.75rem;"></i> Batch Archive
+        </button>
+    </div>
 </div>
 <style>
 @keyframes fadeSlideDown {
@@ -703,8 +904,6 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
     to   { opacity: 1; transform: translateY(0); }
 }
 </style>
-
-
 
 <!-- Hidden one-off action forms (outside bulk-delete, so no nesting) -->
 <form id="action-form-completed" method="POST" action="<?php echo htmlspecialchars(admin_url('bookings', ['status' => $statusFilter])); ?>" style="display:none;">
@@ -718,6 +917,15 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
 </form>
 <form id="action-form-confirmed" method="POST" action="<?php echo htmlspecialchars(admin_url('bookings')); ?>" style="display:none;">
     <input type="hidden" name="mark_confirmed_id" id="action-confirmed-id" value="">
+</form>
+
+<form id="bulk-general-form" method="POST" style="display:none;">
+    <input type="hidden" name="action" id="bulk-general-action" value="">
+    <div id="bulk-general-inputs"></div>
+</form>
+<form id="single-post-form" method="POST" style="display:none;">
+    <input type="hidden" name="action" value="single_auto_post">
+    <input type="hidden" name="booking_id" id="single-post-booking-id" value="">
 </form>
 
 <form id="bulk-delete-form" method="POST" onsubmit="return confirm('Permanently delete selected bookings?')" style="display:none;">
@@ -902,6 +1110,9 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
                         <div class="booking-ref-copy" onclick="event.stopPropagation(); copyBookingId('<?php echo htmlspecialchars($bookingRef); ?>', this);" style="cursor: pointer; font-weight: 700; color: #4f46e5; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; line-height: 1.3;" title="Click to copy ID">
                             #<?php echo htmlspecialchars($bookingRef); ?>
                             <i class="fa-regular fa-copy" style="font-size: 0.68rem; opacity: 0.6;"></i>
+                            <?php if (!empty($booking['backend_request_id']) && ($booking['posting_status'] ?? '') === 'APPROVED'): ?>
+                                <span style="font-size:0.6rem; font-weight:800; background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; padding:1px 5px; border-radius:4px; margin-left:2px;" title="Posted in Driver Marketplace">POSTED</span>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -1075,6 +1286,19 @@ if (isset($_GET['msg']) && (string) $_GET['msg'] === 'created') {
                                 onclick="doBookingAction('confirmed', <?php echo (int)$booking['id']; ?>, 'Confirm booking?')">
                             <i class="fa fa-check-circle"></i>
                         </button>
+                        <?php endif; ?>
+
+                        <?php 
+                        $isApprovedPost = (!empty($booking['backend_request_id']) && ($booking['posting_status'] ?? '') === 'APPROVED');
+                        ?>
+                        <?php if ($isApprovedPost): ?>
+                            <button type="button" class="enquiry-pill" style="background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; width: 28px; height: 28px; font-size: 0.78rem; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;" title="Posted in Driver Marketplace (#<?php echo htmlspecialchars((string)$booking['backend_request_id']); ?>) - Click to re-post" onclick="postSingleBooking(<?php echo (int)$booking['id']; ?>)">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </button>
+                        <?php elseif ($currentStatus === 'confirmed' || $currentStatus === 'pending'): ?>
+                            <button type="button" class="enquiry-pill" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; width: 28px; height: 28px; font-size: 0.78rem; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;" title="Auto Post to Driver Marketplace" onclick="postSingleBooking(<?php echo (int)$booking['id']; ?>)">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </button>
                         <?php endif; ?>
 
                         <button type="button" class="enquiry-pill" style="background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; width: 28px; height: 28px; font-size: 0.8rem; border-radius: 8px;" title="Assign Driver" onclick="openAssignModal(<?php echo (int) $booking['id']; ?>, '<?php echo htmlspecialchars(addslashes($booking['driver_name'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($booking['driver_phone'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($booking['car_name'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(strtoupper($booking['car_number'] ?? '')), ENT_QUOTES); ?>')">
@@ -1253,6 +1477,37 @@ window.doBookingAction = function(action, id, message, assignmentOk) {
     var idMap   = { confirmed: 'action-confirmed-id',  completed: 'action-completed-id',  cancelled: 'action-cancelled-id',  fake: 'action-fake-id'  };
     document.getElementById(idMap[action]).value = id;
     document.getElementById(formMap[action]).submit();
+};
+
+window.submitBulkBookingAction = function(action) {
+    var checked = Array.from(document.querySelectorAll('.booking-checkbox:checked')).map(function(cb) { return cb.value; });
+    if (!checked.length) {
+        alert('Please select at least one booking.');
+        return;
+    }
+    if (action === 'delete_selected') {
+        if (!confirm('Permanently delete ' + checked.length + ' selected booking(s)?')) return;
+    } else if (action === 'bulk_auto_post') {
+        if (!confirm('Auto Post ' + checked.length + ' booking(s) to Driver Marketplace with calculated website tariffs?')) return;
+    }
+    var form = document.getElementById('bulk-general-form');
+    document.getElementById('bulk-general-action').value = action;
+    var inputsContainer = document.getElementById('bulk-general-inputs');
+    inputsContainer.innerHTML = '';
+    checked.forEach(function(id) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'selected_ids[]';
+        inp.value = id;
+        inputsContainer.appendChild(inp);
+    });
+    form.submit();
+};
+
+window.postSingleBooking = function(id) {
+    if (!confirm('Post booking #' + id + ' to Driver Marketplace?')) return;
+    document.getElementById('single-post-booking-id').value = id;
+    document.getElementById('single-post-form').submit();
 };
  
 document.addEventListener('DOMContentLoaded', function() {

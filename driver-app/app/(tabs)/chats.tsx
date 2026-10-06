@@ -316,7 +316,7 @@ export function generateAiResponse(query: string): BotResponse {
   if (isFive || lower.includes('wallet') || lower.includes('hold') || lower.includes('security') || lower.includes('payout') || lower.includes('settlement') || lower.includes('panam') || lower.includes('balance')) {
     return {
       category: 'FINANCIAL CORE',
-      text: `💳 Wallet Security Hold, Payouts & Balance Policy:\n\n• 🔒 Refundable Security Hold (₹500):\n  - Reserved temporarily when an active booking is accepted to guarantee dispatch reliability.\n  - Automatically and instantly released back to your Available Balance the second the trip is completed via End OTP.\n\n• 🏦 Partner Settlements:\n  - Weekly automated bank settlements disbursed every Monday directly to your registered bank account.\n  - Instant on-demand payouts available via Wallet ➔ Withdraw.\n\n• 💡 Pro Tip: Maintain at least ₹1,000 wallet balance so high-demand outstation rides are instantly assigned to you without delay.`,
+      text: `💳 Wallet Security Hold, Payouts & Balance Policy:\n\n• 🔒 Wallet Hold (minimum ₹500):\n  - On every booking you accept, at least ₹500 is held from your wallet (even if the commission is only ₹301). If the commission with extras is more than ₹500, that bigger amount is held.\n  - When the trip is completed the commission is deducted from the hold and the rest is refunded to your Available Balance. A cancelled booking is refunded in full.\n\n• 🏦 Partner Settlements:\n  - Weekly automated bank settlements disbursed every Monday directly to your registered bank account.\n  - Instant on-demand payouts available via Wallet ➔ Withdraw.\n\n• 💡 Pro Tip: Maintain at least ₹1,000 wallet balance so high-demand outstation rides are instantly assigned to you without delay.`,
       action_chips: ['➕ Recharge Wallet', '⚠️ 6. Cancellation Fine', '💰 1. Tariff Rates'],
     };
   }
@@ -654,7 +654,7 @@ export default function ChatsTabScreen() {
   // everything else stays reachable from "+" without cluttering the list.
   const mainListConversations = useMemo(() => {
     let list = conversations.filter(
-      (c) => c.type !== 'AI_BOT' && (c.has_activity || activatedIds.has(c.id) || c.unread_count > 0)
+      (c) => c.type !== 'AI_BOT' && c.type !== 'DISPATCH' && (c.has_activity || activatedIds.has(c.id) || c.unread_count > 0)
     );
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -1315,6 +1315,7 @@ export default function ChatsTabScreen() {
           <FreshRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadConversations(); }} colors={[colors.primary]} />
         }
         ListHeaderComponent={
+          <>
           <TouchableOpacity
             style={[styles.chatRow, { backgroundColor: colors.surface, borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.35)' : '#DDD6FE', marginBottom: 6 }]}
             activeOpacity={0.7}
@@ -1337,6 +1338,30 @@ export default function ChatsTabScreen() {
             </View>
             <ChevronRight size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+          {/* Admin is always here too, like the Help Bot - a real person. "+" (new chat) picks a reason: a trip, or general support. */}
+          <TouchableOpacity
+            style={[styles.chatRow, { backgroundColor: colors.surface, borderColor: isDarkMode ? 'rgba(37, 99, 235, 0.35)' : '#BFDBFE', marginBottom: 6 }]}
+            activeOpacity={0.7}
+            onPress={() => { activateConversation('dispatch-desk'); openChat(dispatchConvo); }}
+          >
+            <View style={[styles.chatAvatar, { backgroundColor: '#2563EB' }]}>
+              <Headphones size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.chatRowMid}>
+              <Text numberOfLines={1} style={[styles.chatRowTitle, { color: colors.text }]}>Drop Cars Admin</Text>
+              <Text numberOfLines={1} style={[styles.chatRowSub, { color: colors.textSecondary }]}>
+                {dispatchConvo.unread_count > 0 ? dispatchConvo.last_message : 'Duty • Upcoming bookings • Payments • any help'}
+              </Text>
+            </View>
+            {dispatchConvo.unread_count > 0 ? (
+              <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.unreadBadgeText}>{dispatchConvo.unread_count}</Text>
+              </View>
+            ) : (
+              <ChevronRight size={18} color={colors.textSecondary} />
+            )}
+          </TouchableOpacity>
+          </>
         }
         renderItem={({ item }) => {
           const roleTag = item.other_role === 'VENDOR' ? 'Vendor' : item.other_role === 'OWNER' ? 'Fleet Driver' : item.other_role === 'ADMIN' ? 'Admin' : '';

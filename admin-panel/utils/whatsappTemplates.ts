@@ -232,11 +232,15 @@ Reference: *${bid}*
 ${data.distanceKm ? `• Estimated Distance: ~${data.distanceKm} KM\n` : ''}
 💰 *Itemized Fare Breakdown:*
 • Base Trip Fare: ₹${base.toLocaleString('en-IN')}
-${bata > 0 ? `• Driver Beta / Allowance: ₹${bata.toLocaleString('en-IN')}\n` : ''}${toll > 0 ? `• Standard Toll Allowance: ₹${toll.toLocaleString('en-IN')}\n` : ''}----------------------------------------
+${bata > 0 ? `• Driver Bata / Allowance: ₹${bata.toLocaleString('en-IN')}\n` : ''}${toll > 0 ? `• Standard Toll Allowance: ₹${toll.toLocaleString('en-IN')}\n` : ''}----------------------------------------
 *TOTAL QUOTED ESTIMATION: ₹${total.toLocaleString('en-IN')}*
 • ${advPercent}% Booking Advance: ₹${advance.toLocaleString('en-IN')}
 • Balance Payable to Driver: ₹${balance.toLocaleString('en-IN')}
 ----------------------------------------
+
+✅ *Included:* Dedicated Vehicle, Fuel Charges, Driver Day Allowance.
+ℹ️ *Excluded:* Highway Tolls (actual Fastag log), Parking & Airport Entry, State Permits (if applicable).
+🏔️ *Hill Section:* ₹300 (One-Way) / ₹500 (Round Trip) applies for ghat/hill station routes.
 
 🔗 *Confirm & Pay ${advPercent}% Advance Online:*
 ${advancePayUrl}

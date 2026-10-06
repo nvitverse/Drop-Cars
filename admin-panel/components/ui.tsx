@@ -30,6 +30,7 @@ export function ScreenHero({
   avatarText,
   onAvatarPress,
   rightAction,
+  rich = true,
 }: {
   greeting: string;
   name: string;
@@ -39,30 +40,89 @@ export function ScreenHero({
   avatarText?: string;
   onAvatarPress?: () => void;
   rightAction?: React.ReactNode;
+  rich?: boolean;
 }) {
   const { themeColors, isDark } = useTheme();
 
-  const gradientColors = isDark
-    ? [themeColors.surfaceAlt, themeColors.surface] as const
-    : [themeColors.primaryTint, themeColors.surface] as const;
+  const gradientColors = rich
+    ? (isDark ? ['#0B0F19', '#1E1B4B'] as const : ['#1E1B4B', '#312E81'] as const)
+    : (isDark ? [themeColors.surfaceAlt, themeColors.surface] as const : [themeColors.primaryTint, themeColors.surface] as const);
+
+  const isRichTheme = rich;
 
   return (
     <LinearGradient
       colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
-      style={[heroStyles.heroContainer, { borderBottomColor: themeColors.border }]}
+      style={[
+        heroStyles.heroContainer,
+        {
+          borderBottomColor: isRichTheme ? 'rgba(255,255,255,0.1)' : themeColors.border,
+        },
+      ]}
     >
       <View style={heroStyles.heroTop}>
         <View style={{ flex: 1, marginRight: 12 }}>
-          <Text style={[heroStyles.greetingText, { color: themeColors.textSecondary }]}>
+          <Text
+            style={[
+              heroStyles.greetingText,
+              { color: isRichTheme ? '#A5B4FC' : themeColors.textSecondary },
+            ]}
+          >
             {greeting}
           </Text>
-          <Text style={[heroStyles.nameText, { color: themeColors.text }]} numberOfLines={1}>
-            {name}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+            <Text
+              style={[
+                heroStyles.nameText,
+                { color: isRichTheme ? '#FFFFFF' : themeColors.text },
+              ]}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            {onToggleDuty !== undefined && onDuty !== undefined && (
+              <TouchableOpacity
+                onPress={onToggleDuty}
+                activeOpacity={0.7}
+                style={[
+                  heroStyles.dutyPill,
+                  {
+                    backgroundColor: onDuty
+                      ? (isRichTheme ? 'rgba(16, 185, 129, 0.25)' : themeColors.successLight)
+                      : (isRichTheme ? 'rgba(239, 68, 68, 0.25)' : '#FEE2E2'),
+                    borderColor: onDuty
+                      ? '#10B981'
+                      : (isRichTheme ? '#EF4444' : '#FCA5A5'),
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    heroStyles.dutyDot,
+                    { backgroundColor: onDuty ? '#10B981' : '#EF4444' },
+                  ]}
+                />
+                <Text
+                  style={[
+                    heroStyles.dutyText,
+                    { color: onDuty ? '#34D399' : (isRichTheme ? '#FCA5A5' : '#DC2626'), fontWeight: '800' },
+                  ]}
+                >
+                  {onDuty ? 'On Duty' : 'Off Duty'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
           {subtitle && (
-            <Text style={[heroStyles.subText, { color: themeColors.textMuted }]} numberOfLines={1}>
+            <Text
+              style={[
+                heroStyles.subText,
+                { color: isRichTheme ? '#C7D2FE' : themeColors.textMuted },
+              ]}
+              numberOfLines={1}
+            >
               {subtitle}
             </Text>
           )}
@@ -70,35 +130,6 @@ export function ScreenHero({
 
         <View style={heroStyles.rightArea}>
           {rightAction}
-          {onToggleDuty !== undefined && onDuty !== undefined && (
-            <TouchableOpacity
-              onPress={onToggleDuty}
-              activeOpacity={0.7}
-              style={[
-                heroStyles.dutyPill,
-                {
-                  backgroundColor: onDuty ? themeColors.successLight : themeColors.surface,
-                  borderColor: onDuty ? themeColors.success : themeColors.border,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  heroStyles.dutyDot,
-                  { backgroundColor: onDuty ? themeColors.success : themeColors.textMuted },
-                ]}
-              />
-              <Text
-                style={[
-                  heroStyles.dutyText,
-                  { color: onDuty ? themeColors.success : themeColors.textSecondary },
-                ]}
-              >
-                {onDuty ? 'On Duty' : 'Off Duty'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
           {avatarText && (
             <TouchableOpacity
               onPress={onAvatarPress}
@@ -106,8 +137,8 @@ export function ScreenHero({
               style={[
                 heroStyles.avatar,
                 {
-                  backgroundColor: themeColors.primary,
-                  borderColor: themeColors.border,
+                  backgroundColor: isRichTheme ? '#4F46E5' : themeColors.primary,
+                  borderColor: isRichTheme ? 'rgba(255, 255, 255, 0.25)' : themeColors.border,
                 },
               ]}
             >
@@ -199,112 +230,145 @@ export interface KpiItem {
 }
 
 export function KpiStrip({ items }: { items: KpiItem[] }) {
-  const { themeColors } = useTheme();
+  const { themeColors, isDark } = useTheme();
 
   return (
-    <Card style={kpiStyles.card}>
-      <View style={kpiStyles.stripRow}>
+    <View style={kpiStyles.container}>
+      <View
+        style={[
+          kpiStyles.stripCard,
+          {
+            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.7)' : '#FFFFFF',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+          },
+        ]}
+      >
         {items.map((item, idx) => {
           const isLast = idx === items.length - 1;
+          const toneColor = item.tone || (item.isPositive ? '#10B981' : '#EF4444');
+
           return (
-            <React.Fragment key={item.label + idx}>
-              <View style={kpiStyles.tile}>
-                <Text style={[kpiStyles.tileLabel, { color: themeColors.textSecondary }]} numberOfLines={2}>
-                  {item.label}
-                </Text>
-                <Text
+            <View
+              key={item.label + idx}
+              style={[
+                kpiStyles.stripSegment,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : (toneColor ? toneColor + '08' : '#F8FAFC'),
+                },
+                !isLast && {
+                  marginRight: 4,
+                },
+              ]}
+            >
+              <Text
+                style={[kpiStyles.segmentLabel, { color: themeColors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {item.label}
+              </Text>
+
+              <Text
+                style={[
+                  kpiStyles.segmentValue,
+                  { color: item.tone || themeColors.text },
+                ]}
+                numberOfLines={1}
+              >
+                {item.value}
+              </Text>
+
+              {item.delta ? (
+                <View
                   style={[
-                    kpiStyles.tileValue,
-                    { color: item.tone || themeColors.text },
+                    kpiStyles.deltaChip,
+                    {
+                      backgroundColor: toneColor + (isDark ? '25' : '18'),
+                      borderColor: toneColor + (isDark ? '45' : '35'),
+                    },
                   ]}
-                  numberOfLines={1}
                 >
-                  {item.value}
-                </Text>
-                {item.delta ? (
-                  <View
+                  <Text
                     style={[
-                      kpiStyles.deltaChip,
-                      {
-                        backgroundColor: item.isPositive ? themeColors.successLight : themeColors.errorLight,
-                      },
+                      kpiStyles.deltaText,
+                      { color: toneColor },
                     ]}
+                    numberOfLines={1}
                   >
-                    {item.isPositive ? (
-                      <ArrowUpRight size={10} color={themeColors.success} />
-                    ) : (
-                      <ArrowDownRight size={10} color={themeColors.error} />
-                    )}
-                    <Text
-                      style={[
-                        kpiStyles.deltaText,
-                        { color: item.isPositive ? themeColors.success : themeColors.error },
-                      ]}
-                    >
-                      {item.delta}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              {!isLast && <View style={[kpiStyles.divider, { backgroundColor: themeColors.border }]} />}
-            </React.Fragment>
+                    {item.delta}
+                  </Text>
+                </View>
+              ) : (
+                <View style={kpiStyles.deltaPlaceholder} />
+              )}
+            </View>
           );
         })}
       </View>
-    </Card>
+    </View>
   );
 }
 
 const kpiStyles = StyleSheet.create({
-  card: {
-    padding: 0,
+  container: {
     marginHorizontal: 16,
-    marginTop: 12,
-    overflow: 'hidden',
+    marginTop: 4,
   },
-  stripRow: {
+  stripCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  tile: {
+  stripSegment: {
     flex: 1,
-    paddingHorizontal: 6,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: 10,
   },
-  tileLabel: {
+  segmentLabel: {
     fontSize: 9.5,
-    lineHeight: 12,
     fontFamily: 'Inter-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
+    textAlign: 'center',
     marginBottom: 3,
   },
-  tileValue: {
-    fontSize: 18,
+  segmentValue: {
+    fontSize: 19,
     fontFamily: 'Inter-ExtraBold',
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    marginBottom: 3,
   },
   deltaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'center',
     paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    marginTop: 3,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    minHeight: 16,
+  },
+  deltaPlaceholder: {
+    height: 16,
   },
   deltaText: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: 'Inter-Bold',
     fontWeight: '800',
-  },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    height: '70%',
+    letterSpacing: -0.1,
   },
 });
 
@@ -313,23 +377,25 @@ export interface PriorityItem {
   key: string;
   icon: any;
   title: string;
-  count: number;
+  count?: number;
   subtitle: string;
   isUrgent?: boolean;
+  alwaysVisible?: boolean;
   onPress: () => void;
 }
 
 export function PriorityGrid({ items }: { items: PriorityItem[] }) {
   const { themeColors } = useTheme();
-  const activeItems = items.filter((i) => i.count > 0);
-  const clearItems = items.filter((i) => i.count === 0);
+  const activeItems = items.filter((i) => (i.count ?? 0) > 0 || i.alwaysVisible);
+  const clearItems = items.filter((i) => (i.count ?? 0) === 0 && !i.alwaysVisible);
 
   return (
     <View style={priorityStyles.container}>
       {/* 2-column Grid of Active Tasks */}
       <View style={priorityStyles.grid}>
         {activeItems.map((item) => {
-          const isUrgent = item.isUrgent || (item.count > 0 && (item.key.includes('urgent') || item.key.includes('missed')));
+          const countVal = item.count ?? 0;
+          const isUrgent = item.isUrgent || (countVal > 0 && (item.key.includes('urgent') || item.key.includes('missed')));
           const iconBg = isUrgent ? themeColors.errorLight : themeColors.primaryLight;
           const iconFg = isUrgent ? themeColors.error : themeColors.primary;
           const badgeBg = isUrgent ? themeColors.error : themeColors.surfaceAlt;
@@ -354,7 +420,7 @@ export function PriorityGrid({ items }: { items: PriorityItem[] }) {
                 </View>
                 <View style={[priorityStyles.countBadge, { backgroundColor: badgeBg }]}>
                   <Text style={[priorityStyles.countText, { color: badgeFg }]}>
-                    {item.count > 99 ? '99+' : item.count}
+                    {countVal > 99 ? '99+' : countVal}
                   </Text>
                 </View>
               </View>

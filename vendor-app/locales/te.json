@@ -1,0 +1,40 @@
+{
+  "common": {
+    "brand": "Drop Cars"
+  },
+  "languageNames": {
+    "en": "English",
+    "ta": "தமிழ்",
+    "te": "తెలుగు",
+    "hi": "हिन्दी"
+  },
+  "languageSelect": {
+    "title": "మీ భాషను ఎంచుకోండి",
+    "subtitle": "దీన్ని మీరు తర్వాత సెట్టింగ్‌లలో ఎప్పుడైనా మార్చుకోవచ్చు",
+    "continue": "కొనసాగించు",
+    "skip": "ఇప్పుడు వద్దు"
+  },
+  "dashboard": {
+    "welcomeBack": "తిరిగి స్వాగతం!",
+    "bookingsTitle": "బుకింగ్‌లు",
+    "tabs": {
+      "new": "కొత్తవి",
+      "accepted": "ఆమోదించబడింది",
+      "running": "నడుస్తోంది",
+      "completed": "పూర్తయింది",
+      "cancelled": "రద్దు చేయబడింది",
+      "all": "అన్నీ"
+    },
+    "quickActions": {
+      "create": "సృష్టించు",
+      "vacantDrivers": "ఖాళీ డ్రైవర్లు"
+    },
+    "searchPlaceholder": "కస్టమర్, లొకేషన్ లేదా ఫోన్ నంబర్ ద్వారా వెతకండి...",
+    "bookingsCount": "{total} లో {count} బుకింగ్‌లు",
+    "emptyState": "ఈ ట్యాబ్‌లో బుకింగ్‌లు లేవు."
+  },
+  "settings": {
+    "languageTitle": "భాష",
+    "languageSubtitle": "మీకు నచ్చిన యాప్ భాషను ఎంచుకోండి"
+  }
+}

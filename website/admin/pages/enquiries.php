@@ -123,6 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'start_date_time' => date('c', strtotime(($row['travel_date'] ?: date('Y-m-d')) . ' ' . ($row['travel_time'] ?: '10:00:00'))),
                                     'is_urgent'       => false,
                                     'is_enquiry'      => false,
+                                    'quoted_total_amount' => (int)($row['fare_estimate'] ?? 0),
+                                    'quoted_trip_distance' => (float)($row['distance_km'] ?? 0),
                                 ];
                                 $createRes = dropcars_backend_request('POST', '/api/website/bookings', $payload);
                                 if ($createRes['ok'] && isset($createRes['data']['id'])) {

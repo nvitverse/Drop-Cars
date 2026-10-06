@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Search, MapPin, Phone, Car, ChevronLeft, ChevronRight, Building2, Navigation, MessageCircle, IdCard, Route, X } from 'lucide-react-native';
+import { Search, MapPin, Phone, Car, ChevronLeft, ChevronRight, Building2, Navigation, MessageCircle, IdCard, Route, X, ChevronDown } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { apiService } from '@/services/api';
 
@@ -50,6 +50,14 @@ export default function FindDriverScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Where are drivers / fleet vehicles vacant? The city list is every city someone marked vacant by hand (never a fixed list).
+  const [cities, setCities] = useState<Array<{ city: string; count: number }>>([]);
+  const [cityOpen, setCityOpen] = useState(false);
+  const [cityPick, setCityPick] = useState<string | null>(null);
+  const [cityText, setCityText] = useState('');
+  const [vacant, setVacant] = useState<any[] | null>(null);
+  const [vacantLoading, setVacantLoading] = useState(false);
+
   const card = { backgroundColor: themeColors.surface, borderColor: themeColors.border };
 
   const loadOnline = useCallback(async () => {
@@ -65,6 +73,31 @@ export default function FindDriverScreen() {
   }, []);
 
   useEffect(() => { loadOnline(); }, [loadOnline]);
+
+  const loadCities = useCallback(async () => {
+    try {
+      const res: any = await apiService.makeRequest('/admin/driver-lookup/cities');
+      setCities(Array.isArray(res) ? res : []);
+    } catch {
+      setCities([]);
+    }
+  }, []);
+  useEffect(() => { loadCities(); }, [loadCities]);
+
+  const searchCity = async (city: string) => {
+    const c = city.trim();
+    if (!c) return;
+    setVacantLoading(true);
+    setCityOpen(false);
+    try {
+      const res: any = await apiService.makeRequest(`/admin/driver-lookup/search?city=${encodeURIComponent(c)}`);
+      setVacant(Array.isArray(res) ? res : []);
+    } catch {
+      setVacant([]);
+    } finally {
+      setVacantLoading(false);
+    }
+  };
 
   const runSearch = async () => {
     if (query.trim().length < 2) return;
@@ -252,6 +285,66 @@ export default function FindDriverScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={[styles.box, card]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Vacant by location</Text>
+          <TouchableOpacity style={[styles.dropdown, { borderColor: themeColors.border }]} onPress={() => setCityOpen((v) => !v)} activeOpacity={0.7}>
+            <MapPin size={15} color={themeColors.textSecondary} />
+            <Text style={{ flex: 1, color: cityPick ? themeColors.text : themeColors.textMuted, fontSize: 13.5 }}>
+              {cityPick || (cities.length ? `Choose a city (${cities.length} with vacant vehicles)` : 'No vacant updates yet')}
+            </Text>
+            <ChevronDown size={16} color={themeColors.textSecondary} />
+          </TouchableOpacity>
+          {cityOpen && (
+            <ScrollView style={[styles.dropdownList, { borderColor: themeColors.border, backgroundColor: themeColors.background }]} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {cities.length === 0 ? (
+                <Text style={{ color: themeColors.textMuted, padding: 10, fontSize: 12.5 }}>No driver or fleet owner has marked a vehicle vacant yet.</Text>
+              ) : cities.map((c) => (
+                <TouchableOpacity key={c.city} style={styles.dropdownRow} onPress={() => { setCityPick(c.city); setCityText(''); searchCity(c.city); }}>
+                  <Text style={{ flex: 1, color: themeColors.text, fontSize: 13.5 }}>{c.city}</Text>
+                  <Text style={{ color: themeColors.textSecondary, fontSize: 12, fontWeight: '700' }}>{c.count}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+          <View style={[styles.searchRow, { borderColor: themeColors.border, marginTop: 8 }]}>
+            <Search size={15} color={themeColors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: themeColors.text }]}
+              placeholder="or type any location"
+              placeholderTextColor={themeColors.textMuted}
+              value={cityText}
+              onChangeText={(v) => { setCityText(v); if (!v.trim() && !cityPick) setVacant(null); }}
+              onSubmitEditing={() => { setCityPick(null); searchCity(cityText); }}
+              returnKeyType="search"
+            />
+            <TouchableOpacity onPress={() => { setCityPick(null); searchCity(cityText); }} style={[styles.searchBtn, { backgroundColor: themeColors.primary }]}>
+              {vacantLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.searchBtnText}>Find</Text>}
+            </TouchableOpacity>
+          </View>
+          {vacant !== null && (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <Text style={[styles.listLabel, { color: themeColors.textSecondary }]}>
+                {vacant.length} VACANT IN {(cityPick || cityText).toUpperCase()}{'  ·  '}
+                <Text onPress={() => { setVacant(null); setCityPick(null); setCityText(''); }} style={{ color: themeColors.primary }}>Clear</Text>
+              </Text>
+              {vacant.length === 0 && <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>No vehicle is marked vacant there. Pick another city from the list.</Text>}
+              {vacant.map((r, i) => (
+                <View key={`${r.id}-${r.car_number || i}`} style={[styles.vacantRow, { borderColor: themeColors.border }]}>
+                  <TouchableOpacity style={{ flex: 1 }} onPress={() => r.kind === 'DUTY' && openDriver(r.id)} activeOpacity={r.kind === 'DUTY' ? 0.7 : 1}>
+                    <Text style={[styles.rowTitle, { color: themeColors.text }]}>{r.name}{r.car_number ? `  ·  ${r.car_number}` : ''}</Text>
+                    <Text style={[styles.meta, { color: themeColors.textSecondary }]}>
+                      {r.phone}{r.fleet_driver_name && r.fleet_driver_name !== r.name ? ` · ${r.fleet_driver_name}` : ''}{r.matched_city ? ` · vacant in ${r.matched_city}` : ''}
+                    </Text>
+                    {r.vacant_updated_at ? <Text style={[styles.meta, { color: themeColors.textMuted }]}>Updated {when(r.vacant_updated_at)}</Text> : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.iconBtn, { backgroundColor: '#059669' }]} onPress={() => call(r.phone)}><Phone size={14} color="#FFF" /></TouchableOpacity>
+                  <TouchableOpacity style={[styles.iconBtn, { backgroundColor: '#16A34A' }]} onPress={() => whatsapp(r.phone)}><MessageCircle size={14} color="#FFF" /></TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {renderDetail()}
 
         {showingSearch ? (
@@ -318,5 +411,10 @@ const styles = StyleSheet.create({
   tripRoute: { fontSize: 14, fontWeight: '800' },
   smallBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 6 },
   carRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dropdown: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginTop: 6 },
+  dropdownList: { maxHeight: 220, borderWidth: 1, borderRadius: 10, marginTop: 6 },
+  dropdownRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 11 },
+  vacantRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, padding: 10 },
+  iconBtn: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   tripRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
 });

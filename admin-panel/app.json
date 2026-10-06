@@ -17,7 +17,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/withSoundChannels.js",
       "expo-router",
       "expo-font",
       "expo-web-browser",
@@ -52,7 +51,11 @@
       }
     },
     "android": {
-      "package": "com.dropcars.dropcarsadmin"
+      "package": "com.dropcars.dropcarsadmin",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#0D47A1"
+      }
     }
   }
 }

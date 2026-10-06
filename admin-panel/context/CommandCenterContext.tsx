@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
+import { smartIntent, buildBrief } from '@/utils/commandSmart';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import { useStaffDuty } from '@/context/StaffDutyContext';
@@ -96,7 +97,16 @@ export const CommandCenterProvider: React.FC<{ children: React.ReactNode }> = ({
     },
   ]);
 
-  const openCommandCenter = useCallback(() => setIsOpen(true), []);
+  // Opening it shows what needs attention right now (live), at most every 2 minutes
+  const lastBriefRef = useRef(0);
+  const openCommandCenter = useCallback(() => {
+    setIsOpen(true);
+    if (Date.now() - lastBriefRef.current < 120000) return;
+    lastBriefRef.current = Date.now();
+    buildBrief()
+      .then((text) => setMessages((prev) => [...prev, { id: 'brief-' + Date.now(), sender: 'assistant', text, timestamp: Date.now() }]))
+      .catch(() => {});
+  }, []);
   const closeCommandCenter = useCallback(() => setIsOpen(false), []);
   const clearChat = useCallback(() => {
     setMessages([
@@ -298,6 +308,13 @@ export const CommandCenterProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsProcessing(true);
 
     try {
+      // Live questions and bulk actions (pending, unassigned, today, booking #id, post/hold all ...) are answered from the real data
+      const looksLikeNewBooking = /\bto\b/i.test(inputText) && /\d{2,}/.test(inputText) && /sedan|suv|innova|crysta|etios|toll/i.test(inputText);
+      const smart = looksLikeNewBooking ? null : await smartIntent(inputText);
+      if (smart) {
+        setMessages((prev) => [...prev, { id: 'asst-' + Date.now(), sender: 'assistant', text: smart, timestamp: Date.now() }]);
+        return;
+      }
       const intent = parseUserIntent(inputText);
 
       if (intent.type === 'DUTY_ON') {

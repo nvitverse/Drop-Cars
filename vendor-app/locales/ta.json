@@ -1,0 +1,40 @@
+{
+  "common": {
+    "brand": "Drop Cars"
+  },
+  "languageNames": {
+    "en": "English",
+    "ta": "தமிழ்",
+    "te": "తెలుగు",
+    "hi": "हिन्दी"
+  },
+  "languageSelect": {
+    "title": "உங்கள் மொழியைத் தேர்ந்தெடுக்கவும்",
+    "subtitle": "இதை பின்னர் அமைப்புகளில் எப்போது வேண்டுமானாலும் மாற்றலாம்",
+    "continue": "தொடரவும்",
+    "skip": "தற்போதைக்கு தவிர்"
+  },
+  "dashboard": {
+    "welcomeBack": "மீண்டும் வருக!",
+    "bookingsTitle": "முன்பதிவுகள்",
+    "tabs": {
+      "new": "புதியது",
+      "accepted": "ஏற்கப்பட்டது",
+      "running": "நடைபெறுகிறது",
+      "completed": "முடிந்தது",
+      "cancelled": "ரத்து செய்யப்பட்டது",
+      "all": "அனைத்தும்"
+    },
+    "quickActions": {
+      "create": "உருவாக்கு",
+      "vacantDrivers": "காலி ஓட்டுநர்கள்"
+    },
+    "searchPlaceholder": "வாடிக்கையாளர், இடம் அல்லது தொலைபேசி எண் மூலம் தேடவும்...",
+    "bookingsCount": "{total} இல் {count} முன்பதிவுகள்",
+    "emptyState": "இந்த தாவலில் முன்பதிவுகள் இல்லை."
+  },
+  "settings": {
+    "languageTitle": "மொழி",
+    "languageSubtitle": "உங்கள் விருப்பமான ஆப் மொழியைத் தேர்ந்தெடுக்கவும்"
+  }
+}

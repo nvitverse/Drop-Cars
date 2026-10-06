@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, MessageCircle, Phone, ChevronDown, Plus, Check, CheckCheck, HelpCircle } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, Phone, ChevronDown, Plus, Check, CheckCheck, HelpCircle, Camera, CheckCircle2, ShieldAlert, MapPin, Zap } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import axiosDriver from '@/app/api/axiosDriver';
 import { formatBookingId } from '@/utils/format';
