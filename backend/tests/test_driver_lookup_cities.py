@@ -33,14 +33,24 @@ def test_cities_list_counts_every_vacant_vehicle(pg_session):
 
 def test_city_search_lists_the_vacant_vehicles_there_even_for_part_of_the_name(pg_session):
     o = _owner(pg_session, vacant_fleet_entries=[{"car_number": "TN01AB1111", "driver_name": "Ravi", "cities": ["Zzcity"], "updated_at": "2026-10-05T10:00:00+00:00"}])
-    rows = ops.search_drivers(q=None, city="zzci", type="all", include_home=False, current_admin=None, db=pg_session)
+    rows = ops.search_drivers(q=None, city="zzci", type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session)
     mine = [r for r in rows if r["fleet_driver_name"] == o.full_name]
     assert len(mine) == 1 and mine[0]["name"] == "Ravi" and mine[0]["car_number"] == "TN01AB1111" and mine[0]["matched_city"] == "Zzcity"
-    assert [r for r in ops.search_drivers(q="ravi", city="zzcity", type="all", include_home=False, current_admin=None, db=pg_session) if r["fleet_driver_name"] == o.full_name]
-    assert not [r for r in ops.search_drivers(q="nobody", city="zzcity", type="all", include_home=False, current_admin=None, db=pg_session) if r["fleet_driver_name"] == o.full_name]
+    assert [r for r in ops.search_drivers(q="ravi", city="zzcity", type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session) if r["fleet_driver_name"] == o.full_name]
+    assert not [r for r in ops.search_drivers(q="nobody", city="zzcity", type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session) if r["fleet_driver_name"] == o.full_name]
 
 
 def test_search_without_a_city_still_needs_two_letters(pg_session):
     with pytest.raises(HTTPException) as e:
-        ops.search_drivers(q="a", city=None, type="all", include_home=False, current_admin=None, db=pg_session)
+        ops.search_drivers(q="a", city=None, type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session)
     assert e.value.status_code == 422
+
+
+def test_the_admin_app_filters_with_driver_type_and_typing_a_place_finds_vacant_vehicles(pg_session):
+    o = _owner(pg_session, vacant_fleet_entries=[{"car_number": "TN01AB9999", "driver_name": "Muthu", "cities": ["Qqtown"], "updated_at": "2026-10-05T10:00:00+00:00"}])
+    rows = ops.search_drivers(q=None, city="Qqtown", type="all", driver_type="FLEET", include_home=False, current_admin=None, db=pg_session)
+    assert [r for r in rows if r["fleet_driver_name"] == o.full_name and r["is_owner_driver"] and r["city"] == "Qqtown"]
+    rows = ops.search_drivers(q=None, city="Qqtown", type="all", driver_type="DUTY", include_home=False, current_admin=None, db=pg_session)
+    assert not [r for r in rows if r["fleet_driver_name"] == o.full_name and r["kind"] == "FLEET" and not r.get("fleet_phone")]
+    typed = ops.search_drivers(q="qqto", city=None, type="all", driver_type=None, include_home=False, current_admin=None, db=pg_session)
+    assert [r for r in typed if r["fleet_driver_name"] == o.full_name]

@@ -75,6 +75,7 @@ def search_drivers(
     q: Optional[str] = Query(None, description="name / phone / reg id (2+ letters)"),
     city: Optional[str] = Query(None, description="a vacant city (or part of its name): lists the vehicles marked vacant there"),
     type: str = Query("all", description="all | duty (drivers) | fleet (fleet owners)"),
+    driver_type: Optional[str] = Query(None, description="same as type: ALL | DUTY | FLEET (what the Admin App sends)"),
     include_home: bool = Query(False, description="with city: also drivers whose own city matches"),
     current_admin=Depends(get_current_admin), db: Session = Depends(get_db),
 ):
@@ -83,7 +84,7 @@ def search_drivers(
 
     term = (q or "").strip()
     city_term = _norm(city)
-    kind = (type or "all").lower()
+    kind = (driver_type or type or "all").lower()
 
     # ---- by place: vehicles marked vacant in that city (what staff / drivers updated by hand) ----
     if city_term:
@@ -115,7 +116,9 @@ def search_drivers(
                     "fleet_driver_name": o.full_name, "fleet_phone": o.primary_number,
                     "car_number": e.get("car_number"), "car_type": e.get("car_type"),
                     "vacant_cities": e["cities"], "matched_city": hit[0], "vacant_updated_at": e.get("updated_at"), "source": "VACANT",
+                    "is_owner_driver": d is None or bool(getattr(d, "is_owner_driver", False)), "vacant_here": True,
                 }
+                row["city"] = hit[0]                      # shown as the pin: where the vehicle is vacant
                 if term and term.lower() not in " ".join(str(row.get(k) or "") for k in ("name", "phone", "reg_id", "car_number", "fleet_driver_name")).lower():
                     continue
                 rows.append(row)
@@ -142,11 +145,24 @@ def search_drivers(
     drivers = db.query(CarDriver).filter(or_(*conds)).order_by(CarDriver.full_name.asc()).limit(25).all()
     owner_ids = {d.vehicle_owner_id for d in drivers}
     owners = {o.vehicle_owner_id: o for o in db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id.in_(owner_ids)).all()} if owner_ids else {}
-    return [{
+    rows = [{
         "id": str(d.id), "kind": "DUTY", "name": d.full_name, "phone": d.primary_number, "reg_id": d.reg_id,
         "status": _v(d.driver_status), "city": d.city, "rating": round(float(d.rating_avg or 0), 1),
         "fleet_driver_name": owners[d.vehicle_owner_id].full_name if d.vehicle_owner_id in owners else None,
+        "is_owner_driver": bool(d.is_owner_driver),
     } for d in drivers]
+    if not digits or len(digits) < 3:
+        # typing a place name also finds the vehicles marked vacant there (location search by hand)
+        seen = {r["id"] for r in rows}
+        for r in search_drivers(q=None, city=term, type="all", driver_type=None, include_home=False, current_admin=current_admin, db=db):
+            if r["id"] not in seen:
+                rows.append(r)
+                seen.add(r["id"])
+    if kind == "duty":
+        rows = [r for r in rows if not r.get("is_owner_driver")]
+    elif kind == "fleet":
+        rows = [r for r in rows if r.get("is_owner_driver")]
+    return rows[:60]
 
 
 @router.get("/{driver_id}")
