@@ -95,3 +95,6 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 - app/(tabs)/index.tsx: loadData / onRefresh always end the spinners (try/finally).
 - TypeScript: fixed 8 errors in enquiries.tsx and fleet-subscriptions.tsx (title -> accessibilityLabel, 'warning' toast -> 'info', null -> undefined, distance_km cast). `tsc --noEmit` = 0 errors.
 - Published the Admin OTA from the working tree (preview + production), which includes everything uncommitted in admin-panel at that moment.
+
+## 2026-10-06 (Claude) — LIVE: revision 00294, commit 4f0b2ff320 (branch deploy/merged-2026-10-06)
+First deploy through scripts/deploy-backend.ps1. Cloud Run service label `git-sha` = 4f0b2ff320e6f857e5f652eb6e8c6bfe8c2482ae; every later deploy must contain it. Contents: everything listed in the entry above (both tools' backend work, no password in source).
