@@ -47,6 +47,10 @@ def authenticate_customer(db: Session, primary_number: str, password: str):
     return credentials
 
 
+def get_customer_by_email(db: Session, email: str):
+    return db.query(CustomerCredentials).filter(CustomerCredentials.email == email).first()
+
+
 def get_customer_by_primary_number(db: Session, primary_number: str):
     """Look up a customer by phone number only, no password check - used to
     tell an unregistered number apart from a wrong password at login."""

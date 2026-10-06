@@ -1,5 +1,5 @@
 # models/vehicle_owner.py
-from sqlalchemy import Column, String, TIMESTAMP, Integer, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON
+from sqlalchemy import Column, String, TIMESTAMP, Integer, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON, Numeric
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from datetime import date as _date
 import uuid
@@ -47,6 +47,14 @@ class VehicleOwnerDetails(Base):
     # Multi-vehicle fleet vacant entries: list of active vacant vehicles for this fleet owner
     # [{"entry_id": "...", "car_id": "...", "car_number": "...", "car_type": "...", "driver_id": "...", "driver_name": "...", "cities": [...], "updated_at": "..."}]
     vacant_fleet_entries = Column(JSON, nullable=True)
+    # Fleet Subscriptions screen (manual mark-paid, pause / resume)
+    billing_suspended_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    billing_suspended_by = Column(String, nullable=True)
+    billing_suspended_reason = Column(String, nullable=True)
+    subscription_payment_channel = Column(String, nullable=True)
+    subscription_payment_ref = Column(String, nullable=True)
+    subscription_paid_amount = Column(Numeric(10, 2), nullable=True)
+    subscription_paid_at = Column(TIMESTAMP(timezone=True), nullable=True)
     # Yearly-fee billing (all nullable / default so existing rows are unaffected).
     # billing_next_date is NULL until an admin starts the cycle for the account.
     billing_next_date = Column(Date, nullable=True)

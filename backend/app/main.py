@@ -22,6 +22,7 @@ import app.models.vehicle_owner_details
 import app.models.booking_chat
 import app.models.support_message
 import app.models.guest_help_token
+import app.models.fleet_subscription
 import app.models.trip_review
 import app.models.stale_document_file
 import app.models.car_details
@@ -197,6 +198,12 @@ from app.api.routes import driver_tariff as driver_tariff_router
 app.include_router(driver_tariff_router.router, prefix="/api", tags=["Driver Tariff"])    # before admin.router (its catch-all /admin/{id})
 from app.api.routes import website_booking_schedule as website_booking_schedule_router
 app.include_router(website_booking_schedule_router.router, prefix="/api", tags=["Website Approvals"])
+from app.api.routes import fleet_subscriptions as fleet_subscriptions_router
+app.include_router(fleet_subscriptions_router.router, prefix="/api", tags=["Fleet Subscriptions"])      # before admin.router (its catch-all /admin/{id})
+from app.api.routes import ai_training_routes
+app.include_router(ai_training_routes.router, tags=["AI Training & Knowledge Hub"])
+from app.api.routes import unified_google_auth
+app.include_router(unified_google_auth.router, prefix="/api", tags=["Unified Google Auth"])
 app.include_router(announcements_router.router, prefix="/api", tags=["Announcements"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 from app.api.routes import system_health as _system_health_routes
@@ -439,6 +446,13 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS post_at_override TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS custom_driver_fare BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS language VARCHAR(2)',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_suspended_at TIMESTAMPTZ',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_suspended_by VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_suspended_reason VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS subscription_payment_channel VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS subscription_payment_ref VARCHAR',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS subscription_paid_amount NUMERIC(10,2)',
+        'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS subscription_paid_at TIMESTAMPTZ',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS reason VARCHAR(100)',
         # Trusted Partner (tier=PREFERRED) - two extra grant paths alongside
         # the yearly-billing evidence above (2026-09-30)

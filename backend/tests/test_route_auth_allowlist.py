@@ -55,6 +55,8 @@ PUBLIC_BY_DESIGN = {
     "POST /api/auth/google/verify",
     "POST /api/auth/phone/request-otp",   # rate limited 5/min
     "POST /api/auth/phone/verify-otp",    # rate limited 10/min, 5 wrong codes burn the OTP
+    "POST /api/auth/google",              # Google ID token in the body is the credential (verified server-side)
+    "POST /api/v1/auth/google",
     "POST /api/support/guest/thread",   # help_token (random, hashed in DB) is the credential
     "POST /api/support/guest/send",
     "POST /api/support/guest/unread",
