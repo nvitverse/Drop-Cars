@@ -978,7 +978,7 @@
 
   function generateBookingId(prefix) {
     var kind = (prefix || "").toString().trim().toUpperCase();
-    var normalized = kind === "C" ? "C" : "E";
+    var normalized = (kind === "DC" || kind === "C") ? "DC" : "E";
     var dateCode = getDateCodeYYMMDD();
     var storageKey = "dropcars_booking_counter_" + normalized + "_" + dateCode;
     var count = 0;
@@ -998,11 +998,11 @@
     if (!source) return "";
     if (/^(?:DE|E)\d+$/i.test(source)) {
       var digits = source.replace(/^(?:DE|E)/i, "");
-      return "C" + digits;
+      return "DC" + digits;
     }
     if (/^(?:DC|C)\d+$/i.test(source)) {
       var digits = source.replace(/^(?:DC|C)/i, "");
-      return "C" + digits;
+      return "DC" + digits;
     }
     return "";
   }
@@ -3130,11 +3130,11 @@
       var cleanBookingId = (bookingIdForMessage || provisionalConfirmId || "").toString().trim();
       if (cleanBookingId) {
           if (cleanBookingId.startsWith("DE")) {
-              cleanBookingId = "C" + cleanBookingId.substring(2);
+              cleanBookingId = "DC" + cleanBookingId.substring(2);
           } else if (cleanBookingId.startsWith("E")) {
-              cleanBookingId = "C" + cleanBookingId.substring(1);
+              cleanBookingId = "DC" + cleanBookingId.substring(1);
           } else if (cleanBookingId.startsWith("DC")) {
-              cleanBookingId = "C" + cleanBookingId.substring(2);
+              cleanBookingId = "DC" + cleanBookingId.substring(2);
           }
       }
       var passCount = (formData.get("passengerCount") || "1").toString().trim();
@@ -3218,7 +3218,7 @@
           (confirmPayload &&
             confirmPayload.booking_data &&
             confirmPayload.booking_data.bookingId) ||
-          generateBookingId("C");
+          generateBookingId("DC");
         if (typeof window !== "undefined" && window.DROP_CARS_ADMIN_BOOKING) {
           var adminCustomerWaUrl = buildCustomerWhatsAppUrl(confirmedBookingId);
           if (responseEl) {

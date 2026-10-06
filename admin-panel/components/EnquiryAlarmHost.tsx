@@ -11,7 +11,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';
 import { BellRing, CheckCircle2, Phone, MapPin, Calendar, IndianRupee, Globe, Clock, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react-native';
 import { enquiriesApi, WebsiteEnquiry } from '@/services/enquiriesApi';
 import { apiService } from '@/services/api';
@@ -31,7 +31,7 @@ const DISMISSED_STORAGE_KEY = 'dropcars_admin_enquiry_dismissed_v2';
 
 const DEFAULT_RING_SECONDS = 15;
 const DEFAULT_REPEAT_MINUTES = 3;
-const FRESH_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours freshness window
+const FRESH_ALERT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window for new lead instant alarm
 
 // Event listener mechanism for "Test Alarm" button
 type AlarmTestListener = (fakeEnquiry: WebsiteEnquiry) => void;
@@ -76,6 +76,7 @@ export function triggerTestEnquiryAlarm(customEnquiry?: Partial<WebsiteEnquiry>)
 export default function EnquiryAlarmHost() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ segment?: string; tab?: string }>();
   const { isDark, themeColors } = useTheme();
 
   const [unackQueue, setUnackQueue] = useState<WebsiteEnquiry[]>([]);
@@ -83,6 +84,20 @@ export default function EnquiryAlarmHost() {
   const [snoozedUntil, setSnoozedUntil] = useState<Record<number, number>>({});
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
+
+  // Track when staff was inside CRM / Leads screen
+  const isInsideLeads = pathname === '/enquiries' || (pathname.includes('orders') && (params?.segment === 'crm' || params?.tab === 'leads' || params?.tab === 'crm'));
+  const lastLeftLeadsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isInsideLeads) {
+      lastLeftLeadsRef.current = null;
+    } else {
+      if (lastLeftLeadsRef.current === null) {
+        lastLeftLeadsRef.current = Date.now();
+      }
+    }
+  }, [isInsideLeads]);
 
   // Server-driven effective config
   const [enabledNow, setEnabledNow] = useState(true);
@@ -203,7 +218,7 @@ export default function EnquiryAlarmHost() {
       try {
         const res = await enquiriesApi.fetchUnacknowledgedResult();
         if (!res.success || !isMounted) {
-          return; // preserve current state during brief connection hiccups
+          return;
         }
 
         const unackList = res.enquiries;
@@ -225,40 +240,63 @@ export default function EnquiryAlarmHost() {
 
         const now = Date.now();
 
-        // Fresh 2-hour window filter: only untouched leads created < 2 hours ago
+        // Filter: ONLY fresh enquiries (< 60 mins), expired snooze reminders, or test items
         const activeItems = unackList.filter((e) => {
-          const createdMs = parseIstTimestamp(e.created_at);
-          const ageMs = now - createdMs;
-          if (ageMs < 0 || ageMs >= FRESH_WINDOW_MS) return false;
-
-          // Check if snoozed
+          // 1. Check if snoozed
           const resumeAt = snoozedUntil[e.id];
-          if (resumeAt && now < resumeAt) return false;
+          if (resumeAt) {
+            if (now < resumeAt) return false;
+            // Snooze expired -> Snooze reminder alarm!
+            return true;
+          }
+
+          // 2. Check if dismissed locally
+          if (dismissedIdsRef.current.has(e.id)) return false;
+
+          // 3. Test leads always trigger
+          if (e.id >= 999000) return true;
+
+          // 4. Fresh Lead Check: Only leads received within the last 60 minutes trigger loud alarms
+          const createdMs = parseIstTimestamp(e.created_at);
+          if (createdMs > 0) {
+            const ageMs = now - createdMs;
+            // Old backlog leads (> 60 mins ago) do NOT trigger siren alarm
+            if (ageMs > FRESH_ALERT_WINDOW_MS || ageMs < -5 * 60 * 1000) {
+              return false;
+            }
+          }
 
           return true;
         });
 
         if (!isMounted) return;
 
-        // If staff is already on /enquiries screen, play mild sound and avoid full interrupt modal
-        if (pathname === '/enquiries') {
-          setUnackQueue([]);
-          stopAlarmSound('enquiry');
-          const freshOnes = activeItems.filter((e) => !softNotifiedIdsRef.current.has(e.id));
-          if (freshOnes.length > 0) {
-            playMildNotificationSound();
-            freshOnes.forEach((e) => softNotifiedIdsRef.current.add(e.id));
-          }
-          return;
-        }
-
-        setUnackQueue(activeItems);
+        // 10-Minute CRM Screen Proximity Rule
+        const awayFromLeadsMs = lastLeftLeadsRef.current !== null ? (now - lastLeftLeadsRef.current) : 0;
+        const isRecentlyInLeads = isInsideLeads || (lastLeftLeadsRef.current !== null && awayFromLeadsMs < 10 * 60 * 1000);
 
         if (activeItems.length > 0) {
-          playAlarmSound('enquiry');
+          if (isRecentlyInLeads) {
+            // Staff was in leads screen < 10 mins ago -> Play 2-second mild chime instead of full siren
+            const freshOnes = activeItems.filter((e) => !softNotifiedIdsRef.current.has(e.id));
+            if (freshOnes.length > 0) {
+              playMildNotificationSound();
+              freshOnes.forEach((e) => softNotifiedIdsRef.current.add(e.id));
+            }
+            if (isInsideLeads) {
+              setUnackQueue([]);
+              stopAlarmSound('enquiry');
+              return;
+            }
+          } else {
+            // Staff has been away from leads screen >= 10 mins -> Full Siren Alarm!
+            playAlarmSound('enquiry');
+          }
         } else {
           stopAlarmSound('enquiry');
         }
+
+        setUnackQueue(activeItems);
       } catch {
         stopAlarmSound('enquiry');
       }
@@ -271,7 +309,7 @@ export default function EnquiryAlarmHost() {
       isMounted = false;
       if (timer) clearInterval(timer);
     };
-  }, [snoozedUntil, isAuth, pathname, enabledNow]);
+  }, [snoozedUntil, isAuth, pathname, enabledNow, isInsideLeads]);
 
   const activeEnquiry = unackQueue[currentIndex] || unackQueue[0] || null;
 
@@ -335,14 +373,7 @@ export default function EnquiryAlarmHost() {
     setCurrentIndex(0);
     forceStopAlarmSound();
 
-    if (pathname !== '/enquiries') {
-      router.push('/enquiries');
-    }
-  };
-
-  const handleSnooze = () => {
-    if (!activeEnquiry) return;
-    snoozeEnquiry(activeEnquiry.id, 5 * 60 * 1000); // 5 minutes manual snooze
+    router.push({ pathname: '/(tabs)/orders', params: { segment: 'crm' } } as any);
   };
 
   if (!activeEnquiry) return null;
@@ -354,6 +385,7 @@ export default function EnquiryAlarmHost() {
   };
 
   const isTestItem = activeEnquiry.id >= 999000;
+  const isSnoozeReminder = !!snoozedUntil[activeEnquiry.id];
 
   return (
     <Modal visible={!!activeEnquiry} transparent animationType="fade" statusBarTranslucent>
@@ -365,7 +397,9 @@ export default function EnquiryAlarmHost() {
               <BellRing size={26} color="#FFFFFF" />
             </Animated.View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>🚨 INCOMING INQUIRY ALERT!</Text>
+              <Text style={styles.headerTitle}>
+                {isSnoozeReminder ? '🔔 SNOOZED ENQUIRY REMINDER!' : '🚨 INCOMING INQUIRY ALERT!'}
+              </Text>
               <Text style={styles.headerSubtitle}>
                 {isTestItem ? '🔔 Test Alarm Mode' : `Queue (${currentIndex + 1} of ${unackQueue.length})`}
               </Text>
@@ -462,19 +496,43 @@ export default function EnquiryAlarmHost() {
             )}
           </View>
 
-          {/* Action Buttons Row */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.snoozeButton, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
-              onPress={handleSnooze}
-            >
-              <Clock size={16} color={themeColors.text} />
-              <Text style={[styles.snoozeText, { color: themeColors.text }]}>SNOOZE (5m)</Text>
-            </TouchableOpacity>
+          {/* Action Buttons Row with 5m / 10m / 20m Snooze Chips */}
+          <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.textSecondary }}>
+                SNOOZE:
+              </Text>
+              <TouchableOpacity
+                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                onPress={() => snoozeEnquiry(activeEnquiry.id, 5 * 60 * 1000)}
+                activeOpacity={0.7}
+              >
+                <Clock size={12} color={themeColors.text} />
+                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>5m</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.ackButton} onPress={handleRespond}>
+              <TouchableOpacity
+                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                onPress={() => snoozeEnquiry(activeEnquiry.id, 10 * 60 * 1000)}
+                activeOpacity={0.7}
+              >
+                <Clock size={12} color={themeColors.text} />
+                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>10m</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                onPress={() => snoozeEnquiry(activeEnquiry.id, 20 * 60 * 1000)}
+                activeOpacity={0.7}
+              >
+                <Clock size={12} color={themeColors.text} />
+                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>20m</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.ackButton} onPress={handleRespond} activeOpacity={0.85}>
               <CheckCircle2 size={18} color="#FFFFFF" />
-              <Text style={styles.ackButtonText}>RESPOND NOW</Text>
+              <Text style={styles.ackButtonText}>RESPOND NOW (CALL / WHATSAPP)</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -625,15 +683,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  snoozeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  snoozeChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   ackButton: {
-    flex: 1.4,
+    width: '100%',
     backgroundColor: '#10B981',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   ackButtonText: {
     color: '#FFFFFF',

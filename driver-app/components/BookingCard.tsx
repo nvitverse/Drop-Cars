@@ -1768,7 +1768,7 @@ export default function BookingCard({
                         onPress={() =>
                           Alert.alert(
                             'Wallet Security Hold',
-                            `₹${requiredSecurityHold} is temporarily held from your wallet as a refundable security deposit to guarantee the booking and protect against last-minute cancellations. It will be released/settled upon trip completion.`
+                            `₹${requiredSecurityHold} is held from your wallet when you accept (minimum ₹500, or your commission with extras if that is more). When the trip completes the commission is deducted and the rest is refunded to your wallet. If the booking is cancelled the full amount comes back.`
                           )
                         }
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1780,7 +1780,7 @@ export default function BookingCard({
                   </View>
 
                   <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: 'Inter-Regular', fontStyle: 'italic', lineHeight: 16 }}>
-                    * Collect {advanceReceived > 0 ? `remaining ₹${remainingToCollect}` : `full ₹${vendorPrice}`} directly from customer. Security deposit is held temporarily in wallet and settled after trip completion.
+                    * Collect {advanceReceived > 0 ? `remaining ₹${remainingToCollect}` : `full ₹${vendorPrice}`} directly from customer. ₹{requiredSecurityHold} is held in your wallet; after the trip the commission is deducted and the rest is refunded.
                   </Text>
                 </View>
               </View>
@@ -2106,7 +2106,7 @@ export default function BookingCard({
 
               {/* Wallet Hold Disclaimer */}
               <Text style={{ fontSize: 11.5, color: isDarkMode ? '#FBBF24' : '#B45309', textAlign: 'center', fontFamily: 'Inter-Medium', marginBottom: 12 }}>
-                ₹{requiredSecurityHold} will be held in wallet as a security deposit until trip completion.
+                ₹{requiredSecurityHold} will be held in your wallet (minimum ₹500). After the trip the commission is deducted and the rest is refunded.
               </Text>
 
               {/* Guidelines & Helpline Support Buttons */}
@@ -2333,7 +2333,7 @@ export default function BookingCard({
                   • I agree to follow all Drop Cars partner standards, rules, and guidelines.
                 </Text>
                 <Text style={[dynamicStyles.modalValue, { marginBottom: 8 }]}>
-                  • I understand that a wallet security hold of ₹{requiredSecurityHold} will be held from my wallet to guarantee this booking until trip completion.
+                  • I understand that ₹{requiredSecurityHold} will be held from my wallet for this booking. After the trip the commission is deducted and the rest is refunded to my wallet.
                 </Text>
                 <Text style={[dynamicStyles.modalValue, { marginBottom: 8 }]}>
                   • I agree that I must assign a verified driver and vehicle details within 15 minutes of accepting.
@@ -2434,7 +2434,7 @@ export default function BookingCard({
                     Trip Security Hold
                   </Text>
                   <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontFamily: 'Inter-Medium', marginTop: 2, lineHeight: 17 }}>
-                    A refundable wallet balance of ₹{requiredSecurityHold} is required to guarantee this booking until trip completion.
+                    ₹{requiredSecurityHold} of wallet balance is required to hold for this booking (minimum ₹500). The commission is deducted after the trip and the rest is refunded.
                   </Text>
                 </View>
               </View>

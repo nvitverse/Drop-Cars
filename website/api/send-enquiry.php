@@ -135,6 +135,7 @@ if ($subdomainSlug !== '' && isset($config['subdomainConfig'][$subdomainSlug])) 
 if (!defined('DROP_CARS_DB_OPTIONAL')) {
     define('DROP_CARS_DB_OPTIONAL', true);
 }
+require_once __DIR__ . '/../config/env.php';
 require_once __DIR__ . '/../admin/config/database.php';
 if (function_exists('dropcars_get_db')) {
     $pdo = dropcars_get_db();
@@ -143,7 +144,16 @@ if (function_exists('dropcars_get_db')) {
 }
 
 require_once __DIR__ . '/../admin/includes/enquiries-schema.php';
+if (isset($pdo) && $pdo instanceof PDO) {
+    dropcars_ensure_enquiries_columns($pdo);
+}
+$incomingBid = preg_replace('/[^A-Za-z0-9]/', '', (string)($data['bookingId'] ?? $data['booking_id'] ?? ''));
+$isRepeatSubmission = false;
+
+// For website enquiries, always generate a fresh daily sequential ID (E26100201, E26100202...)
+// Only treat as repeat if explicit admin update flag or verified session token is provided.
 $bookingId = dropcars_next_enquiry_booking_id(isset($pdo) && $pdo instanceof PDO ? $pdo : null, 'E');
+$idBeforeDb = $bookingId;
 $customerName = htmlspecialchars($data['customerName'] ?? 'N/A');
 $contactValue = htmlspecialchars($data['contactValue'] ?? $data['contactPhone'] ?? $data['contactEmail'] ?? 'N/A');
 $whatsappValue = htmlspecialchars($data['whatsappPhone'] ?? '');
@@ -183,7 +193,7 @@ if ($whatsappValue !== '') {
 $pickup = htmlspecialchars($data['pickup'] ?? 'N/A');
 $pickupLat = isset($data['pickupLat']) ? (float) $data['pickupLat'] : null;
 $pickupLng = isset($data['pickupLng']) ? (float) $data['pickupLng'] : null;
-$pickupMapsUrl = ($pickupLat !== null && $pickupLng !== null)
+$pickupMapsUrl = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
     ? 'https://www.google.com/maps/search/?api=1&query=' . $pickupLat . ',' . $pickupLng
     : null;
 $pickupHtml = $pickupMapsUrl
@@ -194,6 +204,24 @@ if (!$dropSource && !empty($data['hourlyPickup'])) {
     $dropSource = 'Hourly Rental';
 }
 $drop = htmlspecialchars($dropSource ?: 'N/A');
+$dropLat = isset($data['dropLat']) ? (float) $data['dropLat'] : null;
+$dropLng = isset($data['dropLng']) ? (float) $data['dropLng'] : null;
+
+$mapOrigin = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
+    ? ($pickupLat . ',' . $pickupLng)
+    : strip_tags($pickup);
+$mapDest = ($dropLat !== null && $dropLng !== null && $dropLat >= -90 && $dropLat <= 90 && $dropLng >= -180 && $dropLng <= 180)
+    ? ($dropLat . ',' . $dropLng)
+    : strip_tags($drop);
+
+$viewMapUrl = 'https://www.google.com/maps/dir/?api=1&origin=' . rawurlencode($mapOrigin) . '&destination=' . rawurlencode($mapDest);
+$stopsList = $data['stops'] ?? [];
+if (!empty($stopsList) && is_array($stopsList)) {
+    $cleanStops = array_filter(array_map('strip_tags', $stopsList));
+    if (!empty($cleanStops)) {
+        $viewMapUrl .= '&waypoints=' . rawurlencode(implode('|', $cleanStops));
+    }
+}
 $tripType = $data['serviceType'] ?? 'one_way';
 $vehicleType = $data['vehicleType'] ?? 'Sedan'; // Preferred from passenger count
 $fareEstimate = (int) ($data['fareEstimate'] ?? 0);
@@ -399,15 +427,23 @@ $tripTypeLabels = [
 $tripLabel = $tripTypeLabels[$tripType] ?? $tripType;
 
 // Use the new clean SEO URL format
-$trackingLink = "https://dropcars.in/track-booking/" . $bookingId;
+$pickupShort = trim(explode(',', strip_tags($pickup))[0]);
+$dropShort = trim(explode(',', strip_tags($drop))[0]);
+$routeDisplay = ($pickupShort !== '' && $dropShort !== '') ? "{$pickupShort} ➔ {$dropShort}" : (strip_tags($pickup) . " ➔ " . strip_tags($drop));
 
-$subjectTag = $isAirportFlag ? 'Drop Cars Airport Taxi Enquiry' : 'Drop Cars Taxi Enquiry';
+$tripLabelShort = ($tripType === 'round_trip') ? 'Round Trip' : (($tripType === 'hourly_rental') ? 'Hourly Rental' : (($tripType === 'airport_transfer') ? 'Airport Transfer' : 'One Way'));
+$vehicleLabelShort = $selectedVehicle ? ucfirst(strtolower($selectedVehicle)) : ($vehicleType ? ucfirst(strtolower($vehicleType)) : 'Sedan');
+if (strcasecmp($vehicleLabelShort, 'CRYSTA') === 0) $vehicleLabelShort = 'Innova Crysta';
+
 $cleanCustomerName = trim(strip_tags((string)$customerName));
 if ($cleanCustomerName === '' || $cleanCustomerName === 'N/A') {
     $cleanCustomerName = 'Customer';
 }
-$cleanPageName = trim(str_replace(["\u{2708}\u{FE0F}", "\u{2708}", "\u{1F696}", "\u{1F3D9}\u{FE0F}", "\u{1F3D9}", "\u{1F3E0}", "\u{1F4C4}", '✈️', '🚖', '🏙️', '🏠', '📄'], '', (string)$pageDisplayName));
-$subject = "\u{1F696} {$subjectTag} #{$bookingId} - {$cleanCustomerName} ({$cleanPageName})";
+
+$formattedDateTime = (!empty($travelDate) ? date('d M', strtotime($travelDate)) : date('d M')) . ($travelTime ? ', ' . $travelTime : '');
+
+// Subject format: 🚖 #E26100201: Chennai ➔ Coimbatore (One Way - Sedan) - Pugazh
+$subject = "\u{1F696} #{$bookingId}: {$routeDisplay} ({$tripLabelShort} - {$vehicleLabelShort}) - {$cleanCustomerName}";
 
 $estimatesForEmail = [];
 if ($selectedVehicle !== '' && isset($rawVehicleEstimates[$selectedVehicle])) {
@@ -432,9 +468,11 @@ $selectedEstimateVehicleKey = $hasSingleVehicleEstimate ? array_key_first($estim
 $clientIp = trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? ''))[0] ?? '');
 
 // ── WhatsApp share URL generation ────────────────────────────────────────────
-$waBookingId = preg_replace('/^DE/i', 'C', $bookingId);
-if (stripos($waBookingId, 'DC') === 0)      $waBookingId = 'C' . substr($waBookingId, 2);
-elseif (preg_match('/^E[0-9]/i', $waBookingId)) $waBookingId = 'C' . substr($waBookingId, 1);
+// Enquiries strictly use 'E' prefix (e.g. E26100301); Confirmed bookings use 'DC'
+$waBookingId = $bookingId;
+if (preg_match('/^DE/i', $waBookingId)) {
+    $waBookingId = 'E' . substr($waBookingId, 2);
+}
 if (!function_exists('get_route_explore_url')) {
     function get_route_explore_url($pickup, $drop) {
         if (empty($pickup) || empty($drop)) {
@@ -481,45 +519,59 @@ if (!empty($tariffsPath) && file_exists($tariffsPath)) {
     unset($_waTariffs, $_waTTSearch, $_wt);
 }
 
+// Calculate minimum billable KM & included KM limit
+$calculatedMinKm = ($tripType === 'round_trip') ? max(250, (int)$distance * 2) : max(130, (int)$distance);
+
 // Share Customer — enquiry quote message (all emoji as real UTF-8 characters)
 $waVehicleDisplay = $waVehicle !== '' ? $waVehicle : 'Sedan';
-$waCustomerMsg  = "🌟 *DROP CARS* 🌟\n";
-$waCustomerMsg .= "_Your Trusted Outstation Cab Partner_\n\n";
+$waCustomerMsg  = "🌟 *DROP CARS — TRIP QUOTE & SUMMARY* 🌟\n";
+$waCustomerMsg .= "_Your Trusted Outstation & Intercity Cab Partner_\n\n";
 $waCustomerMsg .= "Dear *" . strip_tags($customerName) . "*,\n\n";
-$waCustomerMsg .= "Thank you for choosing *Drop Cars*! Here is a summary of your trip for your reference:\n\n";
+$waCustomerMsg .= "Thank you for choosing *Drop Cars*! Here is your complete trip itinerary & fare estimate for reference:\n\n";
 $waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🗺️ *YOUR TRIP AT A GLANCE*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "📍 *From:* " . strip_tags($pickup) . "\n";
-$waCustomerMsg .= "🏁 *To:* " . strip_tags($drop) . "\n";
-$waCustomerMsg .= "🚗 *Vehicle:* " . $waVehicleDisplay . "\n";
+$waCustomerMsg .= "📌 *Enquiry Reference:* *#" . $waBookingId . "*\n";
+$waCustomerMsg .= "📍 *From (Pickup):* " . strip_tags($pickup) . "\n";
+$waCustomerMsg .= "🏁 *To (Drop):* " . strip_tags($drop) . "\n";
+$waCustomerMsg .= "🚗 *Vehicle Choice:* " . $waVehicleDisplay . "\n";
 $waCustomerMsg .= "💼 *Trip Type:* " . $tripLabel . "\n";
 if ($waGroupDate) $waCustomerMsg .= "📅 *Travel Date:* " . $waGroupDate . "\n";
 if ($travelTime)  $waCustomerMsg .= "⏰ *Pickup Time:* " . $travelTime . "\n";
 if ($isRoundTripCheck && !empty($data['returnDate'])) {
     $waCustomerMsg .= "📅 *Return Date:* " . date('d M Y', strtotime($data['returnDate'])) . "\n";
 }
-$waCustomerMsg .= "📌 *Reference ID:* *#" . $waBookingId . "*\n";
+if ($distance > 0) {
+    $waCustomerMsg .= "🛣️ *Approx Route Distance:* ~" . number_format($distance) . " KM\n";
+    $waCustomerMsg .= "📏 *Included KM Limit:* " . number_format($calculatedMinKm) . " KM\n";
+}
 if ($fareEstimate > 0) {
     $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n💰 *FARE DETAILS*\n━━━━━━━━━━━━━━━━━━━\n";
-    $waCustomerMsg .= "💵 *Estimated Fare:* *₹" . number_format($fareEstimate) . "* _(" . ($fareTypeRaw === 'inclusive' ? 'Inclusive of all taxes' : 'Excl. toll/state tax') . ")_\n";
-    $waCustomerMsg .= "💳 *Payment:* Payable to driver at pickup/trip end\n";
+    $waCustomerMsg .= "💵 *Estimated Fare:* *₹" . number_format($fareEstimate) . "* _(" . ($fareTypeRaw === 'inclusive' ? 'All-Inclusive Fare' : 'Excl. toll & state tax') . ")_\n";
+    $waCustomerMsg .= "💳 *Payment:* Payable to driver via Cash / UPI at trip end\n";
 }
 $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n✅ *WHAT'S INCLUDED*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "🟢 Base fare, fuel charges & driver allowance\n";
-if ($includeTolls) $waCustomerMsg .= "🟢 Toll charges included\n";
-if ($includeTaxes) $waCustomerMsg .= "🟢 State border tax included (if crossing state border)\n";
-$waCustomerMsg .= "\n⚠️ *WHAT'S EXTRA*\n";
-$waCustomerMsg .= "🔸 Parking and entry fees (if any)\n";
-if (!$includeTolls) $waCustomerMsg .= "🔸 Toll charges, as applicable\n";
-if (!$includeTaxes) $waCustomerMsg .= "🔸 State border tax (only if crossing state border)\n";
-if (!$isHourlyCheck) $waCustomerMsg .= "🔸 Extra " . $extraKmRateStr . "/KM beyond the calculated KM limit" . $garageText . "\n";
-$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n🗺️ *EXPLORE THIS ROUTE*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "Find fare details, travel time & sightseeing info:\n";
-$waCustomerMsg .= "👉 " . get_route_explore_url($pickup, $drop) . "\n\n";
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n📱 *TRACK YOUR TRIP*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "👉 https://dropcars.in/track-booking/" . $bookingId . "\n\n";
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🎁 *A TIP FOR YOU*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "Log in with your email on dropcars.in to get *₹100 reward* and unlock faster rebooking, saved trips & more!\n\n";
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n_For any assistance, simply reply or call us:_\n";
+$waCustomerMsg .= "🟢 AC Cab, fuel charges & driver allowance (bata)\n";
+$waCustomerMsg .= "🟢 24x7 Customer assistance & real-time dispatch\n";
+if ($includeTolls) $waCustomerMsg .= "🟢 Highway toll charges included\n";
+if ($includeTaxes) $waCustomerMsg .= "🟢 State border permit / tax included (if crossing state border)\n";
+$waCustomerMsg .= "\n⚠️ *WHAT'S EXTRA / EXCLUDED*\n";
+$waCustomerMsg .= "🔸 Parking and entry fees (if any, paid as actuals)\n";
+if (!$includeTolls) $waCustomerMsg .= "🔸 Highway toll charges (paid as actuals)\n";
+if (!$includeTaxes) $waCustomerMsg .= "🔸 State border tax (applicable only if crossing state border)\n";
+if (!$isHourlyCheck) $waCustomerMsg .= "🔸 Extra KM beyond " . number_format($calculatedMinKm) . " KM at " . $extraKmRateStr . "/KM" . $garageText . "\n";
+
+$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n⚡ *CONFIRM YOUR TRIP*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "To verify and confirm your booking instantly:\n";
+$waCustomerMsg .= "👉 https://dropcars.in/track-booking/" . $bookingId . "\n";
+$waCustomerMsg .= "_Or reply *CONFIRM* directly to this WhatsApp message!_\n\n";
+
+$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🎁 *SAVE SEARCH & EARN ₹100*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "Log in with your email at https://dropcars.in/login to save your trip searches, earn ₹100 wallet credits, and unlock exclusive promo codes!\n\n";
+
+$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n📄 *POLICIES & SIGHTSEEING*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "• Explore Route Details: " . get_route_explore_url($pickup, $drop) . "\n";
+$waCustomerMsg .= "• Terms & Policies: https://dropcars.in/terms\n\n";
+
+$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n_Need help? We are available 24x7:_\n";
 $waCustomerMsg .= "📞 *" . ($config['supportPhone'] ?? '+91 7200217986') . "*\n";
 $waCustomerMsg .= "🌐 https://dropcars.in\n\n";
 $waCustomerMsg .= "_Have a safe and pleasant journey!_\n*— Drop Cars Team* 🙏";
@@ -616,39 +668,55 @@ body{font-family:Arial,sans-serif;line-height:1.6;color:#333;}
 .list-title{font-weight:700;color:#0b4a8f;margin:10px 0 4px;}
 .list{margin:0 0 10px 18px;padding:0;font-size:14px;color:#203a5c;}
 .footer{font-size:12px;color:#68748c;margin-top:24px;text-align:center;}
-</style></head><body><div class="container">
-<div class="header" style="background:linear-gradient(135deg,#ff7a00 0%,#ff5f00 100%);color:#ffffff !important;">
-<h1 style="color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">DROP CARS</span></h1>
-<p style="color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">' . "\u{1F696}" . ' New Taxi Enquiry</span></p>
-<p style="font-size:13px;opacity:0.95;color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">Enquiry ID: ' . $bookingId . '</span></p>
+</style></head><body>
+<!-- Preheader / Inbox Preview Snippet -->
+<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+📅 ' . htmlspecialchars($formattedDateTime) . ' &nbsp;|&nbsp; 📍 ' . htmlspecialchars($routeDisplay) . ' &nbsp;|&nbsp; ' . "\u{1F696}" . ' Enquiry #' . htmlspecialchars($bookingId) . ' &nbsp;|&nbsp; 🚗 ' . htmlspecialchars($tripLabelShort . ' - ' . $vehicleLabelShort) . '
+</div>
+<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+<div class="container">
+<div class="header" style="background:linear-gradient(135deg,#ea580c 0%,#c2410c 100%);color:#ffffff !important;padding:22px 18px;text-align:center;border-radius:10px;">
+<h1 style="color:#ffffff !important;margin:0;font-size:24px;font-weight:800;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#ffffff !important;">DROP CARS</span></h1>
+<p style="color:#ffffff !important;margin:6px 0 2px 0;font-size:16px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#ffffff !important;">🚖 New Taxi Enquiry</span></p>
+<p style="color:#fff7ed !important;font-size:13px;font-weight:600;margin:0;opacity:0.95;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#fff7ed !important;">Enquiry ID: ' . $bookingId . '</span></p>
 </div>';
 
-$contactValueHtml = htmlspecialchars($formattedContact);
+$contactValueHtml = '<div style="font-size: 15px; font-weight: 700; color: #0e2f56; margin-bottom: 4px;">' . htmlspecialchars($formattedContact) . '</div>';
 if (preg_match('/[0-9]/', $contactValue)) {
     $telHref = 'tel:' . preg_replace('/[^\d\+]/', '', $formattedContact);
-    // Reuse the same rich, pre-filled professional trip-summary template
-    // built for the "Send Customer" CRM button below (targets this same
-    // contactValue number) instead of opening a bare, empty WhatsApp chat.
-    $contactValueHtml .= '<div style="margin-top: 6px;">'
-        . '<a href="' . $telHref . '" style="display: inline-block; background-color: #22c55e; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; margin-right: 8px; border: 1px solid #16a34a;">📞 Call</a>'
-        . '<a href="' . $waCustomerUrl . '" target="_blank" style="display: inline-block; background-color: #075E54; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; border: 1px solid #054c44;">💬 WhatsApp</a>'
-        . '</div>';
+    $contactValueHtml .= '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 6px;"><tr>'
+        . '<td style="padding-right: 8px;">'
+        . '<a href="' . $telHref . '" style="display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #1d4ed8; line-height: 1.2; box-shadow: 0 2px 4px rgba(37,99,235,0.25);">'
+        . '<span style="color: #ffffff !important;">📞 Call</span></a>'
+        . '</td>'
+        . '<td>'
+        . '<a href="' . $waCustomerUrl . '" target="_blank" style="display: inline-block; background-color: #059669; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #047857; line-height: 1.2; box-shadow: 0 2px 4px rgba(5,150,105,0.25);">'
+        . '<span style="color: #ffffff !important;">💬 WhatsApp</span></a>'
+        . '</td>'
+        . '</tr></table>';
 }
 
 $whatsappValueHtml = '';
 if ($whatsappValue !== '') {
-    $whatsappValueHtml = htmlspecialchars($formattedWhatsapp);
+    $whatsappValueHtml = '<div style="font-size: 15px; font-weight: 700; color: #0e2f56; margin-bottom: 4px;">' . htmlspecialchars($formattedWhatsapp) . '</div>';
     if (preg_match('/[0-9]/', $whatsappValue)) {
         $cleanWa = preg_replace('/[^\d]/', '', $whatsappValue);
         $waPhoneAlt = (strlen($cleanWa) === 10) ? '91' . $cleanWa : $cleanWa;
         $telHref = 'tel:' . preg_replace('/[^\d\+]/', '', $formattedWhatsapp);
-        // Same rich template as above, addressed to this separate WhatsApp number.
         $waHrefAlt = ($waPhoneAlt !== '' && $waPhoneAlt !== '91') ? 'https://wa.me/' . $waPhoneAlt . '?text=' . rawurlencode($waCustomerMsg) : '#';
 
-        $whatsappValueHtml .= '<div style="margin-top: 6px;">'
-            . '<a href="' . $telHref . '" style="display: inline-block; background-color: #22c55e; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; margin-right: 8px; border: 1px solid #16a34a;">📞 Call</a>'
-            . '<a href="' . $waHrefAlt . '" target="_blank" style="display: inline-block; background-color: #075E54; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; border: 1px solid #054c44;">💬 WhatsApp</a>'
-            . '</div>';
+        $whatsappValueHtml .= '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 6px;"><tr>'
+            . '<td style="padding-right: 8px;">'
+            . '<a href="' . $telHref . '" style="display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #1d4ed8; line-height: 1.2; box-shadow: 0 2px 4px rgba(37,99,235,0.25);">'
+            . '<span style="color: #ffffff !important;">📞 Call</span></a>'
+            . '</td>'
+            . '<td>'
+            . '<a href="' . $waHrefAlt . '" target="_blank" style="display: inline-block; background-color: #059669; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #047857; line-height: 1.2; box-shadow: 0 2px 4px rgba(5,150,105,0.25);">'
+            . '<span style="color: #ffffff !important;">💬 WhatsApp</span></a>'
+            . '</td>'
+            . '</tr></table>';
     }
 }
 
@@ -676,7 +744,14 @@ $bodyHtml .= '
 <tr><td class="k">🗓️ Pickup Date</td><td class="v">' . htmlspecialchars($travelDate) . '</td></tr>
 <tr><td class="k">⏰ Pickup Time</td><td class="v">' . htmlspecialchars($travelTime) . '</td></tr>
 <tr><td class="k">🚗 Vehicle</td><td class="v">' . $vehicleLineHtml . '</td></tr>
-</table></div></div>
+' . ($distance > 0 ? '<tr><td class="k">🛣️ Approx Distance</td><td class="v">~' . number_format($distance, 0) . ' km</td></tr>' : '') . '
+</table>
+<div style="padding: 12px 0 14px 0; text-align: center; border-top: 1px dashed #d8e4f3; margin-top: 8px;">
+    <a href="' . htmlspecialchars($viewMapUrl) . '" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff !important; padding: 11px 24px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 13px; box-shadow: 0 2px 6px rgba(2,132,199,0.35); border: 1px solid #0284c7;">
+        <span style="color: #ffffff !important; font-weight: 700;">🗺️ View Map &amp; Route Directions ↗</span>
+    </a>
+</div>
+</div></div>
 
 ';
 if (!empty($stops)) {
@@ -692,20 +767,19 @@ $websiteUrl = $config['websiteUrl'] ?? 'https://dropcars.in';
 $bodyHtml .= $breakdownHtml
     . "<div class='block'><div class='block-title'>🛡️ Admin Management &amp; CRM Tools</div><div class='block-body' style='padding: 16px; text-align: center;'>
     <div style='display: inline-block; width: 100%; text-align: center;'>
-    <div style='margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>📲 WhatsApp Quick Share:</div>
-    <a href='" . $waCustomerUrl . "' target='_blank' style='display: inline-block; background: #25D366; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px; box-shadow: 0 2px 4px rgba(37,211,102,0.20);'>📲 Send Customer</a>
-    <a href='" . $waGroupUrl . "' target='_blank' style='display: inline-block; background: #128C7E; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px; box-shadow: 0 2px 4px rgba(18,140,126,0.20);'>👥 Group Post</a>
-    <a href='" . $waDriverUrl . "' target='_blank' style='display: inline-block; background: #075E54; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px; box-shadow: 0 2px 4px rgba(7,94,84,0.20);'>🚖 Driver</a>
+    <div style='margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>📲 WhatsApp Dispatch &amp; Broadcasting:</div>
+    <a href='" . $waGroupUrl . "' target='_blank' style='display: inline-block; background: #128C7E; color: #ffffff !important; padding: 10px 18px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px; box-shadow: 0 2px 4px rgba(18,140,126,0.20);'><span style='color:#ffffff !important;'>👥 Group Post</span></a>
+    <a href='" . $waDriverUrl . "' target='_blank' style='display: inline-block; background: #075E54; color: #ffffff !important; padding: 10px 18px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px; box-shadow: 0 2px 4px rgba(7,94,84,0.20);'><span style='color:#ffffff !important;'>🚖 Driver Post</span></a>
     
     <div style='margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>Execute quick CRM actions from your inbox:</div>
     <table role='presentation' style='width: 100%; border-collapse: separate; border-spacing: 6px;'>
     <tr>
-    <td style='width: 50%; background: #0b4a8f; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/enquiries?search=" . urlencode($bookingId) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>🔍</span><br><span style='font-weight: bold; font-size: 13px;'>View Enquiry Detail</span></a></td>
-    <td style='width: 50%; background: #16a34a; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/enquiries?action=confirm&booking_id=" . urlencode($bookingId) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>⚡</span><br><span style='font-weight: bold; font-size: 13px;'>Confirm Booking</span></a></td>
+    <td style='width: 50%; background: #0b4a8f; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/enquiries?search=" . urlencode($bookingId) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>🔍</span><br><span style='font-weight: bold; font-size: 13px; color: #ffffff !important;'>View Enquiry Detail</span></a></td>
+    <td style='width: 50%; background: #16a34a; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/enquiries?action=confirm&booking_id=" . urlencode($bookingId) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>⚡</span><br><span style='font-weight: bold; font-size: 13px; color: #ffffff !important;'>Confirm Booking</span></a></td>
     </tr>
     <tr>
-    <td style='width: 50%; background: #d97706; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/customer-history?phone=" . urlencode($contactValue) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>👤</span><br><span style='font-weight: bold; font-size: 13px;'>Verify Customer History</span></a></td>
-    <td style='width: 50%; background: #ef4444; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/settings?cat=operations&block_ip=" . urlencode($clientIp) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>🚫</span><br><span style='font-weight: bold; font-size: 13px;'>Spam? Block Client IP</span></a></td>
+    <td style='width: 50%; background: #d97706; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/customer-history?phone=" . urlencode($contactValue) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>👤</span><br><span style='font-weight: bold; font-size: 13px; color: #ffffff !important;'>Verify Customer History</span></a></td>
+    <td style='width: 50%; background: #ef4444; border-radius: 8px; padding: 0;'><a href='" . rtrim($websiteUrl, '/') . "/admin/settings?cat=operations&block_ip=" . urlencode($clientIp) . "' target='_blank' style='display: block; color: #ffffff !important; padding: 12px 10px; text-decoration: none; text-align: center;'><span style='font-size: 15px;'>🚫</span><br><span style='font-weight: bold; font-size: 13px; color: #ffffff !important;'>Spam? Block Client IP</span></a></td>
     </tr>
     </table>
     </div>
@@ -739,13 +813,14 @@ $bodyHtml .= $breakdownHtml
     </div></div>" : "")
     . '<div class="block"><div class="block-title">📡 Source &amp; Lead Intelligence</div><div class="block-body"><table class="kv">'
         . '<tr><td class="k">Source</td><td class="v"><span style="background:' . $sourceBadgeBg . ';color:#ffffff;padding:3px 9px;border-radius:4px;font-weight:bold;font-size:12px;display:inline-block;">' . htmlspecialchars($normalizedSource) . '</span></td></tr>'
+        . ($utmCampaign !== '' ? '<tr><td class="k">📢 Campaign Name</td><td class="v"><span style="background:#f1f5f9;color:#0f172a;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmCampaign)) . '</span></td></tr>' : '')
         . ($utmTerm !== '' ? '<tr><td class="k">🎯 Search Keyword</td><td class="v"><strong>' . htmlspecialchars($utmTerm) . '</strong>' . ($matchtypeLabel !== '' ? ' <span style="background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;border:1px solid #bae6fd;">' . htmlspecialchars($matchtypeLabel) . '</span>' : '') . '</td></tr>' : '')
-        . ($utmCampaign !== '' ? '<tr><td class="k">📢 Campaign Name</td><td class="v"><span style="background:#f1f5f9;color:#1e293b;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmCampaign)) . '</span></td></tr>' : '')
-        . ($utmContent !== '' ? '<tr><td class="k">📂 Ad Group Name</td><td class="v"><span style="background:#f1f5f9;color:#1e293b;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmContent)) . '</span></td></tr>' : '')
-        . '<tr><td class="k">Device</td><td class="v">' . htmlspecialchars($deviceLabel) . '</td></tr>'
-        . '<tr><td class="k">Enquiry Page</td><td class="v"><strong>' . htmlspecialchars($pageDisplayName) . '</strong></td></tr>'
-        . '<tr><td class="k">Page URL</td><td class="v">' . ($pageUrlRaw !== '' ? '<a href="' . htmlspecialchars($pageUrlRaw) . '" target="_blank" style="color:#0b4a8f;font-weight:600;word-break:break-all;">' . htmlspecialchars($pageUrlRaw) . '</a>' : htmlspecialchars($sourcePage)) . '</td></tr>'
-        . '<tr><td class="k">IP Address</td><td class="v">' . htmlspecialchars($clientIp) . '</td></tr>'
+        . ($utmContent !== '' ? '<tr><td class="k">📂 Ad Group Name</td><td class="v"><span style="background:#f1f5f9;color:#0f172a;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmContent)) . '</span></td></tr>' : '')
+        . '<tr><td class="k">📱 Device</td><td class="v"><strong>' . htmlspecialchars($deviceLabel) . '</strong></td></tr>'
+        . '<tr><td class="k">🌐 Page Name</td><td class="v"><strong>' . htmlspecialchars($pageDisplayName) . '</strong></td></tr>'
+        . '<tr><td class="k">🔗 Page URL</td><td class="v">' . ($pageUrlRaw !== '' ? '<a href="' . htmlspecialchars($pageUrlRaw) . '" target="_blank" style="color:#0284c7;font-weight:600;word-break:break-all;">' . htmlspecialchars($pageUrlRaw) . '</a>' : htmlspecialchars($sourcePage)) . '</td></tr>'
+        . '<tr><td class="k">💻 IP Address</td><td class="v"><span style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;">' . htmlspecialchars($clientIp) . '</span></td></tr>'
+        . '<tr><td class="k">⏰ Lead Captured</td><td class="v">' . date('d M Y, h:i A') . ' IST</td></tr>'
         . '</table></div></div>'
     . '<div class="footer">Automated enquiry from Drop Cars website. Phone: +91 7200217986</div>
 </div></body></html>';
@@ -757,6 +832,7 @@ $bodyPlain .= "Phone: {$formattedContact}\n";
 $bodyPlain .= "Trip Type: {$tripLabel}\n";
 $bodyPlain .= "Pickup: {$pickup}\n";
 $bodyPlain .= "Drop: {$drop}\n";
+$bodyPlain .= "🗺️ View Map: {$viewMapUrl}\n";
 $bodyPlain .= "Date: {$travelDate} | Time: {$travelTime}\n";
 if ($hasSingleVehicleEstimate && $selectedEstimateVehicleKey !== '') {
     $meta = $vehicleMeta[$selectedEstimateVehicleKey] ?? ['name' => $selectedEstimateVehicleKey];
@@ -817,10 +893,17 @@ try {
         define('DROP_CARS_DB_OPTIONAL', true);
     }
     if (!isset($pdo) || !$pdo instanceof PDO) {
+        require_once __DIR__ . '/../config/env.php';
         require_once __DIR__ . '/../admin/config/database.php';
+        if (function_exists('dropcars_get_db')) {
+            $pdo = dropcars_get_db();
+        }
         if ((!isset($pdo) || !$pdo instanceof PDO) && !empty($GLOBALS['db']) && $GLOBALS['db'] instanceof PDO) {
             $pdo = $GLOBALS['db'];
         }
+    }
+    if (!isset($pdo) || !$pdo instanceof PDO) {
+        $dbSaveError = 'PDO connection null';
     }
     $dbSaved = false;
     if (isset($pdo) && $pdo instanceof PDO) {
@@ -970,82 +1053,71 @@ try {
                 $websiteVal = 'dropcars.in';
             }
 
+            $distanceHint = (int) ($data['distanceHint'] ?? $data['distance'] ?? $distance ?? 0);
+            $durationHint = trim((string)($data['durationHint'] ?? $data['duration'] ?? ''));
             $veJson = !empty($estimatesForEmail) ? json_encode($estimatesForEmail) : null;
             $fbJson = !empty($fareBreakdown) ? json_encode($fareBreakdown) : null;
-            $sqlInsert = "INSERT INTO `enquiries`
-                (`name`, `phone`, `pickup`, `drop_location`, `trip_type`, `vehicle_type`, `travel_date`, `travel_time`, `vehicle_estimates`, `fare_estimate`, `fare_type`, `distance_km`, `duration`, `ip_address`, `source`, `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `device`, `matchtype`, `gclid`, `source_page`, `status`, `booking_id`, `fare_breakdown`, `website`)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-            $stmt = $pdo->prepare($sqlInsert);
+            $enquiryPayload = [
+                'name' => $customerName,
+                'phone' => $contactValue,
+                'pickup' => $pickup,
+                'drop_location' => $drop,
+                'trip_type' => $tripType,
+                'vehicle_type' => $selectedVehicle,
+                'travel_date' => $travelDate ?: date('Y-m-d'),
+                'travel_time' => $travelTime,
+                'vehicle_estimates' => $veJson,
+                'fare_estimate' => (int) $fareEstimate,
+                'fare_type' => $fareTypeRaw,
+                'distance_km' => $distanceHint,
+                'duration' => $durationHint,
+                'ip_address' => $clientIp,
+                'source' => $normalizedSource,
+                'utm_source' => $utmSource,
+                'utm_medium' => $utmMedium,
+                'utm_campaign' => $utmCampaign,
+                'utm_term' => $utmTerm,
+                'utm_content' => $utmContent,
+                'device' => $deviceDb,
+                'matchtype' => $matchtypeRaw,
+                'gclid' => $gclid,
+                'source_page' => $sourcePage,
+                'status' => 'not_confirmed',
+                'booking_id' => $bookingId,
+                'fare_breakdown' => $fbJson,
+                'website' => $websiteVal
+            ];
+
             try {
-                $stmt->execute([
-                    $customerName,
-                    $contactValue,
-                    $pickup,
-                    $drop,
-                    $tripType,
-                    $selectedVehicle,
-                    $travelDate ?: date('Y-m-d'),
-                    $travelTime,
-                    $veJson,
-                    (int) $fareEstimate,
-                    $fareTypeRaw,
-                    $distanceHint,
-                    $durationHint,
-                    $clientIp,
-                    $normalizedSource,
-                    $utmSource,
-                    $utmMedium,
-                    $utmCampaign,
-                    $utmTerm,
-                    $utmContent,
-                    $deviceDb,
-                    $matchtypeRaw,
-                    $gclid,
-                    $sourcePage,
-                    'not_confirmed',
-                    $bookingId,
-                    $fbJson,
-                    $websiteVal
-                ]);
-                $dbSaved = true;
+                $existingCols = $pdo->query("SHOW COLUMNS FROM `enquiries`")->fetchAll(PDO::FETCH_COLUMN);
+                $insertCols = [];
+                $insertVals = [];
+                $placeholders = [];
+                foreach ($enquiryPayload as $colName => $colVal) {
+                    if (in_array($colName, $existingCols, true)) {
+                        $insertCols[] = "`{$colName}`";
+                        $insertVals[] = $colVal;
+                        $placeholders[] = '?';
+                    }
+                }
+                if (!empty($insertCols)) {
+                    $sqlInsert = "INSERT INTO `enquiries` (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $placeholders) . ")";
+                    $stmt = $pdo->prepare($sqlInsert);
+                    $stmt->execute($insertVals);
+                    $dbSaved = true;
+                }
             } catch (PDOException $e) {
+                error_log('[dropcars send-enquiry DB insert error] ' . $e->getMessage());
                 $code = (int) $e->getCode();
                 $msg = $e->getMessage();
                 if ($code === 23000 || stripos($msg, 'Duplicate') !== false) {
                     for ($attempt = 0; $attempt < 8; $attempt++) {
                         $bookingId = dropcars_next_enquiry_booking_id($pdo, 'E');
+                        $enquiryPayload['booking_id'] = $bookingId;
                         try {
-                            $stmt->execute([
-                                $customerName,
-                                $contactValue,
-                                $pickup,
-                                $drop,
-                                $tripType,
-                                $selectedVehicle,
-                                $travelDate ?: date('Y-m-d'),
-                                $travelTime,
-                                $veJson,
-                                (int) $fareEstimate,
-                                $fareTypeRaw,
-                                $distanceHint,
-                                $durationHint,
-                                $clientIp,
-                                $normalizedSource,
-                                $utmSource,
-                                $utmMedium,
-                                $utmCampaign,
-                                $utmTerm,
-                                $utmContent,
-                                $deviceDb,
-                                $matchtypeRaw,
-                                $gclid,
-                                $sourcePage,
-                                'not_confirmed',
-                                $bookingId,
-                                $fbJson,
-                                $websiteVal
-                            ]);
+                            $insertVals[array_search('`booking_id`', $insertCols)] = $bookingId;
+                            $stmt->execute($insertVals);
                             $dbSaved = true;
                             break;
                         } catch (PDOException $e2) {
@@ -1448,6 +1520,7 @@ if (($data['source'] ?? '') !== 'admin') {
 
 if (ob_get_length()) ob_end_clean();
 echo json_encode([
+    'v' => '20261003_SUPPORT_SMTP_V1',
     'success' => $dbSaved || $emailSent || $telegramSent || (isset($data['source']) && $data['source'] === 'admin'),
     'emailSent' => $emailSent,
     'telegramSent' => $telegramSent,
@@ -1455,6 +1528,10 @@ echo json_encode([
     'dbSaved' => $dbSaved,
     'dbError' => $dbSaveError,
     'emailSubject' => $emailSubject ?? $subject,
+    'mailAccountUsed' => $mailRes['account_used'] ?? 'none',
+    'mailError' => $mailRes['error'] ?? '',
+    'resolvedSmtpUser' => $smtp['smtpUser'] ?? '',
+    'resolvedMailFrom' => $smtp['mailFrom'] ?? '',
     'message' => $emailSent ? 'Notification sent.' : 'Response captured.'
 ]);
 

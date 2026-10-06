@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar as RNStatusBar,
   Platform,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -18,11 +19,16 @@ import {
   ChevronLeft,
   UserCheck,
   ShieldCheck,
+  ShieldAlert,
   AlertCircle,
   CheckCircle2,
   XCircle,
   FileText,
   ArrowRight,
+  MessageCircle,
+  MessageSquare,
+  Phone,
+  CreditCard,
 } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
@@ -42,6 +48,19 @@ interface ProfileEditRequest {
   admin_notes?: string;
   created_at: string;
 }
+
+const SENSITIVE_FIELDS = [
+  'bank_account_number',
+  'bank_ifsc',
+  'ifsc_code',
+  'upi_id',
+  'account_number',
+  'pan_number',
+  'license_number',
+  'driving_license',
+  'rc_number',
+  'aadhaar_number',
+];
 
 export default function ProfileEditQueueScreen() {
   const router = useRouter();
@@ -130,6 +149,40 @@ export default function ProfileEditQueueScreen() {
     );
   };
 
+  const openWhatsAppFollowUp = (item: ProfileEditRequest) => {
+    const rawPhone = (item.user_phone || '').replace(/\D/g, '');
+    if (!rawPhone) {
+      Alert.alert('No Phone Number', 'Phone number is not available for this user.');
+      return;
+    }
+    const phone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+    const isSensitive = SENSITIVE_FIELDS.includes((item.field_name || '').toLowerCase());
+    const docPrompt = isSensitive
+      ? '\n\n📸 Please share a photo of your Bank Passbook / Cancelled Cheque / Document for admin verification.'
+      : '';
+
+    const text = `Hello ${item.user_name || 'Partner'},\n\nWe received your request on Drop Cars to update:\n📌 Field: *${item.field_name.replace(/_/g, ' ').toUpperCase()}*\n🔴 Current: ${item.old_value || 'None'}\n🟢 Proposed: *${item.proposed_value}*${docPrompt}\n\nDrop Cars Admin Support`;
+    
+    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Error', 'Unable to open WhatsApp on this device.');
+    });
+  };
+
+  const openInAppChat = (item: ProfileEditRequest) => {
+    router.push('/(tabs)/chats');
+  };
+
+  const callUser = (phone?: string) => {
+    if (!phone) {
+      Alert.alert('No Phone', 'User phone number not found.');
+      return;
+    }
+    Linking.openURL(`tel:${phone.replace(/\D/g, '')}`).catch(() => {
+      Alert.alert('Error', 'Unable to place phone call.');
+    });
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
@@ -139,7 +192,7 @@ export default function ProfileEditQueueScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Profile changes</Text>
+        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Profile & Bank Reviews</Text>
       </View>
 
       {/* Status Filter Tabs */}
@@ -180,69 +233,114 @@ export default function ProfileEditQueueScreen() {
             </Text>
           </View>
         ) : (
-          requests.map(item => (
-            <View key={item.id} style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-              <View style={styles.cardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <UserCheck size={16} color={colors.primary} />
-                  <Text style={[styles.userName, { color: themeColors.text }]}>{item.user_name || item.user_id}</Text>
-                  <Text style={[styles.userBadge, { color: colors.primary }]}>({item.user_type})</Text>
-                </View>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: item.status === 'APPROVED' ? '#10B98115' : item.status === 'REJECTED' ? '#EF444415' : '#F59E0B15' }
-                ]}>
-                  <Text style={[
-                    styles.statusBadgeText,
-                    { color: item.status === 'APPROVED' ? '#10B981' : item.status === 'REJECTED' ? '#EF4444' : '#F59E0B' }
+          requests.map(item => {
+            const isSensitive = SENSITIVE_FIELDS.includes((item.field_name || '').toLowerCase());
+
+            return (
+              <View key={item.id} style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+                {/* Header info */}
+                <View style={styles.cardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <UserCheck size={16} color={colors.primary} />
+                    <Text style={[styles.userName, { color: themeColors.text }]} numberOfLines={1}>
+                      {item.user_name || item.user_id}
+                    </Text>
+                    <Text style={[styles.userBadge, { color: colors.primary }]}>({item.user_type})</Text>
+                  </View>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: item.status === 'APPROVED' ? '#10B98115' : item.status === 'REJECTED' ? '#EF444415' : '#F59E0B15' }
                   ]}>
-                    {item.status}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginBottom: 8 }}>Phone: {item.user_phone || 'N/A'}</Text>
-
-              {/* Proposed Field Change comparison */}
-              <View style={styles.comparisonBox}>
-                <Text style={styles.fieldTitle}>FIELD TO UPDATE: {item.field_name.toUpperCase()}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>Current Live Record</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>{item.old_value || 'None / Empty'}</Text>
-                  </View>
-                  <ArrowRight size={14} color={themeColors.textSecondary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>Proposed Update</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>{item.proposed_value}</Text>
+                    <Text style={[
+                      styles.statusBadgeText,
+                      { color: item.status === 'APPROVED' ? '#10B981' : item.status === 'REJECTED' ? '#EF4444' : '#F59E0B' }
+                    ]}>
+                      {item.status}
+                    </Text>
                   </View>
                 </View>
-              </View>
 
-              {/* Action Buttons for Pending requests */}
-              {item.status === 'PENDING' && (
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                {/* Phone & Sensitive indicator */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>Phone: {item.user_phone || 'N/A'}</Text>
+                  {isSensitive && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <CreditCard size={11} color="#D97706" />
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#D97706' }}>FINANCIAL / SENSITIVE</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Proposed Field Change comparison */}
+                <View style={styles.comparisonBox}>
+                  <Text style={styles.fieldTitle}>FIELD TO UPDATE: {item.field_name.toUpperCase()}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>Current Live Record</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>{item.old_value || 'None / Empty'}</Text>
+                    </View>
+                    <ArrowRight size={14} color={themeColors.textSecondary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, color: themeColors.textSecondary }}>Proposed Update</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>{item.proposed_value}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Follow-up Communication Row (WhatsApp + In-App Chat + Call) */}
+                <View style={styles.communicationRow}>
                   <TouchableOpacity
-                    style={[styles.approveBtn, processingId === item.id && { opacity: 0.5 }]}
-                    onPress={() => handleApprove(item.id, item.field_name)}
-                    disabled={processingId === item.id}
+                    style={styles.whatsAppBtn}
+                    onPress={() => openWhatsAppFollowUp(item)}
                   >
-                    <CheckCircle2 size={14} color="#FFFFFF" />
-                    <Text style={styles.approveBtnText}>Approve & Update</Text>
+                    <MessageCircle size={13} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>WhatsApp</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.rejectBtn, processingId === item.id && { opacity: 0.5 }]}
-                    onPress={() => handleReject(item.id, item.field_name)}
-                    disabled={processingId === item.id}
+                    style={styles.inAppChatBtn}
+                    onPress={() => openInAppChat(item)}
                   >
-                    <XCircle size={14} color="#FFFFFF" />
-                    <Text style={styles.rejectBtnText}>Reject</Text>
+                    <MessageSquare size={13} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>In-App Chat</Text>
                   </TouchableOpacity>
+
+                  {item.user_phone && (
+                    <TouchableOpacity
+                      style={styles.callBtn}
+                      onPress={() => callUser(item.user_phone)}
+                    >
+                      <Phone size={13} color={colors.primary} />
+                      <Text style={[styles.actionBtnText, { color: colors.primary }]}>Call</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              )}
-            </View>
-          ))
+
+                {/* Action Buttons for Pending requests */}
+                {item.status === 'PENDING' && (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: themeColors.border }}>
+                    <TouchableOpacity
+                      style={[styles.approveBtn, processingId === item.id && { opacity: 0.5 }]}
+                      onPress={() => handleApprove(item.id, item.field_name)}
+                      disabled={processingId === item.id}
+                    >
+                      <CheckCircle2 size={14} color="#FFFFFF" />
+                      <Text style={styles.approveBtnText}>Approve & Update</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.rejectBtn, processingId === item.id && { opacity: 0.5 }]}
+                      onPress={() => handleReject(item.id, item.field_name)}
+                      disabled={processingId === item.id}
+                    >
+                      <XCircle size={14} color="#FFFFFF" />
+                      <Text style={styles.rejectBtnText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -262,14 +360,50 @@ const styles = StyleSheet.create({
   backButton: { padding: 4, marginRight: 8 },
   headerTitle: { fontSize: 18, fontWeight: '800' },
   scrollContent: { padding: 16, gap: 12 },
-  card: { padding: 14, borderRadius: 6, borderWidth: 1 },
+  card: { padding: 14, borderRadius: 8, borderWidth: 1 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   userName: { fontSize: 15, fontWeight: '800' },
   userBadge: { fontSize: 11, fontWeight: '700' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   statusBadgeText: { fontSize: 10, fontWeight: '800' },
-  comparisonBox: { backgroundColor: '#0EA5E910', padding: 10, borderRadius: 6, marginTop: 6 },
+  comparisonBox: { backgroundColor: '#0EA5E910', padding: 10, borderRadius: 6, marginTop: 4 },
   fieldTitle: { fontSize: 10, fontWeight: '800', color: colors.primary },
+  communicationRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  whatsAppBtn: {
+    flex: 1.2,
+    backgroundColor: '#25D366',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  inAppChatBtn: {
+    flex: 1.2,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  callBtn: {
+    backgroundColor: '#0EA5E915',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#0EA5E930',
+  },
+  actionBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 11 },
   approveBtn: { flex: 1, backgroundColor: '#10B981', paddingVertical: 9, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   approveBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
   rejectBtn: { flex: 1, backgroundColor: '#EF4444', paddingVertical: 9, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },

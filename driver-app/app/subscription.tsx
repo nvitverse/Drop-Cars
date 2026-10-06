@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { safeBack } from '@/utils/safeBack';
 import {
   View,
@@ -69,7 +69,7 @@ const DRIVER_PERKS = [
 
 export default function DriverSubscriptionScreen() {
   const router = useRouter();
-  const { focusBookingId, flow } = useLocalSearchParams<{ focusBookingId?: string; flow?: string }>();
+  const { focusBookingId, flow, autoPlan } = useLocalSearchParams<{ focusBookingId?: string; flow?: string; autoPlan?: string }>();
   const insets = useSafeAreaInsets();
   const topPadding = insets.top || 20;
   const { colors, isDarkMode: isDark } = useTheme();
@@ -145,12 +145,23 @@ export default function DriverSubscriptionScreen() {
   const currentPlanPrice = selectedPlan === 'MONTHLY' ? pricing.MONTHLY : pricing.YEARLY;
   const shortfall = Math.max(0, currentPlanPrice - walletBalance);
 
+  // Coming back from "Add money" with the plan the driver chose: buy it now. Before, the money landed in the wallet and the
+  // driver had to find this screen and tap Subscribe again - many thought the payment had failed ("paid 199, no subscription").
+  const autoBuyDone = useRef(false);
+  useEffect(() => {
+    if (autoBuyDone.current || initialLoading || (autoPlan !== 'MONTHLY' && autoPlan !== 'YEARLY')) return;
+    if (selectedPlan !== autoPlan) { setSelectedPlan(autoPlan); return; }
+    autoBuyDone.current = true;
+    if (tier === autoPlan || shortfall > 0) return;        // already subscribed, or the payment did not cover it: leave the screen as is
+    handleSubscribe();
+  }, [autoPlan, initialLoading, selectedPlan, tier, shortfall]);
+
   const handleSubscribe = async () => {
     if (shortfall > 0) {
       // Direct driver to add exact shortfall to wallet
       router.push({
         pathname: '/(tabs)/wallet',
-        params: { amount: String(shortfall) },
+        params: { amount: String(shortfall), plan: selectedPlan },
       } as any);
       return;
     }
@@ -194,7 +205,7 @@ export default function DriverSubscriptionScreen() {
           t('Insufficient Wallet Balance'),
           t('Add ₹{0} to your wallet to buy this plan', { 0: shortfall }),
           [
-            { text: t('Add Money'), onPress: () => router.push({ pathname: '/(tabs)/wallet', params: { amount: String(shortfall) } } as any) },
+            { text: t('Add Money'), onPress: () => router.push({ pathname: '/(tabs)/wallet', params: { amount: String(shortfall), plan: selectedPlan } } as any) },
             { text: t('Cancel'), style: 'cancel' },
           ]
         );

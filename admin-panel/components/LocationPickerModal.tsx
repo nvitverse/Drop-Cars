@@ -147,13 +147,12 @@ export default function LocationPickerModal({
     performSearch(text);
   };
 
-  // `save` is false for text the staff typed themselves: only real places (from the
-  // list or a matching online result) are remembered, never free text.
-  const handleSelectLocation = async (location: string, save: boolean = true) => {
+  const handleSelectLocation = async (location: string) => {
     const clean = (location || '').trim();
     if (!clean) return;
 
-    if (save) await Promise.all([saveLocationToCache(clean), addRecentSearch(clean)]);
+    // Persist to local storage forever
+    await Promise.all([saveLocationToCache(clean), addRecentSearch(clean)]);
 
     Keyboard.dismiss();
     onLocationSelect(clean);
@@ -167,13 +166,13 @@ export default function LocationPickerModal({
     setIsSearchingOnline(true);
     try {
       const res = await searchCityOnline(q);
-      if (res.found && res.city) {
+      if (res.city) {
         handleSelectLocation(res.city);
       } else {
-        handleSelectLocation(q, false);
+        handleSelectLocation(q);
       }
     } catch {
-      handleSelectLocation(q, false);
+      handleSelectLocation(q);
     } finally {
       setIsSearchingOnline(false);
     }
@@ -324,7 +323,7 @@ export default function LocationPickerModal({
                 if (predictions.length > 0) {
                   handleSelectLocation(predictions[0].description);
                 } else if (searchQuery.trim()) {
-                  handleSelectLocation(searchQuery.trim(), false);
+                  handleSelectLocation(searchQuery.trim());
                 }
               }}
             />
@@ -373,7 +372,7 @@ export default function LocationPickerModal({
                       No standard city found
                     </Text>
                     <Text style={[styles.emptySubtitle, { color: themeColors.textMuted }]}>
-                      Not a known city. Search the online map, or use the name as typed.
+                      You can use this exact name or search online map
                     </Text>
 
                     <TouchableOpacity
@@ -390,12 +389,12 @@ export default function LocationPickerModal({
                         styles.actionButtonOutline,
                         { borderColor: themeColors.border, backgroundColor: themeColors.surface },
                       ]}
-                      onPress={() => handleSelectLocation(searchQuery.trim(), false)}
+                      onPress={() => handleSelectLocation(searchQuery.trim())}
                       activeOpacity={0.8}
                     >
                       <PlusCircle size={16} color="#2563EB" />
                       <Text style={[styles.actionButtonOutlineText, { color: themeColors.text }]}>
-                        Use "{searchQuery.trim()}" as typed
+                        Use "{searchQuery.trim()}" as custom location
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -410,16 +409,16 @@ export default function LocationPickerModal({
                         styles.customOptionRow,
                         { borderColor: themeColors.border, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' },
                       ]}
-                      onPress={() => handleSelectLocation(searchQuery.trim(), false)}
+                      onPress={() => handleSelectLocation(searchQuery.trim())}
                       activeOpacity={0.7}
                     >
                       <PlusCircle size={17} color="#2563EB" />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.customOptionText, { color: themeColors.text }]}>
-                          Use "{searchQuery.trim()}" as typed
+                          Use exact custom text: "{searchQuery.trim()}"
                         </Text>
                         <Text style={[styles.customOptionSub, { color: themeColors.textMuted }]}>
-                          For a place that is not listed. It is not saved. The route is checked - if it cannot be found, pick the nearest city and put the exact spot in Address / Maps link.
+                          Choose this only if entering a custom street or doorstep address
                         </Text>
                       </View>
                     </TouchableOpacity>

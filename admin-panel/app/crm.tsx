@@ -103,8 +103,8 @@ export default function CRMMarketingScreen() {
   };
 
   useEffect(() => {
-    loadData();
-  }, [statusFilter, sourceFilter]);
+    router.replace('/enquiries' as any);
+  }, []);
 
   const handleSearch = () => {
     loadData();

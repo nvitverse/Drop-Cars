@@ -37,7 +37,15 @@ export async function can(permission: string): Promise<boolean> {
   }
 
   // Owner-only permissions that can NEVER be granted to Staff
-  if (permission === 'delete_booking' || permission === 'permanent_delete' || permission === 'manage_alarm' || permission === 'manage_staff') {
+  if (
+    permission === 'delete_booking' ||
+    permission === 'permanent_delete' ||
+    permission === 'manage_alarm' ||
+    permission === 'manage_staff' ||
+    permission === 'email_settings' ||
+    permission === 'manage_email' ||
+    permission === 'smtp_settings'
+  ) {
     return false;
   }
 

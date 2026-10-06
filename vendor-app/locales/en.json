@@ -1,0 +1,40 @@
+{
+  "common": {
+    "brand": "Drop Cars"
+  },
+  "languageNames": {
+    "en": "English",
+    "ta": "தமிழ்",
+    "te": "తెలుగు",
+    "hi": "हिन्दी"
+  },
+  "languageSelect": {
+    "title": "Choose your language",
+    "subtitle": "You can always change this later in Settings",
+    "continue": "Continue",
+    "skip": "Skip for now"
+  },
+  "dashboard": {
+    "welcomeBack": "Welcome back!",
+    "bookingsTitle": "Bookings",
+    "tabs": {
+      "new": "New",
+      "accepted": "Accepted",
+      "running": "Running",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "all": "All"
+    },
+    "quickActions": {
+      "create": "Create",
+      "vacantDrivers": "Vacant Drivers"
+    },
+    "searchPlaceholder": "Search by customer, location, or phone...",
+    "bookingsCount": "{count} of {total} Bookings",
+    "emptyState": "No bookings in this tab."
+  },
+  "settings": {
+    "languageTitle": "Language",
+    "languageSubtitle": "Choose your preferred app language"
+  }
+}

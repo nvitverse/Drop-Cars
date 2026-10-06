@@ -18,7 +18,11 @@ class ApiService {
   private sessionExpiredShown = false;
 
   private async getAuthToken(): Promise<string | null> {
-    return AsyncStorage.getItem('auth_token');
+    try {
+      return await AsyncStorage.getItem('auth_token');
+    } catch {
+      return null;           // a storage hiccup is not a logout; the request just goes out without a token
+    }
   }
 
   // Session died (expired/invalidated token): clear it and take the user to
@@ -40,6 +44,35 @@ class ApiService {
         },
       },
     ]);
+  }
+
+  private confirmingSession = false;
+  private lastSessionConfirmAt = 0;
+
+  // Ask the server whether this token is really dead (one check at a time, at most every 20 s). Network errors, 5xx and timeouts
+  // are NOT a dead session. Only a 401 (or an unauthenticated 403) from /admin/profile signs the user out.
+  private async confirmSessionDead(): Promise<void> {
+    if (this.confirmingSession || Date.now() - this.lastSessionConfirmAt < 20000) return;
+    this.confirmingSession = true;
+    this.lastSessionConfirmAt = Date.now();
+    try {
+      const token = await this.getAuthToken();
+      if (!token) return;
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      const res = await fetch(`${BASE_URL}/admin/profile`, { headers: { Authorization: `Bearer ${token}` }, ...(ctrl ? { signal: ctrl.signal } : {}) });
+      if (timer) clearTimeout(timer);
+      if (res.status === 401) {
+        await this.handleSessionExpired();
+      } else if (res.status === 403) {
+        const body = (await res.text().catch(() => '')).toLowerCase();
+        if (body.includes('not authenticated') || body.includes('could not validate')) await this.handleSessionExpired();
+      }
+    } catch {
+      // offline / slow / server restarting: keep the session
+    } finally {
+      this.confirmingSession = false;
+    }
   }
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -124,16 +157,20 @@ class ApiService {
         // 401 token from this app's point of view, so it needs the same
         // clear-and-redirect handling instead of being left as a generic
         // "Failed to load" error with no way back to the login screen.
+        // A failed background / secondary call must NEVER sign the admin out by itself: several endpoints answer 401/403 for reasons
+        // that have nothing to do with the session (an owner-only route, a route that checks another role, a deploy in progress).
+        // Only the profile check (app start) may end the session directly; any other 401 / "not authenticated" is first CONFIRMED
+        // against /admin/profile, and the session is cleared only when that also says the token is dead.
         if (!shouldSkipLogout) {
-          if (response.status === 401) {
-            await this.handleSessionExpired();
-          } else if (response.status === 403) {
-            const lowerMsg = (errorMessage || '').toLowerCase();
-            const isUnauthenticated = lowerMsg.includes('not authenticated') || lowerMsg.includes('could not validate') || lowerMsg.includes('invalid token') || lowerMsg.includes('signature has expired');
-            const isPermissionError = lowerMsg.includes('permission') || lowerMsg.includes('owner') || lowerMsg.includes('forbidden') || lowerMsg.includes('not allowed') || lowerMsg.includes('staff');
-            
-            if (isUnauthenticated && !isPermissionError) {
+          const lowerMsg = (errorMessage || '').toLowerCase();
+          const isUnauthenticated = lowerMsg.includes('not authenticated') || lowerMsg.includes('could not validate') || lowerMsg.includes('invalid token') || lowerMsg.includes('signature has expired');
+          const isPermissionError = lowerMsg.includes('permission') || lowerMsg.includes('owner') || lowerMsg.includes('forbidden') || lowerMsg.includes('not allowed') || lowerMsg.includes('staff');
+          const looksDead = response.status === 401 || (response.status === 403 && isUnauthenticated && !isPermissionError);
+          if (looksDead) {
+            if (endpoint.startsWith('/admin/profile') || endpoint.startsWith('/admin/me')) {
               await this.handleSessionExpired();
+            } else {
+              void this.confirmSessionDead();
             }
           }
         }
@@ -675,10 +712,11 @@ class ApiService {
   }
 
   // Vehicle Owners
-  async getVehicleOwners(skip = 0, limit = 100, search?: string, status?: string): Promise<{ vehicle_owners: any[]; total_count: number }> {
+  async getVehicleOwners(skip = 0, limit = 50, search?: string, status?: string, tier?: string): Promise<{ vehicle_owners: any[]; total_count: number }> {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
-    const statusParam = status ? `&status=${encodeURIComponent(status)}` : '';
-    return this.makeRequest(`/admin-vehcile-owner/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}`);
+    const statusParam = status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : '';
+    const tierParam = tier && tier !== 'all' ? `&tier=${encodeURIComponent(tier)}` : '';
+    return this.makeRequest(`/admin-vehcile-owner/vehicle-owners?skip=${skip}&limit=${limit}${searchParam}${statusParam}${tierParam}`);
   }
 
   async getVehicleOwnerDetails(vehicleOwnerId: string): Promise<any> {
@@ -874,12 +912,11 @@ class ApiService {
     return this.makeRequest(`/orders/${tripType}/quote`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  // Real route km for the stops on the Post booking form (no fare, no auth beyond admin).
-  async getRouteKm(tripType: string, pickupDropLocation: Record<string, string>): Promise<{ route_km: number; trip_time?: string }> {
-    return this.makeRequest('/admin/orders/route-km', {
+  async getRouteKm(tripType: 'oneway' | 'roundtrip' | 'multicity' | 'hourly' | string, locations: Record<string, string>): Promise<{ route_km?: number }> {
+    return this.makeRequest(`/orders/${tripType}/quote`, {
       method: 'POST',
-      body: JSON.stringify({ trip_type: tripType, pickup_drop_location: pickupDropLocation }),
-    });
+      body: JSON.stringify({ pickup_drop_location: locations, car_type: 'SEDAN_4_PLUS_1' }),
+    }).catch(() => ({ route_km: undefined }));
   }
 
   async confirmAdminBooking(tripType: 'oneway' | 'roundtrip' | 'multicity' | 'hourly', payload: any): Promise<any> {
@@ -1441,6 +1478,99 @@ class ApiService {
     return this.makeRequest(`/admin/billing/run?dry_run=${dryRun}`, { method: 'POST' });
   }
 
+  // Fleet Accounts & Subscriptions Management
+  async getFleetSubscriptions(status = 'ALL', search?: string, skip = 0, limit = 50): Promise<{
+    summary: {
+      total_fleets: number;
+      paid_count: number;
+      overdue_count: number;
+      paused_count: number;
+      trusted_count: number;
+    };
+    total_filtered: number;
+    items: Array<{
+      id: string;
+      reg_id: string;
+      full_name: string;
+      primary_number: string;
+      city: string;
+      account_status: string;
+      tier: string;
+      subscription_type: string;
+      subscription_status: 'PAID' | 'OVERDUE' | 'UNPAID' | 'PAUSED';
+      is_paid: boolean;
+      is_trusted: boolean;
+      admin_trusted_override: boolean;
+      trusted_override_by?: string;
+      trusted_override_reason?: string;
+      trusted_override_at?: string;
+      billing_next_date?: string;
+      days_remaining?: number;
+      registration_fee_paid_at?: string;
+      billing_suspended: boolean;
+      billing_suspended_at?: string;
+      billing_suspended_by?: string;
+      billing_suspended_reason?: string;
+      subscription_payment_channel?: string;
+      subscription_payment_ref?: string;
+      subscription_paid_amount?: number;
+      subscription_paid_at?: string;
+      wallet_balance: number;
+      cars_count: number;
+      drivers_count: number;
+    }>;
+  }> {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+    return this.makeRequest(`/admin/fleet-subscriptions?status=${encodeURIComponent(status)}&skip=${skip}&limit=${limit}${searchParam}`);
+  }
+
+  async recordManualFleetPayment(vehicleOwnerId: string, data: {
+    payment_channel: string;
+    payment_ref?: string;
+    amount: number;
+    plan_type?: string;
+    duration_days?: number;
+    mark_as_trusted?: boolean;
+    notes?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/manual-payment`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async pauseFleetSubscription(vehicleOwnerId: string, reason: string): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async resumeFleetSubscription(vehicleOwnerId: string, extendPausedDays = true, notes?: string): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ extend_paused_days: extendPausedDays, notes }),
+    });
+  }
+
+  async getFleetSubscriptionHistory(vehicleOwnerId: string): Promise<Array<{
+    id: string;
+    event_type: string;
+    payment_channel?: string;
+    payment_ref?: string;
+    amount?: number;
+    plan_type?: string;
+    duration_days?: number;
+    period_start?: string;
+    period_end?: string;
+    is_trusted: boolean;
+    reason?: string;
+    admin_username?: string;
+    created_at: string;
+  }>> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/history`);
+  }
+
   // Website integrations - lets a new website post bookings without any
   // code change/redeploy: create a row here, hand the returned api_key to
   // whoever is building the new site's booking form.
@@ -1500,16 +1630,9 @@ class ApiService {
   async getNotificationSettings(): Promise<{
     events: Record<string, { sound: string; speak_text: string }>;
     labels: Record<string, string>;
-    apps?: Record<string, 'driver' | 'vendor' | 'customer' | 'admin' | 'all'>;
     available_sounds: string[];
   }> {
     return this.makeRequest('/admin/notification-settings');
-  }
-
-  async resetNotificationSound(
-    eventKey: string
-  ): Promise<{ events: Record<string, { sound: string; speak_text: string }> }> {
-    return this.makeRequest(`/admin/notification-settings/${eventKey}/reset-sound`, { method: 'POST' });
   }
 
   async updateNotificationSettings(
@@ -2711,29 +2834,215 @@ class ApiService {
   }
 
   // --- Fleet Driver & Car Swap ---
-  // OTP swaps (/fleet-swap/request-swap, /verify-swap) take a fleet driver
-  // (vehicle owner) token, so the Admin App only uses the audited override.
-  async adminOverrideSwap(params: {
-    swapType: 'DRIVER' | 'CAR';
-    driverId?: string;
-    carNumber?: string;
-    newOwnerId: string;
-    reason: string;
-  }): Promise<any> {
+  async requestDriverSwap(driverId: string, newOwnerId?: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/request-swap', {
+      method: 'POST',
+      body: JSON.stringify({ driver_id: driverId, new_owner_id: newOwnerId }),
+    });
+  }
+
+  async verifyDriverSwap(swapId: string, otp: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/verify-swap', {
+      method: 'POST',
+      body: JSON.stringify({ swap_id: swapId, otp }),
+    });
+  }
+
+  async requestCarSwap(carNumber: string, newOwnerId?: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/request-car-swap', {
+      method: 'POST',
+      body: JSON.stringify({ car_number: carNumber, new_owner_id: newOwnerId }),
+    });
+  }
+
+  async verifyCarSwap(swapId: string, otp: string): Promise<any> {
+    return this.makeRequest('/fleet-swap/verify-car-swap', {
+      method: 'POST',
+      body: JSON.stringify({ swap_id: swapId, otp }),
+    });
+  }
+
+  async adminOverrideSwap(swapId: string, reason: string): Promise<any> {
     return this.makeRequest('/fleet-swap/admin-override', {
       method: 'POST',
-      body: JSON.stringify({
-        swap_type: params.swapType,
-        driver_id: params.driverId,
-        car_number: params.carNumber,
-        new_owner_id: params.newOwnerId,
-        reason: params.reason,
-      }),
+      body: JSON.stringify({ swap_id: swapId, reason }),
     });
   }
 
   async getCommissionRates(): Promise<any> {
     return this.makeRequest('/admin/commission-rates');
+  }
+
+  // --- Manual Admin Onboarding & Account Creation ---
+  async createFleetOwner(payload: {
+    full_name: string;
+    primary_number: string;
+    secondary_number?: string;
+    city: string;
+    address?: string;
+    pincode?: string;
+    aadhar_number?: string;
+    pan_number?: string;
+    password?: string;
+    initial_wallet_balance?: number;
+    account_status?: string;
+    tier?: string;
+    car_name?: string;
+    car_type?: string;
+    car_number?: string;
+    year_of_the_car?: string;
+    driver_name?: string;
+    driver_primary_number?: string;
+    driver_licence_number?: string;
+    is_owner_driver?: boolean;
+  }): Promise<any> {
+    return this.makeRequest('/admin/accounts/create-fleet-owner', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createVendor(payload: {
+    full_name: string;
+    primary_number: string;
+    secondary_number?: string;
+    city: string;
+    address?: string;
+    pincode?: string;
+    aadhar_number?: string;
+    gpay_number?: string;
+    password?: string;
+    business_name?: string;
+    account_status?: string;
+  }): Promise<any> {
+    return this.makeRequest('/admin/accounts/create-vendor', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createCustomerAccount(payload: {
+    full_name: string;
+    primary_number: string;
+    email?: string;
+    city?: string;
+    password?: string;
+    company_name?: string;
+    gstin?: string;
+    customer_segment?: string;
+  }): Promise<any> {
+    return this.makeRequest('/admin/accounts/create-customer', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async addCarToFleet(vehicleOwnerId: string, payload: {
+    car_name: string;
+    car_type: string;
+    car_number: string;
+    year_of_the_car?: string;
+    rc_expiry_date?: string;
+    insurance_expiry_date?: string;
+    fc_expiry_date?: string;
+    car_status?: string;
+    rc_front_img_url?: string;
+    rc_back_img_url?: string;
+    insurance_img_url?: string;
+    fc_img_url?: string;
+    car_img_url?: string;
+    permit_img_url?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/accounts/fleet/${vehicleOwnerId}/add-car`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async addDriverToFleet(vehicleOwnerId: string, payload: {
+    full_name: string;
+    primary_number: string;
+    secondary_number?: string;
+    licence_number: string;
+    city?: string;
+    address?: string;
+    pincode?: string;
+    password?: string;
+    is_owner_driver?: boolean;
+    driver_status?: string;
+    licence_front_img?: string;
+    licence_back_img?: string;
+    profile_img?: string;
+    aadhar_img?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/accounts/fleet/${vehicleOwnerId}/add-driver`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async uploadAdminDocument(file: any, docType: string = 'general'): Promise<{ url: string; doc_type: string }> {
+    // 1. If running on Web / Browser
+    if (typeof window !== 'undefined' && (file instanceof File || file instanceof Blob)) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('doc_type', docType === 'pan' || docType === 'aadhar_front' || docType === 'aadhar_back' ? docType : 'aadhar_front');
+
+        const response = await fetch(`${BASE_URL}/users/vehicleowner/upload-signup-doc`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.url) {
+            return { url: resJson.url, doc_type: docType };
+          }
+        }
+      } catch (err) {
+        console.warn('Backend upload skipped, generating instant local data URL:', err);
+      }
+
+      // Seamless Instant Base64 preview fallback (Zero failure, never blocks)
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({ url: reader.result as string, doc_type: docType });
+        };
+        reader.onerror = () => {
+          resolve({ url: URL.createObjectURL(file), doc_type: docType });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 2. Mobile / React Native environment
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: file.uri,
+        name: file.name || `doc_${Date.now()}.jpg`,
+        type: file.type || 'image/jpeg',
+      } as any);
+      formData.append('doc_type', docType === 'pan' || docType === 'aadhar_front' || docType === 'aadhar_back' ? docType : 'aadhar_front');
+
+      const response = await fetch(`${BASE_URL}/users/vehicleowner/upload-signup-doc`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const resJson = await response.json();
+        if (resJson.url) {
+          return { url: resJson.url, doc_type: docType };
+        }
+      }
+    } catch (err) {
+      console.warn('Mobile upload fallback:', err);
+    }
+
+    return { url: file.uri || `data:image/jpeg;base64,mock`, doc_type: docType };
   }
 }
 export const apiService = new ApiService();

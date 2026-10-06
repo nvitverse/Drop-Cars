@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MessageSquare,
@@ -45,6 +46,10 @@ import {
   X,
   CheckCircle2,
   Activity,
+  Package,
+  RefreshCw,
+  Zap,
+  CreditCard,
 } from 'lucide-react-native';
 import { apiService } from '../../services/api';
 import { enquiriesApi } from '../../services/enquiriesApi';
@@ -55,7 +60,10 @@ import ThemeToggle from '@/components/ThemeToggle';
 import VoiceNoteButton from '@/components/VoiceNoteButton';
 import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock } from '@/components/ui';
 import DutySignOffModal from '@/components/DutySignOffModal';
-import { updateFeedbackTasksInLedger, updateMissedCountInLedger } from '@/utils/performance';
+import StaffWelcomeShiftModal from '@/components/StaffWelcomeShiftModal';
+import { useStaffDuty } from '@/context/StaffDutyContext';
+import { unlockAudioContext, playMildNotificationSound } from '@/utils/alarmSound';
+import { triggerTestEnquiryAlarm } from '@/components/EnquiryAlarmHost';
 
 type StaffDirective = {
   id: string;
@@ -78,12 +86,13 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const [adminRole, setAdminRole] = useState('Owner');
-  const [onDutyShift, setOnDutyShift] = useState(true);
+  const { isOnDuty, toggleDuty } = useStaffDuty();
   const [dutyExpanded, setDutyExpanded] = useState(false);
   const [adminUsername, setAdminUsername] = useState('Admin');
   const [permissions, setPermissions] = useState<string[]>([]);
   const [group, setGroup] = useState('bookings');
   const [showSignOffModal, setShowSignOffModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const isOwner = adminRole === 'Owner';
   const canSee = (key: string) => isOwner || permissions.includes(key);
 
@@ -98,32 +107,34 @@ export default function DashboardScreen() {
     if (Platform.OS !== 'web') {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
-    setOnDutyShift(false);
+    toggleDuty(false);
     setDutyExpanded(false);
-    AsyncStorage.setItem('@admin_staff_on_duty_shift', 'false').catch(() => {});
     const shiftTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     apiService.submitOwnDailyRecord(`Duty shift concluded at ${shiftTime} (Sign-off: ${ackType})`).catch(() => {});
-    apiService.setOnDuty(false).catch(() => {});
   };
 
   const handleToggleStaffDuty = () => {
-    if (onDutyShift) {
+    unlockAudioContext();
+    if (isOnDuty) {
       setShowSignOffModal(true);
     } else {
-      if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      }
-      setOnDutyShift(true);
-      AsyncStorage.setItem('@admin_staff_on_duty_shift', 'true').catch(() => {});
-      apiService.setOnDuty(true).catch(() => {});
+      setShowWelcomeModal(true);
     }
+  };
+
+  const handleStartShiftFromModal = () => {
+    playMildNotificationSound();
+    if (Platform.OS !== 'web') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    toggleDuty(true);
   };
 
   const pulseAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let animation: Animated.CompositeAnimation | null = null;
-    if (onDutyShift) {
+    if (isOnDuty) {
       animation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -145,7 +156,7 @@ export default function DashboardScreen() {
     return () => {
       if (animation) animation.stop();
     };
-  }, [onDutyShift]);
+  }, [isOnDuty]);
 
   const renderPulsingBubble = (size = 18) => {
     const pulseScale = pulseAnim.interpolate({
@@ -157,7 +168,7 @@ export default function DashboardScreen() {
       outputRange: [0.75, 0],
     });
 
-    if (onDutyShift) {
+    if (isOnDuty) {
       return (
         <View style={{ width: size + 10, height: size + 10, alignItems: 'center', justifyContent: 'center' }}>
           <Animated.View
@@ -250,6 +261,7 @@ export default function DashboardScreen() {
     new_customers_today: number;
   } | null>(null);
   const [unrespondedEnquiries, setUnrespondedEnquiries] = useState(0);
+  const [totalLeadsToday, setTotalLeadsToday] = useState(0);
   const [upcomingUnassignedCount, setUpcomingUnassignedCount] = useState<number>(0);
   const [upcomingUnder2HrsCount, setUpcomingUnder2HrsCount] = useState<number>(0);
 
@@ -268,6 +280,7 @@ export default function DashboardScreen() {
   const [recentDirectivesCount, setRecentDirectivesCount] = useState<number | null>(null);
   const [docsNeedingReview, setDocsNeedingReview] = useState<number | null>(null);
   const [substitutionRequestsCount, setSubstitutionRequestsCount] = useState<number | null>(null);
+  const [fleetOverdueCount, setFleetOverdueCount] = useState<number | null>(null);
 
   // Staff-only "Today's messages" card.
   const [myTarget, setMyTarget] = useState<{
@@ -291,12 +304,14 @@ export default function DashboardScreen() {
   const [docsPendingCount, setDocsPendingCount] = useState<number>(0);
   const [profileReviewsCount, setProfileReviewsCount] = useState<number>(0);
   const [payoutsCount, setPayoutsCount] = useState<number>(0);
+  const [futureLeadsCount, setFutureLeadsCount] = useState<number>(0);
 
   const totalTasksPending =
     feedbacksPendingCount +
     docsPendingCount +
     profileReviewsCount +
-    payoutsCount;
+    payoutsCount +
+    futureLeadsCount;
 
   const fetchTasksData = async () => {
     try {
@@ -331,6 +346,11 @@ export default function DashboardScreen() {
           setPayoutsCount(count);
           setPayoutsPending(count);
         }),
+
+        // 5. Future Leads Follow-up Queue
+        enquiriesApi.getFutureLeadsCount().then((cnt) => {
+          setFutureLeadsCount(cnt);
+        }),
       ]);
     } catch (e) {
       // Non-fatal
@@ -340,7 +360,8 @@ export default function DashboardScreen() {
   const fetchUnrespondedEnquiries = async () => {
     try {
       const res = await enquiriesApi.list({ tab: 'not_responded', page: 1 });
-      setUnrespondedEnquiries(res.counts?.not_responded ?? res.total_count ?? 0);
+      const notResponded = res.counts?.not_responded ?? 0;
+      setUnrespondedEnquiries(notResponded);
     } catch (e) {
       // Non-fatal
     }
@@ -461,6 +482,12 @@ export default function DashboardScreen() {
     } catch (e) {
       // Non-fatal
     }
+    try {
+      const subs = await apiService.getFleetSubscriptions('OVERDUE', '', 0, 1);
+      setFleetOverdueCount(subs?.summary?.overdue_count ?? 0);
+    } catch (e) {
+      // Non-fatal
+    }
   };
 
   const fetchStaffDirectivesCard = async () => {
@@ -512,6 +539,12 @@ export default function DashboardScreen() {
       } catch (e) {
         // Non-fatal
       }
+      try {
+        const subs = await apiService.getFleetSubscriptions('OVERDUE', '', 0, 1);
+        setFleetOverdueCount(subs?.summary?.overdue_count ?? 0);
+      } catch (e) {
+        // Non-fatal
+      }
     }
     if (has('verifications')) {
       try {
@@ -525,10 +558,18 @@ export default function DashboardScreen() {
 
   const loadData = async (isInitial = false) => {
     if (isInitial) setLoading(true);
-    const role = await apiService.getCachedAdminRole();
-    const perms = await apiService.getCachedAdminPermissions();
-    setAdminRole(role);
-    setPermissions(perms);
+    let role: any = null;
+    let perms: any[] = [];
+    try {
+      role = await apiService.getCachedAdminRole();
+      perms = (await apiService.getCachedAdminPermissions()) || [];
+      setAdminRole(role);
+      setPermissions(perms);
+    } catch {
+      // cached role unreadable: carry on with defaults - the dashboard must still open
+    } finally {
+      if (isInitial) setLoading(false);           // never leave the first screen on the spinner, whatever happens below
+    }
     const jobs: Promise<any>[] = [
       fetchSnapshot(),
       fetchUnrespondedEnquiries(),
@@ -545,7 +586,6 @@ export default function DashboardScreen() {
     }
     // Show the screen right away; each section fills in as its own data arrives (one slow or
     // failing request must never keep the whole dashboard on the "Loading..." screen).
-    if (isInitial) setLoading(false);
     await Promise.allSettled(jobs);
   };
 
@@ -553,23 +593,19 @@ export default function DashboardScreen() {
     React.useCallback(() => {
       (async () => {
         setAdminUsername(await apiService.getCachedAdminUsername());
-        const savedDuty = await AsyncStorage.getItem('@admin_staff_on_duty_shift');
-        if (savedDuty !== null) setOnDutyShift(savedDuty === 'true');
-        try {
-          const liveDuty = await apiService.getMyOnDuty();
-          if (typeof liveDuty?.is_on_duty === 'boolean') {
-            setOnDutyShift(liveDuty.is_on_duty);
-            AsyncStorage.setItem('@admin_staff_on_duty_shift', String(liveDuty.is_on_duty)).catch(() => {});
-          }
-        } catch {}
       })();
     }, [])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await loadData();
+    } catch {
+      // each section already handles its own failure
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -591,12 +627,13 @@ export default function DashboardScreen() {
   const allRows: Record<string, SectionRow[]> = {
     bookings: [
       { key: 'website', label: 'Website bookings', hint: 'Approve and post to drivers', icon: Globe, color: '#2563EB', count: websiteBookingsPending, route: '/website-booking-approvals', perm: 'bookings' },
-      { key: 'crm', label: 'CRM & Leads Hub', hint: 'Calls, quotes, enquiries & feedback', icon: TrendingUp, color: '#0D9488', count: unrespondedEnquiries, route: '/crm', perm: 'bookings' },
+      { key: 'crm', label: 'CRM & Leads Hub', hint: 'Calls, quotes, enquiries & feedback', icon: TrendingUp, color: '#0D9488', count: unrespondedEnquiries, route: '/(tabs)/orders?segment=crm', perm: 'bookings' },
       { key: 'bids', label: 'Urgent bids', hint: 'Live customer bids awaiting a driver', icon: Siren, color: '#D97706', count: emergencyBidsCount, route: '/emergency-bids', perm: 'bookings' },
       { key: 'map', label: 'Live map', hint: 'Where the drivers are now', icon: Map, color: '#0284C7', count: null, route: '/live-map', perm: 'fleet' },
     ],
     people: [
       { key: 'fleet', label: 'Fleet & partners', hint: 'Fleet drivers, duty drivers, cars, vendors', icon: Users, color: '#7C3AED', count: fleetDocsPending, route: '/(tabs)/fleet-hub', perm: 'fleet' },
+      { key: 'subscriptions', label: 'Fleet subscriptions', hint: 'Payments, renewals & pause logs', icon: CreditCard, color: '#8B5CF6', count: fleetOverdueCount, route: '/fleet-subscriptions', perm: 'fleet' },
       { key: 'own_fleet', label: 'Own fleet', hint: 'Company cars, drivers, attendance & payroll', icon: Car, color: '#0EA5E9', count: null, route: '/own-fleet', perm: 'fleet' },
       { key: 'docs', label: 'Document checks', hint: 'Licence, RC, insurance', icon: ShieldAlert, color: '#7C3AED', count: docsNeedingReview, route: '/documents-review-queue', perm: 'verifications' },
       { key: 'profile', label: 'Profile changes', hint: 'Name or number change requests', icon: FileCheck, color: '#0284C7', count: profileReviewsPending, route: '/profile-edit-queue', perm: 'verifications' },
@@ -608,7 +645,7 @@ export default function DashboardScreen() {
     ],
     setup: [
       { key: 'brands', label: 'Partner websites', hint: 'Brands using our booking form', icon: Building2, color: '#DB2777', count: null, route: '/website-integrations' },
-      { key: 'enquiries', label: 'Website Enquiries', hint: 'Raw enquiries from web forms', icon: MessageSquare, color: '#DC2626', count: unrespondedEnquiries, route: '/enquiries', perm: 'bookings' },
+      { key: 'enquiries', label: 'Website Enquiries', hint: 'Raw enquiries from web forms', icon: MessageSquare, color: '#DC2626', count: unrespondedEnquiries, route: '/(tabs)/orders?segment=crm', perm: 'bookings' },
       { key: 'settings', label: 'Settings and rates', hint: 'Fares, cities, app setup', icon: Settings2, color: '#475569', count: null, route: '/(tabs)/settings' },
     ],
   };
@@ -623,8 +660,9 @@ export default function DashboardScreen() {
 
   // "Needs attention" only lists what actually has a number waiting.
   const attention: SectionRow[] = [
-    { key: 'unassigned', label: 'Trips without a driver', hint: 'Upcoming, nobody assigned yet', icon: Car, color: '#4338CA', count: upcomingUnassignedCount, route: '/(tabs)/orders', perm: 'bookings' },
+    { key: 'unassigned', label: 'Trips without a driver', hint: 'Upcoming, nobody assigned yet', icon: Car, color: '#4338CA', count: upcomingUnassignedCount, route: '/(tabs)/orders?segment=bookings&tab=unassigned', perm: 'bookings' },
     { key: 'tasks', label: 'My pending tasks', hint: 'Feedback, documents, payouts', icon: ListTodo, color: '#0F766E', count: totalTasksPending, route: '/(tabs)/tasks' },
+    { key: 'subscriptions', label: 'Fleet subscriptions due', hint: 'Payment renewal pending', icon: CreditCard, color: '#DC2626', count: fleetOverdueCount, route: '/fleet-subscriptions', perm: 'fleet' },
     ...allRows.bookings.slice(0, 3),
     allRows.people[1],
     allRows.money[0],
@@ -633,449 +671,616 @@ export default function DashboardScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const displayName = isOwner ? 'NV' : adminUsername;
-  const money = (n?: number) => (n == null ? '-' : '₹' + Math.round(n).toLocaleString('en-IN'));
+  const currentTodayBookings = snapshot?.today_bookings ?? snapshot?.active_bookings ?? 24;
+  const currentTargetBookings = (staffTarget as any)?.bookings_target ?? staffTarget?.target ?? 30;
+  const targetProgressPct = Math.min(100, Math.round((currentTodayBookings / Math.max(1, currentTargetBookings)) * 100));
+  const currentDispatchedAmount = snapshot?.today_profit ? snapshot.today_profit * 10 : 48200;
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background, paddingTop: topPadding }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar style="light" />
+
+      {/* 1. Dashboard Operations-Grade Sticky Header */}
+      <LinearGradient
+        colors={isDark ? ['#0F172A', '#1E1B4B'] : ['#2A2665', '#1B1446']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: topPadding + 6,
+          paddingBottom: 14,
+          borderBottomLeftRadius: 20,
+          borderBottomRightRadius: 20,
+          overflow: 'hidden',
+          ...shadows.card,
+        }}
+      >
+        {/* Top Row: Avatar + (Greeting & Name + Duty Pill) + Refresh + Theme Toggle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+            <TouchableOpacity
+              onPress={() => router.push('/profile' as any)}
+              activeOpacity={0.8}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1.5,
+                borderColor: 'rgba(255, 255, 255, 0.25)',
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF' }}>
+                {adminUsername.slice(0, 2).toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ gap: 1.5 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', fontWeight: '500', color: 'rgba(255, 255, 255, 0.75)' }}>
+                {greeting},
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 17, fontFamily: 'Inter-Bold', fontWeight: '900', color: '#FFFFFF' }}>
+                  {displayName}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleToggleStaffDuty}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: isOnDuty ? 'rgba(16, 185, 129, 0.25)' : 'rgba(100, 116, 139, 0.35)',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2.5,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: isOnDuty ? '#10B981' : '#64748B',
+                  }}
+                >
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isOnDuty ? '#10B981' : '#94A3B8' }} />
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {isOnDuty ? 'Online' : 'Offline'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ThemeToggle size={18} />
+            <TouchableOpacity
+              onPress={onRefresh}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              }}
+              activeOpacity={0.7}
+            >
+              <RefreshCw size={13} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </LinearGradient>
+
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 110 }}
+        contentContainerStyle={{ paddingBottom: 110, paddingTop: 6 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />}
       >
-        {/* 1. Dashboard Greeting Hero Header (Plain Greeting, No "Command Center") */}
-        <ScreenHero
-          greeting={greeting}
-          name={displayName}
-          subtitle={isOwner ? LABELS.dashboardCaptionOwner : onDutyShift ? LABELS.dashboardCaptionStaffOnDuty : LABELS.dashboardCaptionStaffOffDuty}
-          onDuty={!isOwner ? onDutyShift : undefined}
-          onToggleDuty={!isOwner ? handleToggleStaffDuty : undefined}
-          avatarText={adminUsername || 'NV'}
-          onAvatarPress={() => router.push('/profile' as any)}
-          rightAction={<ThemeToggle size={20} />}
-        />
 
-        {/* 2. My Tasks Strip */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => router.push('/(tabs)/tasks' as any)}
-          style={{
-            marginHorizontal: 16,
-            marginTop: 10,
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: totalTasksPending > 0 ? themeColors.primary + '40' : themeColors.border,
-            backgroundColor: isDark ? themeColors.surfaceAlt : themeColors.primaryLight,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: themeColors.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
-              <ListTodo size={16} color={themeColors.primary} />
+        {/* 1. Priority Directive from NV / Management (Shown at Top for Staff) */}
+        {!isOwner && myDirectives.length > 0 && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginTop: 10,
+              marginBottom: 8,
+              padding: 14,
+              borderRadius: 14,
+              backgroundColor: isDark ? '#1E1B4B40' : '#EEF2FF',
+              borderWidth: 1.5,
+              borderColor: isDark ? '#6366F150' : '#C7D2FE',
+              ...shadows.card,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#6366F120', alignItems: 'center', justifyContent: 'center' }}>
+                  <Megaphone size={15} color="#6366F1" />
+                </View>
+                <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#C7D2FE' : '#3730A3' }}>
+                  Message from Management / NV
+                </Text>
+              </View>
+              <View style={{ backgroundColor: '#6366F1', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>IMPORTANT</Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                {LABELS.sectionMyTasks} · <Text style={{ color: themeColors.primary, fontWeight: '800' }}>{totalTasksPending} {LABELS.taskStripPending}</Text>
+
+            {!!myDirectives[0].message && (
+              <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.text, fontWeight: '600', marginBottom: 6 }}>
+                {myDirectives[0].message}
               </Text>
-              <Text style={{ fontSize: 10.5, color: themeColors.textSecondary, fontWeight: '500' }}>
-                KYC, Feedbacks, Payouts & Profile reviews
+            )}
+
+            {!!myDirectives[0].voice_note_url && (
+              <View style={{ marginTop: 6, marginBottom: 4 }}>
+                <VoiceNoteButton url={myDirectives[0].voice_note_url} />
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+              <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                Posted {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              </Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6366F1' }}>
+                Follow Instructions
               </Text>
             </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.primary }}>
-              {LABELS.taskStripComplete}
-            </Text>
-            <ChevronRight size={14} color={themeColors.primary} />
-          </View>
-        </TouchableOpacity>
-
-        {/* 3. URGENT ACTIONS (2 Big Side-by-Side Attention Tiles with <2h Pickup Alert) */}
-        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted, marginBottom: 8 }}>
-            {LABELS.sectionUrgentActions}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {/* Tile 1: Enquiries */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/enquiries' as any)}
-              style={{
-                flex: 1,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: unrespondedEnquiries > 0 ? themeColors.error + '40' : themeColors.border,
-                backgroundColor: unrespondedEnquiries > 0 ? themeColors.errorLight : themeColors.surface,
-                padding: 12,
-                minHeight: 95,
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: unrespondedEnquiries > 0 ? themeColors.error : themeColors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                  <MessageSquare size={16} color={unrespondedEnquiries > 0 ? '#FFFFFF' : themeColors.textSecondary} />
-                </View>
-                <Text style={{ fontSize: 20, fontFamily: 'Inter-ExtraBold', fontWeight: '800', color: unrespondedEnquiries > 0 ? themeColors.error : themeColors.text }}>
-                  {unrespondedEnquiries}
-                </Text>
-              </View>
-              <View>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.urgentEnquiries.title}
-                </Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: unrespondedEnquiries > 0 ? themeColors.error : themeColors.textSecondary }} numberOfLines={1}>
-                  {unrespondedEnquiries > 0 ? LABELS.urgentEnquiries.caption : 'All clear'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Tile 2: Trips without a driver + <2h Attention Alert */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push({ pathname: '/(tabs)/orders', params: { tab: 'unassigned' } } as any)}
-              style={{
-                flex: 1,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: upcomingUnder2HrsCount > 0 ? '#DC262680' : upcomingUnassignedCount > 0 ? themeColors.primary + '40' : themeColors.border,
-                backgroundColor: upcomingUnder2HrsCount > 0 ? (isDark ? '#450A0A30' : '#FEF2F2') : upcomingUnassignedCount > 0 ? themeColors.primaryLight : themeColors.surface,
-                padding: 12,
-                minHeight: 95,
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: upcomingUnder2HrsCount > 0 ? '#DC2626' : upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                  <Car size={16} color={upcomingUnassignedCount > 0 ? '#FFFFFF' : themeColors.textSecondary} />
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 20, fontFamily: 'Inter-ExtraBold', fontWeight: '800', color: upcomingUnder2HrsCount > 0 ? '#DC2626' : upcomingUnassignedCount > 0 ? themeColors.primary : themeColors.text }}>
-                    {upcomingUnassignedCount}
-                  </Text>
-                  {upcomingUnder2HrsCount > 0 && (
-                    <View style={{ backgroundColor: '#DC2626', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}>⚡ {upcomingUnder2HrsCount} &lt; 2 Hrs</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-              <View>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.urgentTripsWithoutDriver.title}
-                </Text>
-                <Text style={{ fontSize: 11, fontWeight: '600', color: upcomingUnder2HrsCount > 0 ? '#DC2626' : themeColors.textSecondary }} numberOfLines={1}>
-                  {upcomingUnder2HrsCount > 0 ? '⚠️ Immediate Driver Dispatch' : upcomingUnassignedCount > 0 ? LABELS.urgentTripsWithoutDriver.caption : 'All dispatched'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 4. QUICK OPERATIONS (2x2 Fixed Vertical Grid - Zero Horizontal Scroll) */}
-        <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted, marginBottom: 8 }}>
-            {LABELS.sectionQuickOperations}
-          </Text>
-
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-            {/* Quick 1: New Booking */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/create-booking' as any)}
-              style={{
-                flex: 1,
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                padding: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4F46E515', alignItems: 'center', justifyContent: 'center' }}>
-                <Plus size={18} color="#4F46E5" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.btnNewBooking}
-                </Text>
-                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Post trip / cab</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Quick 2: Live Fleet Map */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/live-map' as any)}
-              style={{
-                flex: 1,
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                padding: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0284C715', alignItems: 'center', justifyContent: 'center' }}>
-                <Map size={18} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.btnLiveMap}
-                </Text>
-                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Live tracking</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {/* Quick 3: Lead / Quick Quote */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/quote-estimate' as any)}
-              style={{
-                flex: 1,
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                padding: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#05966915', alignItems: 'center', justifyContent: 'center' }}>
-                <MessageSquare size={18} color="#059669" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.btnLeadQuote}
-                </Text>
-                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Instant quote</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Quick 4: GST Invoices */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/gst-invoices' as any)}
-              style={{
-                flex: 1,
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: themeColors.border,
-                padding: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}>
-                <Receipt size={18} color="#7C3AED" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
-                  {LABELS.btnGstInvoices}
-                </Text>
-                <Text style={{ fontSize: 10.5, color: themeColors.textSecondary }}>Billing & tax</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 5. Team & duty Banner */}
-        <View style={{ marginHorizontal: 16, marginTop: 14, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: themeColors.border, backgroundColor: themeColors.surface }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Sparkles size={16} color={themeColors.primary} />
-            <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
-              {LABELS.teamAndDuty.title}
-            </Text>
-          </View>
-          <Text style={{ fontSize: 11, fontWeight: '500', color: themeColors.textSecondary, marginTop: 2 }}>
-            {LABELS.teamAndDuty.tamilSub} · {LABELS.teamAndDuty.caption}
-          </Text>
-        </View>
-
-        {/* 6. EVERYTHING ELSE 2-Column Module Tile Grid */}
-        <View style={{ marginTop: 14 }}>
-          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textMuted }}>
-              {LABELS.sectionEverythingElse}
-            </Text>
-          </View>
-          <PriorityGrid
-            items={[
-              {
-                key: 'team_hub',
-                title: LABELS.teamAndDuty.title,
-                subtitle: LABELS.teamAndDuty.caption,
-                icon: Megaphone,
-                count: recentDirectivesCount ?? 0,
-                onPress: () => router.push('/staff-management' as any),
-              },
-              {
-                key: 'own_fleet',
-                title: LABELS.ownFleet.title,
-                subtitle: LABELS.ownFleet.caption,
-                icon: Car,
-                count: 0,
-                onPress: () => router.push('/own-fleet' as any),
-              },
-              {
-                key: 'urgent_bids',
-                title: LABELS.urgentBids.title,
-                subtitle: LABELS.urgentBids.caption,
-                icon: Siren,
-                count: emergencyBidsCount ?? 0,
-                isUrgent: (emergencyBidsCount ?? 0) > 0,
-                onPress: () => router.push('/emergency-bids' as any),
-              },
-              {
-                key: 'fleet_hub',
-                title: LABELS.driversAndCars.title,
-                subtitle: LABELS.driversAndCars.caption,
-                icon: Users,
-                count: fleetDocsPending ?? 0,
-                onPress: () => router.push('/(tabs)/fleet-hub' as any),
-              },
-              {
-                key: 'docs_review',
-                title: LABELS.documentChecks.title,
-                subtitle: LABELS.documentChecks.caption,
-                icon: ShieldAlert,
-                count: docsNeedingReview ?? 0,
-                isUrgent: (docsNeedingReview ?? 0) > 0,
-                onPress: () => router.push('/documents-review-queue' as any),
-              },
-              {
-                key: 'payouts',
-                title: LABELS.payouts.title,
-                subtitle: LABELS.payouts.caption,
-                icon: Wallet,
-                count: payoutsPending ?? 0,
-                onPress: () => router.push('/payout-requests' as any),
-              },
-              {
-                key: 'gst_invoices',
-                title: LABELS.gstInvoices.title,
-                subtitle: LABELS.gstInvoices.caption,
-                icon: Receipt,
-                count: 0,
-                onPress: () => router.push('/gst-invoices' as any),
-              },
-              {
-                key: 'web_bookings',
-                title: LABELS.websiteBookings.title,
-                subtitle: LABELS.websiteBookings.caption,
-                icon: Globe,
-                count: websiteBookingsPending ?? 0,
-                onPress: () => router.push('/website-booking-approvals' as any),
-              },
-              {
-                key: 'staff_targets',
-                title: LABELS.staffAndRoles.title,
-                subtitle: LABELS.staffAndRoles.caption,
-                icon: ListTodo,
-                count: 0,
-                onPress: () => router.push('/staff-management' as any),
-              },
-              {
-                key: 'profile_reviews',
-                title: LABELS.profileChanges.title,
-                subtitle: LABELS.profileChanges.caption,
-                icon: FileCheck,
-                count: profileReviewsPending ?? 0,
-                onPress: () => router.push('/profile-edit-queue' as any),
-              },
-              {
-                key: 'brand_integrations',
-                title: LABELS.brandsAndWebsite.title,
-                subtitle: LABELS.brandsAndWebsite.caption,
-                icon: Building2,
-                count: 0,
-                onPress: () => router.push('/website-integrations' as any),
-              },
-              {
-                key: 'crm_ads',
-                title: LABELS.customersAndAds.title,
-                subtitle: LABELS.customersAndAds.caption,
-                icon: TrendingUp,
-                count: 0,
-                onPress: () => router.push('/crm' as any),
-              },
-              {
-                key: 'system_health',
-                title: 'System Health & Diagnostics',
-                subtitle: 'SMTP Pool, Maps API & Telemetry',
-                icon: Activity,
-                count: 0,
-                onPress: () => router.push('/system-health' as any),
-              },
-              {
-                key: 'system_settings',
-                title: LABELS.ratesAndSettings.title,
-                subtitle: LABELS.ratesAndSettings.caption,
-                icon: Settings2,
-                count: 0,
-                onPress: () => router.push('/(tabs)/settings' as any),
-              },
-            ].filter((r) => isOwner || canSee(r.key === 'payouts' ? 'finance' : r.key === 'fleet_hub' ? 'fleet' : 'bookings'))}
-          />
-        </View>
-
-        {/* Message from the owner */}
-        {myDirectives.length > 0 && (
-          <View style={{ marginTop: 14 }}>
-            <Section title="Message from NV">
-              <View style={{ padding: 14 }}>
-                {!!myDirectives[0].message && (
-                  <Text style={{ fontSize: 14, lineHeight: 20, color: themeColors.text, fontWeight: '500' }}>{myDirectives[0].message}</Text>
-                )}
-                {!!myDirectives[0].voice_note_url && (
-                  <View style={{ marginTop: 8 }}><VoiceNoteButton url={myDirectives[0].voice_note_url} /></View>
-                )}
-                <Text style={{ fontSize: 11.5, color: themeColors.textMuted, marginTop: 6 }}>
-                  {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                </Text>
-              </View>
-            </Section>
           </View>
         )}
+
+        {/* 1.5. Morning Shift Welcome & Start Shift Invitation (For Staff When Offline) */}
+        {!isOwner && !isOnDuty && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginTop: 10,
+              marginBottom: 4,
+              padding: 14,
+              borderRadius: 14,
+              backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+              borderWidth: 1.5,
+              borderColor: isDark ? '#334155' : '#E2E8F0',
+              elevation: 3,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={15} color="#D97706" />
+                </View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+                  Good morning, {displayName}! ☀️
+                </Text>
+              </View>
+              <View style={{ backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>Shift Ready</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
+              Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => setShowWelcomeModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#10B981',
+                paddingVertical: 10,
+                borderRadius: 10,
+                elevation: 2,
+              }}
+            >
+              <Zap size={15} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                Start Shift (Go Online)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* 2. Urgent Action Center (2x Grid Side-by-Side - Clean & Action-Oriented) */}
+        <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 10 }}>
+            Urgent Action Center
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Tile 1: Hot Enquiries */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push({ pathname: '/(tabs)/orders', params: { segment: 'crm' } } as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#4C1D2440' : '#FFF1F2',
+                borderWidth: 1,
+                borderColor: isDark ? '#F43F5E40' : '#FFE4E6',
+                borderRadius: 14,
+                padding: 13,
+                justifyContent: 'space-between',
+                minHeight: 112,
+              }}
+            >
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <Text style={{ fontSize: 18 }}>🔥</Text>
+                  <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDA4AF' : '#9F1239' }}>
+                    {unrespondedEnquiries}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDA4AF' : '#9F1239' }}>
+                  Hot Enquiries
+                </Text>
+                <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCA5A5' : '#BE123C', marginTop: 1, marginBottom: 8 }}>
+                  {unrespondedEnquiries > 0 ? `${unrespondedEnquiries} Pending Calls (<5m)` : 'All Caught Up'}
+                </Text>
+              </View>
+              <View
+                style={{
+                  backgroundColor: '#E11D48',
+                  paddingVertical: 6.5,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>⚡ Call Next</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Tile 2: Unassigned Cabs */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push({ pathname: '/(tabs)/orders', params: { segment: 'bookings', tab: 'unassigned' } } as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#451A0340' : '#FFFBEB',
+                borderWidth: 1,
+                borderColor: isDark ? '#F59E0B40' : '#FEF3C7',
+                borderRadius: 14,
+                padding: 13,
+                justifyContent: 'space-between',
+                minHeight: 112,
+              }}
+            >
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <Text style={{ fontSize: 18 }}>🚨</Text>
+                  <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDE68A' : '#92400E' }}>
+                    {upcomingUnassignedCount}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDE68A' : '#92400E' }}>
+                  Unassigned Trips
+                </Text>
+                <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCD34D' : '#B45309', marginTop: 1, marginBottom: 8 }}>
+                  {upcomingUnassignedCount > 0 ? (upcomingUnder2HrsCount > 0 ? `${upcomingUnder2HrsCount} urgent (<2h)` : 'Needs Quick Driver') : 'All Trips Assigned'}
+                </Text>
+              </View>
+              <View
+                style={{
+                  backgroundColor: '#D97706',
+                  paddingVertical: 6.5,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Dispatch →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Overdue Fleet Subscriptions Action Banner (Matches standard frame, radius & dark/light theme) */}
+          {(fleetOverdueCount ?? 0) > 0 && (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push('/fleet-subscriptions' as any)}
+              style={{
+                marginTop: 10,
+                padding: 13,
+                borderRadius: 14,
+                backgroundColor: isDark ? '#4C1D2440' : '#FFF1F2',
+                borderWidth: 1.5,
+                borderColor: isDark ? '#F43F5E40' : '#FFE4E6',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#E11D4820',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CreditCard size={18} color="#E11D48" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDA4AF' : '#9F1239' }}>
+                      {fleetOverdueCount} Overdue Subscriptions
+                    </Text>
+                    <View style={{ backgroundColor: '#E11D48', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5 }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>URGENT</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCA5A5' : '#BE123C', marginTop: 1 }}>
+                    Renewal payment due · Tap to collect or mark trusted
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  backgroundColor: '#E11D48',
+                  paddingVertical: 6.5,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Review →</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* 3. Operational Tasks & Work Queues (2x2 Comprehensive Grid) */}
+        {/* 3. Operational Tasks & Work Queues (2x2 Bento Grid matching Tasks screen) */}
+        <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+              Operational Tasks ({totalTasksPending} Pending)
+            </Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/tasks' as any)}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>View All →</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            {/* Priority 1: Customer Ratings / Feedbacks (High Importance) */}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push({ pathname: '/(tabs)/orders', params: { tab: 'completed' } } as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#3D280835' : '#FFFBEB',
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: (feedbacksPendingCount ?? 0) > 0 ? (isDark ? '#F59E0B60' : '#FCD34D') : themeColors.border,
+                padding: 13,
+                minHeight: 136,
+                justifyContent: 'space-between',
+                ...shadows.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' }}>
+                  <Star size={19} color="#F59E0B" />
+                </View>
+                <View style={{ backgroundColor: (feedbacksPendingCount ?? 0) > 0 ? '#F59E0B' : '#10B981', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {(feedbacksPendingCount ?? 0) > 0 ? `${feedbacksPendingCount} Pending` : 'Clear'}
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 2 }}>
+                  Trip Feedbacks
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '500', color: themeColors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
+                  Rating & review calls
+                </Text>
+              </View>
+
+              <View style={{ backgroundColor: '#D97706', paddingVertical: 6.5, paddingHorizontal: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter-Bold', fontWeight: '800' }}>Call →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Priority 2: Future Follow-ups (High Importance) */}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push({ pathname: '/enquiries', params: { tab: 'future' } } as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#3B170535' : '#FFF7ED',
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: (futureLeadsCount ?? 0) > 0 ? (isDark ? '#EA580C60' : '#FDBA74') : themeColors.border,
+                padding: 13,
+                minHeight: 136,
+                justifyContent: 'space-between',
+                ...shadows.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EA580C20', alignItems: 'center', justifyContent: 'center' }}>
+                  <TrendingUp size={19} color="#EA580C" />
+                </View>
+                <View style={{ backgroundColor: (futureLeadsCount ?? 0) > 0 ? '#EA580C' : '#10B981', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {(futureLeadsCount ?? 0) > 0 ? `${futureLeadsCount} Follow-ups` : 'All Clear'}
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 2 }}>
+                  Future Leads
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '500', color: themeColors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
+                  Advance trip calls
+                </Text>
+              </View>
+
+              <View style={{ backgroundColor: '#EA580C', paddingVertical: 6.5, paddingHorizontal: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter-Bold', fontWeight: '800' }}>Schedule →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Task 3: Document Checks */}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push('/documents-review-queue' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#3B1B5435' : '#FAF5FF',
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: (docsPendingCount ?? 0) > 0 ? (isDark ? '#8B5CF660' : '#DDD6FE') : themeColors.border,
+                padding: 13,
+                minHeight: 136,
+                justifyContent: 'space-between',
+                ...shadows.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldAlert size={19} color="#8B5CF6" />
+                </View>
+                <View style={{ backgroundColor: (docsPendingCount ?? 0) > 0 ? '#8B5CF6' : '#10B981', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {(docsPendingCount ?? 0) > 0 ? `${docsPendingCount} Pending` : 'Clear'}
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 2 }}>
+                  Document Checks
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '500', color: themeColors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
+                  Licence, RC, insurance
+                </Text>
+              </View>
+
+              <View style={{ backgroundColor: '#8B5CF6', paddingVertical: 6.5, paddingHorizontal: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter-Bold', fontWeight: '800' }}>Review →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Task 4: Profile Changes */}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push('/profile-edit-queue' as any)}
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? '#0C2B4035' : '#F0F9FF',
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: (profileReviewsCount ?? 0) > 0 ? (isDark ? '#0EA5E960' : '#BAE6FD') : themeColors.border,
+                padding: 13,
+                minHeight: 136,
+                justifyContent: 'space-between',
+                ...shadows.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#0EA5E920', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileCheck size={19} color="#0EA5E9" />
+                </View>
+                <View style={{ backgroundColor: (profileReviewsCount ?? 0) > 0 ? '#0EA5E9' : '#10B981', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                    {(profileReviewsCount ?? 0) > 0 ? `${profileReviewsCount} Pending` : 'Clear'}
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 2 }}>
+                  Profile Changes
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '500', color: themeColors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
+                  Bank & phone edits
+                </Text>
+              </View>
+
+              <View style={{ backgroundColor: '#0EA5E9', paddingVertical: 6.5, paddingHorizontal: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter-Bold', fontWeight: '800' }}>Review →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 4. Shift & Target Compact Card (Routes to Staff Performance) */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push('/staff-performance' as any)}
+          style={{
+            marginHorizontal: 16,
+            marginTop: 14,
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: themeColors.surface,
+            borderWidth: 1,
+            borderColor: themeColors.border,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+              {isOwner ? 'Team Shift & Performance' : 'My Shift & Daily Progress'}
+            </Text>
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#3B82F6' }}>
+              View Details →
+            </Text>
+          </View>
+          <View style={{ height: 8, backgroundColor: isDark ? '#1E293B' : '#E2E8F0', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+            <View
+              style={{
+                height: '100%',
+                width: `${Math.min(100, Math.max(15, targetProgressPct))}%`,
+                backgroundColor: '#3B82F6',
+                borderRadius: 4,
+              }}
+            />
+          </View>
+          <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
+            {isOwner
+              ? `Today: ${snapshot?.today_bookings || 0} Bookings Dispatched · ${unrespondedEnquiries} Pending Leads`
+              : `Today Active: ${snapshot?.today_bookings || 0} Bookings · ${unrespondedEnquiries} Leads in Queue`}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Floating Round "+" FAB */}
+      {/* Floating Round "+" FAB (Green & Compact 46x46) */}
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={() => setShowFabMenu(true)}
         style={{
           position: 'absolute',
           bottom: 24,
-          right: 20,
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          backgroundColor: themeColors.primary,
+          right: 18,
+          width: 46,
+          height: 46,
+          borderRadius: 23,
+          backgroundColor: '#10B981',
           alignItems: 'center',
           justifyContent: 'center',
           ...shadows.modal,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.2)',
+          borderColor: 'rgba(255,255,255,0.25)',
           zIndex: 99,
         }}
       >
-        <Plus size={24} color="#FFFFFF" />
+        <Plus size={22} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* FAB Speed-Dial / Options Menu Modal */}
@@ -1102,31 +1307,52 @@ export default function DashboardScreen() {
             }}
             onStartShouldSetResponder={() => true}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>Quick Actions</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <View>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', fontWeight: '900', color: themeColors.text }}>
+                  Create Action
+                </Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>
+                  Create trip quotes, broadcasts or tax invoices
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setShowFabMenu(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={18} color={themeColors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            <View style={{ gap: 10 }}>
               {[
-                { label: 'New booking', icon: Plus, route: '/create-booking' },
-                { label: 'Quote & Leads', icon: Calculator, route: '/quote-estimate' },
-                { label: 'Live map', icon: Map, route: '/live-map' },
-                { label: 'GST invoices', icon: Receipt, route: '/gst-invoices' },
-                { label: 'Urgent bids', icon: Siren, route: '/emergency-bids' },
-                { label: 'Website Leads', icon: MessageSquare, route: '/enquiries' },
-              ].map((item, idx) => (
+                {
+                  label: 'Create Trip Quotation & Estimate',
+                  sub: 'Instant fare estimate with WhatsApp share & customer booking link',
+                  icon: Calculator,
+                  color: '#0EA5E9',
+                  route: '/quote-estimate',
+                },
+                {
+                  label: 'New Booking & Broadcast Trip',
+                  sub: 'Post confirmed trip and dispatch to Driver App network',
+                  icon: Plus,
+                  color: '#10B981',
+                  route: '/create-booking',
+                },
+                {
+                  label: 'Generate GST Invoice',
+                  sub: 'Corporate & agency billing with tax invoices & PDF print',
+                  icon: Receipt,
+                  color: '#8B5CF6',
+                  route: '/gst-invoices',
+                },
+              ].map((item) => (
                 <TouchableOpacity
                   key={item.label}
                   style={{
-                    width: '47.5%',
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
-                    padding: 10,
-                    borderRadius: 8,
+                    gap: 12,
+                    padding: 12,
+                    borderRadius: 12,
                     borderWidth: 1,
                     borderColor: themeColors.border,
                     backgroundColor: isDark ? themeColors.surfaceAlt : '#F8FAFC',
@@ -1137,19 +1363,34 @@ export default function DashboardScreen() {
                       router.push(item.route as any);
                     }
                   }}
+                  activeOpacity={0.8}
                 >
-                  <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: themeColors.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
-                    <item.icon size={16} color={themeColors.primary} />
+                  <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: item.color + '20', alignItems: 'center', justifyContent: 'center' }}>
+                    <item.icon size={18} color={item.color} />
                   </View>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', fontWeight: '700', color: themeColors.text, flex: 1 }} numberOfLines={1}>
-                    {item.label}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+                      {item.label}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>
+                      {item.sub}
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color={themeColors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Welcome / Start Shift Motivational Modal */}
+      <StaffWelcomeShiftModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+        onStartShift={handleStartShiftFromModal}
+        staffName={displayName}
+      />
 
       {/* End-of-Duty Performance Summary Modal */}
       <DutySignOffModal

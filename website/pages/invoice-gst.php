@@ -283,8 +283,10 @@ $invoiceDate = !empty($bookingRow['created_at']) ? date('d M Y', strtotime($book
 <div class="invoice-card">
     <div class="invoice-header">
         <div>
-            <div class="brand-title">🚗 DROP CARS</div>
-            <div class="brand-sub">South India Premium Taxi Network</div>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:0.5rem;">
+                <img src="/assets/brand/DropCars_Logo_Invoice_Header.svg" alt="Drop Cars ®" style="height:42px; width:auto; display:block;" />
+            </div>
+            <div class="brand-sub">South India Premium Taxi Network · Registered Trademark</div>
             <div style="font-size:0.78rem; color:var(--muted); margin-top:0.3rem;">
                 <?php echo htmlspecialchars($gstBusinessName); ?> · GSTIN: <strong><?php echo htmlspecialchars($gstNumber); ?></strong><br>
                 <?php if (!empty($gstBusinessAddress)): ?><?php echo htmlspecialchars($gstBusinessAddress); ?><br><?php endif; ?>
@@ -368,17 +370,7 @@ $invoiceDate = !empty($bookingRow['created_at']) ? date('d M Y', strtotime($book
 
     <div class="actions-bar" style="display:flex; gap:12px; justify-content:center;">
         <button onclick="window.print()" class="btn-print">🖨️ Print Invoice</button>
-        <?php
-            // The backend no longer serves invoices by booking number alone:
-            // sign the link with the website key it already shares
-            // (backend: tax_admin.invoice_link_signature).
-            require_once __DIR__ . '/../api/includes/backend-client.php';
-            $cfgPath = is_file(__DIR__ . '/../api/config.php') ? __DIR__ . '/../api/config.php' : __DIR__ . '/../api/config.example.php';
-            $backendCfg = dropcars_backend_config(is_file($cfgPath) ? (include $cfgPath) : []);
-            $pdfSig = $backendCfg['key'] !== '' ? hash_hmac('sha256', $bookingId, $backendCfg['key']) : '';
-            $pdfBase = $backendCfg['baseUrl'] !== '' ? $backendCfg['baseUrl'] : 'https://drop-cars-api-207918408785.asia-south2.run.app';
-        ?>
-        <a href="<?php echo htmlspecialchars($pdfBase . '/api/customer/bookings/' . rawurlencode($bookingId) . '/invoice-pdf?sig=' . $pdfSig); ?>" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <a href="https://drop-cars-api-207918408785.asia-south2.run.app/api/customer/bookings/<?php echo urlencode($bookingId); ?>/invoice-pdf" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
             📥 Download Vector PDF (ReportLab)
         </a>
     </div>

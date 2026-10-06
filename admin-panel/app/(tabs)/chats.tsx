@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   FlatList,
   TextInput,
   ActivityIndicator,
@@ -12,9 +13,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  StatusBar as RNStatusBar,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   MessageSquare,
@@ -31,12 +35,27 @@ import {
   Square,
   Play,
   Pause,
+  Check,
+  CheckCheck,
+  Sparkles,
+  BookOpen,
+  ChevronDown,
+  Building2,
+  KeyRound,
+  Users,
+  Brain,
+  Store,
+  Compass,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { useCommandCenter } from '@/context/CommandCenterContext';
+import ThemeToggle from '@/components/ThemeToggle';
 import { apiService } from '@/services/api';
+import * as supportApi from '@/services/supportApi';
 import { useTheme } from '@/context/ThemeContext';
-import VoiceNote from '@/components/chat/VoiceNote';
-import ChatComposer from '@/components/chat/ChatComposer';
-import { Card, StatusPill, EmptyState, SkeletonRow } from '@/components/ui';
+import { Card, KpiStrip, EmptyState, SkeletonRow } from '@/components/ui';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -54,8 +73,55 @@ interface Msg {
   text: string;
   voice_url?: string;
   created_at: string;
+  read?: boolean;
 }
 
+function VoiceMessageBubble({ uri, mine, tint }: { uri: string; mine: boolean; tint: string }) {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+
+  const toggle = () => {
+    if (status.playing) {
+      player.pause();
+    } else {
+      if (status.didJustFinish || status.currentTime >= (status.duration || 0)) {
+        player.seekTo(0);
+      }
+      player.play();
+    }
+  };
+
+  const total = status.duration || 0;
+  const pos = Math.min(status.currentTime || 0, total);
+  const pct = total > 0 ? pos / total : 0;
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  return (
+    <TouchableOpacity onPress={toggle} activeOpacity={0.75} style={voiceStyles.row}>
+      <View style={[voiceStyles.playBtn, { backgroundColor: mine ? 'rgba(255,255,255,0.25)' : tint + '22' }]}>
+        {status.playing ? (
+          <Pause size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
+        ) : (
+          <Play size={14} color={mine ? '#FFFFFF' : tint} fill={mine ? '#FFFFFF' : tint} />
+        )}
+      </View>
+      <View style={[voiceStyles.track, { backgroundColor: mine ? 'rgba(255,255,255,0.3)' : '#E2E8F0' }]}>
+        <View style={[voiceStyles.trackFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: mine ? '#FFFFFF' : tint }]} />
+      </View>
+      <Text style={[voiceStyles.time, { color: mine ? 'rgba(255,255,255,0.85)' : '#64748B' }]}>
+        {fmt(status.playing || pos > 0 ? pos : total)}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const voiceStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 160, paddingVertical: 2 },
+  playBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  track: { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
+  trackFill: { height: '100%', borderRadius: 2 },
+  time: { fontSize: 10.5, fontWeight: '500', minWidth: 32 },
+});
 
 interface Row {
   key: string;
@@ -66,6 +132,9 @@ interface Row {
   last_text: string | null;
   last_at: string | null;
   unread: number;
+  role?: string;               // SUPPORT rows: OWNER | VEHICLE_OWNER | DRIVER | VENDOR | CUSTOMER
+  help?: boolean;              // asked for help from the forgot-password screen (could not log in)
+  stage?: string;              // BOOKING rows: the assignment status (COMPLETED = finished trip)
 }
 
 const timeLabel = (iso?: string | null) => {
@@ -78,8 +147,26 @@ const timeLabel = (iso?: string | null) => {
     : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
 
+// Ready replies for the Chats inbox (support threads and booking chats)
+const QUICK_REPLIES = [
+  { label: 'Checking', text: 'We are checking this now. We will update you here shortly.' },
+  { label: 'Need details', text: 'Please send your full name, vehicle number and registered mobile number so we can verify you.' },
+  { label: 'Send photo', text: 'Please send a clear photo of your DL / Aadhaar here (or a voice note if easier).' },
+  { label: 'Try OTP again', text: 'Please tap Forgot password once and use the code sent to your email. Check the Spam / Promotions folder too.' },
+  { label: 'Fixed', text: 'Your account is updated. Please log in again and tell us if you still face any problem.' },
+  { label: 'Call you', text: 'We will call you on your registered number shortly.' },
+  { label: 'Upcoming booking', text: 'Your upcoming booking details are in the app under My Trips. Tell us which booking you need help with.' },
+];
+
+type TabType = 'ASSISTANTS' | 'SUPPORT' | 'TRIPS' | 'ALL';
+
 export default function AdminChatsScreen() {
   const { isDark, themeColors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { openCommandCenter } = useCommandCenter();
+  const [activeTab, setActiveTab] = useState<TabType>('ALL');
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['reply', 'help', 'driver']));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -96,20 +183,32 @@ export default function AdminChatsScreen() {
   const voiceRecorderState = useAudioRecorderState(voiceRecorder);
   const [uploadingVoice, setUploadingVoice] = useState(false);
 
+  const lastSupport = useRef<any[] | null>(null);
+  const lastBooking = useRef<any[] | null>(null);
+  const loadingNow = useRef(false);
+
   const load = useCallback(async () => {
+    if (loadingNow.current) return;
+    loadingNow.current = true;
     try {
-      const [support, booking] = await Promise.all([
-        apiService.getSupportThreads().catch(() => []),
-        apiService.getBookingChatThreads().catch(() => []),
+      const [sup, bk] = await Promise.all([
+        supportApi.getSupportThreads().then((r: any) => (Array.isArray(r) ? r : null)).catch(() => null),
+        apiService.getBookingChatThreads().then((r: any) => (Array.isArray(r) ? r : null)).catch(() => null),
       ]);
+      if (sup) lastSupport.current = sup;
+      if (bk) lastBooking.current = bk;
+      const support = lastSupport.current || [];
+      const booking = lastBooking.current || [];
       const supportRows: Row[] = (support || []).map((t: any) => ({
         key: t.thread_key,
         kind: 'SUPPORT',
         title: t.thread_name || 'Driver/Owner',
-        subtitle: t.thread_role === 'OWNER' ? 'Fleet Driver' : t.thread_role === 'VENDOR' ? 'Vendor' : 'Duty Driver',
+        subtitle: (t.thread_role === 'OWNER' || t.thread_role === 'VEHICLE_OWNER') ? 'Fleet Driver' : t.thread_role === 'VENDOR' ? 'Vendor' : 'Duty Driver',
         last_text: t.last_text,
         last_at: t.last_at,
         unread: t.unread || 0,
+        role: String(t.thread_role || '').toUpperCase(),
+        help: !!t.help_request,
       }));
       const bookingRows: Row[] = (booking || []).map((t: any) => ({
         key: `order-${t.order_id}`,
@@ -120,6 +219,7 @@ export default function AdminChatsScreen() {
         last_text: t.last_text,
         last_at: t.last_at,
         unread: t.unread || 0,
+        stage: String(t.assignment_status || '').toUpperCase(),
       }));
       const all = [...supportRows, ...bookingRows].sort(
         (a, b) => new Date(b.last_at || 0).getTime() - new Date(a.last_at || 0).getTime()
@@ -127,6 +227,7 @@ export default function AdminChatsScreen() {
       setRows(all);
     } catch {
     } finally {
+      loadingNow.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -146,12 +247,14 @@ export default function AdminChatsScreen() {
     const interval = setInterval(async () => {
       try {
         if (openRow.kind === 'SUPPORT') {
-          const res = await apiService.getSupportThread(openRow.key);
+          const res = await supportApi.getSupportThread(openRow.key);
           const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}` }));
           setMessages((prev) => {
             const known = new Set(prev.map((p) => String(p.id)));
             const add = fresh.filter((m: Msg) => !known.has(String(m.id)));
-            return add.length ? [...prev, ...add] : prev;
+            const readNow = new Map(fresh.map((m: Msg) => [String(m.id), !!m.read]));
+            const merged = prev.map((p) => (p.mine && !p.read && readNow.get(String(p.id)) ? { ...p, read: true } : p));
+            return add.length || merged.some((m, i) => m !== prev[i]) ? [...merged, ...add] : prev;
           });
         } else if (openRow.order_id) {
           const res = await apiService.getBookingChat(openRow.order_id);
@@ -159,7 +262,9 @@ export default function AdminChatsScreen() {
           setMessages((prev) => {
             const known = new Set(prev.map((p) => String(p.id)));
             const add = fresh.filter((m: Msg) => !known.has(String(m.id)));
-            return add.length ? [...prev, ...add] : prev;
+            const readNow = new Map(fresh.map((m: Msg) => [String(m.id), !!m.read]));
+            const merged = prev.map((p) => (p.mine && !p.read && readNow.get(String(p.id)) ? { ...p, read: true } : p));
+            return add.length || merged.some((m, i) => m !== prev[i]) ? [...merged, ...add] : prev;
           });
         }
       } catch {}
@@ -172,7 +277,7 @@ export default function AdminChatsScreen() {
     setMessages([]);
     try {
       if (row.kind === 'SUPPORT') {
-        const res = await apiService.getSupportThread(row.key);
+        const res = await supportApi.getSupportThread(row.key);
         setMessages((res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}` })));
       } else if (row.order_id) {
         const res = await apiService.getBookingChat(row.order_id);
@@ -181,8 +286,22 @@ export default function AdminChatsScreen() {
     } catch {}
   };
 
-  const send = async (override?: string) => {
-    const text = (override ?? input).trim();
+  const openOwnerOfficeChat = () => {
+    const ownerRow: Row = {
+      key: 'owner_office_desk',
+      kind: 'SUPPORT',
+      title: 'Naveen / Head Office Desk',
+      subtitle: 'Drop Cars Owner & Management Line',
+      last_text: 'Direct communication with Owner & HQ',
+      last_at: new Date().toISOString(),
+      unread: 0,
+      role: 'OWNER',
+    };
+    openThread(ownerRow);
+  };
+
+  const send = async () => {
+    const text = input.trim();
     if (!text || !openRow || sending) return;
     setSending(true);
     setInput('');
@@ -191,7 +310,7 @@ export default function AdminChatsScreen() {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     try {
       if (openRow.kind === 'SUPPORT') {
-        await apiService.replySupportThread(openRow.key, text);
+        await supportApi.replySupportThread(openRow.key, text);
       } else if (openRow.order_id) {
         await apiService.sendBookingChatMessage(openRow.order_id, text);
       }
@@ -219,13 +338,7 @@ export default function AdminChatsScreen() {
     try {
       await voiceRecorder.stop();
       const uri = voiceRecorder.uri;
-      if (uri) await sendVoiceUri(uri);
-    } catch {}
-  };
-
-  const sendVoiceUri = async (uri: string) => {
-    if (!openRow) return;
-    try {
+      if (!uri) return;
       setUploadingVoice(true);
       const upload = await apiService.uploadChatVoiceNote(uri, 'audio/m4a');
       const voiceUrl = upload.voice_url;
@@ -233,7 +346,7 @@ export default function AdminChatsScreen() {
       setMessages((prev) => [...prev, optimistic]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       if (openRow.kind === 'SUPPORT') {
-        await apiService.replySupportThread(openRow.key, undefined, voiceUrl);
+        await supportApi.replySupportThread(openRow.key, undefined, voiceUrl);
       } else if (openRow.order_id) {
         await apiService.sendBookingChatMessage(openRow.order_id, undefined, voiceUrl);
       }
@@ -266,40 +379,353 @@ export default function AdminChatsScreen() {
       )
     : rows;
 
+  const totalUnread = rows.reduce((acc, r) => acc + (r.unread || 0), 0);
+  const supportUnread = rows.filter((r) => r.kind === 'SUPPORT').reduce((acc, r) => acc + (r.unread || 0), 0);
+  const bookingUnread = rows.filter((r) => r.kind === 'BOOKING').reduce((acc, r) => acc + (r.unread || 0), 0);
+
+  const needsReplyCount = rows.filter((r) => r.unread > 0).length;
+  const loginHelpCount = rows.filter((r) => r.kind === 'SUPPORT' && r.help).length;
+  const activeTripsCount = rows.filter((r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED').length;
+
+  const SUPPORT_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
+    { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Unread messages awaiting staff response', match: (r) => r.unread > 0 },
+    { id: 'help', label: "Help requests (can't log in)", icon: KeyRound, color: '#F59E0B', hint: 'Forgot password, OTP & login assistance', match: (r) => r.kind === 'SUPPORT' && !!r.help },
+    { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', match: (r) => r.kind === 'SUPPORT' && !r.help && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
+    { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'DRIVER' },
+    { id: 'vendor', label: 'Vendors & B2B Partners', icon: Store, color: '#8B5CF6', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'VENDOR' },
+    { id: 'customer', label: 'Customers', icon: User, color: '#06B6D4', hint: 'Customer messages from Customer App', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'CUSTOMER' },
+  ];
+
+  const TRIP_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
+    { id: 'live', label: 'Booking chats · Live & Upcoming', icon: Compass, color: '#10B981', hint: 'Ongoing and scheduled bookings', match: (r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED' },
+    { id: 'done', label: 'Booking chats · Completed', icon: CheckCheck, color: '#64748B', match: (r) => r.kind === 'BOOKING' && r.stage === 'COMPLETED' },
+  ];
+
+  const toggleGroup = (id: string) => setOpenGroups((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const renderRow = (item: Row) => (
+    <Card
+      style={styles.chatCard}
+      onPress={() => openThread(item)}
+    >
+      <View style={styles.cardHeader}>
+        <View style={[styles.avatar, { backgroundColor: item.kind === 'SUPPORT' ? themeColors.primaryLight : themeColors.successLight }]}>
+          {item.kind === 'SUPPORT' ? <Headphones size={17} color={themeColors.primary} /> : <Package size={17} color={themeColors.success} />}
+        </View>
+        <View style={styles.rowMid}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text numberOfLines={1} style={[styles.rowTitle, { color: themeColors.text, flex: 1 }]}>{item.title}</Text>
+            {item.help && (
+              <View style={[styles.miniTag, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: '#B45309' }}>LOGIN HELP</Text>
+              </View>
+            )}
+          </View>
+          <Text numberOfLines={1} style={[styles.rowSub, { color: themeColors.textSecondary }]}>
+            {item.last_text || item.subtitle}
+          </Text>
+        </View>
+        <View style={styles.rightColumn}>
+          <Text style={{ fontSize: 10.5, color: themeColors.textMuted }}>{timeLabel(item.last_at)}</Text>
+          {item.unread > 0 ? (
+            <View style={[styles.unreadBadge, { backgroundColor: themeColors.primary }]}>
+              <Text style={styles.unreadText}>{item.unread}</Text>
+            </View>
+          ) : (
+            <ChevronRight size={14} color={themeColors.textMuted} />
+          )}
+        </View>
+      </View>
+    </Card>
+  );
+
+  const renderAssistantsSection = () => (
+    <View style={styles.assistantsContainer}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Smart Desk & Office HQ</Text>
+        <View style={[styles.badgePill, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border, borderWidth: 1 }]}>
+          <Text style={[styles.badgePillText, { color: themeColors.textSecondary }]}>3 Direct Desks</Text>
+        </View>
+      </View>
+
+      {/* 1. Command Centre */}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={openCommandCenter}
+        style={[styles.assistantCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <View style={[styles.assistantIconWrap, { backgroundColor: '#EDE9FE' }]}>
+          <Sparkles size={18} color="#7C3AED" />
+        </View>
+        <View style={styles.assistantTextWrap}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.assistantTitle, { color: themeColors.text }]}>Command Centre</Text>
+            <View style={[styles.miniTag, { backgroundColor: '#F3E8FF' }]}>
+              <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#7C3AED' }}>AI Copilot</Text>
+            </View>
+          </View>
+          <Text style={[styles.assistantSubtitle, { color: themeColors.textSecondary }]} numberOfLines={2}>
+            Tell it what to do: post, approve, notify, create booking or handle exceptions
+          </Text>
+        </View>
+        <ChevronRight size={15} color={themeColors.textMuted} />
+      </TouchableOpacity>
+
+      {/* 2. Helper (Renamed from Information) */}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={() => router.push('/info-chat' as any)}
+        style={[styles.assistantCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <View style={[styles.assistantIconWrap, { backgroundColor: '#DCFCE7' }]}>
+          <BookOpen size={18} color="#16A34A" />
+        </View>
+        <View style={styles.assistantTextWrap}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.assistantTitle, { color: themeColors.text }]}>Helper</Text>
+            <View style={[styles.miniTag, { backgroundColor: '#DCFCE7' }]}>
+              <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#15803D' }}>Rules & System AI</Text>
+            </View>
+          </View>
+          <Text style={[styles.assistantSubtitle, { color: themeColors.textSecondary }]} numberOfLines={2}>
+            Any doubt? Ask how rules, tariffs, cutoffs, hold & screens work
+          </Text>
+        </View>
+        <ChevronRight size={15} color={themeColors.textMuted} />
+      </TouchableOpacity>
+
+      {/* 3. Naveen / Office (Owner Desk) */}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={openOwnerOfficeChat}
+        style={[styles.assistantCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <View style={[styles.assistantIconWrap, { backgroundColor: '#DBEAFE' }]}>
+          <Building2 size={18} color="#2563EB" />
+        </View>
+        <View style={styles.assistantTextWrap}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.assistantTitle, { color: themeColors.text }]}>Naveen / Office (HQ)</Text>
+            <View style={[styles.miniTag, { backgroundColor: '#DBEAFE' }]}>
+              <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#1E40AF' }}>Owner Desk</Text>
+            </View>
+          </View>
+          <Text style={[styles.assistantSubtitle, { color: themeColors.textSecondary }]} numberOfLines={2}>
+            Direct line to Owner & Head Office • Urgent escalations, approvals & notes
+          </Text>
+        </View>
+        <ChevronRight size={15} color={themeColors.textMuted} />
+      </TouchableOpacity>
+
+      {/* 4. AI Knowledge & Self-Training Hub */}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={() => router.push('/ai-training' as any)}
+        style={[styles.assistantCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <View style={[styles.assistantIconWrap, { backgroundColor: '#FDF2F8' }]}>
+          <Brain size={18} color="#DB2777" />
+        </View>
+        <View style={styles.assistantTextWrap}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.assistantTitle, { color: themeColors.text }]}>AI Knowledge & Training Hub</Text>
+            <View style={[styles.miniTag, { backgroundColor: '#FDF2F8' }]}>
+              <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#BE185D' }}>Self-Learning</Text>
+            </View>
+          </View>
+          <Text style={[styles.assistantSubtitle, { color: themeColors.textSecondary }]} numberOfLines={2}>
+            Teach custom replies, fix misunderstandings & configure LLM bridge
+          </Text>
+        </View>
+        <ChevronRight size={15} color={themeColors.textMuted} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 12);
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: themeColors.text }]}>Chats</Text>
-          <View style={[styles.countBadge, { backgroundColor: themeColors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{rows.length}</Text>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar style="light" />
+
+      {/* 1. Executive Hero Gradient Header with Edge-Attached Wide Dock & Curved Bottom */}
+      <LinearGradient
+        colors={isDark ? ['#0F172A', '#1E1B4B'] : ['#1E1B4B', '#2E1065']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.heroBanner, { paddingTop: topPadding + 4 }]}
+      >
+        <View style={styles.heroTopRow}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.heroTitle}>Chats</Text>
+              <TouchableOpacity
+                onPress={toggleOnDuty}
+                activeOpacity={0.8}
+                style={[
+                  styles.onDutyBadge,
+                  {
+                    backgroundColor: onDuty ? 'rgba(16, 185, 129, 0.25)' : 'rgba(100, 116, 139, 0.35)',
+                    borderColor: onDuty ? '#10B981' : '#64748B',
+                  },
+                ]}
+              >
+                <View style={[styles.onDutyDot, { backgroundColor: onDuty ? '#10B981' : '#94A3B8' }]} />
+                <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                  {onDuty ? 'Online' : 'Offline'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ThemeToggle size={18} />
+            <TouchableOpacity
+              onPress={() => load()}
+              style={styles.heroRefreshBtn}
+              activeOpacity={0.7}
+            >
+              <RefreshCw size={13} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={toggleOnDuty}
-          style={[styles.onDutyPill, { backgroundColor: onDuty ? themeColors.successLight : themeColors.surfaceAlt, borderColor: onDuty ? themeColors.success : themeColors.border }]}
-        >
-          <View style={[styles.onDutyDot, { backgroundColor: onDuty ? themeColors.success : themeColors.textMuted }]} />
-          <Text style={{ fontSize: 11, fontWeight: '700', color: onDuty ? themeColors.success : themeColors.textSecondary }}>
-            {onDuty ? 'On Duty' : 'Off Duty'}
-          </Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Search Bar */}
-      <View style={[styles.searchBox, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-        <Search size={15} color={themeColors.textMuted} />
-        <TextInput
-          style={[styles.searchInput, { color: themeColors.text }]}
-          placeholder="Search chats..."
-          placeholderTextColor={themeColors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
+        {/* Wide Header-Attached Tabs Dock (Curved to Match Header Bottom) */}
+        <View style={styles.heroDock}>
+          {/* Tab 1: HQ & AI */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('ASSISTANTS')}
+            style={[
+              styles.dockSegment,
+              activeTab === 'ASSISTANTS' && styles.dockSegmentActive,
+            ]}
+          >
+            <Sparkles size={13} color={activeTab === 'ASSISTANTS' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.65)'} />
+            <Text
+              style={[
+                styles.dockLabel,
+                {
+                  color: activeTab === 'ASSISTANTS' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+                  fontWeight: activeTab === 'ASSISTANTS' ? '800' : '600',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              HQ & AI
+            </Text>
+          </TouchableOpacity>
 
-      {/* List */}
+          {/* Tab 2: Support */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('SUPPORT')}
+            style={[
+              styles.dockSegment,
+              activeTab === 'SUPPORT' && styles.dockSegmentActive,
+            ]}
+          >
+            <View style={styles.dockInnerRow}>
+              <Text
+                style={[
+                  styles.dockLabel,
+                  {
+                    color: activeTab === 'SUPPORT' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+                    fontWeight: activeTab === 'SUPPORT' ? '800' : '600',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                Support
+              </Text>
+              {supportUnread > 0 && (
+                <View
+                  style={[
+                    styles.dockBadge,
+                    { backgroundColor: activeTab === 'SUPPORT' ? '#FFFFFF' : '#EF4444' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dockBadgeText,
+                      { color: activeTab === 'SUPPORT' ? '#4F46E5' : '#FFFFFF' },
+                    ]}
+                  >
+                    {supportUnread}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {/* Tab 3: Trips */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('TRIPS')}
+            style={[
+              styles.dockSegment,
+              activeTab === 'TRIPS' && styles.dockSegmentActive,
+            ]}
+          >
+            <View style={styles.dockInnerRow}>
+              <Text
+                style={[
+                  styles.dockLabel,
+                  {
+                    color: activeTab === 'TRIPS' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+                    fontWeight: activeTab === 'TRIPS' ? '800' : '600',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                Trips
+              </Text>
+              {bookingUnread > 0 && (
+                <View
+                  style={[
+                    styles.dockBadge,
+                    { backgroundColor: activeTab === 'TRIPS' ? '#FFFFFF' : '#10B981' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dockBadgeText,
+                      { color: activeTab === 'TRIPS' ? '#4F46E5' : '#FFFFFF' },
+                    ]}
+                  >
+                    {bookingUnread}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {/* Tab 4: All (At the Last Position) */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('ALL')}
+            style={[
+              styles.dockSegment,
+              activeTab === 'ALL' && styles.dockSegmentActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.dockLabel,
+                {
+                  color: activeTab === 'ALL' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
+                  fontWeight: activeTab === 'ALL' ? '800' : '600',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              All
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* 2. Main Scrollable Container (Snapshot, Search, & Categorized Feeds) */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <SkeletonRow />
@@ -308,57 +734,254 @@ export default function AdminChatsScreen() {
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          style={{ flex: 1 }}
+          data={search.trim() ? filtered : []}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={themeColors.primary} />}
-          renderItem={({ item }) => (
-            <Card
-              style={styles.chatCard}
-              onPress={() => openThread(item)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={[styles.avatar, { backgroundColor: item.kind === 'SUPPORT' ? themeColors.primaryLight : themeColors.successLight }]}>
-                  {item.kind === 'SUPPORT' ? <Headphones size={18} color={themeColors.primary} /> : <Package size={18} color={themeColors.success} />}
+          showsVerticalScrollIndicator={true}
+          ListHeaderComponent={
+            <View style={{ gap: 10, marginBottom: 8 }}>
+              {/* 1. CHATS & SUPPORT LIVE SNAPSHOT */}
+              <View style={{ marginTop: 2 }}>
+                <View style={{ paddingHorizontal: 16, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textSecondary }}>
+                      Chats & Support Live Snapshot
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => load()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE' }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.primary }}>
+                      Live ⚡
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.rowMid}>
-                  <Text numberOfLines={1} style={[styles.rowTitle, { color: themeColors.text }]}>{item.title}</Text>
-                  <Text numberOfLines={1} style={[styles.rowSub, { color: themeColors.textSecondary }]}>
-                    {item.last_text || item.subtitle}
-                  </Text>
-                </View>
-                <View style={styles.rightColumn}>
-                  <Text style={{ fontSize: 10.5, color: themeColors.textMuted }}>{timeLabel(item.last_at)}</Text>
-                  {item.unread > 0 ? (
-                    <View style={[styles.unreadBadge, { backgroundColor: themeColors.primary }]}>
-                      <Text style={styles.unreadText}>{item.unread}</Text>
+                <KpiStrip
+                  items={[
+                    {
+                      label: 'Needs Reply',
+                      value: needsReplyCount,
+                      tone: needsReplyCount > 0 ? '#DC2626' : themeColors.text,
+                      delta: needsReplyCount > 0 ? 'Urgent' : 'Clear',
+                      isPositive: needsReplyCount === 0,
+                    },
+                    {
+                      label: 'Login Help',
+                      value: loginHelpCount,
+                      tone: loginHelpCount > 0 ? '#EA580C' : themeColors.text,
+                      delta: loginHelpCount > 0 ? 'OTP / Pass' : 'Clear',
+                      isPositive: loginHelpCount === 0,
+                    },
+                    {
+                      label: 'Trip Chats',
+                      value: activeTripsCount,
+                      tone: '#10B981',
+                      delta: activeTripsCount > 0 ? 'On Road' : 'Standby',
+                      isPositive: true,
+                    },
+                    {
+                      label: 'Total Active',
+                      value: rows.length,
+                      tone: themeColors.primary,
+                      delta: 'Active',
+                      isPositive: true,
+                    },
+                  ]}
+                />
+              </View>
+
+              {/* 2. Search Bar with Action Button */}
+              <View style={[styles.searchBox, { backgroundColor: themeColors.surface, borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E2E8F0' }]}>
+                <Search size={15} color={themeColors.textMuted} />
+                <TextInput
+                  style={[styles.searchInput, { color: themeColors.text }]}
+                  placeholder="Search by name, trip ID, or keyword..."
+                  placeholderTextColor={themeColors.textMuted}
+                  value={search}
+                  onChangeText={setSearch}
+                  returnKeyType="search"
+                />
+                {search.trim().length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch('')} style={{ padding: 4 }}>
+                    <X size={14} color={themeColors.textMuted} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.searchActionBtn, { backgroundColor: themeColors.primary }]}
+                >
+                  <Text style={styles.searchActionBtnText}>Search</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 3. Non-search sections */}
+              {!search.trim() && (
+                <View style={{ gap: 14 }}>
+                  {/* Assistants Section (Visible in 'ALL' and 'ASSISTANTS' tabs) */}
+                  {(activeTab === 'ALL' || activeTab === 'ASSISTANTS') && renderAssistantsSection()}
+
+                  {/* Support & Driver Groups (Visible in 'ALL' and 'SUPPORT' tabs) */}
+                  {(activeTab === 'ALL' || activeTab === 'SUPPORT') && (
+                    <View style={styles.sectionGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Support & Partner Inbox</Text>
+                        {supportUnread > 0 && (
+                          <View style={[styles.badgePill, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', borderWidth: 1 }]}>
+                            <Text style={[styles.badgePillText, { color: '#DC2626' }]}>{supportUnread} Pending</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {SUPPORT_GROUPS.map((g) => {
+                        const list = rows.filter(g.match);
+                        const unread = list.reduce((n, r) => n + (r.unread || 0), 0);
+                        const open = openGroups.has(g.id);
+                        const IconComponent = g.icon;
+
+                        return (
+                          <View key={g.id} style={{ marginBottom: 4 }}>
+                            <TouchableOpacity
+                              activeOpacity={0.75}
+                              onPress={() => toggleGroup(g.id)}
+                              style={[
+                                styles.foldRow,
+                                {
+                                  borderColor: unread > 0 ? themeColors.primary + '55' : themeColors.border,
+                                  backgroundColor: themeColors.surface,
+                                },
+                              ]}
+                            >
+                              <View style={[styles.foldIconWrap, { backgroundColor: (g.color || themeColors.primary) + '18' }]}>
+                                <IconComponent size={15} color={g.color || themeColors.primary} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 13 }}>
+                                  {g.label}
+                                </Text>
+                                <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                                  {list.length} {list.length === 1 ? 'chat' : 'chats'}
+                                </Text>
+                              </View>
+                              {unread > 0 && (
+                                <View style={[styles.unreadBadge, { backgroundColor: g.color || themeColors.primary }]}>
+                                  <Text style={styles.unreadText}>{unread}</Text>
+                                </View>
+                              )}
+                              {open ? <ChevronDown size={15} color={themeColors.textMuted} /> : <ChevronRight size={15} color={themeColors.textMuted} />}
+                            </TouchableOpacity>
+                            {open && (
+                              <View style={{ gap: 6, marginTop: 6, paddingLeft: 4 }}>
+                                {list.length === 0 ? (
+                                  <View style={[styles.emptyGroupHint, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border }]}>
+                                    <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
+                                      {g.hint || 'No active conversations in this category'}
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  list.map((r) => <View key={r.key}>{renderRow(r)}</View>)
+                                )}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
                     </View>
-                  ) : (
-                    <ChevronRight size={14} color={themeColors.textMuted} />
+                  )}
+
+                  {/* Booking & Trip Chats (Visible in 'ALL' and 'TRIPS' tabs) */}
+                  {(activeTab === 'ALL' || activeTab === 'TRIPS') && (
+                    <View style={styles.sectionGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Trip & Booking Communications</Text>
+                        {bookingUnread > 0 && (
+                          <View style={[styles.badgePill, { backgroundColor: themeColors.primaryLight, borderColor: themeColors.border, borderWidth: 1 }]}>
+                            <Text style={[styles.badgePillText, { color: themeColors.primary }]}>{bookingUnread} Unread</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {TRIP_GROUPS.map((g) => {
+                        const list = rows.filter(g.match);
+                        const unread = list.reduce((n, r) => n + (r.unread || 0), 0);
+                        const open = openGroups.has(g.id);
+                        const IconComponent = g.icon;
+
+                        return (
+                          <View key={g.id} style={{ marginBottom: 4 }}>
+                            <TouchableOpacity
+                              activeOpacity={0.75}
+                              onPress={() => toggleGroup(g.id)}
+                              style={[
+                                styles.foldRow,
+                                {
+                                  borderColor: unread > 0 ? themeColors.primary + '55' : themeColors.border,
+                                  backgroundColor: themeColors.surface,
+                                },
+                              ]}
+                            >
+                              <View style={[styles.foldIconWrap, { backgroundColor: (g.color || themeColors.success) + '18' }]}>
+                                <IconComponent size={15} color={g.color || themeColors.success} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 13 }}>
+                                  {g.label}
+                                </Text>
+                                <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                                  {list.length} {list.length === 1 ? 'trip chat' : 'trip chats'}
+                                </Text>
+                              </View>
+                              {unread > 0 && (
+                                <View style={[styles.unreadBadge, { backgroundColor: g.color || themeColors.primary }]}>
+                                  <Text style={styles.unreadText}>{unread}</Text>
+                                </View>
+                              )}
+                              {open ? <ChevronDown size={15} color={themeColors.textMuted} /> : <ChevronRight size={15} color={themeColors.textMuted} />}
+                            </TouchableOpacity>
+                            {open && (
+                              <View style={{ gap: 6, marginTop: 6, paddingLeft: 4 }}>
+                                {list.length === 0 ? (
+                                  <View style={[styles.emptyGroupHint, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border }]}>
+                                    <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
+                                      {g.hint || 'No bookings with chats currently in this state'}
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  list.map((r) => <View key={r.key}>{renderRow(r)}</View>)
+                                )}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
                   )}
                 </View>
-              </View>
-            </Card>
-          )}
+              )}
+            </View>
+          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={themeColors.primary} />}
+          renderItem={({ item }) => renderRow(item)}
           ListEmptyComponent={
-            <EmptyState
-              icon={<MessageSquare size={36} color={themeColors.textMuted} />}
-              title="No chats yet"
-              message="Driver/owner support messages and booking chats will appear here."
-            />
+            !search.trim() ? null : (
+              <EmptyState
+                icon={<MessageSquare size={36} color={themeColors.textMuted} />}
+                title="No matching chats"
+                message={`No conversations matched "${search}". Try searching another name or ID.`}
+              />
+            )
           }
         />
       )}
 
       {/* Thread Chat Modal */}
       <Modal visible={Boolean(openRow)} animationType="fade" onRequestClose={() => setOpenRow(null)}>
-        <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.background }]}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[styles.chatHeader, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
-              <TouchableOpacity onPress={() => setOpenRow(null)} style={{ padding: 4 }}>
+              <TouchableOpacity onPress={() => setOpenRow(null)} style={{ padding: 6, marginRight: 6 }}>
                 <ArrowLeft size={20} color={themeColors.text} />
               </TouchableOpacity>
-              <View style={{ flex: 1, marginLeft: 8 }}>
+              <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={[styles.rowTitle, { color: themeColors.text }]}>{openRow?.title}</Text>
                 <Text style={[styles.rowSub, { color: themeColors.textSecondary }]}>{openRow?.subtitle}</Text>
               </View>
@@ -384,86 +1007,332 @@ export default function AdminChatsScreen() {
                       <Text style={[styles.senderLabel, { color: themeColors.primary }]}>{item.sender_name}</Text>
                     ) : null}
                     {item.voice_url ? (
-                      <VoiceNote uri={item.voice_url} mine={item.mine} tint={themeColors.primary} />
+                      <VoiceMessageBubble uri={item.voice_url} mine={item.mine} tint={item.mine ? '#FFFFFF' : themeColors.primary} />
                     ) : (
-                      <Text style={{ color: item.mine ? '#FFFFFF' : themeColors.text, fontSize: 13.5 }}>{item.text}</Text>
+                      <Text style={{ color: item.mine ? '#FFFFFF' : themeColors.text, fontSize: 13.5, lineHeight: 19 }}>
+                        {item.text}
+                      </Text>
                     )}
-                    <Text style={{ color: item.mine ? 'rgba(255,255,255,0.7)' : themeColors.textMuted, fontSize: 10, marginTop: 4 }}>
-                      {timeLabel(item.created_at)}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+                      <Text style={{ color: item.mine ? 'rgba(255,255,255,0.7)' : themeColors.textMuted, fontSize: 10 }}>
+                        {timeLabel(item.created_at)}
+                      </Text>
+                      {item.mine ? (item.read ? <CheckCheck size={13} color="#BFDBFE" /> : <Check size={13} color="rgba(255,255,255,0.75)" />) : null}
+                    </View>
                   </View>
                 </View>
               )}
             />
 
-            <ChatComposer
-              colors={themeColors}
-              placeholder="Type a reply..."
-              onSendText={(t) => send(t)}
-              onSendVoice={(uri) => sendVoiceUri(uri)}
-            />
+            {/* Quick replies */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={{ flexGrow: 0, backgroundColor: themeColors.surface }}
+              contentContainerStyle={styles.quickRow}
+            >
+              {QUICK_REPLIES.map((q) => (
+                <TouchableOpacity
+                  key={q.label}
+                  onPress={() => setInput(q.text)}
+                  activeOpacity={0.7}
+                  style={[styles.quickChip, { borderColor: themeColors.border, backgroundColor: themeColors.background }]}
+                >
+                  <Text style={{ fontSize: 12, color: themeColors.primary, fontWeight: '600' }}>{q.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Input Bar */}
+            <View style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+              <TextInput
+                style={[styles.input, { color: themeColors.text, backgroundColor: themeColors.background, borderColor: themeColors.border }]}
+                placeholder="Type a reply..."
+                placeholderTextColor={themeColors.textMuted}
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={send}
+              />
+              <TouchableOpacity
+                onPress={voiceRecorderState.isRecording ? stopAndSendVoiceRecording : startVoiceRecording}
+                style={[styles.actionBtn, { backgroundColor: voiceRecorderState.isRecording ? themeColors.error : themeColors.surfaceAlt }]}
+              >
+                {voiceRecorderState.isRecording ? (
+                  <Square size={16} color="#FFFFFF" />
+                ) : (
+                  <Mic size={16} color={uploadingVoice ? themeColors.textMuted : themeColors.primary} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={send}
+                disabled={sending || !input.trim()}
+                style={[styles.sendBtn, { backgroundColor: themeColors.primary, opacity: sending || !input.trim() ? 0.5 : 1 }]}
+              >
+                <Send size={15} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
+  modalContainer: { flex: 1 },
+  heroBanner: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
   },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  countText: { fontSize: 12, fontWeight: '700' },
-  onDutyPill: {
+  heroTitle: {
+    fontSize: 21,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
+  },
+  onDutyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
     borderWidth: 1,
   },
-  onDutyDot: { width: 7, height: 7, borderRadius: 4 },
+  onDutyDot: { width: 6, height: 6, borderRadius: 3 },
+  dutyToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  heroRefreshBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  heroDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.32)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    gap: 4,
+    width: '100%',
+  },
+  dockSegment: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7.5,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  dockSegmentActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  dockInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  dockLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    letterSpacing: -0.1,
+  },
+  dockBadge: {
+    paddingHorizontal: 4.5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    minWidth: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockBadgeText: {
+    fontSize: 9.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginVertical: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 4,
+    paddingLeft: 12,
+    paddingRight: 4,
+    height: 42,
+    borderRadius: 10,
     borderWidth: 1,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   searchInput: { flex: 1, fontSize: 13, padding: 0 },
+  searchActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
   loadingContainer: { padding: 16, gap: 8 },
-  listContainer: { padding: 16, gap: 8, paddingBottom: 40 },
-  chatCard: { marginBottom: 4, padding: 12 },
+  listContainer: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 40 },
+  assistantsContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    marginTop: 2,
+    paddingHorizontal: 2,
+  },
+  sectionHeading: {
+    fontSize: 13.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  badgePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sectionGroup: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  assistantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+  },
+  assistantIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assistantTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  assistantTitle: {
+    fontSize: 13.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+  },
+  assistantSubtitle: {
+    fontSize: 11.5,
+    lineHeight: 15,
+  },
+  miniTag: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  chatCard: {
+    marginBottom: 3,
+    padding: 10,
+    borderRadius: 8,
+  },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  rowMid: { flex: 1, marginRight: 8 },
-  rowTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
-  rowSub: { fontSize: 12, fontWeight: '500' },
-  rightColumn: { alignItems: 'flex-end', gap: 4 },
+  avatar: { width: 34, height: 34, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  rowMid: { flex: 1, marginRight: 8, gap: 1.5 },
+  rowTitle: { fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '700' },
+  rowSub: { fontSize: 11.5, fontWeight: '500' },
+  rightColumn: { alignItems: 'flex-end', gap: 3 },
   unreadBadge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   unreadText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  foldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  foldIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyGroupHint: {
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
   chatHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   bubbleRow: { flexDirection: 'row', marginVertical: 2 },
   bubbleRowMine: { justifyContent: 'flex-end' },
   bubbleRowOther: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '80%', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  bubble: { maxWidth: '80%', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   senderLabel: { fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  quickRow: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6 },
+  quickChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1 },
   inputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
-  input: { flex: 1, height: 38, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, fontSize: 13 },
-  actionBtn: { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sendBtn: { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, height: 38, borderRadius: 6, borderWidth: 1, paddingHorizontal: 12, fontSize: 13 },
+  actionBtn: { width: 38, height: 38, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: { width: 38, height: 38, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
 });

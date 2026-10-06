@@ -53,6 +53,8 @@ import Toast, { useToast } from '@/components/Toast';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Card, StatusPill, Btn } from '@/components/ui';
+import AdminAddCarModal from '@/components/AdminAddCarModal';
+import AdminAddDriverModal from '@/components/AdminAddDriverModal';
 
 interface OwnerProfile {
   id: string;
@@ -183,6 +185,10 @@ export default function FleetOwnerDetailScreen() {
   const [tierOverrideReason, setTierOverrideReason] = useState('');
   const [submittingTier, setSubmittingTier] = useState(false);
 
+  // Add Car / Add Driver Modals State
+  const [addCarModalVisible, setAddCarModalVisible] = useState(false);
+  const [addDriverModalVisible, setAddDriverModalVisible] = useState(false);
+
   const handleSaveTierOverride = async () => {
     if (!owner) return;
     if (!tierOverrideReason.trim()) {
@@ -215,48 +221,85 @@ export default function FleetOwnerDetailScreen() {
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [swapType, setSwapType] = useState<'DRIVER' | 'CAR'>('DRIVER');
   const [swapTargetInput, setSwapTargetInput] = useState('');
-  const [swapStep, setSwapStep] = useState<'REQUEST' | 'OVERRIDE'>('REQUEST');
+  const [activeSwapUuid, setActiveSwapUuid] = useState<string | null>(null);
+  const [swapStep, setSwapStep] = useState<'REQUEST' | 'VERIFY' | 'OVERRIDE'>('REQUEST');
+  const [swapOtp, setSwapOtp] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const [swapSubmitting, setSwapSubmitting] = useState(false);
+  const [swapInfo, setSwapInfo] = useState<string | null>(null);
 
   const handleOpenSwapModal = (type: 'DRIVER' | 'CAR') => {
     setSwapType(type);
     setSwapTargetInput('');
+    setActiveSwapUuid(null);
     setSwapStep('REQUEST');
+    setSwapOtp('');
     setOverrideReason('');
+    setSwapInfo(null);
     setSwapModalVisible(true);
   };
 
-  // The OTP swap (/fleet-swap/request-swap, /verify-swap) is done by the
-  // fleet driver from the Driver App - those routes only accept a vehicle
-  // owner token. From the Admin App a transfer is always the audited admin
-  // override (/fleet-swap/admin-override), which the backend limits to the
-  // Owner role and logs with the admin's name and reason.
-  const handleInitiateSwap = () => {
+  const handleInitiateSwap = async () => {
     if (!owner) return;
     if (!swapTargetInput.trim()) {
-      Alert.alert('Required', swapType === 'DRIVER' ? 'Please enter the Driver ID' : 'Please enter the Car Number');
+      Alert.alert('Required', swapType === 'DRIVER' ? 'Please enter Driver UUID / Mobile' : 'Please enter Car Number');
       return;
     }
-    setSwapStep('OVERRIDE');
+    setSwapSubmitting(true);
+    try {
+      if (swapType === 'DRIVER') {
+        const res = await apiService.requestDriverSwap(swapTargetInput.trim(), owner.vehicle_owner_id);
+        setActiveSwapUuid(res.swap_id);
+        setSwapInfo(res.message || 'OTP sent to driver.');
+        setSwapStep('VERIFY');
+        showToast('Swap request created. OTP sent to driver.', 'info');
+      } else {
+        const res = await apiService.requestCarSwap(swapTargetInput.trim(), owner.vehicle_owner_id);
+        setActiveSwapUuid(res.swap_id);
+        setSwapInfo(res.message || 'OTP sent to current car owner.');
+        setSwapStep('VERIFY');
+        showToast('Swap request created. OTP sent to current car owner.', 'info');
+      }
+    } catch (err: any) {
+      Alert.alert('Swap Blocked', err?.message || 'Failed to initiate swap.');
+    } finally {
+      setSwapSubmitting(false);
+    }
+  };
+
+  const handleVerifySwap = async () => {
+    if (!activeSwapUuid) return;
+    if (!swapOtp.trim() || swapOtp.trim().length !== 6) {
+      Alert.alert('Invalid OTP', 'Please enter a 6-digit OTP.');
+      return;
+    }
+    setSwapSubmitting(true);
+    try {
+      if (swapType === 'DRIVER') {
+        await apiService.verifyDriverSwap(activeSwapUuid, swapOtp.trim());
+      } else {
+        await apiService.verifyCarSwap(activeSwapUuid, swapOtp.trim());
+      }
+      showToast('Fleet swap completed successfully!', 'success');
+      setSwapModalVisible(false);
+      fetchDetails();
+    } catch (err: any) {
+      Alert.alert('Verification Failed', err?.message || 'Invalid or expired OTP.');
+    } finally {
+      setSwapSubmitting(false);
+    }
   };
 
   const handleAdminOverride = async () => {
-    if (!owner) return;
+    if (!activeSwapUuid) return;
     if (!overrideReason.trim() || overrideReason.trim().length < 10) {
       Alert.alert('Reason Required', 'Please provide a detailed reason (at least 10 characters) for admin override.');
       return;
     }
     setSwapSubmitting(true);
     try {
-      await apiService.adminOverrideSwap({
-        swapType,
-        driverId: swapType === 'DRIVER' ? swapTargetInput.trim() : undefined,
-        carNumber: swapType === 'CAR' ? swapTargetInput.trim() : undefined,
-        newOwnerId: owner.vehicle_owner_id,
-        reason: overrideReason.trim(),
-      });
-      showToast('Transfer completed and logged.', 'success');
+      await apiService.adminOverrideSwap(activeSwapUuid, overrideReason.trim());
+      showToast('Admin override swap completed successfully!', 'success');
       setSwapModalVisible(false);
       fetchDetails();
     } catch (err: any) {
@@ -1122,12 +1165,50 @@ export default function FleetOwnerDetailScreen() {
         <>
         {/* Cars List */}
         <Card style={styles.card}>
-          <View style={styles.cardHeaderLeft}>
-            <Car size={18} color={themeColors.warning} />
-            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Cars ({cars.length})</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Car size={18} color="#D97706" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>Cars ({cars.length})</Text>
+            </View>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#D97706',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 6,
+              }}
+              onPress={() => setAddCarModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color="#FFFFFF" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>+ Add Car</Text>
+            </TouchableOpacity>
           </View>
           {cars.length === 0 ? (
-            <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>No cars registered</Text>
+            <View style={{ alignItems: 'center', paddingVertical: 14, gap: 10 }}>
+              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>No cars registered in this fleet yet.</Text>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: isDark ? '#D9770622' : '#FEF3C7',
+                  borderColor: '#D97706',
+                  borderWidth: 1.5,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+                onPress={() => setAddCarModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Plus size={15} color="#D97706" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#D97706' }}>+ Register / Add Car</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             cars.map((car) => {
               const isOnline = (car.car_status || '').toUpperCase() === 'ONLINE';
@@ -1156,12 +1237,50 @@ export default function FleetOwnerDetailScreen() {
 
         {/* Drivers List */}
         <Card style={styles.card}>
-          <View style={styles.cardHeaderLeft}>
-            <UserCircle size={18} color="#8B5CF6" />
-            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Drivers ({drivers.length})</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <UserCircle size={18} color="#8B5CF6" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>Drivers ({drivers.length})</Text>
+            </View>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#8B5CF6',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 6,
+              }}
+              onPress={() => setAddDriverModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color="#FFFFFF" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>+ Add Driver</Text>
+            </TouchableOpacity>
           </View>
           {drivers.length === 0 ? (
-            <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>No drivers registered</Text>
+            <View style={{ alignItems: 'center', paddingVertical: 14, gap: 10 }}>
+              <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>No drivers registered in this fleet yet.</Text>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: isDark ? '#8B5CF622' : '#F5F3FF',
+                  borderColor: '#8B5CF6',
+                  borderWidth: 1.5,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+                onPress={() => setAddDriverModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Plus size={15} color="#8B5CF6" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#8B5CF6' }}>+ Register / Add Driver</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             drivers.map((driver) => {
               const isOnline = (driver.driver_status || '').toUpperCase() === 'ONLINE';
@@ -1327,7 +1446,7 @@ export default function FleetOwnerDetailScreen() {
             <View style={styles.modalHeader}>
               <ArrowLeftRight size={22} color="#8B5CF6" />
               <Text style={[styles.modalTitle, { color: themeColors.text }]}>
-                {swapStep === 'REQUEST' ? `Transfer ${swapType === 'DRIVER' ? 'Driver' : 'Car'}` : 'Admin Override Swap'}
+                {swapStep === 'REQUEST' ? `Initiate ${swapType === 'DRIVER' ? 'Driver' : 'Car'} Swap` : swapStep === 'VERIFY' ? 'Enter 6-Digit OTP' : 'Admin Override Swap'}
               </Text>
             </View>
 
@@ -1335,15 +1454,15 @@ export default function FleetOwnerDetailScreen() {
               <>
                 <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
                   Transfer {swapType === 'DRIVER' ? 'a driver' : 'a car'} to <Text style={{ fontWeight: '700', color: themeColors.text }}>{owner?.full_name}</Text>.
-                  OTP-based swaps are started by the fleet driver in the Driver App; from here the transfer is an admin override with a reason.
+                  An OTP will be dispatched to the {swapType === 'DRIVER' ? "driver's phone" : "current car owner's phone"}.
                 </Text>
 
                 <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>
-                  {swapType === 'DRIVER' ? 'Driver ID' : 'Car Plate Number (e.g. TN01AB1234)'} <Text style={{ color: themeColors.error }}>*</Text>
+                  {swapType === 'DRIVER' ? 'Driver UUID or Phone Number' : 'Car Plate Number (e.g. TN01AB1234)'} <Text style={{ color: themeColors.error }}>*</Text>
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]}
-                  placeholder={swapType === 'DRIVER' ? 'Enter Driver ID' : 'Enter Car Registration Number'}
+                  placeholder={swapType === 'DRIVER' ? 'Enter Driver ID / Mobile' : 'Enter Car Registration Number'}
                   placeholderTextColor={themeColors.textSecondary}
                   value={swapTargetInput}
                   onChangeText={setSwapTargetInput}
@@ -1367,7 +1486,57 @@ export default function FleetOwnerDetailScreen() {
                     {swapSubmitting ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.modalConfirmText}>Continue</Text>
+                      <Text style={styles.modalConfirmText}>Request Swap OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {swapStep === 'VERIFY' && (
+              <>
+                <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
+                  {swapInfo || `A 6-digit OTP has been sent to the ${swapType === 'DRIVER' ? 'driver' : 'current owner'}. Enter it below to complete the transfer.`}
+                </Text>
+
+                <Text style={[styles.fieldLabel, { color: themeColors.text, marginTop: 12 }]}>6-Digit OTP <Text style={{ color: themeColors.error }}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text, letterSpacing: 4, textAlign: 'center', fontSize: 18, fontWeight: '800' }]}
+                  placeholder="••••••"
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={swapOtp}
+                  onChangeText={setSwapOtp}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+
+                <TouchableOpacity
+                  onPress={() => setSwapStep('OVERRIDE')}
+                  style={{ alignSelf: 'center', marginVertical: 8 }}
+                >
+                  <Text style={{ color: themeColors.error, fontSize: 12, fontWeight: '700' }}>
+                    Owner/Driver unavailable? Use Admin Override →
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
+                    onPress={() => setSwapStep('REQUEST')}
+                    disabled={swapSubmitting}
+                  >
+                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalConfirmBtn, { backgroundColor: '#10B981' }, swapSubmitting && styles.buttonDisabled]}
+                    onPress={handleVerifySwap}
+                    disabled={swapSubmitting}
+                  >
+                    {swapSubmitting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.modalConfirmText}>Verify & Complete</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1394,10 +1563,10 @@ export default function FleetOwnerDetailScreen() {
                 <View style={styles.modalActionRow}>
                   <TouchableOpacity
                     style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
-                    onPress={() => setSwapStep('REQUEST')}
+                    onPress={() => setSwapStep('VERIFY')}
                     disabled={swapSubmitting}
                   >
-                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back</Text>
+                    <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Back to OTP</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1417,6 +1586,31 @@ export default function FleetOwnerDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Manual Car Addition Modal for this Fleet Owner */}
+      {owner && (
+        <AdminAddCarModal
+          visible={addCarModalVisible}
+          onClose={() => setAddCarModalVisible(false)}
+          vehicleOwnerId={owner.vehicle_owner_id}
+          ownerName={owner.full_name}
+          onSuccess={fetchDetails}
+        />
+      )}
+
+      {/* Manual Driver Addition Modal for this Fleet Owner */}
+      {owner && (
+        <AdminAddDriverModal
+          visible={addDriverModalVisible}
+          onClose={() => setAddDriverModalVisible(false)}
+          vehicleOwnerId={owner.vehicle_owner_id}
+          ownerName={owner.full_name}
+          ownerPhone={owner.primary_number}
+          ownerCity={owner.city}
+          ownerAddress={owner.address}
+          onSuccess={fetchDetails}
+        />
+      )}
 
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
     </View>

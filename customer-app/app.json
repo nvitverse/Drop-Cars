@@ -16,7 +16,7 @@
       "package": "com.dropcars.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#0EA5E9"
+        "backgroundColor": "#0D47A1"
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -36,7 +36,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#0EA5E9"
+          "color": "#0D47A1"
         }
       ],
       [

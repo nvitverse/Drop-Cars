@@ -126,7 +126,13 @@ if (function_exists('dropcars_get_db')) {
     $pdo = $GLOBALS['db'];
 }
 
-$needNewId = !preg_match('/^C\d{8,}$/', $bookingId);
+require_once __DIR__ . '/../admin/includes/enquiries-schema.php';
+if (isset($pdo) && $pdo instanceof PDO) {
+    dropcars_ensure_bookings_columns($pdo);
+    dropcars_ensure_enquiries_columns($pdo);
+}
+
+$needNewId = !preg_match('/^(?:DC|C)\d{8,}$/i', $bookingId);
 
 // Check if booking ID already exists in DB to prevent overwriting
 if (!$needNewId && isset($pdo) && $pdo instanceof PDO) {
@@ -138,8 +144,7 @@ if (!$needNewId && isset($pdo) && $pdo instanceof PDO) {
 }
 
 if ($needNewId) {
-    require_once __DIR__ . '/../admin/includes/enquiries-schema.php';
-    $bookingId = dropcars_next_enquiry_booking_id(isset($pdo) && $pdo instanceof PDO ? $pdo : null, 'C');
+    $bookingId = dropcars_next_enquiry_booking_id(isset($pdo) && $pdo instanceof PDO ? $pdo : null, 'DC');
 }
 $customerName = htmlspecialchars($bookingData['customerName'] ?? 'N/A');
 $contactValue = htmlspecialchars(
@@ -206,6 +211,26 @@ $pickupLng = isset($bookingData['pickupLng']) ? (float) $bookingData['pickupLng'
 $pickupMapsLink = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
     ? 'https://www.google.com/maps?q=' . $pickupLat . ',' . $pickupLng
     : null;
+
+$dropLat = isset($bookingData['dropLat']) ? (float) $bookingData['dropLat'] : null;
+$dropLng = isset($bookingData['dropLng']) ? (float) $bookingData['dropLng'] : null;
+
+$mapOrigin = ($pickupLat !== null && $pickupLng !== null && $pickupLat >= -90 && $pickupLat <= 90 && $pickupLng >= -180 && $pickupLng <= 180)
+    ? ($pickupLat . ',' . $pickupLng)
+    : strip_tags($pickupPlain ?: $pickup);
+$mapDest = ($dropLat !== null && $dropLng !== null && $dropLat >= -90 && $dropLat <= 90 && $dropLng >= -180 && $dropLng <= 180)
+    ? ($dropLat . ',' . $dropLng)
+    : strip_tags($dropPlain ?: $drop);
+
+$viewMapUrl = 'https://www.google.com/maps/dir/?api=1&origin=' . rawurlencode($mapOrigin) . '&destination=' . rawurlencode($mapDest);
+$stopsList = $bookingData['stops'] ?? [];
+if (!empty($stopsList) && is_array($stopsList)) {
+    $cleanStops = array_filter(array_map('strip_tags', $stopsList));
+    if (!empty($cleanStops)) {
+        $viewMapUrl .= '&waypoints=' . rawurlencode(implode('|', $cleanStops));
+    }
+}
+
 $customerNamePlain = trim((string) ($bookingData['customerName'] ?? 'Guest'));
 $fareType = (string) ($bookingData['fareType'] ?? 'base');
 
@@ -219,6 +244,13 @@ if (isset($bookingData['fareBreakdown']) && is_array($bookingData['fareBreakdown
     $fareBreakdown['fareType'] = $fareType;
     $fareBreakdown['includeTolls'] = $includeTolls;
     $fareBreakdown['includeTaxes'] = $includeTaxes;
+}
+
+require_once __DIR__ . '/fare-breakdown-format.php';
+$fareBreakdown['pickup'] = $pickup;
+$fareBreakdown['drop'] = $drop;
+if (empty($fareBreakdown['borderTransitions'])) {
+    $fareBreakdown['borderTransitions'] = dropcars_detect_border_transitions((string)$pickup, (string)$drop, is_array($stopsList ?? null) ? $stopsList : []);
 }
 
 $selectedVehicleKey = strtoupper(trim((string)($bookingData['vehicleType'] ?? '')));
@@ -370,12 +402,33 @@ $isAirportFlag   = $pageMeta['isAirport'];
 $clientIp = trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? ''))[0] ?? '');
 
 // ── Pre-compute inclusions / exclusions for WA driver message ────────────────
+$borderList = !empty($fareBreakdown['borderTransitions']) && is_array($fareBreakdown['borderTransitions']) ? $fareBreakdown['borderTransitions'] : [];
+$borderCount = count($borderList);
+$selVehUpper = strtoupper($mappedKey ?: $vehicleType);
+$vTaxRate = 500;
+if ($selVehUpper === 'SUV') $vTaxRate = 1000;
+if ($selVehUpper === 'INNOVA' || $selVehUpper === 'CRYSTA') $vTaxRate = 1500;
+$totalTaxCalculated = 0;
+foreach ($borderList as $b) {
+    if (($selVehUpper === 'INNOVA' || $selVehUpper === 'CRYSTA') && !empty($b['andhraBorder'])) {
+        $totalTaxCalculated += 2000;
+    } else {
+        $totalTaxCalculated += $vTaxRate;
+    }
+}
+
 $waInclusionsText = 'Base Fare, Driver Allowance, Clean AC Cab';
 if ($includeTolls)  $waInclusionsText .= ', Highway Tolls';
-if ($includeTaxes)  $waInclusionsText .= ', State border tax (if crossing state border)';
+if ($includeTaxes)  $waInclusionsText .= ', State border tax' . ($totalTaxCalculated > 0 ? " (₹" . number_format($totalTaxCalculated) . ")" : " (if crossing state border)");
 $waExclusionsText = '';
 if (!$includeTolls) $waExclusionsText .= 'Toll, ';
-if (!$includeTaxes) $waExclusionsText .= 'State border tax, ';
+if (!$includeTaxes) {
+    if ($totalTaxCalculated > 0) {
+        $waExclusionsText .= "State border tax (₹" . number_format($totalTaxCalculated) . "), ";
+    } else {
+        $waExclusionsText .= "State border tax, ";
+    }
+}
 $waExclusionsText .= 'Parking, Extra KM/Hour, Waiting Charges';
 
 if (!function_exists('get_route_explore_url')) {
@@ -426,35 +479,55 @@ if (file_exists($_waTariffsPath)) {
     }
 }
 
+// Calculate minimum billable KM & included KM limit
+$calculatedMinKm = ($serviceType === 'round_trip' || stripos($bookingType, 'ROUND') !== false) ? max(250, (int)$distance * 2) : max(130, (int)$distance);
+
 // Share Customer — confirmed booking message (real UTF-8 emoji)
 $waVehicleDisplay = $waVehicle !== '' ? $waVehicle : 'Sedan';
-$waCustomerMsg  = "🌟 *DROP CARS — BOOKING CONFIRMATION* 🌟\n";
+$waCustomerMsg  = "🎉 *DROP CARS — BOOKING CONFIRMED!* 🎉\n";
 $waCustomerMsg .= "_Your Trusted Outstation & Airport Cab Partner_\n\n";
 $waCustomerMsg .= "Dear *" . strip_tags($customerName) . "*,\n\n";
-$waCustomerMsg .= "Thank you for choosing *Drop Cars*! Here is your complete booking summary for reference:\n\n";
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🗺️ *TRIP DETAILS*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "Great news! Your booking has been successfully *CONFIRMED*. Our verified chauffeur and sanitized cab will arrive on time.\n\n";
+$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🗺️ *CONFIRMED TRIP DETAILS*\n━━━━━━━━━━━━━━━━━━━\n";
 $waCustomerMsg .= "📌 *Booking ID:* *#" . $bookingId . "*\n";
 $waCustomerMsg .= "📍 *Pickup Location:* " . strip_tags($pickup) . "\n";
 $waCustomerMsg .= "🏁 *Drop Location:* " . strip_tags($drop) . "\n";
-$waCustomerMsg .= "🚗 *Vehicle Choice:* " . $waVehicleDisplay . "\n";
+$waCustomerMsg .= "🚗 *Vehicle Category:* " . $waVehicleDisplay . "\n";
 $waCustomerMsg .= "💼 *Service Type:* " . $tripLabel . "\n";
 if ($waGroupDate)  $waCustomerMsg .= "📅 *Pickup Date:* " . $waGroupDate . "\n";
 if ($travelTime)   $waCustomerMsg .= "⏰ *Pickup Time:* " . $travelTime . "\n";
 if ($waIsRound && $waReturnDate) $waCustomerMsg .= "📅 *Return Date:* " . $waReturnDate . "\n";
+if ($distance > 0) {
+    $waCustomerMsg .= "🛣️ *Approx Route Distance:* ~" . number_format($distance) . " KM\n";
+    $waCustomerMsg .= "📏 *Included KM Limit:* " . number_format($calculatedMinKm) . " KM\n";
+}
 
 if ($finalFare > 0) {
     $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n💰 *FARE & BILLING SUMMARY*\n━━━━━━━━━━━━━━━━━━━\n";
-    $waCustomerMsg .= "💵 *Estimated Total Fare:* *₹" . number_format($finalFare) . "* _(" . ($isInclusive ? 'All-Inclusive Fare' : 'Excl. Toll/Permit') . ")_\n";
-    $waCustomerMsg .= "🛣️ *Min Coverage:* " . ($serviceType === 'airport_transfer' && ($airportSubtype ?? '') === 'local' ? '20 KM Local' : '130 KM Outstation Min') . "\n";
-    $waCustomerMsg .= "👨‍✈️ *Driver Allowance (Bata):* Included in quote\n";
-    $waCustomerMsg .= "💳 *Advance Paid:* *₹0* _(Pay driver directly via Cash / UPI)_\n";
-    $waCustomerMsg .= "🧾 *Tolls & Permit:* " . ($isInclusive ? 'Toll, State Border Tax & GST included' : 'Paid extra as actuals') . "\n";
+    $waCustomerMsg .= "💵 *Confirmed Total Fare:* *₹" . number_format($finalFare) . "* _(" . ($isInclusive ? 'All-Inclusive Fare' : 'Excl. Toll/Permit') . ")_\n";
+    $waCustomerMsg .= "👨‍✈️ *Driver Allowance (Bata):* Included in fare\n";
+    if ($extraKmRate > 0) {
+        $waCustomerMsg .= "⚡ *Extra KM Rate:* ₹" . $extraKmRate . "/KM beyond included limit\n";
+    }
+    if ($isInclusive) {
+        $waCustomerMsg .= "🧾 *Tolls & Permit:* " . ($totalTaxCalculated > 0 ? "Toll, State Border Tax (₹" . number_format($totalTaxCalculated) . ") & GST included\n" : "Toll, State Border Tax & GST included\n");
+    } else {
+        $waCustomerMsg .= "🧾 *Tolls & Permit:* " . ($totalTaxCalculated > 0 ? "Toll paid as actuals. State Permit/Tax: ₹" . number_format($totalTaxCalculated) . " (crossing state border, payable extra to driver)\n" : "Paid extra as actuals (if applicable)\n");
+    }
 }
 
-$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n🔗 *LIVE TRACKING & LINKS*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "📍 *Live Driver & Trip Status:* https://dropcars.in/track-booking/" . $bookingId . "\n";
-$waCustomerMsg .= "🗺️ *Explore Route Details:* " . get_route_explore_url($pickup, $drop) . "\n";
-$waCustomerMsg .= "🔑 *Customer Portal:* https://dropcars.in/pages/customer-login.php\n";
+$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n💳 *ADVANCE / ONLINE PAYMENT*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "Prefer a 100% cashless trip? Pay advance or full amount securely:\n";
+$waCustomerMsg .= "👉 https://dropcars.in/pay-advance/" . $bookingId . "\n\n";
+
+$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n📱 *LIVE TRACKING & DRIVER OTP*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "Track driver assignment, vehicle details & view your Start-Trip OTP:\n";
+$waCustomerMsg .= "👉 https://dropcars.in/track-booking/" . $bookingId . "\n\n";
+
+$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n📄 *POLICIES & GUIDELINES*\n━━━━━━━━━━━━━━━━━━━\n";
+$waCustomerMsg .= "• Safety & Ride Guidelines: https://dropcars.in/terms\n";
+$waCustomerMsg .= "• Cancellation Policy: https://dropcars.in/terms#cancellation\n";
+$waCustomerMsg .= "• Explore Route Details: " . get_route_explore_url($pickup, $drop) . "\n\n";
 
 $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n🚨 *24x7 CUSTOMER SUPPORT*\n━━━━━━━━━━━━━━━━━━━\n";
 $waCustomerMsg .= "Need urgent updates or route changes?\n";
@@ -528,14 +601,23 @@ $waDriverMsg .= "💬 *WhatsApp Channel (🚖 Drop Cars - Driver Updates 🚨):*
 $waDriverMsg .= "_Reply with your vehicle details and ✅ to accept._";
 $waDriverUrl = 'https://wa.me/?text=' . rawurlencode($waDriverMsg);
 
-$subjectTag = $isAirportFlag ? 'Airport Taxi Confirmed' : 'Booking Confirmed';
+$pickupShort = trim(explode(',', strip_tags($pickup))[0]);
+$dropShort = trim(explode(',', strip_tags($drop))[0]);
+$routeDisplay = ($pickupShort !== '' && $dropShort !== '') ? "{$pickupShort} ➔ {$dropShort}" : (strip_tags($pickup) . " ➔ " . strip_tags($drop));
+
+$tripLabelShort = ($serviceType === 'round_trip' || stripos($bookingType, 'ROUND') !== false) ? 'Round Trip' : (($serviceType === 'hourly_rental') ? 'Hourly Rental' : (($serviceType === 'airport_transfer') ? 'Airport Transfer' : 'One Way'));
+$vehicleLabelShort = $vehicleType ? ucfirst(strtolower($vehicleType)) : 'Sedan';
+if (strcasecmp($vehicleLabelShort, 'CRYSTA') === 0) $vehicleLabelShort = 'Innova Crysta';
+
 $cleanCustomerName = trim(strip_tags((string)$customerName));
 if ($cleanCustomerName === '' || $cleanCustomerName === 'N/A') {
     $cleanCustomerName = 'Customer';
 }
-$cleanPageName = trim(str_replace(["\u{2708}\u{FE0F}", "\u{2708}", "\u{1F696}", "\u{1F3D9}\u{FE0F}", "\u{1F3D9}", "\u{1F3E0}", "\u{1F4C4}", '✈️', '🚖', '🏙️', '🏠', '📄'], '', (string)$pageDisplayName));
-$checkEmoji = "\u{2705}";
-$subject = "{$checkEmoji} Drop Cars {$subjectTag} #{$bookingId} - {$cleanCustomerName} ({$cleanPageName})";
+
+$formattedDateTime = (!empty($travelDate) ? date('d M', strtotime($travelDate)) : date('d M')) . ($travelTime ? ', ' . $travelTime : '');
+
+// Subject format: ✅ Confirmed #DC26100210: Chennai ➔ Coimbatore (One Way - Sedan) - Pugazh
+$subject = "\u{2705} Confirmed #{$bookingId}: {$routeDisplay} ({$tripLabelShort} - {$vehicleLabelShort}) - {$cleanCustomerName}";
 
 $bodyHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 body{font-family:Arial,sans-serif;line-height:1.6;color:#333;}
@@ -556,23 +638,34 @@ body{font-family:Arial,sans-serif;line-height:1.6;color:#333;}
 .list-title{font-weight:700;color:#0b4a8f;margin:10px 0 4px;}
 .list{margin:0 0 10px 18px;padding:0;font-size:14px;color:#203a5c;}
 .footer{font-size:12px;color:#68748c;margin-top:24px;text-align:center;}
-</style></head><body><div class="container">
-<div class="header" style="background:linear-gradient(135deg,#0b4a8f 0%,#1f6fc7 100%);color:#ffffff !important;">
-<h1 style="color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">DROP CARS</span></h1>
-<p style="color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">' . "\u{2705}" . ' Confirmed Booking</span></p>
-<p style="font-size:13px;opacity:0.95;color:#ffffff !important;text-shadow:0 1px 1px rgba(0,0,0,0.25);"><span style="color:#ffffff !important;">Booking ID: ' . $bookingId . '</span></p>
+</style></head><body>
+<!-- Preheader / Inbox Preview Snippet -->
+<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+📅 ' . htmlspecialchars($formattedDateTime) . ' &nbsp;|&nbsp; 📍 ' . htmlspecialchars($routeDisplay) . ' &nbsp;|&nbsp; ' . "\u{2705}" . ' Confirmed #' . htmlspecialchars($bookingId) . ' &nbsp;|&nbsp; 🚗 ' . htmlspecialchars($tripLabelShort . ' - ' . $vehicleLabelShort) . '
+</div>
+<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+<div class="container">
+<div class="header" style="background:linear-gradient(135deg,#065f46 0%,#047857 100%);color:#ffffff !important;padding:22px 18px;text-align:center;border-radius:10px;">
+<h1 style="color:#ffffff !important;margin:0;font-size:24px;font-weight:800;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#ffffff !important;">DROP CARS</span></h1>
+<p style="color:#ffffff !important;margin:6px 0 2px 0;font-size:16px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#ffffff !important;">✅ Confirmed Booking</span></p>
+<p style="color:#ecfdf5 !important;font-size:13px;font-weight:600;margin:0;opacity:0.95;text-shadow:0 1px 2px rgba(0,0,0,0.3);"><span style="color:#ecfdf5 !important;">Booking ID: ' . $bookingId . '</span></p>
 </div>';
 
-$contactValueHtml = htmlspecialchars($formattedContact);
+$contactValueHtml = '<div style="font-size: 15px; font-weight: 700; color: #0e2f56; margin-bottom: 4px;">' . htmlspecialchars($formattedContact) . '</div>';
 if (preg_match('/[0-9]/', $contactValue)) {
     $telHref = 'tel:' . preg_replace('/[^\d\+]/', '', $formattedContact);
-    // Reuse the same rich, pre-filled professional booking-confirmation
-    // template built for the "Send Customer" CRM button below instead of
-    // opening a bare, empty WhatsApp chat.
-    $contactValueHtml .= '<div style="margin-top: 6px;">'
-        . '<a href="' . $telHref . '" style="display: inline-block; background-color: #22c55e; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; margin-right: 8px; border: 1px solid #16a34a;">📞 Call</a>'
-        . '<a href="' . $waCustomerUrl . '" target="_blank" style="display: inline-block; background-color: #075E54; color: #ffffff !important; padding: 5px 12px; border-radius: 5px; font-weight: bold; text-decoration: none; font-size: 12px; border: 1px solid #054c44;">💬 WhatsApp</a>'
-        . '</div>';
+    $contactValueHtml .= '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 6px;"><tr>'
+        . '<td style="padding-right: 8px;">'
+        . '<a href="' . $telHref . '" style="display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #1d4ed8; line-height: 1.2; box-shadow: 0 2px 4px rgba(37,99,235,0.25);">'
+        . '<span style="color: #ffffff !important;">📞 Call</span></a>'
+        . '</td>'
+        . '<td>'
+        . '<a href="' . $waCustomerUrl . '" target="_blank" style="display: inline-block; background-color: #059669; color: #ffffff !important; padding: 8px 20px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; text-align: center; border: 1px solid #047857; line-height: 1.2; box-shadow: 0 2px 4px rgba(5,150,105,0.25);">'
+        . '<span style="color: #ffffff !important;">💬 WhatsApp</span></a>'
+        . '</td>'
+        . '</tr></table>';
 }
 
 $bodyHtml .= '
@@ -591,7 +684,13 @@ $bodyHtml .= '
 <tr><td class="k">⏰ Pickup Time</td><td class="v">' . htmlspecialchars($travelTime) . '</td></tr>
 <tr><td class="k">🚗 Vehicle</td><td class="v">' . htmlspecialchars($vehicleType) . '</td></tr>
 ' . ($distance > 0 ? '<tr><td class="k">🛣️ Distance</td><td class="v">' . number_format($distance, 0) . ' km</td></tr>' : '') . '
-</table></div></div>
+</table>
+<div style="padding: 12px 0 14px 0; text-align: center; border-top: 1px dashed #d8e4f3; margin-top: 8px;">
+    <a href="' . htmlspecialchars($viewMapUrl) . '" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff !important; padding: 11px 24px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 13px; box-shadow: 0 2px 6px rgba(2,132,199,0.35); border: 1px solid #0284c7;">
+        <span style="color: #ffffff !important; font-weight: 700;">🗺️ View Map &amp; Route Directions ↗</span>
+    </a>
+</div>
+</div></div>
 ';
 
 
@@ -616,16 +715,15 @@ $bodyHtml .= "<div class='block'><div class='block-title'>💰 Confirmed Fare Pa
     . $breakdownHtml
     . "<div class='block'><div class='block-title'>🛡️ Admin Management &amp; CRM Tools</div><div class='block-body' style='padding: 16px; text-align: center;'>
     <div style='display: inline-block; width: 100%; text-align: center;'>
-    <div style='margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>📲 WhatsApp Quick Share:</div>
-    <a href='" . $waCustomerUrl . "' target='_blank' style='display: inline-block; background: #25D366; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>📲 Send Customer</a>
-    <a href='" . $waGroupUrl . "' target='_blank' style='display: inline-block; background: #128C7E; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>👥 Group Post</a>
-    <a href='" . $waDriverUrl . "' target='_blank' style='display: inline-block; background: #075E54; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>🚖 Driver</a>
+    <div style='margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>📲 WhatsApp Dispatch &amp; Broadcasting:</div>
+    <a href='" . $waGroupUrl . "' target='_blank' style='display: inline-block; background: #128C7E; color: #ffffff !important; padding: 10px 18px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;'>👥 Group Post</span></a>
+    <a href='" . $waDriverUrl . "' target='_blank' style='display: inline-block; background: #075E54; color: #ffffff !important; padding: 10px 18px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;'>🚖 Driver Post</span></a>
     
     <div style='margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-bottom: 10px; font-size: 13px; color: #475569; font-weight: bold; text-align: left;'>Manage and fulfill this confirmed ride directly:</div>
-    <a href='" . rtrim($websiteUrl, '/') . "/admin/bookings?search=" . urlencode($bookingId) . "' target='_blank' style='display: inline-block; background: #0b4a8f; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>🚖 View Booking Details</a>
-    <a href='" . rtrim($websiteUrl, '/') . "/admin/bookings?search=" . urlencode($bookingId) . "#crew-assignment' target='_blank' style='display: inline-block; background: #7e22ce; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>👨‍✈️ Assign Cab &amp; Driver</a>
-    <a href='" . rtrim($websiteUrl, '/') . "/admin/customer-history?phone=" . urlencode($contactValue) . "' target='_blank' style='display: inline-block; background: #d97706; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>👤 Verify Customer Profile</a>
-    <a href='" . rtrim($websiteUrl, '/') . "/admin/settings?cat=operations&block_ip=" . urlencode($clientIp) . "' target='_blank' style='display: inline-block; background: #ef4444; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'>🚫 Spam? Block Client IP</a>
+    <a href='" . rtrim($websiteUrl, '/') . "/admin/bookings?search=" . urlencode($bookingId) . "' target='_blank' style='display: inline-block; background: #0b4a8f; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;font-weight:bold;'>🚖 View Booking Details</span></a>
+    <a href='" . rtrim($websiteUrl, '/') . "/admin/bookings?search=" . urlencode($bookingId) . "#crew-assignment' target='_blank' style='display: inline-block; background: #7e22ce; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;font-weight:bold;'>👨‍✈️ Assign Cab &amp; Driver</span></a>
+    <a href='" . rtrim($websiteUrl, '/') . "/admin/customer-history?phone=" . urlencode($contactValue) . "' target='_blank' style='display: inline-block; background: #d97706; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;font-weight:bold;'>👤 Verify Customer Profile</span></a>
+    <a href='" . rtrim($websiteUrl, '/') . "/admin/settings?cat=operations&block_ip=" . urlencode($clientIp) . "' target='_blank' style='display: inline-block; background: #ef4444; color: #ffffff !important; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; font-size: 13px; margin: 4px 6px;'><span style='color:#ffffff !important;font-weight:bold;'>🚫 Spam? Block Client IP</span></a>
     </div>
     </div></div>"
     . "<div class='block'><div class='block-title'>Coverage &amp; Trip Guidelines</div><div class='block-body' style='padding-top: 12px; padding-bottom: 12px;'>
@@ -636,13 +734,13 @@ $bodyHtml .= "<div class='block'><div class='block-title'>💰 Confirmed Fare Pa
                 <ul style='list-style: none; padding-left: 0; margin: 0; font-size: 13px; color: #2c3e50;'>
                     <li style='margin-bottom: 6px;'>🟢 Base Fare</li>
                     <li style='margin-bottom: 6px;'>🟢 Driver Allowance (Bata)</li>
-                    <li style='margin-bottom: 6px;'>🟢 Clean Sanitized AC Cab</li>" . ($includeTolls ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 Highway Toll Charges</li>" : "") . ($includeTaxes ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 State permit / border tax (if crossing state border)</li>" : "") . "
+                    <li style='margin-bottom: 6px;'>🟢 Clean Sanitized AC Cab</li>" . ($includeTolls ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 Highway Toll Charges</li>" : "") . ($includeTaxes ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 State permit / border tax included" . ($totalTaxCalculated > 0 ? " (₹" . number_format($totalTaxCalculated) . ")" : "") . "</li>" : "") . "
                 </ul>
             </div>
             <div style='display: table-cell; width: 50%; vertical-align: top; padding-left: 10px; border-left: 1px solid #eef3fb;'>
                 <div style='font-weight:700; color:#0b4a8f; margin-bottom: 4px; font-size: 13px; text-transform: uppercase;'>⚠️ What's Excluded</div>
                 <ul style='list-style: none; padding-left: 0; margin: 0; font-size: 13px; color: #64748b;'>
-                    <li style='margin-bottom: 6px;'>🔴 Parking Charges (if applicable)</li>" . ($includeTolls ? "" : "<li style='margin-bottom: 6px;'>🔴 Toll Charges</li>") . ($includeTaxes ? "" : "<li style='margin-bottom: 6px;'>🔴 State permit / border tax (applicable only if crossing state border)</li>") . "
+                    <li style='margin-bottom: 6px;'>🔴 Parking Charges (if applicable)</li>" . ($includeTolls ? "" : "<li style='margin-bottom: 6px;'>🔴 Toll Charges</li>") . ($includeTaxes ? "" : ($totalTaxCalculated > 0 ? "<li style='margin-bottom: 6px; font-weight: 700; color: #c2410c;'>🔴 State permit / border tax: ₹" . number_format($totalTaxCalculated) . " (crossing state border, payable extra)</li>" : "<li style='margin-bottom: 6px;'>🔴 State permit / border tax (applicable only if crossing state border)</li>")) . "
                     <li style='margin-bottom: 6px;'>🔴 Extra KM/Hour (if exceeded)</li>
                     <li style='margin-bottom: 6px;'>🔴 Waiting charges (after 20m grace)</li>
                 </ul>
@@ -661,13 +759,14 @@ $bodyHtml .= "<div class='block'><div class='block-title'>💰 Confirmed Fare Pa
 $sourceBadgeBg = ($normalizedSource === 'Google Ads') ? '#16a34a' : ($normalizedSource === 'Admin' ? '#7e22ce' : '#0284c7');
 $bodyHtml .= '<div class="block"><div class="block-title">📡 Source &amp; Lead Intelligence</div><div class="block-body"><table class="kv">'
         . '<tr><td class="k">Source</td><td class="v"><span style="background:' . $sourceBadgeBg . ';color:#ffffff;padding:3px 9px;border-radius:4px;font-weight:bold;font-size:12px;display:inline-block;">' . htmlspecialchars($normalizedSource) . '</span></td></tr>'
+        . ($utmCampaign !== '' ? '<tr><td class="k">📢 Campaign Name</td><td class="v"><span style="background:#f1f5f9;color:#0f172a;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmCampaign)) . '</span></td></tr>' : '')
         . ($utmTerm !== '' ? '<tr><td class="k">🎯 Search Keyword</td><td class="v"><strong>' . htmlspecialchars($utmTerm) . '</strong>' . ($matchtypeLabel !== '' ? ' <span style="background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;border:1px solid #bae6fd;">' . htmlspecialchars($matchtypeLabel) . '</span>' : '') . '</td></tr>' : '')
-        . ($utmCampaign !== '' ? '<tr><td class="k">📢 Campaign Name</td><td class="v"><span style="background:#f1f5f9;color:#1e293b;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmCampaign)) . '</span></td></tr>' : '')
-        . ($utmContent !== '' ? '<tr><td class="k">📂 Ad Group Name</td><td class="v"><span style="background:#f1f5f9;color:#1e293b;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmContent)) . '</span></td></tr>' : '')
-        . '<tr><td class="k">Device</td><td class="v">' . htmlspecialchars($deviceLabel) . '</td></tr>'
-        . '<tr><td class="k">Booking Page</td><td class="v"><strong>' . htmlspecialchars($pageDisplayName) . '</strong></td></tr>'
-        . '<tr><td class="k">Page URL</td><td class="v">' . ($pageUrlRaw !== '' ? '<a href="' . htmlspecialchars($pageUrlRaw) . '" target="_blank" style="color:#0b4a8f;font-weight:600;word-break:break-all;">' . htmlspecialchars($pageUrlRaw) . '</a>' : htmlspecialchars($sourcePage)) . '</td></tr>'
-        . '<tr><td class="k">IP Address</td><td class="v">' . htmlspecialchars($clientIp) . '</td></tr>'
+        . ($utmContent !== '' ? '<tr><td class="k">📂 Ad Group Name</td><td class="v"><span style="background:#f1f5f9;color:#0f172a;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;">' . htmlspecialchars(str_replace('_', ' ', $utmContent)) . '</span></td></tr>' : '')
+        . '<tr><td class="k">📱 Device</td><td class="v"><strong>' . htmlspecialchars($deviceLabel) . '</strong></td></tr>'
+        . '<tr><td class="k">🌐 Page Name</td><td class="v"><strong>' . htmlspecialchars($pageDisplayName) . '</strong></td></tr>'
+        . '<tr><td class="k">🔗 Page URL</td><td class="v">' . ($pageUrlRaw !== '' ? '<a href="' . htmlspecialchars($pageUrlRaw) . '" target="_blank" style="color:#0284c7;font-weight:600;word-break:break-all;">' . htmlspecialchars($pageUrlRaw) . '</a>' : htmlspecialchars($sourcePage)) . '</td></tr>'
+        . '<tr><td class="k">💻 IP Address</td><td class="v"><span style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;">' . htmlspecialchars($clientIp) . '</span></td></tr>'
+        . '<tr><td class="k">⏰ Lead Captured</td><td class="v">' . date('d M Y, h:i A') . ' IST</td></tr>'
         . '</table></div></div>'
     . '<div class="footer">Automated confirmation from Drop Cars. Phone: +91 7200217986 | support@dropcars.in</div>
 </div></body></html>';
@@ -679,6 +778,7 @@ $bodyPlain .= "Phone: {$formattedContact}\n";
 $bodyPlain .= "Trip Type: {$tripLabel}\n";
 $bodyPlain .= "Pickup: {$pickup}\n";
 $bodyPlain .= "Drop: {$drop}\n";
+$bodyPlain .= "🗺️ View Map: {$viewMapUrl}\n";
 if ($pickupMapsLink) {
     $bodyPlain .= "Pickup GPS: {$pickupMapsLink}\n";
 }
@@ -696,7 +796,7 @@ if ($includeTolls) {
     $inclusionsPlain .= ", Highway Tolls";
 }
 if ($includeTaxes) {
-    $inclusionsPlain .= ", State permit / border tax (if crossing state border)";
+    $inclusionsPlain .= ", State permit / border tax" . ($totalTaxCalculated > 0 ? " included (₹" . number_format($totalTaxCalculated) . ")" : " (if crossing state border)");
 }
 
 $exclusionsPlain = "";
@@ -704,7 +804,11 @@ if (!$includeTolls) {
     $exclusionsPlain .= "Toll, ";
 }
 if (!$includeTaxes) {
-    $exclusionsPlain .= "State permit / border tax (applicable only if crossing state border), ";
+    if ($totalTaxCalculated > 0) {
+        $exclusionsPlain .= "State permit / border tax: ₹" . number_format($totalTaxCalculated) . " (crossing state border, payable extra), ";
+    } else {
+        $exclusionsPlain .= "State permit / border tax (applicable only if crossing state border), ";
+    }
 }
 $exclusionsPlain .= "Parking, Extra KM/Hour, Waiting Charges";
 $bodyPlain .= "Inclusions: {$inclusionsPlain}\n";
@@ -919,67 +1023,19 @@ if ($threadKeySource === '||||') {
     $threadKeySource = 'unknown';
 }
 $threadHash          = substr(sha1($threadKeySource), 0, 24);
-$threadRootMessageId = '<trip-thread-' . $threadHash . '@gmail.com>';
+$threadRootMessageId = '<booking-thread-' . $threadHash . '@gmail.com>';
+$currentMessageId   = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
 
 $phpmailerPath = __DIR__ . '/phpmailer/src/PHPMailer.php';
 // Skip blocking SMTP on the single-threaded php -S dev server.
 if (php_sapi_name() === 'cli-server') {
     error_log('[dropcars] Skipping SMTP send on built-in dev server (cli-server).');
 } elseif (is_file($phpmailerPath) && $appPassword) {
-    require_once __DIR__ . '/phpmailer/src/Exception.php';
-    require_once __DIR__ . '/phpmailer/src/PHPMailer.php';
-    require_once __DIR__ . '/phpmailer/src/SMTP.php';
-    $sendEmail = function ($toAddress, $subjectLine, $htmlBody, $plainBody) use ($smtp, $bookingId, $threadRootMessageId, $threadHash) {
-        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host = 'smtp.gmail.com';
-            $mail->SMTPAuth = true;
-            $mail->SMTPSecure = 'tls';
-            $mail->Port = 587;
-            dropcars_phpmailer_apply_smtp($mail, $smtp);
-            $mail->addAddress($toAddress);
-            $mail->CharSet = 'UTF-8';
-            $mail->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
-            $mail->addCustomHeader('In-Reply-To', $threadRootMessageId);
-            $mail->addCustomHeader('References', $threadRootMessageId);
-            $mail->addCustomHeader('X-DropCars-Thread-Key', $threadHash);
-            $mail->addCustomHeader('X-Entity-Ref-ID', 'confirm-' . $bookingId . '-' . uniqid());
-            $mail->Subject = $subjectLine;
-            $mail->Body = $htmlBody;
-            $mail->AltBody = $plainBody;
-            $mail->isHTML(true);
-            $mail->send();
-            return true;
-        } catch (Exception $e) {
-            // Fallback to Port 465 SSL
-            try {
-                $mail2 = new \PHPMailer\PHPMailer\PHPMailer(true);
-                $mail2->isSMTP();
-                $mail2->Host = 'smtp.gmail.com';
-                $mail2->SMTPAuth = true;
-                $mail2->SMTPSecure = 'ssl';
-                $mail2->Port = 465;
-                dropcars_phpmailer_apply_smtp($mail2, $smtp);
-                $mail2->addAddress($toAddress);
-                $mail2->CharSet = 'UTF-8';
-                $mail2->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
-                $mail2->addCustomHeader('In-Reply-To', $threadRootMessageId);
-                $mail2->addCustomHeader('References', $threadRootMessageId);
-                $mail2->addCustomHeader('X-DropCars-Thread-Key', $threadHash);
-                $mail2->addCustomHeader('X-Entity-Ref-ID', 'confirm-' . $bookingId . '-' . uniqid());
-                $mail2->Subject = $subjectLine;
-                $mail2->Body = $htmlBody;
-                $mail2->AltBody = $plainBody;
-                $mail2->isHTML(true);
-                $mail2->send();
-                return true;
-            } catch (Exception $e2) {
-                error_log("Drop Cars SMTP 587 Error: " . $e->getMessage() . " | Port 465 Fallback Error: " . $e2->getMessage());
-                return false;
-            }
-        }
-    };
+    $customHeaders = [
+        'Message-ID' => $currentMessageId,
+        'X-DropCars-Thread-Key' => 'booking-' . $threadHash,
+        'X-Entity-Ref-ID' => 'confirm-' . $bookingId . '-' . uniqid(),
+    ];
 
     $adminRecipients = array_filter(array_map('trim', explode(',', (string) $mailTo)));
     if (empty($adminRecipients)) {
@@ -987,8 +1043,20 @@ if (php_sapi_name() === 'cli-server') {
     }
     foreach ($adminRecipients as $recipient) {
         if ($recipient !== '' && filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
-            if ($sendEmail($recipient, $subject, $bodyHtml, $bodyPlain)) {
+            $mailRes = dropcars_send_mail_with_fallback(
+                $smtp,
+                __DIR__ . '/phpmailer/src',
+                $recipient,
+                $subject,
+                $bodyHtml,
+                $bodyPlain,
+                $customHeaders,
+                $config
+            );
+            if ($mailRes['ok']) {
                 $adminEmailSent = true;
+            } else {
+                error_log("Drop Cars confirm_booking admin mail failed: " . $mailRes['error']);
             }
         }
     }
@@ -1136,6 +1204,30 @@ if ($targetStatus !== 'confirmed') {
         $backendPhone = preg_replace('/[^\d]/', '', (string) $contactValue);
 
         if ($backendPhone !== '') {
+            $backendCostPerKm = null;
+            $backendDriverBata = null;
+            $backendPermitCharges = 0;
+            $backendTollCharges = 0;
+
+            if (!empty($fareBreakdown['vehicles'][$mappedKey])) {
+                $vData = $fareBreakdown['vehicles'][$mappedKey];
+                if (isset($vData['perKmRate'])) $backendCostPerKm = (int)$vData['perKmRate'];
+                if (isset($vData['driverBata'])) $backendDriverBata = (int)$vData['driverBata'];
+                if (isset($vData['stateTax'])) $backendPermitCharges += (int)$vData['stateTax'];
+                if (isset($vData['permitCharges'])) $backendPermitCharges += (int)$vData['permitCharges'];
+                if (isset($vData['toll'])) $backendTollCharges += (int)$vData['toll'];
+            }
+            if ($backendCostPerKm === null && !empty($_waTariffs)) {
+                $_waTTSearch = $waIsRound ? 'round' : 'oneway';
+                foreach ($_waTariffs as $_wt) {
+                    if (strtoupper($_wt['vehicle_type'] ?? '') === $mappedKey && strtolower($_wt['trip_type'] ?? '') === $_waTTSearch) {
+                        $backendCostPerKm = (int)($_wt['per_km_rate'] ?? 15);
+                        $backendDriverBata = (int)($_wt['driver_beta'] ?? 400);
+                        break;
+                    }
+                }
+            }
+
             $backendResult = dropcars_backend_request('POST', '/api/website/bookings', [
                 'customer_name' => $customerNamePlain !== '' ? $customerNamePlain : 'Guest',
                 'customer_number' => $backendPhone,
@@ -1144,6 +1236,12 @@ if ($targetStatus !== 'confirmed') {
                 'trip_type' => $backendTripType,
                 'car_type' => $backendCarType,
                 'start_date_time' => $startDateTime,
+                'quoted_total_amount' => (int) round($finalFare),
+                'quoted_cost_per_km' => $backendCostPerKm,
+                'quoted_driver_allowance' => $backendDriverBata,
+                'quoted_permit_charges' => $backendPermitCharges,
+                'quoted_toll_charges' => $backendTollCharges,
+                'quoted_trip_distance' => (float)$distance,
                 // "Urgent - need taxi immediately" (website Phase 3) - the
                 // customer already completed a Razorpay Checkout payment for
                 // the 15% advance client-side (see assets/js/booking-form.js'

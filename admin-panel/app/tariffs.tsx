@@ -22,6 +22,7 @@ import Toast, { useToast } from '@/components/Toast';
 import { colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
+import DriverTariffEditor from '@/components/DriverTariffEditor';
 
 // Core per-vehicle-type, per-trip-type rate management - mirrors the core
 // of admin/pages/tariffs.php on the website (same data/tariffs.json store,
@@ -51,7 +52,7 @@ export default function TariffsScreen() {
   const [tariffs, setTariffs] = useState<WebsiteTariff[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeBrand, setActiveBrand] = useState<'dropcars' | 'airporttaxi'>('dropcars');
+  const [activeBrand, setActiveBrand] = useState<'dropcars' | 'airporttaxi' | 'driver'>('dropcars');
   const [airportTariffs, setAirportTariffs] = useState<any>(null);
   const [savingAirport, setSavingAirport] = useState(false);
 
@@ -195,9 +196,24 @@ export default function TariffsScreen() {
             ✈️ Airport Taxi Sub-Brand
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+            activeBrand === 'driver'
+              ? { backgroundColor: themeColors.primary, borderColor: themeColors.primary }
+              : { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+          ]}
+          onPress={() => setActiveBrand('driver')}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: activeBrand === 'driver' ? '#FFF' : themeColors.text }}>
+            👤 Driver
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {activeBrand === 'airporttaxi' ? (
+      {activeBrand === 'driver' ? (
+        <DriverTariffEditor />
+      ) : activeBrand === 'airporttaxi' ? (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
           <View style={[styles.noticeBar, { backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderColor: '#6366F1', borderWidth: 1, marginBottom: 14 }]}>
             <Text style={[styles.noticeText, { color: isDark ? '#C7D2FE' : '#312E81' }]}>

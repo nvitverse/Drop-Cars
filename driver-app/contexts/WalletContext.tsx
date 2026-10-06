@@ -35,7 +35,7 @@ interface WalletContextType {
   refreshTransactions: () => Promise<void>;
   addMoney: (amount: number, description?: string, metadata?: Record<string, any>) => Promise<void>;
   deductMoney: (amount: number, description: string, metadata?: Record<string, any>) => Promise<void>;
-  processWalletTopup: (amount: number, userData: { name: string; email: string; contact: string }) => Promise<any>;
+  processWalletTopup: (amount: number, userData: { name: string; email: string; contact: string }, purpose?: string) => Promise<any>;
   handlePaymentSuccess: (razorpayResponse: any) => Promise<void>;
   handlePaymentFailure: (error: any) => void;
   syncWithBackend: () => Promise<void>;
@@ -218,13 +218,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const processWalletTopupWithRazorpay = async (amount: number, userData: { name: string; email: string; contact: string }) => {
+  const processWalletTopupWithRazorpay = async (amount: number, userData: { name: string; email: string; contact: string }, purpose?: string) => {
     try {
       setLoading(true);
       setError(null);
       
       // Create Razorpay order
-      const orderResponse = await processWalletTopup(amount, userData);
+      const orderResponse = await processWalletTopup(amount, userData, purpose);
       
       if (orderResponse.success) {
         console.log('✅ Razorpay order created for wallet top-up:', orderResponse.razorpay_order_id);

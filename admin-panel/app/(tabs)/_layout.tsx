@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, Users, Wallet, Package, Settings, UserCheck, Briefcase, MessageSquare, Megaphone, ListTodo } from 'lucide-react-native';
+import { Home, Users, Wallet, Package, Settings, UserCheck, Briefcase, MessageSquare, Megaphone, ListTodo, Menu } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
-import { syncNotificationSounds } from '@/services/soundChannelSync';
 import { apiService } from '@/services/api';
+import * as supportApi from '@/services/supportApi';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -55,7 +55,7 @@ export default function TabLayout() {
     const refresh = async () => {
       try {
         const [support, booking] = await Promise.all([
-          apiService.getSupportThreads().catch(() => []),
+          supportApi.getSupportThreads().catch(() => []),
           apiService.getBookingChatThreads().catch(() => []),
         ]);
         const total = [...(support || []), ...(booking || [])].reduce((sum: number, t: any) => sum + (t.unread || 0), 0);
@@ -73,7 +73,6 @@ export default function TabLayout() {
       if (token) {
         try {
           await apiService.registerPushToken(token);
-          syncNotificationSounds(token).catch(() => {});
         } catch (error) {
           console.error('Failed to register admin push token:', error);
         }
@@ -136,8 +135,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarLabel: renderLabel('Dashboard'),
+          title: 'Home',
+          tabBarLabel: renderLabel('Home'),
           tabBarIcon: ({ size, color, focused }) => (
             <View style={styles.iconWrapper}>
               {focused && <View style={[styles.activeIndicator, { backgroundColor: themeColors.primary }]} />}
@@ -155,29 +154,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Bookings',
-          tabBarLabel: renderLabel('Bookings'),
+          title: 'Operations',
+          tabBarLabel: renderLabel('Operations'),
           tabBarIcon: ({ size, color, focused }) => (
             <View style={styles.iconWrapper}>
               {focused && <View style={[styles.activeIndicator, { backgroundColor: themeColors.primary }]} />}
-              <Package size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+              <Briefcase size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
             </View>
           ),
           href: canSee('bookings') ? undefined : null,
-        }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          title: 'Tasks',
-          tabBarLabel: renderLabel('Tasks'),
-          tabBarIcon: ({ size, color, focused }) => (
-            <View style={styles.iconWrapper}>
-              {focused && <View style={[styles.activeIndicator, { backgroundColor: themeColors.primary }]} />}
-              <ListTodo size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
-            </View>
-          ),
-          href: canSee('tasks') || canSee('bookings') || isOwner ? undefined : null,
         }}
       />
       <Tabs.Screen
@@ -206,12 +191,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="customers"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="fleet-hub"
         options={{
           title: 'Fleet',
@@ -223,6 +202,26 @@ export default function TabLayout() {
             </View>
           ),
           href: canSee('fleet') ? undefined : null,
+        }}
+      />
+      <Tabs.Screen
+        name="tasks"
+        options={{
+          title: 'More',
+          tabBarLabel: renderLabel('More'),
+          tabBarIcon: ({ size, color, focused }) => (
+            <View style={styles.iconWrapper}>
+              {focused && <View style={[styles.activeIndicator, { backgroundColor: themeColors.primary }]} />}
+              <Menu size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+            </View>
+          ),
+          href: canSee('tasks') || canSee('bookings') || isOwner ? undefined : null,
+        }}
+      />
+      <Tabs.Screen
+        name="customers"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

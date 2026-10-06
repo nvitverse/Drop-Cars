@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname } from 'expo-router';
@@ -16,6 +17,12 @@ import { playAlarmSound, stopAlarmSound, forceStopAlarmSound } from '@/utils/ala
 import { useTheme } from '@/context/ThemeContext';
 
 const ALERT_CUTOFF_STORAGE_KEY = 'dropcars_admin_booking_alert_cutoff_v1';
+// A confirmed website booking waiting for approval rings for ONE minute when it arrives (or until ACKNOWLEDGE), then never again: it stays
+// quiet in the approvals list while the auto-post timing rule runs (backend crud/website_post_rules.py), and after posting (by rule or by
+// hand) it simply appears in Bookings > Upcoming.
+const WEBSITE_RING_MS = 60000;
+const LAST_WINDOW_MS = 15 * 60000;   // a HELD booking rings once more this long before its hold ends (pickup - 2 hrs) and it posts by the rule
+const QUIET_STORAGE_KEY = 'dropcars_admin_booking_alarm_quiet_v1';
 
 type BookingAlarmItem = {
   id: string;
@@ -34,6 +41,9 @@ type BookingAlarmItem = {
   is_urgent: boolean;
   is_urgent_unassigned?: boolean;
   mins_to_pickup?: number;
+  auto_post_at?: string | null;
+  auto_post_reason?: string | null;
+  is_held?: boolean;
 };
 
 function locationLabel(loc: any, routeStr?: string): string {
@@ -57,6 +67,8 @@ export default function BookingAlarmHost() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [snoozedUntil, setSnoozedUntil] = useState<Record<string, number>>({});
   const dismissedRef = useRef<Set<string>>(new Set());
+  const ringStartRef = useRef<Record<string, number>>({});   // when a website booking started ringing
+  const quietRef = useRef<Set<string>>(new Set());            // already rang (1 min) or acknowledged: never rings again
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [alertCutoffMs, setAlertCutoffMs] = useState<number | null>(null);
 
@@ -74,6 +86,13 @@ export default function BookingAlarmHost() {
     };
     checkAuth();
   }, [pathname]);
+
+  // bookings that already rang their share stay quiet after a reload too
+  useEffect(() => {
+    AsyncStorage.getItem(QUIET_STORAGE_KEY).then((v) => {
+      if (v) JSON.parse(v).forEach((id: string) => quietRef.current.add(id));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -110,13 +129,35 @@ export default function BookingAlarmHost() {
 
         const now = Date.now();
 
-        // Fresh website approval items
-        const freshWebsite = (websiteList || []).filter((b) => {
+        // Fresh website approval items - each rings only for WEBSITE_RING_MS, once
+        const freshWebsite = ((websiteList || []) as any[]).filter((b: any) => {
+          // Held by staff: silent until its last window, then one more 1-minute ring (it posts by itself right after)
+          if (b.is_held && b.auto_post_at) {
+            const untilPost = new Date(b.auto_post_at).getTime() - now;
+            if (untilPost > LAST_WINDOW_MS) return false;
+            const key = `${b.id}:last`;
+            if (quietRef.current.has(key)) return false;
+            const startedLast = ringStartRef.current[key] ?? (ringStartRef.current[key] = now);
+            if (now - startedLast > WEBSITE_RING_MS) {
+              quietRef.current.add(key);
+              AsyncStorage.setItem(QUIET_STORAGE_KEY, JSON.stringify(Array.from(quietRef.current))).catch(() => {});
+              return false;
+            }
+            return true;
+          }
           const createdMs = new Date(b.created_at).getTime();
           if (Number.isNaN(createdMs) || createdMs <= alertCutoffMs) return false;
           if (dismissedRef.current.has(b.id)) return false;
           const snoozeExpiry = snoozedUntil[b.id];
           if (snoozeExpiry && now < snoozeExpiry) return false;
+
+          if (quietRef.current.has(b.id)) return false;                    // quiet: it waits for its auto-post time, no more alarms
+          const started = ringStartRef.current[b.id] ?? (ringStartRef.current[b.id] = now);
+          if (now - started > WEBSITE_RING_MS) {
+            quietRef.current.add(b.id);
+            AsyncStorage.setItem(QUIET_STORAGE_KEY, JSON.stringify(Array.from(quietRef.current))).catch(() => {});
+            return false;
+          }
           return true;
         });
 
@@ -199,6 +240,35 @@ export default function BookingAlarmHost() {
     }
   };
 
+  // "Handle manually": pause the auto-post (backend allows up to 2 hrs, never past pickup - 2 hrs), stop the alarm for this booking and
+  // open the approvals list so staff can talk to the customer and post it by hand.
+  const handleManual = async () => {
+    if (!activeBooking) return;
+    try {
+      await apiService.makeRequest(`/admin/website-bookings/${activeBooking.id}/hold`, { method: 'POST', body: JSON.stringify({ minutes: 120 }) });
+    } catch (e: any) {
+      Alert.alert('Cannot hold this booking', e?.message || 'Too close to pickup - post it now or snooze.');
+      return;
+    }
+    dismissedRef.current.add(activeBooking.id);
+    const remaining = queue.filter((b) => b.id !== activeBooking.id);
+    setQueue(remaining);
+    setCurrentIndex(0);
+    if (remaining.length === 0) forceStopAlarmSound();
+    router.push('/website-booking-approvals' as any);
+  };
+
+  // ACKNOWLEDGE (website bookings): silence this booking's alarm for good. It stays in Website Approvals and the auto-post rule carries on.
+  const handleAcknowledge = () => {
+    if (!activeBooking) return;
+    quietRef.current.add(activeBooking.is_held ? `${activeBooking.id}:last` : activeBooking.id);
+    AsyncStorage.setItem(QUIET_STORAGE_KEY, JSON.stringify(Array.from(quietRef.current))).catch(() => {});
+    const remaining = queue.filter((b) => b.id !== activeBooking.id);
+    setQueue(remaining);
+    setCurrentIndex(0);
+    if (remaining.length === 0) forceStopAlarmSound();
+  };
+
   const handleSnooze = () => {
     if (!activeBooking) return;
     setSnoozedUntil((prev) => ({ ...prev, [activeBooking.id]: Date.now() + 300000 }));
@@ -250,7 +320,9 @@ export default function BookingAlarmHost() {
               <Text style={styles.headerSubtitle}>
                 {isUnassignedAlert
                   ? `⏰ Pickup in ${activeBooking.mins_to_pickup ?? 60} mins · No driver assigned!`
-                  : `Queue (${currentIndex + 1} of ${queue.length}) · auto-posts if not reviewed`}
+                  : activeBooking.auto_post_at
+                    ? `Queue (${currentIndex + 1} of ${queue.length}) · auto-posts ${new Date(activeBooking.auto_post_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${activeBooking.auto_post_reason ? ` · ${activeBooking.auto_post_reason}` : ''}`
+                    : `Queue (${currentIndex + 1} of ${queue.length}) · waits for staff`}
               </Text>
             </View>
             <View style={styles.timerBadge}>
@@ -328,12 +400,21 @@ export default function BookingAlarmHost() {
           </View>
 
           <View style={styles.buttonRow}>
+            {!isUnassignedAlert && (
+              <TouchableOpacity
+                style={[styles.snoozeButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0', flexBasis: '100%' }]}
+                onPress={handleManual}
+              >
+                <Phone size={18} color={themeColors.text} />
+                <Text style={[styles.snoozeText, { color: themeColors.text }]}>HANDLE MANUALLY</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.snoozeButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
-              onPress={handleSnooze}
+              onPress={isUnassignedAlert ? handleSnooze : handleAcknowledge}
             >
               <Clock size={18} color={themeColors.text} />
-              <Text style={[styles.snoozeText, { color: themeColors.text }]}>SNOOZE (5m)</Text>
+              <Text style={[styles.snoozeText, { color: themeColors.text }]}>{isUnassignedAlert ? 'SNOOZE (5m)' : 'ACKNOWLEDGE'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -470,6 +551,7 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     paddingHorizontal: 18,
     paddingBottom: 18,

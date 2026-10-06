@@ -115,8 +115,7 @@ const TRIP_TYPE_SUBTITLES: Record<TripType, string> = {
 
 const HOURLY_PACKAGES = [
   { hours: 5, km_range: 50 },
-  { hours: 10, km_range: 100 },
-  { hours: 12, km_range: 120 },
+  { hours: 8, km_range: 80 },
 ];
 
 const currentYear = new Date().getFullYear();
@@ -343,6 +342,8 @@ export default function CreateBookingScreen() {
   })();
   const [endTime, setEndTime] = useState('');
   const [hourlyPackageIndex, setHourlyPackageIndex] = useState(0);
+  const [isCustomHourly, setIsCustomHourly] = useState(false);
+  const [customHourlyHours, setCustomHourlyHours] = useState('');
   const [pickupNotes, setPickupNotes] = useState('');
   const [tollChargeUpdate, setTollChargeUpdate] = useState(false);
 
@@ -513,7 +514,7 @@ export default function CreateBookingScreen() {
     } else {
       if (!costPerHour || costPerHour === '0') setCostPerHour('250');
       if (!extraCostPerHour) setExtraCostPerHour('50');
-      if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('15');
+      if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('25');
       if (!extraCostForAddonKm) setExtraCostForAddonKm('5');
     }
   }, [carType, tripType]);
@@ -1129,6 +1130,9 @@ export default function CreateBookingScreen() {
       }
     } else {
       if (!stops[0]?.trim()) return 'Enter the pickup location';
+      if (isCustomHourly && (!customHourlyHours.trim() || Number(customHourlyHours) <= 0)) {
+        return 'Enter valid custom duration in hours (min 1 hour)';
+      }
       if (!costPerHour.trim()) return 'Enter the hourly driver rate';
     }
     if ((tripType === 'roundtrip' || tripType === 'multicity') && (!endDate || !endTime)) {
@@ -1282,7 +1286,12 @@ export default function CreateBookingScreen() {
       start_date_time: startIso,
       customer_name: customerName.trim(),
       customer_number: formattedPhone,
-      package_hours: HOURLY_PACKAGES[hourlyPackageIndex],
+      package_hours: isCustomHourly
+        ? (() => {
+            const h = Math.max(1, parseInt(customHourlyHours, 10) || 1);
+            return { hours: h, km_range: h * 10 };
+          })()
+        : (HOURLY_PACKAGES[hourlyPackageIndex] || HOURLY_PACKAGES[0]),
       cost_per_hour: Number(costPerHour) || 0,
       extra_cost_per_hour: Number(extraCostPerHour) || 0,
       cost_for_addon_km: Number(costForAddonKm) || 0,
@@ -1571,10 +1580,8 @@ export default function CreateBookingScreen() {
             </View>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity
+              <View
                 style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#0F172A' : '#F9FAFB', borderWidth: 1, borderColor: themeColors.border, borderRadius: 6, paddingHorizontal: 12, height: 42 }}
-                onPress={() => searchLeads()}
-                activeOpacity={0.8}
               >
                 <Search size={15} color={themeColors.textMuted} style={{ marginRight: 8 }} />
                 <TextInput
@@ -1587,7 +1594,7 @@ export default function CreateBookingScreen() {
                   returnKeyType="search"
                   accessibilityLabel="Search lead or booking"
                 />
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={{ height: 42, paddingHorizontal: 14, borderRadius: 6, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 onPress={() => searchLeads()}
@@ -1739,12 +1746,82 @@ export default function CreateBookingScreen() {
 
               <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary }]}>Package</Text>
               <View style={styles.chipRow}>
-                {HOURLY_PACKAGES.map((p, idx) => (
-                  <TouchableOpacity key={idx} style={[styles.chip, hourlyPackageIndex === idx && styles.chipActive]} onPress={() => setHourlyPackageIndex(idx)}>
-                    <Text style={[styles.chipText, hourlyPackageIndex === idx && styles.chipTextActive]}>{p.hours}h / {p.km_range}km</Text>
-                  </TouchableOpacity>
-                ))}
+                {HOURLY_PACKAGES.map((p, idx) => {
+                  const isSelected = !isCustomHourly && hourlyPackageIndex === idx;
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        setIsCustomHourly(false);
+                        setHourlyPackageIndex(idx);
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{p.hours}h / {p.km_range}km</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={[styles.chip, isCustomHourly && styles.chipActive]}
+                  onPress={() => setIsCustomHourly(true)}
+                >
+                  <Text style={[styles.chipText, isCustomHourly && styles.chipTextActive]}>Custom / Manual</Text>
+                </TouchableOpacity>
               </View>
+
+              {isCustomHourly && (
+                <View
+                  style={{
+                    marginTop: 10,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: themeColors.surface,
+                    borderWidth: 1,
+                    borderColor: themeColors.border,
+                  }}
+                >
+                  <Text style={[styles.fieldLabel, { marginBottom: 6, fontSize: 13, color: themeColors.text }]}>
+                    Enter Custom Hours *
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          flex: 1,
+                          paddingVertical: 10,
+                          height: 44,
+                          backgroundColor: themeColors.background,
+                          color: themeColors.text,
+                          borderColor: themeColors.border,
+                        },
+                      ]}
+                      value={customHourlyHours}
+                      onChangeText={(val) => setCustomHourlyHours(val.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="e.g. 6"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <View
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        backgroundColor: themeColors.primary + '18',
+                        borderWidth: 1,
+                        borderColor: themeColors.primary + '40',
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.primary }}>
+                        {(parseInt(customHourlyHours, 10) || 0) * 10} km (10 km/hr)
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>
+                    Kms auto-calculated at 10 kms/hr ({parseInt(customHourlyHours, 10) || 0} hrs × 10 km/hr = {(parseInt(customHourlyHours, 10) || 0) * 10} km)
+                  </Text>
+                </View>
+              )}
             </>
           ) : (
             <>

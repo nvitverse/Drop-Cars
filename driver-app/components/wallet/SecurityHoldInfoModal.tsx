@@ -38,10 +38,10 @@ export const SecurityHoldInfoModal: React.FC<SecurityHoldInfoModalProps> = ({ vi
             <View style={[styles.ruleCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
               <View style={styles.ruleHeader}>
                 <IndianRupee size={16} color="#0EA5E9" />
-                <AppText style={[styles.ruleTitle, { color: colors.text }]}>₹500 Security Hold (பாதுகாப்பு வைப்பு)</AppText>
+                <AppText style={[styles.ruleTitle, { color: colors.text }]}>Minimum ₹500 Hold (குறைந்தபட்ச ஹோல்டு)</AppText>
               </View>
               <AppText style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                ஒவ்வொரு சவாரியையும் நீங்கள் ஏற்கும் போது, சவாரி நம்பகத்தன்மையை உறுதி செய்ய ₹500 மட்டும் உங்கள் வாலட்டில் தற்காலிகமாக ஹோல்டு செய்யப்படும்.
+                ஒவ்வொரு சவாரியையும் நீங்கள் ஏற்கும் போது குறைந்தது ₹500 உங்கள் வாலட்டில் ஹோல்டு செய்யப்படும். கமிஷன் + கூடுதல் கட்டணம் ₹500-ஐ விட அதிகமாக இருந்தால் அந்தத் தொகை ஹோல்டு ஆகும்.
               </AppText>
             </View>
 
@@ -49,10 +49,10 @@ export const SecurityHoldInfoModal: React.FC<SecurityHoldInfoModalProps> = ({ vi
             <View style={[styles.ruleCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
               <View style={styles.ruleHeader}>
                 <CheckCircle2 size={16} color="#10B981" />
-                <AppText style={[styles.ruleTitle, { color: colors.text }]}>Instant Release (உடனடி விடுவிப்பு)</AppText>
+                <AppText style={[styles.ruleTitle, { color: colors.text }]}>Commission deducted, rest refunded (மீதி திரும்பும்)</AppText>
               </View>
               <AppText style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                சவாரி முடிவில் வாடிக்கையாளரிடம் End OTP பெற்று சரிபார்த்த அடுத்த வினாடியே, ஹோல்டு செய்யப்பட்ட ₹500 உங்கள் Available Balance-க்கு உடனடியாக திரும்பிவிடும்.
+                சவாரி முடிந்ததும் ஹோல்டு தொகையிலிருந்து கமிஷன் (கூடுதல் கட்டணத்துடன்) கழிக்கப்படும்; மீதித் தொகை உங்கள் Available Balance-க்கு திரும்பி வரும். புக்கிங் ரத்தானால் முழுத் தொகையும் திரும்பும்.
               </AppText>
             </View>
 

@@ -84,7 +84,7 @@ export default function TripRulesModal({
               <View style={styles.ruleRow}>
                 <Lock size={16} color="#10B981" />
                 <Text style={styles.ruleText}>
-                  <Text style={styles.bold}>Security Deposit Hold:</Text> Required wallet amount is temporarily held during duty execution and released upon clean completion.
+                  <Text style={styles.bold}>Security Deposit Hold:</Text> At least ₹500 (or your commission with extras, if more) is held from your wallet when you accept. After the trip the commission is deducted and the rest is refunded to your wallet.
                 </Text>
               </View>
 

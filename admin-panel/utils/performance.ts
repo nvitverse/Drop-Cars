@@ -112,9 +112,16 @@ export function parseIstTimestamp(value: string | null | undefined): number {
  */
 export function formatEnquiryReceivedTime(createdAt: string | null | undefined): string {
   const ts = parseIstTimestamp(createdAt);
-  if (!ts) return 'Unknown time';
+  if (!ts) return 'Unknown';
 
   const date = new Date(ts);
+  const now = new Date();
+  
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
   const timeStr = date.toLocaleTimeString('en-IN', {
     hour: 'numeric',
     minute: '2-digit',
@@ -129,38 +136,108 @@ export function formatEnquiryReceivedTime(createdAt: string | null | undefined):
   if (diffMin < 1) {
     agoStr = 'just now';
   } else if (diffMin < 60) {
-    agoStr = `${diffMin} min ago`;
-  } else {
+    agoStr = `${diffMin}m ago`;
+  } else if (diffMin < 24 * 60) {
     const diffHrs = Math.floor(diffMin / 60);
-    agoStr = diffHrs === 1 ? '1 hr ago' : `${diffHrs} hrs ago`;
+    agoStr = diffHrs === 1 ? '1h ago' : `${diffHrs}h ago`;
   }
 
-  return `${timeStr} (${agoStr})`;
+  if (isToday) {
+    return agoStr ? `Today, ${timeStr} (${agoStr})` : `Today, ${timeStr}`;
+  } else if (isYesterday) {
+    return `Yesterday, ${timeStr}`;
+  } else {
+    const dateStr = date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'Asia/Kolkata',
+    });
+    return `${dateStr}, ${timeStr}`;
+  }
 }
 
 /**
- * Format pickup date and time: "Sat 27 Sep, 6:30 PM"
+ * Format pickup date and time: "Mon, 21 Sep, 09:40 AM"
  */
 export function formatPickupDateTime(travelDate?: string | null, travelTime?: string | null): string {
   if (!travelDate && !travelTime) return 'Today (Immediate)';
 
   let formattedDate = travelDate || 'Today';
-  if (travelDate && /^\d{4}-\d{2}-\d{2}$/.test(travelDate.trim())) {
-    try {
-      const parts = travelDate.trim().split('-');
-      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      formattedDate = d.toLocaleDateString('en-IN', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-      });
-    } catch {}
+  const trimmed = travelDate ? travelDate.trim() : '';
+
+  if (trimmed) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      try {
+        const parts = trimmed.split('-');
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        formattedDate = d.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        });
+      } catch {}
+    } else if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(trimmed)) {
+      try {
+        const parts = trimmed.split(/[/-]/);
+        const d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        formattedDate = d.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        });
+      } catch {}
+    }
   }
 
-  if (travelTime) {
+  if (travelTime && travelTime.trim()) {
     return `${formattedDate}, ${travelTime.trim()}`;
   }
   return formattedDate;
+}
+
+/**
+ * Check if a lead has a future pickup date & time (> 2 hours from current time) needing follow-up
+ */
+export function isFutureLead(travelDate?: string | null, travelTime?: string | null): boolean {
+  if (!travelDate) return false;
+  const trimmed = travelDate.trim();
+  if (!trimmed) return false;
+
+  let targetDate: Date | null = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const parts = trimmed.split('-');
+    targetDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  } else if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(trimmed)) {
+    const parts = trimmed.split(/[/-]/);
+    targetDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+  } else {
+    const parsed = Date.parse(trimmed);
+    if (!isNaN(parsed)) {
+      targetDate = new Date(parsed);
+    }
+  }
+
+  if (!targetDate || isNaN(targetDate.getTime())) return false;
+
+  if (travelTime && travelTime.trim()) {
+    const timeStr = travelTime.trim().toLowerCase();
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const meridiem = match[3];
+      if (meridiem === 'pm' && hours < 12) hours += 12;
+      if (meridiem === 'am' && hours === 12) hours = 0;
+      targetDate.setHours(hours, minutes, 0, 0);
+    } else {
+      targetDate.setHours(12, 0, 0, 0);
+    }
+  } else {
+    targetDate.setHours(23, 59, 59, 999);
+  }
+
+  // Pickup is > 2 hours in the future from current time
+  return targetDate.getTime() > Date.now() + 2 * 60 * 60 * 1000;
 }
 
 /**

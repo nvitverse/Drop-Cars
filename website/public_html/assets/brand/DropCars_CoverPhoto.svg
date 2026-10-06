@@ -1,0 +1,16 @@
+<svg width="1024" height="576" viewBox="0 0 1024 576" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="576" fill="#FFFFFF"/>
+  <g transform="translate(212,70.8) scale(1.2)">
+    <g transform="translate(150,10)">
+      <rect x="8" y="8" width="184" height="184" rx="42" fill="#0D47A1"/>
+      <path d="M84,58 L118,81 L84,104" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M116,112 L82,135 L116,158" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g transform="translate(60,232)">
+      <rect x="0" y="0" width="380" height="110" rx="22" fill="#0D47A1" stroke="#0D47A1" stroke-width="3"/>
+      <path d="M190,0 H358 A22,22 0 0 1 380,22 V88 A22,22 0 0 1 358,110 H190 Z" fill="#FFFFFF" stroke="#0D47A1" stroke-width="3"/>
+      <text x="95" y="79" text-anchor="middle" font-family="Poppins" font-weight="700" font-size="54" fill="#FFFFFF">DROP</text>
+      <text x="285" y="79" text-anchor="middle" font-family="Poppins" font-weight="700" font-size="54" fill="#0D47A1">CARS</text>
+    </g>
+  </g>
+</svg>

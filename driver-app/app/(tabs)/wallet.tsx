@@ -45,7 +45,7 @@ try {
 
 export default function WalletScreen() {
   const router = useRouter();
-  const { amount: addAmountParam } = useLocalSearchParams<{ amount?: string }>();
+  const { amount: addAmountParam, plan: subscribePlanParam } = useLocalSearchParams<{ amount?: string; plan?: string }>();
   const { 
     balance, 
     transactions, 
@@ -239,7 +239,10 @@ export default function WalletScreen() {
       console.log('💰 Starting Razorpay payment for amount:', amount);
       
       // Create Razorpay order
-      const orderResponse = await processTopup(amount, userData);
+      const orderResponse = await processTopup(
+        amount, userData,
+        subscribePlanParam === 'MONTHLY' || subscribePlanParam === 'YEARLY' ? `subscription_${subscribePlanParam.toLowerCase()}` : undefined
+      );
       
       if (!orderResponse.success || !orderResponse.razorpay_order_id) {
         throw new Error('Failed to create Razorpay order');
@@ -271,8 +274,13 @@ export default function WalletScreen() {
           await refreshBalance();
           await refreshTransactions();
 
-          Alert.alert('Success', `₹${amount} added to your wallet successfully!`);
           setRazorpayAmount('');
+          if (subscribePlanParam === 'MONTHLY' || subscribePlanParam === 'YEARLY') {
+            // The top-up was for a subscription: go back and buy the plan right away (the Subscription screen does it).
+            router.replace({ pathname: '/subscription', params: { autoPlan: subscribePlanParam } } as any);
+            return;
+          }
+          Alert.alert('Success', `₹${amount} added to your wallet successfully!`);
         })
         .catch(async (error: any) => {
           console.error('❌ Razorpay payment error:', error);
@@ -704,7 +712,7 @@ export default function WalletScreen() {
           }}>
             <ShieldCheck size={14} color="#FFFFFF" />
             <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-              Security Hold: ₹500 / ride
+              Hold: min ₹500 / ride
             </Text>
             <TouchableOpacity
               onPress={() => setShowSecurityHoldInfo(true)}
