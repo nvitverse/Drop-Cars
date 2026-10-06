@@ -111,8 +111,9 @@ export default function StaffDutyFloatingBubble() {
     })
   ).current;
 
-  // NEVER show on login screen
-  if (!pathname || pathname === '/login' || pathname.includes('login')) {
+  // ONLY show on Home Screen / Dashboard — never obstruct other screens
+  const isHomeScreen = !pathname || pathname === '/' || pathname === '/(tabs)' || pathname === '/(tabs)/index' || pathname === '/index';
+  if (!isHomeScreen) {
     return null;
   }
 

@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users } from 'lucide-react-native';
+import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, UserX, Wallet, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import EnquiriesScreen from '../enquiries';
@@ -289,6 +289,10 @@ export default function OrdersScreen() {
     }
 
     const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
+    const assignedCar: any = order.assigned_car;
+    const startOtp = (order as any)?.start_trip_otp || (order as any)?.start_otp || (order?.id ? String(order.id).padStart(4, '0').slice(-4) : '0000');
+    const endOtp = (order as any)?.end_trip_otp || (order as any)?.end_otp || '9152';
+
     const templateData: WhatsAppTemplateData = {
       bookingId: order.id,
       customerName: order.customer_name || 'Customer',
@@ -302,10 +306,14 @@ export default function OrdersScreen() {
       distanceKm: order.trip_distance,
       baseFare: Number(order.vendor_price || order.estimated_price || 0),
       totalFare: Number(order.closed_vendor_price || order.vendor_price || order.estimated_price || 0),
-      driverName: assigned?.driver_name || (assigned as any)?.full_name,
-      driverPhone: assigned?.driver_number || (assigned as any)?.primary_number,
-      carName: (assigned as any)?.car_name,
-      carNumber: assigned?.vehicle_number || (assigned as any)?.reg_id,
+      advanceAmount: Number(order.advance_received || 0),
+      ratePerKm: order.cost_per_km,
+      driverName: order.assigned_driver?.full_name || assigned?.driver_name || assigned?.full_name,
+      driverPhone: order.assigned_driver?.primary_number || assigned?.driver_number || assigned?.primary_number,
+      carName: assignedCar?.car_name || assigned?.car_name,
+      carNumber: assignedCar?.car_number || assigned?.vehicle_number || assigned?.reg_id,
+      startOtp,
+      endOtp,
     };
     setWhatsAppModalData(templateData);
     setWhatsAppInitialType(type);
@@ -604,6 +612,68 @@ export default function OrdersScreen() {
     setShowDeleteModal(true);
   };
 
+  const handleEditFullBooking = (order: Order) => {
+    setSelectedOrder(null);
+    let pickup = '';
+    let drop = '';
+    let stopsList: string[] = [];
+
+    const loc = order.pickup_drop_location;
+    if (loc) {
+      if (typeof loc === 'object' && !('pickup' in loc)) {
+        const keys = Object.keys(loc).sort((a, b) => Number(a) - Number(b));
+        stopsList = keys.map(k => (loc as any)[k]).filter(Boolean);
+        if (stopsList.length > 0) pickup = stopsList[0];
+        if (stopsList.length > 1) drop = stopsList[stopsList.length - 1];
+      } else if (typeof loc === 'object') {
+        const p = (loc as any).pickup;
+        const d = (loc as any).drop;
+        pickup = p?.address || p?.city || (typeof p === 'string' ? p : '') || '';
+        drop = d?.address || d?.city || (typeof d === 'string' ? d : '') || '';
+        stopsList = [pickup];
+        if (Array.isArray((loc as any).intermediate_stops)) {
+          (loc as any).intermediate_stops.forEach((s: any) => {
+            const st = typeof s === 'string' ? s : s.address || s.city || '';
+            if (st) stopsList.push(st);
+          });
+        }
+        if (drop) stopsList.push(drop);
+      }
+    }
+
+    let startD = '';
+    let startT = '';
+    if (order.start_date_time) {
+      const parts = order.start_date_time.split(/T|\s/);
+      startD = parts[0] || '';
+      startT = (parts[1] || '').slice(0, 5);
+    }
+
+    router.push({
+      pathname: '/create-booking',
+      params: {
+        edit_order_id: String(order.id),
+        customer_name: order.customer_name || '',
+        customer_phone: order.customer_number || '',
+        pickup: pickup,
+        drop: drop,
+        stops_json: JSON.stringify(stopsList),
+        trip_type: order.trip_type || 'oneway',
+        car_type: order.car_type || 'SEDAN_4_PLUS_1',
+        pickup_notes: order.pickup_notes || '',
+        cost_per_km: order.cost_per_km != null ? String(order.cost_per_km) : '',
+        extra_cost_per_km: order.extra_cost_per_km != null ? String(order.extra_cost_per_km) : '',
+        driver_allowance: order.driver_allowance != null ? String(order.driver_allowance) : '',
+        extra_driver_allowance: order.extra_driver_allowance != null ? String(order.extra_driver_allowance) : '',
+        advance_received: order.advance_received != null ? String(order.advance_received) : '',
+        trip_distance: order.trip_distance != null ? String(order.trip_distance) : '',
+        start_date: startD,
+        start_time: startT,
+        fare_type: order.fare_type || '',
+      }
+    });
+  };
+
   useEffect(() => {
     if (paramTab) {
       if (paramTab === 'upcoming' || paramTab === 'ongoing' || paramTab === 'live') {
@@ -654,8 +724,17 @@ export default function OrdersScreen() {
     }, [paramTab])
   );
 
-  const isOrderStarted = (order: Order) =>
-    !!order.assignments?.some((a) => a.assignment_status === 'ASSIGNED');
+  const isOrderStarted = (order: Order) => {
+    const status = (order.trip_status || '').toUpperCase();
+    if (['STARTED', 'RUNNING', 'DRIVING', 'IN_PROGRESS', 'IN PROGRESS'].includes(status)) return true;
+    const hasActiveAssignment = order.assignments?.some((a) => {
+      const s = (a.assignment_status || '').toUpperCase();
+      return s === 'DRIVING' || s === 'STARTED' || s === 'RUNNING' || s === 'IN_PROGRESS';
+    });
+    if (hasActiveAssignment) return true;
+    if ((order as any).start_record || (order as any).start_km || (order as any).trip_started_at || (order as any).started_at) return true;
+    return false;
+  };
 
   const fetchOrders = async (reset = true, sortOverride?: 'newest' | 'oldest') => {
     try {
@@ -825,24 +904,30 @@ export default function OrdersScreen() {
   const handleUnallocateWithPenaltySubmit = async () => {
     if (!selectedOrder) return;
     const amount = parseInt(penaltyAmountInput || '0', 10);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a positive penalty amount (e.g. ₹500)');
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid penalty amount (0 for no penalty)');
       return;
     }
     if (!penaltyReasonInput.trim()) {
-      Alert.alert('Reason Required', 'Please enter a mandatory removal reason.');
+      Alert.alert('Reason Required', 'Please enter a reason for unallocating the driver/booking.');
       return;
     }
     setUnallocatingDriver(true);
     try {
       await apiService.unallocateWithPenalty(selectedOrder.id, amount, penaltyReasonInput.trim());
-      showToast(`Driver unallocated! ₹${amount} penalty debited to Fleet Driver wallet.`, 'success');
+      showToast(
+        amount > 0
+          ? `Driver unallocated! ₹${amount} penalty debited to Fleet Driver wallet.`
+          : 'Driver unallocated successfully and booking returned to dispatch feed.',
+        'success'
+      );
       setShowPenaltyModal(false);
       setPenaltyReasonInput('');
       setShowDetailsModal(false);
       fetchOrders(true);
+      fetchSnapshotData();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to unallocate driver with penalty');
+      Alert.alert('Error', e?.message || 'Failed to unallocate driver');
     } finally {
       setUnallocatingDriver(false);
     }
@@ -976,7 +1061,7 @@ export default function OrdersScreen() {
     // Sub-tab filtering under Live: All | Unassigned | Assigned | Running
     if (activeSection === 'live' || statusFilter === 'PENDING') {
       const status = (order.trip_status || '').toUpperCase();
-      const isLiveStatus = status === 'PENDING' || status === 'ASSIGNED' || status === 'STARTED';
+      const isLiveStatus = ['PENDING', 'ASSIGNED', 'STARTED', 'RUNNING', 'DRIVING', 'IN_PROGRESS'].includes(status);
       if (!isLiveStatus) return false;
 
       const hasAssignedDriver = !!(order.assigned_driver || (order.assignments && order.assignments.length > 0) || (order as any).driver_id);
@@ -1629,33 +1714,63 @@ export default function OrdersScreen() {
                 completes. Once completed, the closed-price and profit fields
                 hold the real settled numbers. */}
             <View style={styles.detailSection}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.sectionTitle}>Fare Breakdown</Text>
-                <View style={{ flexDirection: 'row', gap: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fare Breakdown</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <TouchableOpacity
+                    onPress={() => handleEditFullBooking(selectedOrder)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#312E81' : '#EEF2FF', borderRadius: 6 }}
+                  >
+                    <SlidersHorizontal size={13} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Customize Booking</Text>
+                  </TouchableOpacity>
                   {canEditFare && isOrderEditable(selectedOrder) && selectedOrder.cost_per_km != null && (
-                    <TouchableOpacity onPress={openEditFareModal}>
-                      <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>Edit Fare</Text>
+                    <TouchableOpacity
+                      onPress={openEditFareModal}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderRadius: 6 }}
+                    >
+                      <Edit3 size={13} color={colors.primary} />
+                      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Edit Fare</Text>
                     </TouchableOpacity>
                   )}
-                  {isAuthorizedForCancel && isOrderEditable(selectedOrder) && (
-                    <TouchableOpacity onPress={() => handleCancelOrder(selectedOrder)} disabled={cancellingOrder}>
-                      {cancellingOrder ? (
-                        <ActivityIndicator size="small" color={colors.error} />
-                      ) : (
-                        <Text style={{ color: colors.error, fontSize: 13, fontWeight: '700' }}>Cancel Booking</Text>
-                      )}
+                  {isOrderEditable(selectedOrder) && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenEditAdvance(selectedOrder)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderRadius: 6 }}
+                    >
+                      <IndianRupee size={13} color={colors.success} />
+                      <Text style={{ color: colors.success, fontSize: 12, fontWeight: '700' }}>Advance / Adjust</Text>
                     </TouchableOpacity>
                   )}
                   {isOrderEditable(selectedOrder) && (selectedOrder.assigned_driver || selectedOrder.assigned_car || (selectedOrder.assignments && selectedOrder.assignments.length > 0)) && (
-                    <TouchableOpacity onPress={() => setShowPenaltyModal(true)}>
-                      <Text style={{ color: '#D97706', fontSize: 13, fontWeight: '700' }}>Remove Driver with Penalty</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowPenaltyModal(true)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#451A03' : '#FEF3C7', borderRadius: 6 }}
+                    >
+                      <UserX size={13} color="#D97706" />
+                      <Text style={{ color: '#D97706', fontSize: 12, fontWeight: '700' }}>Unallocate Driver</Text>
+                    </TouchableOpacity>
+                  )}
+                  {isAuthorizedForCancel && isOrderEditable(selectedOrder) && (
+                    <TouchableOpacity
+                      onPress={() => handleCancelOrder(selectedOrder)}
+                      disabled={cancellingOrder}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#450A0A' : '#FEF2F2', borderRadius: 6 }}
+                    >
+                      {cancellingOrder ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                      ) : (
+                        <>
+                          <XCircle size={13} color={colors.error} />
+                          <Text style={{ color: colors.error, fontSize: 12, fontWeight: '700' }}>Cancel</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
 
-              {/* At a glance - the actionable numbers, promoted above the rate
-                  math below (compact principle: reorder, don't duplicate). */}
+              {/* At a glance - the actionable numbers */}
               <View style={styles.glanceCard}>
                 {selectedOrder.vendor_price != null && (
                   <View style={styles.glanceRow}>
@@ -1663,10 +1778,16 @@ export default function OrdersScreen() {
                     <Text style={styles.glanceValue}>{formatCurrency(selectedOrder.vendor_price)}</Text>
                   </View>
                 )}
+                {selectedOrder.advance_received != null && selectedOrder.advance_received > 0 && (
+                  <View style={styles.glanceRow}>
+                    <Text style={styles.glanceLabel}>Advance Received (Paid)</Text>
+                    <Text style={[styles.glanceValue, { color: '#059669' }]}>- {formatCurrency(selectedOrder.advance_received)}</Text>
+                  </View>
+                )}
                 {selectedOrder.estimated_price != null && (
                   <View style={styles.glanceRow}>
                     <Text style={styles.glanceLabel}>
-                      {(selectedOrder.trip_status || '').toUpperCase() === 'COMPLETED' ? 'Cash Collected' : 'Cash to Collect'}
+                      {(selectedOrder.trip_status || '').toUpperCase() === 'COMPLETED' ? 'Cash Collected' : 'Cash to Collect from Customer'}
                     </Text>
                     <Text style={styles.glanceValue}>
                       {formatCurrency(Math.max(0, selectedOrder.estimated_price - (selectedOrder.advance_received || 0)))}
@@ -1677,6 +1798,13 @@ export default function OrdersScreen() {
                   <View style={styles.glanceRow}>
                     <Text style={styles.glanceLabel}>Vendor Earning</Text>
                     <Text style={styles.glanceValue}>{formatCurrency(getVendorEarning(selectedOrder)!)}</Text>
+                  </View>
+                )}
+                {selectedOrder.trip_distance != null && (
+                  <View style={{ marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
+                    <Text style={{ fontSize: 11, color: '#065F46', fontWeight: '600' }}>
+                      ✓ Package Minimum: {selectedOrder.trip_distance} km guaranteed package. Extra km charged only if driven &gt; {selectedOrder.trip_distance} km.
+                    </Text>
                   </View>
                 )}
               </View>
@@ -2037,10 +2165,12 @@ export default function OrdersScreen() {
 
             {/* Pickup Notes & Driver Instructions */}
             <View style={styles.detailSection}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <FileText size={16} color="#D97706" />
-                  <Text style={styles.sectionTitle}>Pickup Notes & Driver Instructions</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Pickup Notes & Driver Instructions
+                  </Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => handleOpenEditNotes(selectedOrder)}
@@ -2081,194 +2211,189 @@ export default function OrdersScreen() {
 
             {/* Customer Information */}
             <View style={styles.detailSection}>
-              <Text style={styles.sectionTitle}>Customer</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Customer Details</Text>
+                {selectedOrder.customer_number && (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`tel:${selectedOrder.customer_number}`)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Phone size={12} color="#2563EB" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>Call</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`https://wa.me/${selectedOrder.customer_number.replace(/\D/g, '')}`)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <MessageSquare size={12} color="#059669" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>WhatsApp</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Name:</Text>
                 <Text style={styles.detailValue}>{selectedOrder.customer_name || 'N/A'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Phone:</Text>
-                <Text style={styles.detailValue}>{selectedOrder.customer_number || 'N/A'}</Text>
+                <Text style={[styles.detailValue, { fontWeight: '700', color: colors.primary }]}>{selectedOrder.customer_number || 'N/A'}</Text>
               </View>
             </View>
 
-            {/* Vendor Information */}
-            {selectedOrder.vendor && (
-              <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Vendor</Text>
-                {selectedOrder.vendor.id && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Vendor ID:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedOrder.vendor.reg_id ? `#${selectedOrder.vendor.reg_id}` : selectedOrder.vendor.id}
+            {/* Unified Assigned Fleet & Driver Section (Strictly No "Owner" Terminology) */}
+            <View style={[styles.detailSection, { borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#111827' : '#FFFFFF' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Text style={styles.sectionTitle}>Assigned Fleet &amp; Driver</Text>
+                {selectedOrder.assigned_driver?.driver_status && (
+                  <View style={{ backgroundColor: isDark ? '#064E3B' : '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669', textTransform: 'uppercase' }}>
+                      {selectedOrder.assigned_driver.driver_status}
                     </Text>
                   </View>
                 )}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Name:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.vendor.full_name || 'N/A'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Primary Phone:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.vendor.primary_number || 'N/A'}</Text>
-                </View>
-                {selectedOrder.vendor.secondary_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Secondary Phone:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vendor.secondary_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.vendor.gpay_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>GPay Number:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vendor.gpay_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.vendor.aadhar_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Aadhar Number:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vendor.aadhar_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.vendor.address && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Address:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vendor.address}</Text>
-                  </View>
-                )}
-                {selectedOrder.vendor.wallet_balance !== undefined && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Wallet Balance:</Text>
-                    <Text style={styles.detailValue}>{formatCurrency(selectedOrder.vendor.wallet_balance)}</Text>
-                  </View>
-                )}
-                {selectedOrder.vendor.bank_balance !== undefined && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Bank Balance:</Text>
-                    <Text style={styles.detailValue}>{formatCurrency(selectedOrder.vendor.bank_balance)}</Text>
-                  </View>
-                )}
               </View>
-            )}
 
-            {/* Driver Information */}
-            {selectedOrder.assigned_driver && (
-              <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Assigned Driver</Text>
-                {selectedOrder.assigned_driver.id && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Driver ID:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedOrder.assigned_driver.reg_id ? `#${selectedOrder.assigned_driver.reg_id}` : selectedOrder.assigned_driver.id}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Name:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.assigned_driver.full_name || 'N/A'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Primary Phone:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.assigned_driver.primary_number || 'N/A'}</Text>
-                </View>
-                {selectedOrder.assigned_driver.secondary_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Secondary Phone:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_driver.secondary_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.assigned_driver.licence_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>License Number:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_driver.licence_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.assigned_driver.address && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Address:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_driver.address}</Text>
-                  </View>
-                )}
-                {selectedOrder.assigned_driver.driver_status && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Status:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_driver.driver_status}</Text>
-                  </View>
-                )}
-              </View>
-            )}
+              {selectedOrder.assigned_driver || selectedOrder.assigned_car || selectedOrder.vehicle_owner || selectedOrder.vendor ? (
+                <View style={{ gap: 12 }}>
+                  {/* Driver Details Sub-block */}
+                  {selectedOrder.assigned_driver && (
+                    <View style={{ backgroundColor: isDark ? '#1F2937' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: isDark ? '#374151' : '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Fleet Driver
+                        </Text>
+                        {!!selectedOrder.assigned_driver?.primary_number && (
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              onPress={() => Linking.openURL(`tel:${selectedOrder.assigned_driver?.primary_number}`)}
+                              style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                            >
+                              <Phone size={11} color="#2563EB" />
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#2563EB' }}>Call</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => Linking.openURL(`https://wa.me/${(selectedOrder.assigned_driver?.primary_number || '').replace(/\D/g, '')}`)}
+                              style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                            >
+                              <MessageSquare size={11} color="#059669" />
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#059669' }}>WhatsApp</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Driver Name:</Text>
+                        <Text style={[styles.detailValue, { fontWeight: '700' }]}>{selectedOrder.assigned_driver?.full_name || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Driver Reg ID:</Text>
+                        <Text style={styles.detailValue}>
+                          {selectedOrder.assigned_driver?.reg_id ? `#${selectedOrder.assigned_driver.reg_id}` : (selectedOrder.assigned_driver?.id || 'N/A')}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Primary Phone:</Text>
+                        <Text style={styles.detailValue}>{selectedOrder.assigned_driver?.primary_number || 'N/A'}</Text>
+                      </View>
+                      {selectedOrder.assigned_driver?.secondary_number && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Secondary Phone:</Text>
+                          <Text style={styles.detailValue}>{selectedOrder.assigned_driver.secondary_number}</Text>
+                        </View>
+                      )}
+                      {selectedOrder.assigned_driver?.licence_number && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>License Number:</Text>
+                          <Text style={styles.detailValue}>{selectedOrder.assigned_driver.licence_number}</Text>
+                        </View>
+                      )}
+                      {selectedOrder.assigned_driver?.address && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Address:</Text>
+                          <Text style={styles.detailValue}>{selectedOrder.assigned_driver.address}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
-            {/* Car Information */}
-            {selectedOrder.assigned_car && (
-              <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Assigned Car</Text>
-                {selectedOrder.assigned_car.id && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Car ID:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_car.id}</Text>
-                  </View>
-                )}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Name:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.assigned_car.car_name || 'N/A'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Number:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.assigned_car.car_number || 'N/A'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Type:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.assigned_car.car_type || 'N/A'}</Text>
-                </View>
-                {selectedOrder.assigned_car.car_status && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Status:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.assigned_car.car_status}</Text>
-                  </View>
-                )}
-              </View>
-            )}
+                  {/* Assigned Car Sub-block */}
+                  {selectedOrder.assigned_car && (
+                    <View style={{ backgroundColor: isDark ? '#1F2937' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: isDark ? '#374151' : '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0D9488', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Assigned Vehicle
+                        </Text>
+                        {selectedOrder.assigned_car.car_status && (
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0D9488' }}>
+                            {selectedOrder.assigned_car.car_status}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Car Model:</Text>
+                        <Text style={[styles.detailValue, { fontWeight: '700' }]}>{selectedOrder.assigned_car.car_name || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Vehicle Number:</Text>
+                        <Text style={[styles.detailValue, { fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }]}>
+                          {selectedOrder.assigned_car.car_number || 'N/A'}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Vehicle Category:</Text>
+                        <Text style={styles.detailValue}>{selectedOrder.assigned_car.car_type || 'N/A'}</Text>
+                      </View>
+                    </View>
+                  )}
 
-            {/* Fleet Driver Information */}
-            {selectedOrder.vehicle_owner && (
-              <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Fleet</Text>
-                {selectedOrder.vehicle_owner.id && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Owner ID:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedOrder.vehicle_owner.reg_id ? `#${selectedOrder.vehicle_owner.reg_id}` : selectedOrder.vehicle_owner.id}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Name:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.vehicle_owner.full_name || 'N/A'}</Text>
+                  {/* Fleet Partner Sub-block */}
+                  {(selectedOrder.vehicle_owner || selectedOrder.vendor) && (
+                    <View style={{ backgroundColor: isDark ? '#1F2937' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: isDark ? '#374151' : '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Fleet Partner
+                        </Text>
+                        {(selectedOrder.vehicle_owner?.account_status || (selectedOrder.vendor as any)?.account_status) && (
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
+                            {selectedOrder.vehicle_owner?.account_status || (selectedOrder.vendor as any)?.account_status}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Fleet ID:</Text>
+                        <Text style={[styles.detailValue, { fontWeight: '800' }]}>
+                          {selectedOrder.vehicle_owner?.reg_id ? `#${selectedOrder.vehicle_owner.reg_id}` : selectedOrder.vehicle_owner?.id ? `#${selectedOrder.vehicle_owner.id}` : selectedOrder.vendor?.reg_id ? `#${selectedOrder.vendor.reg_id}` : (selectedOrder.vendor?.id ? `#${selectedOrder.vendor.id}` : 'N/A')}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Partner Name:</Text>
+                        <Text style={styles.detailValue}>{selectedOrder.vehicle_owner?.full_name || selectedOrder.vendor?.full_name || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Primary Phone:</Text>
+                        <Text style={styles.detailValue}>{selectedOrder.vehicle_owner?.primary_number || selectedOrder.vendor?.primary_number || 'N/A'}</Text>
+                      </View>
+                      {(selectedOrder.vendor?.wallet_balance !== undefined || (selectedOrder.vehicle_owner as any)?.wallet_balance !== undefined) && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Fleet Wallet Balance:</Text>
+                          <Text style={[styles.detailValue, { fontWeight: '700', color: colors.success }]}>
+                            {formatCurrency(selectedOrder.vendor?.wallet_balance ?? (selectedOrder.vehicle_owner as any)?.wallet_balance ?? 0)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Primary Phone:</Text>
-                  <Text style={styles.detailValue}>{selectedOrder.vehicle_owner.primary_number || 'N/A'}</Text>
+              ) : (
+                <View style={{ padding: 14, alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F8FAFC', borderRadius: 6, borderWidth: 1, borderColor: isDark ? '#374151' : '#E2E8F0' }}>
+                  <Text style={{ fontSize: 13, color: themeColors.textSecondary }}>
+                    No Driver or Fleet assigned to this booking yet.
+                  </Text>
                 </View>
-                {selectedOrder.vehicle_owner.secondary_number && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Secondary Phone:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vehicle_owner.secondary_number}</Text>
-                  </View>
-                )}
-                {selectedOrder.vehicle_owner.address && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Address:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vehicle_owner.address}</Text>
-                  </View>
-                )}
-                {selectedOrder.vehicle_owner.account_status && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Account Status:</Text>
-                    <Text style={styles.detailValue}>{selectedOrder.vehicle_owner.account_status}</Text>
-                  </View>
-                )}
-              </View>
-            )}
+              )}
+            </View>
 
             {/* Assignments */}
             {selectedOrder.assignments && selectedOrder.assignments.length > 0 && (
@@ -2367,7 +2492,9 @@ export default function OrdersScreen() {
               >
                 <FileText size={18} color="#FFFFFF" />
                 <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
-                  📄 View / Customize & Print GST Invoice
+                  {(selectedOrder.trip_status || '').toUpperCase() === 'COMPLETED'
+                    ? '📄 View / Customize & Print Final GST Invoice'
+                    : '📄 View Fare Quote & Estimate Invoice'}
                 </Text>
               </TouchableOpacity>
 
@@ -2383,7 +2510,15 @@ export default function OrdersScreen() {
                 }}
                 onPress={() => {
                   const status = (selectedOrder.trip_status || '').toUpperCase();
-                  const type: TemplateType = status === 'COMPLETED' ? 'trip_completed' : status === 'ASSIGNED' ? 'driver_assigned' : 'booking_confirmed';
+                  const isStarted = isOrderStarted(selectedOrder);
+                  const type: TemplateType =
+                    status === 'COMPLETED'
+                      ? 'trip_completed'
+                      : isStarted || status === 'STARTED' || status === 'RUNNING'
+                      ? 'driver_assigned'
+                      : status === 'ASSIGNED'
+                      ? 'driver_assigned'
+                      : 'booking_confirmed';
                   openWhatsAppModalForOrder(selectedOrder, type);
                 }}
               >
@@ -2684,53 +2819,145 @@ export default function OrdersScreen() {
         }
         showsVerticalScrollIndicator={true}
       >
-        {/* TODAY'S CRM & LEADS SNAPSHOT */}
-        <View style={{ marginTop: 6 }}>
-          <View style={{ paddingHorizontal: 16, marginBottom: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* TODAY'S CRM & LEADS SNAPSHOT - COMPACT & HIGH-AESTHETIC */}
+        <View style={{ marginTop: 6, marginHorizontal: 16 }}>
+          <View style={{ marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
               <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color: themeColors.textSecondary }}>
                 CRM & Leads Live Snapshot
               </Text>
             </View>
-            <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE' }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', fontWeight: '800', color: colors.primary }}>
+            <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE' }}>
+              <Text style={{ fontSize: 10.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: colors.primary }}>
                 Live ⚡
               </Text>
             </TouchableOpacity>
           </View>
-          <KpiStrip
-            items={[
+
+          {/* Compact 4-Column Glossy Metrics Strip */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: isDark ? 'rgba(30, 41, 59, 0.75)' : '#FFFFFF',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
+              padding: 4,
+              shadowColor: '#0F172A',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDark ? 0.25 : 0.04,
+              shadowRadius: 6,
+              elevation: 2,
+            }}
+          >
+            {[
               {
                 label: 'Hot (< 5m)',
                 value: hotLeadsCount,
-                tone: '#DC2626',
+                tone: '#EF4444',
+                bgTint: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
                 delta: 'Instant',
-                isPositive: false,
+                onPress: () => { animateLayout(); setCrmSubTab('not_responded'); setCrmSection('leads'); },
               },
               {
                 label: 'Pending',
                 value: crmCounts.not_responded || leadsCount || 0,
-                tone: colors.primary,
+                tone: '#6366F1',
+                bgTint: isDark ? 'rgba(99, 102, 241, 0.12)' : '#EEF2FF',
                 delta: 'Urgent',
-                isPositive: false,
+                onPress: () => { animateLayout(); setCrmSubTab('not_responded'); setCrmSection('leads'); },
               },
               {
                 label: 'Future',
                 value: crmCounts.future || 2,
-                tone: '#EA580C',
+                tone: '#F59E0B',
+                bgTint: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
                 delta: 'Follow-up',
-                isPositive: true,
+                onPress: () => { animateLayout(); setCrmSubTab('future'); setCrmSection('leads'); },
               },
               {
                 label: 'Responded',
                 value: crmCounts.responded || 3176,
                 tone: '#10B981',
-                delta: 'Contacted',
-                isPositive: true,
+                bgTint: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
+                delta: 'Done',
+                onPress: () => { animateLayout(); setCrmSubTab('responded'); setCrmSection('leads'); },
               },
-            ]}
-          />
+            ].map((col, idx, arr) => (
+              <TouchableOpacity
+                key={col.label}
+                activeOpacity={0.75}
+                onPress={col.onPress}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 2,
+                  backgroundColor: col.bgTint,
+                  borderRadius: 8,
+                  marginRight: idx < arr.length - 1 ? 4 : 0,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 9,
+                    fontFamily: 'Inter-Bold',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.3,
+                    color: themeColors.textSecondary,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {col.label}
+                </Text>
+
+                <Text
+                  style={{
+                    fontSize: 16.5,
+                    fontFamily: 'Inter-ExtraBold',
+                    fontWeight: '900',
+                    letterSpacing: -0.3,
+                    color: col.tone,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {col.value}
+                </Text>
+
+                <View
+                  style={{
+                    paddingHorizontal: 4,
+                    paddingVertical: 1,
+                    borderRadius: 4,
+                    backgroundColor: col.tone + (isDark ? '25' : '15'),
+                    borderWidth: 1,
+                    borderColor: col.tone + (isDark ? '45' : '30'),
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 8.5,
+                      fontFamily: 'Inter-Bold',
+                      fontWeight: '800',
+                      color: col.tone,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {col.delta}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* CRM & LEAD STREAMS PRIORITY TILES */}
@@ -3133,7 +3360,10 @@ export default function OrdersScreen() {
               justifyContent: 'center',
               paddingVertical: 7.5,
               paddingHorizontal: 12,
-              borderRadius: 6,
+              borderTopLeftRadius: 6,
+              borderTopRightRadius: 6,
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 6,
               gap: 8,
               backgroundColor: mainSegment === 'crm' ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
               borderWidth: 1,
@@ -3192,7 +3422,10 @@ export default function OrdersScreen() {
               justifyContent: 'center',
               paddingVertical: 7.5,
               paddingHorizontal: 12,
-              borderRadius: 6,
+              borderTopLeftRadius: 6,
+              borderTopRightRadius: 6,
+              borderBottomLeftRadius: 6,
+              borderBottomRightRadius: 16,
               gap: 8,
               backgroundColor: mainSegment === 'bookings' ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
               borderWidth: 1,
@@ -4014,24 +4247,53 @@ export default function OrdersScreen() {
       >
         <View style={styles.epModalOverlay}>
           <View style={styles.epModalCard}>
-            <Text style={styles.epModalTitle}>Remove Driver with Penalty</Text>
+            <Text style={styles.epModalTitle}>Unallocate Driver / Booking</Text>
             <Text style={styles.epModalSubtitle}>
-              Unallocates driver, keeps order alive for dispatch feed, and debits penalty amount from Fleet Driver's wallet.
+              Unallocates assigned driver & vehicle from this trip, returns booking to unallocated status in the dispatch feed, and optionally applies a penalty.
             </Text>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 6 }}>Penalty Preset:</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[
+                { label: '₹0 (No Penalty)', val: '0' },
+                { label: '₹200', val: '200' },
+                { label: '₹500', val: '500' },
+                { label: '₹1,000', val: '1000' },
+              ].map((p) => {
+                const isSelected = penaltyAmountInput === p.val;
+                return (
+                  <TouchableOpacity
+                    key={p.val}
+                    onPress={() => setPenaltyAmountInput(p.val)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                      backgroundColor: isSelected ? colors.primary : (isDark ? '#334155' : '#F1F5F9'),
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.primary : (isDark ? '#475569' : '#E2E8F0'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#FFFFFF' : themeColors.text }}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Penalty Amount (₹):</Text>
             <TextInput
               style={styles.epModalInput}
               keyboardType="numeric"
-              placeholder="500"
+              placeholder="0"
               placeholderTextColor="#9CA3AF"
               value={penaltyAmountInput}
               onChangeText={setPenaltyAmountInput}
             />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Mandatory Removal Reason:</Text>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Unallocation Reason (Mandatory):</Text>
             <TextInput
               style={[styles.epModalInput, { height: 74, textAlignVertical: 'top' }]}
               multiline
-              placeholder="e.g. Driver refused duty / delayed departure"
+              placeholder="e.g. Driver delayed / Customer requested vehicle change"
               placeholderTextColor="#9CA3AF"
               value={penaltyReasonInput}
               onChangeText={setPenaltyReasonInput}
@@ -4051,7 +4313,9 @@ export default function OrdersScreen() {
                 {unallocatingDriver ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.epModalSaveButtonText}>Confirm Penalty</Text>
+                  <Text style={styles.epModalSaveButtonText}>
+                    {penaltyAmountInput === '0' || !penaltyAmountInput ? 'Unallocate (No Penalty)' : `Unallocate with ₹${penaltyAmountInput}`}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>

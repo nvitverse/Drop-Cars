@@ -29,6 +29,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import LocationPickerModal from '@/components/LocationPickerModal';
 import DateTimeField from '@/components/DateTimeField';
 import PageInfoModal from '@/components/PageInfoModal';
+import { buildWhatsAppMessage } from '@/utils/whatsappTemplates';
 
 type TripType = 'oneway' | 'roundtrip' | 'multicity' | 'hourly' | 'local';
 
@@ -163,13 +164,25 @@ export default function CreateBookingScreen() {
   const router = useRouter();
   const { isDark, themeColors } = useTheme();
   const params = useLocalSearchParams<{
+    edit_order_id?: string;
     customer_name?: string;
     customer_phone?: string;
     pickup?: string;
     drop?: string;
+    stops_json?: string;
     trip_type?: string;
     car_type?: string;
     pickup_notes?: string;
+    cost_per_km?: string;
+    extra_cost_per_km?: string;
+    driver_allowance?: string;
+    extra_driver_allowance?: string;
+    advance_received?: string;
+    trip_distance?: string;
+    start_date?: string;
+    start_time?: string;
+    vendor_price?: string;
+    fare_type?: string;
   }>();
 
   const [tripType, setTripType] = useState<TripType>('oneway');
@@ -371,8 +384,8 @@ export default function CreateBookingScreen() {
   const [includeGst, setIncludeGst] = useState(false);
   const [gstAmount, setGstAmount] = useState('0');
   const [advanceReceived, setAdvanceReceived] = useState('');
-  const [totalBookingAmount, setTotalBookingAmount] = useState('');
   const [extraAmount, setExtraAmount] = useState('0');
+  const [totalBookingAmount, setTotalBookingAmount] = useState('0');
 
   // "Km limit": the km this booking is billed for. It loads the real route km
   // as soon as the locations are filled (never less than the minimum coverage
@@ -697,6 +710,58 @@ export default function CreateBookingScreen() {
     apiService.getLocalServiceableCities().then(setLocalServiceableCities).catch(() => {});
     apiService.getFareRules().then((r) => { if (r) setFareRules((prev) => ({ ...prev, ...r })); }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (params.customer_name) setCustomerName(params.customer_name);
+    if (params.customer_phone) {
+      const digits = params.customer_phone.replace(/[^0-9]/g, '');
+      setCustomerCountryCode('+91');
+      setCustomerPhone(digits.length > 10 ? digits.slice(-10) : digits);
+    }
+    if (params.trip_type) {
+      const t = params.trip_type.toLowerCase();
+      const nextTrip: TripType = t.includes('round') ? 'roundtrip' : t.includes('multi') ? 'multicity' : t.includes('hour') ? 'hourly' : t.includes('local') ? 'local' : 'oneway';
+      setTripType(nextTrip);
+    }
+    if (params.car_type) {
+      const c = params.car_type.toUpperCase();
+      setCarType(c);
+    }
+    if (params.stops_json) {
+      try {
+        const parsed = JSON.parse(params.stops_json);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setStops(parsed);
+        }
+      } catch {}
+    } else if (params.pickup || params.drop) {
+      setStops([params.pickup || '', params.drop || '']);
+    }
+    if (params.pickup_notes) {
+      const existing = params.pickup_notes.trim();
+      if (existing.toUpperCase() !== 'NILL' && existing.toLowerCase() !== 'null') {
+        setPickupNotes(existing);
+      }
+    }
+    if (params.cost_per_km) setCostPerKm(params.cost_per_km);
+    if (params.extra_cost_per_km) {
+      touchedRates.current.extraKm = true;
+      setExtraCostPerKm(params.extra_cost_per_km);
+    }
+    if (params.driver_allowance) setDriverAllowance(params.driver_allowance);
+    if (params.extra_driver_allowance) {
+      touchedRates.current.extraBata = true;
+      setExtraAmount(params.extra_driver_allowance);
+    }
+    if (params.advance_received) setAdvanceReceived(params.advance_received);
+    if (params.trip_distance) {
+      setMinKm(params.trip_distance);
+      setMinKmTouched(true);
+    }
+    if (params.start_date) setStartDate(params.start_date);
+    if (params.start_time) setStartTime(params.start_time);
+    if (params.fare_type === 'ALL_INCLUSIVE') setFareType('ALL_INCLUSIVE');
+  }, [params.edit_order_id, params.customer_name, params.customer_phone, params.pickup, params.drop, params.trip_type, params.car_type]);
 
   // GST = 5% of the km fare (driver + vendor per-km rate x billable km): the
   // quoted km once there is a quote, the minimum billable km before that.
@@ -1439,31 +1504,79 @@ export default function CreateBookingScreen() {
     const handleShareWhatsApp = () => {
       const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
       const numWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-      const msg = `Hello ${customerName || 'Customer'}! Your Drop Cars Booking #${createdOrderId} is confirmed. Pick up: ${stops[0] || ''} at ${startDate} ${startTime}. Thank you for choosing Drop Cars!`;
+      
+      const pickupLoc = stops[0] || 'Pickup';
+      const dropLoc = stops[stops.length - 1] || 'Drop';
+
+      const msg = buildWhatsAppMessage('booking_confirmed', {
+        bookingId: createdOrderId,
+        customerName: customerName || 'Customer',
+        customerPhone: customerPhone,
+        pickupLocation: pickupLoc,
+        dropLocation: dropLoc,
+        tripType: tripType,
+        vehicleType: carType,
+        pickupDate: startDate,
+        pickupTime: startTime,
+        totalFare: fare?.total_cost || Number(totalBookingAmount) || undefined,
+        advanceAmount: Number(advanceReceived) || 0,
+        ratePerKm: Number(costPerKm) || undefined,
+        distanceKm: Number(minKm) || Number(fare?.total_km) || undefined,
+      });
+
       Linking.openURL(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
     };
 
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.successBox}>
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]} edges={['top']}>
+        <ScrollView contentContainerStyle={[styles.successBox, { paddingBottom: 40 }]}>
           <CheckCircle2 size={48} color={colors.success} />
-          <Text style={styles.successTitle}>Booking Created</Text>
-          <Text style={styles.successSubtitle}>Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{leadConfirmed === 'ok' ? ' The lead is now marked Confirmed.' : leadConfirmed === 'fail' ? ' The lead could not be marked Confirmed - do it from Enquiries.' : ''}{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}</Text>
+          <Text style={[styles.successTitle, { color: themeColors.text }]}>Booking Created</Text>
+          <Text style={[styles.successSubtitle, { color: themeColors.textSecondary }]}>
+            Booking #{createdOrderId} has been posted{selectedVendor ? ` under ${selectedVendor.full_name}` : ' as a platform booking'}.{leadConfirmed === 'ok' ? ' The lead is now marked Confirmed.' : leadConfirmed === 'fail' ? ' The lead could not be marked Confirmed - do it from Enquiries.' : ''}{allocateTarget && allocationResult ? ` Allocated to ${allocateTarget.full_name}${allocationResult.on_credit ? ` on credit - ₹${allocationResult.commission_amount || 0} commission is deducted from their wallet when the trip completes` : ''}.` : ''}
+          </Text>
 
           {customerPhone ? (
-            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: '#25D366', marginBottom: 10 }]} onPress={handleShareWhatsApp}>
-              <Text style={styles.primaryButtonText}>📲 Send WhatsApp Confirmation to Customer</Text>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: '#25D366',
+                  marginTop: 16,
+                  marginBottom: 10,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }
+              ]}
+              onPress={handleShareWhatsApp}
+            >
+              <Text style={{ color: 'white', fontSize: 13.5, fontWeight: '800', textAlign: 'center' }}>
+                📲 Send WhatsApp Confirmation to Customer
+              </Text>
             </TouchableOpacity>
           ) : null}
 
-          <TouchableOpacity style={styles.primaryButton} onPress={() => { resetForm(); setTripType('oneway'); }}>
+          <TouchableOpacity
+            style={[styles.primaryButton, { marginTop: 10, paddingVertical: 14 }]}
+            onPress={() => { resetForm(); setTripType('oneway'); }}
+          >
             <Text style={styles.primaryButtonText}>Create Another Booking</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()} accessibilityLabel="Go back">
-            <Text style={styles.secondaryButtonText}>Back to Bookings</Text>
+          <TouchableOpacity
+            style={[styles.secondaryButton, { marginTop: 12, paddingVertical: 12 }]}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+          >
+            <Text style={[styles.secondaryButtonText, { color: themeColors.primary, fontWeight: '700' }]}>
+              Back to Bookings
+            </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }

@@ -33,6 +33,10 @@ import {
   InvoiceData,
   printOrDownloadInvoice,
   generateInvoiceHtml,
+  INVOICE_TEMPLATES,
+  getStoredBusinessProfile,
+  BusinessProfileSettings,
+  DEFAULT_BUSINESS_PROFILE,
 } from '@/utils/invoiceGenerator';
 import { sendWhatsAppMessage } from '@/utils/whatsappTemplates';
 import { apiService } from '@/services/api';
@@ -51,6 +55,10 @@ export default function InvoiceCustomizerModal({
   initialData,
 }: InvoiceCustomizerModalProps) {
   const { themeColors, isDark } = useTheme();
+
+  // Selected Invoice Template & Business Profile
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('dropcars_neon');
+  const [bizProfile, setBizProfile] = useState<BusinessProfileSettings>(DEFAULT_BUSINESS_PROFILE);
 
   // Customer & Business Particulars
   const [customerName, setCustomerName] = useState('');
@@ -97,7 +105,22 @@ export default function InvoiceCustomizerModal({
   const [officialInvoiceNumber, setOfficialInvoiceNumber] = useState<string | null>(null);
 
   useEffect(() => {
+    getStoredBusinessProfile().then((profile) => {
+      setBizProfile(profile);
+      if (!initialData?.templateId) {
+        setSelectedTemplate(profile.defaultTemplateId || 'dropcars_neon');
+      }
+      if (!initialData?.gstNumber && profile.gstin) {
+        setGstin(profile.gstin);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (visible && initialData) {
+      if (initialData.templateId) {
+        setSelectedTemplate(initialData.templateId);
+      }
       setCustomerName(initialData.customerName || '');
       setCustomerPhone(initialData.customerPhone || '');
       setCustomerEmail(initialData.customerEmail || '');
@@ -171,9 +194,25 @@ export default function InvoiceCustomizerModal({
   const assembleInvoiceData = (): InvoiceData => ({
     invoiceNumber: officialInvoiceNumber || String(initialData.invoiceNumber || '1001'),
     date: initialData.date,
-    brandName: initialData.brandName || 'Drop Cars',
-    brandPhone: initialData.brandPhone || '7200217986',
-    gstNumber: gstin,
+    templateId: selectedTemplate,
+    companyLegalName: bizProfile.companyLegalName,
+    brandName: bizProfile.brandDisplayName || initialData.brandName || 'Drop Cars',
+    brandPhone: bizProfile.primaryPhone || initialData.brandPhone || '7200217986',
+    customerCareNumber: bizProfile.customerCareNumber,
+    whatsappNumber: bizProfile.whatsappNumber,
+    companyEmail: bizProfile.emailId,
+    domainName: bizProfile.domainName,
+    companyAddress: bizProfile.officeAddress,
+    panNumber: bizProfile.panNumber,
+    gstNumber: gstin || bizProfile.gstin,
+    hsnSacCode: bizProfile.hsnSacCode,
+    bankAccountName: bizProfile.bankAccountName,
+    bankName: bizProfile.bankName,
+    bankAccountNumber: bizProfile.bankAccountNumber,
+    bankIfsc: bizProfile.bankIfsc,
+    bankBranch: bizProfile.bankBranch,
+    upiId: bizProfile.upiId,
+    termsAndConditions: bizProfile.termsAndConditions,
     customerName: customerName || 'Valued Customer',
     customerPhone: customerPhone || '',
     customerEmail: customerEmail || undefined,
@@ -323,6 +362,47 @@ export default function InvoiceCustomizerModal({
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+            {/* 10 Visual Themes Selector */}
+            <View style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: themeColors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🎨 Invoice Theme / Visual Model (10 Available)
+                </Text>
+                <Text style={{ fontSize: 11, color: themeColors.textMuted, fontWeight: '600' }}>
+                  {INVOICE_TEMPLATES.find(t => t.id === selectedTemplate)?.name}
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                {INVOICE_TEMPLATES.map((t) => {
+                  const isSelected = selectedTemplate === t.id;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => setSelectedTemplate(t.id)}
+                      activeOpacity={0.8}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 9,
+                        borderWidth: isSelected ? 2 : 1,
+                        borderColor: isSelected ? t.primaryColor : (isDark ? '#334155' : '#E2E8F0'),
+                        backgroundColor: isSelected ? (isDark ? '#1E293B' : '#F0F9FF') : (isDark ? '#0F172A' : '#FFFFFF'),
+                      }}
+                    >
+                      <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: t.primaryColor }} />
+                      <Text style={{ fontSize: 12, fontWeight: isSelected ? '800' : '600', color: isSelected ? (isDark ? '#FFFFFF' : '#0F172A') : themeColors.textSecondary }}>
+                        {t.name.replace(/^[0-9]+\.\s*/, '')}
+                      </Text>
+                      {isSelected && <CheckCircle2 size={13} color={t.primaryColor} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {/* Live Calculation Summary Banner */}
             <View style={[styles.summaryCard, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: themeColors.border }]}>
               <View style={styles.summaryRow}>

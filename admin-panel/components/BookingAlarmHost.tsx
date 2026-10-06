@@ -15,6 +15,7 @@ import { BellRing, Car, Phone, MapPin, Calendar, IndianRupee, Zap, Clock, Chevro
 import { apiService } from '@/services/api';
 import { playAlarmSound, stopAlarmSound, forceStopAlarmSound } from '@/utils/alarmSound';
 import { useTheme } from '@/context/ThemeContext';
+import { useStaffDuty } from '@/context/StaffDutyContext';
 
 const ALERT_CUTOFF_STORAGE_KEY = 'dropcars_admin_booking_alert_cutoff_v1';
 // A confirmed website booking waiting for approval rings for ONE minute when it arrives (or until ACKNOWLEDGE), then never again: it stays
@@ -62,6 +63,7 @@ export default function BookingAlarmHost() {
   const router = useRouter();
   const pathname = usePathname();
   const { isDark, themeColors } = useTheme();
+  const { isOnDuty, isOnBreak } = useStaffDuty();
 
   const [queue, setQueue] = useState<BookingAlarmItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -112,8 +114,9 @@ export default function BookingAlarmHost() {
   }, []);
 
   useEffect(() => {
-    if (alertCutoffMs === null || !isAuth || pathname === '/login') {
+    if (alertCutoffMs === null || !isAuth || pathname === '/login' || !isOnDuty || isOnBreak) {
       stopAlarmSound('booking');
+      forceStopAlarmSound();
       setQueue([]);
       return;
     }
@@ -197,7 +200,7 @@ export default function BookingAlarmHost() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [alertCutoffMs, snoozedUntil, isAuth, pathname]);
+  }, [alertCutoffMs, snoozedUntil, isAuth, pathname, isOnDuty, isOnBreak]);
 
   const activeBooking = queue[currentIndex] || queue[0] || null;
 
@@ -285,6 +288,8 @@ export default function BookingAlarmHost() {
     const s = secs % 60;
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   };
+
+  if (!isOnDuty || isOnBreak || !activeBooking) return null;
 
   const isUnassignedAlert = activeBooking.is_urgent_unassigned;
   const fareVal = activeBooking.quoted_total_amount || activeBooking.total_booking_amount;

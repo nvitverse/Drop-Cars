@@ -530,6 +530,26 @@ export default function FleetOwnerDetailScreen() {
     );
   };
 
+  const handleShareWhatsAppSummary = () => {
+    if (!owner) return;
+    const activeCars = cars.filter(c => (c.car_status || '').toUpperCase() === 'ONLINE' || (c.car_status || '').toUpperCase() === 'ACTIVE').length;
+    const activeDrivers = drivers.filter(d => (d.driver_status || '').toUpperCase() === 'ONLINE' || (d.driver_status || '').toUpperCase() === 'ACTIVE').length;
+    const carList = cars.slice(0, 5).map(c => `• ${c.car_number} (${c.car_name || c.car_type})`).join('\n');
+    
+    const message = `*DROP CARS - Fleet Partner Statement*\n\n` +
+      `👤 *Partner:* ${owner.full_name}\n` +
+      `📞 *Mobile:* ${owner.primary_number}\n` +
+      `💰 *Wallet Balance:* ₹${Number(owner.wallet_balance || 0).toLocaleString('en-IN')}\n` +
+      `⭐ *Tier:* ${owner.tier === 'PREFERRED' ? 'Trusted Partner' : 'Standard Partner'}\n` +
+      `🚗 *Cars:* ${activeCars} Active (${cars.length} Total)\n` +
+      `👨‍✈️ *Drivers:* ${activeDrivers} Active (${drivers.length} Total)\n` +
+      (carList ? `\n*Vehicles:*\n${carList}\n` : '') +
+      `\n_Generated on ${new Date().toLocaleDateString('en-IN')}_ - Drop Cars Head Office`;
+
+    const phone = owner.primary_number.replace(/\D/g, '').slice(-10);
+    Linking.openURL(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`);
+  };
+
   const openDocuments = () => {
     if (!owner) return;
     router.push({
@@ -704,6 +724,14 @@ export default function FleetOwnerDetailScreen() {
               <Text style={{ color: '#25D366', fontWeight: '800', fontSize: 13 }}>WhatsApp</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={[styles.secondaryButton, { backgroundColor: isDark ? themeColors.surfaceAlt : '#10B98115', borderColor: '#10B981', borderWidth: 1, marginBottom: 8 }]}
+            onPress={handleShareWhatsAppSummary}
+          >
+            <MessageSquare size={16} color="#10B981" />
+            <Text style={[styles.secondaryButtonText, { color: '#10B981' }]}>Send Fleet Statement on WhatsApp</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: isDark ? themeColors.surfaceAlt : themeColors.primaryTint }]} onPress={openDocuments}>
             <FileCheck size={16} color={themeColors.primary} />

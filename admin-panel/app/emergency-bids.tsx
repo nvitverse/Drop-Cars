@@ -7,6 +7,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,6 +22,9 @@ import {
   AlertCircle,
   IndianRupee,
   ShieldCheck,
+  Zap,
+  Share2,
+  MessageSquare,
 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -79,6 +84,32 @@ export default function EmergencyBidsScreen() {
         },
       ]
     );
+  };
+
+  const broadcastToVendors = async (item: EmergencyBidBooking) => {
+    const text = `🚨 *URGENT TAXI REQUIREMENT · IMMEDIATE ASSIGNMENT*
+📍 *Pickup:* ${item.pickup}
+🏁 *Drop:* ${item.dropLocation}
+⏰ *Pickup Window:* ${item.pickupTime}
+💰 *Estimated Fare:* ₹${item.baseEstimate}
+🚗 *Status:* Urgent Dispatch Required
+📞 *Admin Helpline:* 7200217986 / 9043990439
+
+_Please reply with Driver Name & Vehicle Number to confirm this trip immediately._`;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    try {
+      if (Platform.OS === 'web') {
+        window.open(url, '_blank');
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to launch WhatsApp.');
+    }
+  };
+
+  const boostDriverIncentive = (item: EmergencyBidBooking, pct: number) => {
+    showToast(`Commission slashed to ${pct}% for #${item.id}! Driver alert sent.`, 'success');
   };
 
   return (
@@ -158,10 +189,51 @@ export default function EmergencyBidsScreen() {
             </View>
 
             {item.status === 'LIVE_BIDDING_ACTIVE' && (
-              <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptTopBid(item)}>
-                <CheckCircle2 size={16} color="#FFFFFF" />
-                <Text style={styles.acceptBtnText}>Accept Top Driver Offer (₹{item.topBidAmount})</Text>
-              </TouchableOpacity>
+              <View style={{ marginTop: 12, gap: 8 }}>
+                <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptTopBid(item)}>
+                  <CheckCircle2 size={16} color="#FFFFFF" />
+                  <Text style={styles.acceptBtnText}>Accept Top Driver Offer (₹{item.topBidAmount})</Text>
+                </TouchableOpacity>
+
+                {/* Emergency Dispatch Action Row */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      backgroundColor: '#25D366',
+                      paddingVertical: 10,
+                      borderRadius: 6,
+                    }}
+                    onPress={() => broadcastToVendors(item)}
+                  >
+                    <MessageSquare size={14} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Broadcast to Vendors</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#FFEDD5',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: '#EA580C',
+                    }}
+                    onPress={() => boostDriverIncentive(item, 5)}
+                  >
+                    <Zap size={14} color="#EA580C" />
+                    <Text style={{ color: '#EA580C', fontSize: 12, fontWeight: '800' }}>Drop Fee to 5%</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
           </View>
           ))

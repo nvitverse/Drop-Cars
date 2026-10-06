@@ -47,17 +47,30 @@ import {
   Info,
   Navigation,
   CreditCard,
-  Layers,
+  Globe,
+  Sliders,
+  Save,
+  Briefcase,
+  Share2,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
 import { colors } from '@/constants/theme';
 import Toast, { useToast } from '@/components/Toast';
-import { printOrDownloadInvoice, InvoiceData } from '@/utils/invoiceGenerator';
+import {
+  printOrDownloadInvoice,
+  InvoiceData,
+  INVOICE_TEMPLATES,
+  getStoredBusinessProfile,
+  saveStoredBusinessProfile,
+  BusinessProfileSettings,
+  DEFAULT_BUSINESS_PROFILE,
+} from '@/utils/invoiceGenerator';
 import { sendWhatsAppMessage } from '@/utils/whatsappTemplates';
 
 interface BookingOrder {
   id: number | string;
+  status?: string;
   customer_name?: string;
   customer_number?: string;
   customer_email?: string;
@@ -97,8 +110,8 @@ export default function GstInvoicesScreen() {
   const { isDark, themeColors } = useTheme();
   const { toast, showToast } = useToast();
 
-  // Active Screen Tab
-  const [activeTab, setActiveTab] = useState<'issued' | 'generate'>('issued');
+  // Active Screen Tab (4 Tabs)
+  const [activeTab, setActiveTab] = useState<'issued' | 'completed' | 'generate' | 'settings'>('issued');
 
   // Core Data States
   const [loading, setLoading] = useState(true);
@@ -110,6 +123,15 @@ export default function GstInvoicesScreen() {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'auto'>('all');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
+
+  // Business Profile Settings & Themes State
+  const [bizSettings, setBizSettings] = useState<BusinessProfileSettings>(DEFAULT_BUSINESS_PROFILE);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('dropcars_neon');
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Completed Bookings State
+  const [completedOrders, setCompletedOrders] = useState<BookingOrder[]>([]);
+  const [completedSearchQuery, setCompletedSearchQuery] = useState('');
 
   // Edit Counter Modal (Owner Only)
   const [showSeqModal, setShowSeqModal] = useState(false);
@@ -183,17 +205,23 @@ export default function GstInvoicesScreen() {
       if (params.vehicle_type) setVehicleType(String(params.vehicle_type));
       if (params.bata) setDriverBata(String(params.bata));
       if (params.toll) setTollCharges(String(params.toll));
+    } else if (params.tab === 'completed') {
+      setActiveTab('completed');
+    } else if (params.tab === 'settings') {
+      setActiveTab('settings');
     }
   }, [params]);
 
-  // Load Invoices and Sequence Status
+  // Load Invoices, Sequence Status, Business Profile & Completed Bookings
   const loadData = async () => {
     setLoading(true);
     try {
-      const [invList, seq, role] = await Promise.all([
+      const [invList, seq, role, profile, ordersRes] = await Promise.all([
         apiService.getTaxInvoices({ limit: 100 }).catch(() => []),
         apiService.getTaxSequenceStatus().catch(() => null),
         apiService.getCachedAdminRole().catch(() => 'Staff'),
+        getStoredBusinessProfile().catch(() => DEFAULT_BUSINESS_PROFILE),
+        apiService.getOrders(0, 100).catch(() => ({ orders: [] })),
       ]);
       setInvoices(invList || []);
       setSeqStatus(seq);
@@ -201,6 +229,22 @@ export default function GstInvoicesScreen() {
       if (seq?.last_number != null) {
         setNewSeqNumber(String(seq.last_number));
       }
+      if (profile) {
+        setBizSettings(profile);
+        setSelectedTemplateId(profile.defaultTemplateId || 'dropcars_neon');
+      }
+      const rawOrders: BookingOrder[] = ordersRes?.orders || [];
+      const completed = rawOrders.filter((o: any) => {
+        const s = (o.status || '').toUpperCase();
+        return (
+          s === 'COMPLETED' ||
+          s === 'TRIP_COMPLETED' ||
+          s === 'CLOSED' ||
+          Number(o.closed_vendor_price) > 0 ||
+          Number(o.vendor_price) > 0
+        );
+      });
+      setCompletedOrders(completed.length > 0 ? completed : rawOrders.slice(0, 30));
     } catch (e: any) {
       showToast(e?.message || 'Failed to load tax invoices', 'error');
     } finally {
@@ -351,9 +395,25 @@ export default function GstInvoicesScreen() {
   const assembleInvoiceData = (customNumber?: string): InvoiceData => ({
     invoiceNumber: customNumber || (bookingId ? `DC-${bookingId}` : (seqStatus?.next_invoice_number || 'INV-031')),
     date: travelDate,
-    brandName: 'Drop Cars',
-    brandPhone: '7200217986',
-    gstNumber: 'GSTIN: 33AAACM9876A1Z4',
+    templateId: selectedTemplateId,
+    companyLegalName: bizSettings.companyLegalName,
+    brandName: bizSettings.brandDisplayName,
+    brandPhone: bizSettings.primaryPhone,
+    customerCareNumber: bizSettings.customerCareNumber,
+    whatsappNumber: bizSettings.whatsappNumber,
+    companyEmail: bizSettings.emailId,
+    domainName: bizSettings.domainName,
+    companyAddress: bizSettings.officeAddress,
+    panNumber: bizSettings.panNumber,
+    gstNumber: bizSettings.gstin,
+    hsnSacCode: bizSettings.hsnSacCode,
+    bankAccountName: bizSettings.bankAccountName,
+    bankName: bizSettings.bankName,
+    bankAccountNumber: bizSettings.bankAccountNumber,
+    bankIfsc: bizSettings.bankIfsc,
+    bankBranch: bizSettings.bankBranch,
+    upiId: bizSettings.upiId,
+    termsAndConditions: bizSettings.termsAndConditions,
     customerName: customerName.trim() || 'Valued Customer',
     customerPhone: customerPhone.trim(),
     customerEmail: customerEmail.trim() || undefined,
@@ -392,6 +452,114 @@ export default function GstInvoicesScreen() {
     notes: notes.trim() || undefined,
     isCompleted: true,
   });
+
+  // Action from Completed Bookings Tab: 1-Tap Generate GST Tax Invoice
+  const handleGenerateInvoiceFromCompleted = (order: BookingOrder, withGst: boolean = true) => {
+    handleSelectBookingForAutofill(order);
+    setIncludeGst(withGst);
+    setActiveTab('generate');
+  };
+
+  // Action from Completed Bookings Tab: 1-Tap Print / Preview HTML Receipt
+  const handlePrintCompletedOrder = (order: BookingOrder, withGst: boolean = false) => {
+    const { fromCity, toCity } = getOrderAddresses(order);
+    const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
+    const fare = Number(order.closed_vendor_price || order.vendor_price || order.estimated_price || 0);
+    const dist = Number(order.trip_distance) || 150;
+    const rate = Math.max(12, Math.round(fare / (dist || 1)));
+    const advance = Number(order.advance_received) || 0;
+
+    const invoicePayload: InvoiceData = {
+      invoiceNumber: `DC-${order.id}`,
+      date: order.start_date_time ? new Date(order.start_date_time).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      templateId: selectedTemplateId,
+      companyLegalName: bizSettings.companyLegalName,
+      brandName: bizSettings.brandDisplayName,
+      brandPhone: bizSettings.primaryPhone,
+      customerCareNumber: bizSettings.customerCareNumber,
+      whatsappNumber: bizSettings.whatsappNumber,
+      companyEmail: bizSettings.emailId,
+      domainName: bizSettings.domainName,
+      companyAddress: bizSettings.officeAddress,
+      panNumber: bizSettings.panNumber,
+      gstNumber: bizSettings.gstin,
+      hsnSacCode: bizSettings.hsnSacCode,
+      bankAccountName: bizSettings.bankAccountName,
+      bankName: bizSettings.bankName,
+      bankAccountNumber: bizSettings.bankAccountNumber,
+      bankIfsc: bizSettings.bankIfsc,
+      bankBranch: bizSettings.bankBranch,
+      upiId: bizSettings.upiId,
+      termsAndConditions: bizSettings.termsAndConditions,
+      customerName: order.customer_name || 'Valued Customer',
+      customerPhone: order.customer_number || '',
+      customerEmail: order.customer_email || undefined,
+      pickup: fromCity || 'Pickup Location',
+      dropLocation: toCity || 'Drop Location',
+      travelDate: order.start_date_time ? new Date(order.start_date_time).toISOString().split('T')[0] : undefined,
+      vehicleType: order.car_type || 'Sedan',
+      tripType: order.trip_type || 'One Way',
+      cabNumber: assigned?.vehicle_number || (assigned as any)?.reg_id || undefined,
+      driverName: assigned?.driver_name || (assigned as any)?.full_name || undefined,
+      driverPhone: assigned?.driver_number || (assigned as any)?.primary_number || undefined,
+      distanceKm: dist,
+      ratePerKm: rate,
+      baseFare: fare,
+      tollCharges: Number(order.toll_charges) || 0,
+      driverBata: Number(order.driver_allowance) || 0,
+      advancePaid: advance,
+      includeGst: withGst,
+      gstPercent: 5,
+      gstAmount: withGst ? Math.round(fare * 0.05) : 0,
+      isCompleted: true,
+    };
+
+    printOrDownloadInvoice(invoicePayload);
+  };
+
+  // Action from Completed Bookings Tab: 1-Tap WhatsApp Receipt
+  const handleWhatsAppCompletedOrder = async (order: BookingOrder) => {
+    if (!order.customer_number) {
+      Alert.alert('Phone Required', 'Customer phone number is missing for WhatsApp sharing.');
+      return;
+    }
+    const { fromCity, toCity } = getOrderAddresses(order);
+    const fare = Number(order.closed_vendor_price || order.vendor_price || order.estimated_price || 0);
+    const advance = Number(order.advance_received) || 0;
+    const balance = Math.max(0, fare - advance);
+
+    await sendWhatsAppMessage('trip_completed', {
+      bookingId: `DC-${order.id}`,
+      customerName: order.customer_name || 'Customer',
+      customerPhone: order.customer_number,
+      pickupLocation: fromCity || 'Pickup',
+      totalFare: fare,
+      finalFare: fare,
+      balancePaid: balance,
+      carName: order.car_type || 'Sedan',
+      driverName: order.assigned_driver?.driver_name || 'Drop Cars Fleet Chauffeur',
+      brandName: bizSettings.brandDisplayName || 'Drop Cars',
+      brandPhone: bizSettings.primaryPhone || '7200217986',
+    });
+  };
+
+  // Action: Save Business Profile Settings
+  const handleSaveBusinessSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const payload: BusinessProfileSettings = {
+        ...bizSettings,
+        defaultTemplateId: selectedTemplateId,
+      };
+      const updated = await saveStoredBusinessProfile(payload);
+      setBizSettings(updated);
+      showToast('Business & Invoicing Settings Saved Successfully!', 'success');
+    } catch (e: any) {
+      Alert.alert('Save Error', e?.message || 'Failed to save business settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Action: Print / PDF Preview
   const handlePrintPreview = () => {
@@ -595,6 +763,20 @@ export default function GstInvoicesScreen() {
     });
   }, [recentOrders, orderSearchQuery]);
 
+  // Filtered completed bookings
+  const filteredCompletedOrders = useMemo(() => {
+    if (!completedSearchQuery) return completedOrders;
+    const q = completedSearchQuery.toLowerCase();
+    return completedOrders.filter((o) => {
+      const idMatch = String(o.id).includes(q);
+      const nameMatch = (o.customer_name || '').toLowerCase().includes(q);
+      const phoneMatch = (o.customer_number || '').toLowerCase().includes(q);
+      const { fromCity, toCity } = getOrderAddresses(o);
+      const routeMatch = (fromCity || '').toLowerCase().includes(q) || (toCity || '').toLowerCase().includes(q);
+      return idMatch || nameMatch || phoneMatch || routeMatch;
+    });
+  }, [completedOrders, completedSearchQuery]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Toast Notification */}
@@ -607,9 +789,9 @@ export default function GstInvoicesScreen() {
             <ArrowLeft size={20} color={themeColors.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: themeColors.text }]}>GST Tax Invoicing</Text>
+            <Text style={[styles.headerTitle, { color: themeColors.text }]}>GST Invoicing & Billing Hub</Text>
             <Text style={[styles.headerSub, { color: themeColors.textSecondary }]} numberOfLines={1}>
-              Official SAC 9964 · 5% Pure KM Rule · Continuous FY Series
+              SAC 9964 (5% Pure KM) · 10 Custom Visual Themes · Auto-Fill Trips
             </Text>
           </View>
         </View>
@@ -619,29 +801,53 @@ export default function GstInvoicesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Top Segmented Tabs: [Issued Invoices] vs [Generate Tax Invoice] */}
-      <View style={[styles.tabBar, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'issued' && styles.tabItemActive]}
-          onPress={() => setActiveTab('issued')}
-          activeOpacity={0.8}
-        >
-          <Receipt size={16} color={activeTab === 'issued' ? colors.primary : themeColors.textSecondary} />
-          <Text style={[styles.tabText, { color: activeTab === 'issued' ? colors.primary : themeColors.textSecondary }]}>
-            Issued Invoices ({invoices.length})
-          </Text>
-        </TouchableOpacity>
+      {/* Top Segmented Tabs: [Issued] vs [Completed Trips] vs [Invoice Studio] vs [Settings] */}
+      <View style={[styles.tabBarContainer, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarScroll}>
+          <TouchableOpacity
+            style={[styles.tabItemPill, activeTab === 'issued' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            onPress={() => setActiveTab('issued')}
+            activeOpacity={0.8}
+          >
+            <Receipt size={15} color={activeTab === 'issued' ? '#FFFFFF' : themeColors.textSecondary} />
+            <Text style={[styles.tabTextPill, { color: activeTab === 'issued' ? '#FFFFFF' : themeColors.textSecondary }]}>
+              Issued Invoices ({invoices.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'generate' && styles.tabItemActive]}
-          onPress={() => setActiveTab('generate')}
-          activeOpacity={0.8}
-        >
-          <Plus size={16} color={activeTab === 'generate' ? colors.primary : themeColors.textSecondary} />
-          <Text style={[styles.tabText, { color: activeTab === 'generate' ? colors.primary : themeColors.textSecondary }]}>
-            ⚡ Generate Invoice / Bill
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItemPill, activeTab === 'completed' && { backgroundColor: '#10B981', borderColor: '#10B981' }]}
+            onPress={() => setActiveTab('completed')}
+            activeOpacity={0.8}
+          >
+            <Car size={15} color={activeTab === 'completed' ? '#FFFFFF' : themeColors.textSecondary} />
+            <Text style={[styles.tabTextPill, { color: activeTab === 'completed' ? '#FFFFFF' : themeColors.textSecondary }]}>
+              Completed Trips ({completedOrders.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItemPill, activeTab === 'generate' && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }]}
+            onPress={() => setActiveTab('generate')}
+            activeOpacity={0.8}
+          >
+            <Plus size={15} color={activeTab === 'generate' ? '#FFFFFF' : themeColors.textSecondary} />
+            <Text style={[styles.tabTextPill, { color: activeTab === 'generate' ? '#FFFFFF' : themeColors.textSecondary }]}>
+              ⚡ Invoice Builder
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItemPill, activeTab === 'settings' && { backgroundColor: '#0284C7', borderColor: '#0284C7' }]}
+            onPress={() => setActiveTab('settings')}
+            activeOpacity={0.8}
+          >
+            <Settings size={15} color={activeTab === 'settings' ? '#FFFFFF' : themeColors.textSecondary} />
+            <Text style={[styles.tabTextPill, { color: activeTab === 'settings' ? '#FFFFFF' : themeColors.textSecondary }]}>
+              ⚙️ Business & Branding
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* ══════════════════════════════════════════════════════
@@ -902,7 +1108,182 @@ export default function GstInvoicesScreen() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          TAB 2: GENERATE TAX INVOICE & BILL STUDIO
+          TAB 2: COMPLETED TRIPS & INSTANT INVOICE GENERATOR
+          ══════════════════════════════════════════════════════ */}
+      {activeTab === 'completed' && (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Header Stats Banner */}
+          <View style={[styles.seqBanner, { backgroundColor: isDark ? '#064E3B20' : '#ECFDF5', borderColor: '#10B981' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Car size={18} color="#10B981" />
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: isDark ? '#34D399' : '#065F46' }}>
+                  Completed Bookings ({completedOrders.length} Trips)
+                </Text>
+              </View>
+              <View style={[styles.seqBadge, { backgroundColor: '#10B981' }]}>
+                <Text style={styles.seqBadgeText}>1-Tap Invoice Ready</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 4 }}>
+              All trips marked completed or executed. Generate official SAC 9964 GST tax invoices, non-GST bills, or WhatsApp receipts instantly!
+            </Text>
+          </View>
+
+          {/* Search Bar for Completed Trips */}
+          <View style={[styles.searchWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, marginBottom: 14 }]}>
+            <Search size={16} color={themeColors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: themeColors.text }]}
+              placeholder="Search by customer, phone, route, or booking #..."
+              placeholderTextColor={themeColors.textSecondary}
+              value={completedSearchQuery}
+              onChangeText={setCompletedSearchQuery}
+            />
+            {completedSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setCompletedSearchQuery('')} style={{ padding: 4 }}>
+                <X size={16} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* List of Completed Bookings */}
+          {filteredCompletedOrders.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+              <Car size={32} color={themeColors.textSecondary} style={{ opacity: 0.5, marginBottom: 8 }} />
+              <Text style={[styles.emptyTitle, { color: themeColors.text }]}>No Completed Trips Found</Text>
+              <Text style={[styles.emptySub, { color: themeColors.textSecondary }]}>
+                {completedSearchQuery ? 'No trips match your search.' : 'Completed bookings will appear here for instant 1-tap invoice generation.'}
+              </Text>
+            </View>
+          ) : (
+            filteredCompletedOrders.map((order) => {
+              const { fromCity, toCity } = getOrderAddresses(order);
+              const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
+              const fare = Number(order.closed_vendor_price || order.vendor_price || order.estimated_price || 0);
+              const advance = Number(order.advance_received) || 0;
+              const dateStr = order.start_date_time
+                ? new Date(order.start_date_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Recent Trip';
+
+              return (
+                <View
+                  key={String(order.id)}
+                  style={[styles.completedTripCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+                >
+                  {/* Card Header */}
+                  <View style={styles.completedTripHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.tripTypeTag, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                        <Text style={[styles.tripTypeTagText, { color: themeColors.text }]}>
+                          #{order.id} · {order.trip_type || 'One Way'}
+                        </Text>
+                      </View>
+                      <View style={styles.completedBadgePill}>
+                        <CheckCircle2 size={11} color="#059669" />
+                        <Text style={styles.completedBadgeText}>COMPLETED</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, fontWeight: '600' }}>
+                      {dateStr}
+                    </Text>
+                  </View>
+
+                  {/* Route & Customer Details */}
+                  <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+                    <Text style={[styles.completedRouteText, { color: themeColors.text }]}>
+                      {fromCity || 'Pickup'} <Text style={{ color: colors.primary }}>➔</Text> {toCity || 'Destination'}
+                    </Text>
+
+                    <View style={styles.completedMetaRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1.2 }}>
+                        <User size={13} color={themeColors.textSecondary} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }} numberOfLines={1}>
+                          {order.customer_name || 'Valued Customer'}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                        <Phone size={13} color="#10B981" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: themeColors.textSecondary }}>
+                          {order.customer_number || 'N/A'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {assigned && (
+                      <View style={[styles.completedMetaRow, { marginTop: 4 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1.2 }}>
+                          <Car size={13} color="#8B5CF6" />
+                          <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }} numberOfLines={1}>
+                            {order.car_type || 'Sedan'} · {assigned.vehicle_number || assigned.reg_id || ''}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                          <User size={13} color={themeColors.textSecondary} />
+                          <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }} numberOfLines={1}>
+                            {assigned.driver_name || assigned.full_name || 'Chauffeur'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Fare Summary Box */}
+                    <View style={[styles.completedFareBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
+                      <View>
+                        <Text style={{ fontSize: 10, color: themeColors.textSecondary, fontWeight: '600' }}>TOTAL FARE</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>
+                          ₹{fare.toLocaleString('en-IN')}
+                        </Text>
+                      </View>
+                      {advance > 0 && (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 10, color: themeColors.textSecondary, fontWeight: '600' }}>ADVANCE PAID</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text }}>
+                            ₹{advance.toLocaleString('en-IN')}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* 1-Tap Action Buttons */}
+                    <View style={styles.completedActionsRow}>
+                      <TouchableOpacity
+                        style={[styles.completedBtnPrimary, { backgroundColor: '#0284C7' }]}
+                        onPress={() => handleGenerateInvoiceFromCompleted(order, true)}
+                        activeOpacity={0.8}
+                      >
+                        <Sparkles size={13} color="#FFFFFF" />
+                        <Text style={styles.completedBtnPrimaryText}>⚡ Tax Invoice (GST)</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.completedBtnSecondary, { borderColor: themeColors.border, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}
+                        onPress={() => handlePrintCompletedOrder(order, false)}
+                        activeOpacity={0.8}
+                      >
+                        <FileText size={13} color={themeColors.text} />
+                        <Text style={[styles.completedBtnSecondaryText, { color: themeColors.text }]}>Travel Bill</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.completedBtnIcon, { backgroundColor: '#25D366' }]}
+                        onPress={() => handleWhatsAppCompletedOrder(order)}
+                        activeOpacity={0.8}
+                        accessibilityLabel="WhatsApp Receipt"
+                      >
+                        <MessageCircle size={15} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          TAB 3: GENERATE TAX INVOICE & BILL STUDIO
           ══════════════════════════════════════════════════════ */}
       {activeTab === 'generate' && (
         <ScrollView
@@ -910,6 +1291,48 @@ export default function GstInvoicesScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* 10 Theme Models Selector */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, marginBottom: 12 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={16} color={colors.primary} />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.text }}>
+                  Invoice Visual Theme (10 Models)
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
+                {INVOICE_TEMPLATES.find(t => t.id === selectedTemplateId)?.name}
+              </Text>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {INVOICE_TEMPLATES.map((t) => {
+                const isSelected = selectedTemplateId === t.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => setSelectedTemplateId(t.id)}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.templateChip,
+                      {
+                        borderColor: isSelected ? t.primaryColor : (isDark ? '#334155' : '#E2E8F0'),
+                        backgroundColor: isSelected ? (isDark ? '#1E293B' : '#F0F9FF') : (isDark ? '#0F172A' : '#FFFFFF'),
+                        borderWidth: isSelected ? 2 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: t.primaryColor }} />
+                    <Text style={{ fontSize: 11.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? (isDark ? '#FFFFFF' : '#0F172A') : themeColors.textSecondary }}>
+                      {t.name.replace(/^[0-9]+\.\s*/, '')}
+                    </Text>
+                    {isSelected && <CheckCircle2 size={12} color={t.primaryColor} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
           {/* Top Quick Autofill Banner */}
           <TouchableOpacity
             style={[styles.autofillBanner, { backgroundColor: isDark ? '#082F49' : '#F0F9FF', borderColor: '#0284C7' }]}
@@ -1563,6 +1986,374 @@ export default function GstInvoicesScreen() {
                 <ShieldCheck size={18} color="#FFFFFF" />
                 <Text style={styles.registerOfficialBtnText}>
                   Issue & Register Official GST Tax Invoice
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          TAB 4: ⚙️ BUSINESS PROFILE & INVOICING SETTINGS
+          ══════════════════════════════════════════════════════ */}
+      {activeTab === 'settings' && (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Settings Hub Banner */}
+          <View style={[styles.seqBanner, { backgroundColor: isDark ? '#082F49' : '#F0F9FF', borderColor: '#0284C7' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Settings size={18} color="#0284C7" />
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: isDark ? '#38BDF8' : '#0369A1' }}>
+                Business Profile & Invoicing Settings Hub
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 4 }}>
+              These branding particulars, GST/PAN credentials, helpline contacts, and bank remittance info automatically appear on all generated Invoices, Quotations, and PDF receipts.
+            </Text>
+          </View>
+
+          {/* SECTION 1: Default Visual Theme */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Sparkles size={18} color={colors.primary} />
+                <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                  Default Invoice Visual Model (10 Themes)
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
+                {INVOICE_TEMPLATES.find(t => t.id === selectedTemplateId)?.name}
+              </Text>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {INVOICE_TEMPLATES.map((t) => {
+                const isSelected = selectedTemplateId === t.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => setSelectedTemplateId(t.id)}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.templateRowCard,
+                      {
+                        borderColor: isSelected ? t.primaryColor : (isDark ? '#334155' : '#E2E8F0'),
+                        backgroundColor: isSelected ? (isDark ? '#1E293B' : '#F0F9FF') : (isDark ? '#0F172A' : '#FFFFFF'),
+                        borderWidth: isSelected ? 2 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: t.primaryColor }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: isSelected ? '800' : '700', color: themeColors.text }}>
+                        {t.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                        {t.subtitle}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <View style={[styles.selectedCheckBadge, { backgroundColor: t.primaryColor }]}>
+                        <Check size={12} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* SECTION 2: Company Identity & Online Presence */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Building size={18} color={colors.primary} />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                1. Company & Brand Identity
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.inputLabel, { color: themeColors.text }]}>Company Full Legal Name *</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                value={bizSettings.companyLegalName}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, companyLegalName: val })}
+                placeholder="e.g. Drop Cars Private Limited"
+                placeholderTextColor={themeColors.textSecondary}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Brand Display Name *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.brandDisplayName}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, brandDisplayName: val })}
+                  placeholder="Drop Cars"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Website Domain *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.domainName}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, domainName: val })}
+                  placeholder="dropcars.in"
+                  autoCapitalize="none"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Brand Tagline</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                value={bizSettings.tagline}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, tagline: val })}
+                placeholder="Premium Outstation & One-Way Taxi Network"
+                placeholderTextColor={themeColors.textSecondary}
+              />
+            </View>
+
+            <View>
+              <Text style={[styles.inputLabel, { color: themeColors.text }]}>Registered Office Address *</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text, height: 64 }]}
+                value={bizSettings.officeAddress}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, officeAddress: val })}
+                placeholder="No. 12, GST Road, Guindy, Chennai, Tamil Nadu - 600032"
+                placeholderTextColor={themeColors.textSecondary}
+                multiline
+              />
+            </View>
+          </View>
+
+          {/* SECTION 3: Contact Numbers & Communication */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Phone size={18} color="#10B981" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                2. Helpline, WhatsApp & Support
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Primary Phone *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.primaryPhone}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, primaryPhone: val })}
+                  keyboardType="phone-pad"
+                  placeholder="7200217986"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Customer Care Helpline</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.customerCareNumber}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, customerCareNumber: val })}
+                  keyboardType="phone-pad"
+                  placeholder="044-4800-9999"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: '#10B981' }]}>Official WhatsApp Number *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.whatsappNumber}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, whatsappNumber: val })}
+                  keyboardType="phone-pad"
+                  placeholder="917200217986"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Official Support Email</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.emailId}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, emailId: val })}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholder="support@dropcars.in"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* SECTION 4: Tax & Legal Compliance */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <ShieldCheck size={18} color="#0284C7" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                3. Tax, GSTIN & SAC Code
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.inputLabel, { color: themeColors.text }]}>Company GSTIN Number *</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                value={bizSettings.gstin}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, gstin: val })}
+                autoCapitalize="characters"
+                placeholder="GSTIN: 33AAACM9876A1Z4"
+                placeholderTextColor={themeColors.textSecondary}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Company PAN</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.panNumber}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, panNumber: val })}
+                  autoCapitalize="characters"
+                  placeholder="AAACM9876A"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Default HSN / SAC Code</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.hsnSacCode}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, hsnSacCode: val })}
+                  placeholder="9964"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* SECTION 5: Bank Remittance & UPI Payments */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <CreditCard size={18} color="#8B5CF6" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                4. Bank Account & Remittance Particulars
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.inputLabel, { color: themeColors.text }]}>Beneficiary Account Name *</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                value={bizSettings.bankAccountName}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, bankAccountName: val })}
+                placeholder="DROP CARS PRIVATE LIMITED"
+                placeholderTextColor={themeColors.textSecondary}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Bank Name *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.bankName}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, bankName: val })}
+                  placeholder="Axis Bank Ltd"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Account Number *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.bankAccountNumber}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, bankAccountNumber: val })}
+                  keyboardType="numeric"
+                  placeholder="924020012345678"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>IFSC Code *</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.bankIfsc}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, bankIfsc: val })}
+                  autoCapitalize="characters"
+                  placeholder="UTIB0001234"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Branch Name</Text>
+                <TextInput
+                  style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                  value={bizSettings.bankBranch}
+                  onChangeText={(val) => setBizSettings({ ...bizSettings, bankBranch: val })}
+                  placeholder="Guindy Chennai"
+                  placeholderTextColor={themeColors.textSecondary}
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={[styles.inputLabel, { color: '#8B5CF6' }]}>Official UPI Payment ID *</Text>
+              <TextInput
+                style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text }]}
+                value={bizSettings.upiId}
+                onChangeText={(val) => setBizSettings({ ...bizSettings, upiId: val })}
+                autoCapitalize="none"
+                placeholder="7200217986-1@okbizaxis"
+                placeholderTextColor={themeColors.textSecondary}
+              />
+            </View>
+          </View>
+
+          {/* SECTION 6: Terms & Conditions */}
+          <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <FileText size={18} color="#EA580C" />
+              <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+                5. Custom Terms & Conditions (Multi-Line)
+              </Text>
+            </View>
+            <TextInput
+              style={[styles.inputBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border, color: themeColors.text, height: 120 }]}
+              value={bizSettings.termsAndConditions}
+              onChangeText={(val) => setBizSettings({ ...bizSettings, termsAndConditions: val })}
+              placeholder="Enter standard terms (one per line)..."
+              placeholderTextColor={themeColors.textSecondary}
+              multiline
+            />
+          </View>
+
+          {/* Save Settings Button */}
+          <TouchableOpacity
+            style={[styles.saveSettingsBtn, savingSettings && { opacity: 0.6 }]}
+            onPress={handleSaveBusinessSettings}
+            disabled={savingSettings}
+            activeOpacity={0.85}
+          >
+            {savingSettings ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Save size={18} color="#FFFFFF" />
+                <Text style={styles.saveSettingsBtnText}>
+                  Save Business & Invoicing Settings
                 </Text>
               </>
             )}
@@ -2243,5 +3034,179 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     padding: 12,
+  },
+
+  // Segmented Pill Tabs
+  tabBarContainer: {
+    borderBottomWidth: 1,
+    paddingVertical: 6,
+  },
+  tabBarScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tabItemPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabTextPill: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // 10 Theme Models Selector
+  templateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  templateRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 8,
+  },
+  selectedCheckBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Completed Bookings Tab Styles
+  completedTripCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  completedTripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F020',
+  },
+  tripTypeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tripTypeTagText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  completedBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#10B98120',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  completedBadgeText: {
+    color: '#059669',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  completedRouteText: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  completedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 2,
+  },
+  completedFareBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  completedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  completedBtnPrimary: {
+    flex: 1.3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 6,
+  },
+  completedBtnPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  completedBtnSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  completedBtnSecondaryText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  completedBtnIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySub: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // Settings Tab Styles
+  saveSettingsBtn: {
+    backgroundColor: '#0284C7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  saveSettingsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

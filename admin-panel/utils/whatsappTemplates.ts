@@ -24,6 +24,10 @@ export interface WhatsAppTemplateData {
   driverPhone?: string;
   carName?: string;
   carNumber?: string;
+  startOtp?: string;
+  endOtp?: string;
+  ratePerKm?: number | string;
+  extraKmRate?: number | string;
   brandName?: string;
   brandPhone?: string;
   reviewToken?: string;
@@ -54,13 +58,13 @@ export const TEMPLATE_METADATA: Record<
 > = {
   booking_confirmed: {
     title: 'Booking Confirmed',
-    subtitle: 'Trip schedule, vehicle category & live tracking link',
+    subtitle: 'Trip schedule, fare breakdown, OTP & live tracking link',
     icon: 'CheckCircle2',
     defaultColor: '#10B981',
   },
   driver_assigned: {
     title: 'Driver & Cab Assigned',
-    subtitle: 'Driver phone, car plate number & tap-to-call link',
+    subtitle: 'Driver contact, plate number, OTP & live tracking link',
     icon: 'Car',
     defaultColor: '#3B82F6',
   },
@@ -108,58 +112,90 @@ export function buildWhatsAppMessage(type: TemplateType, data: WhatsAppTemplateD
   const vehicle = data.vehicleType || 'Sedan';
   const tripType = data.tripType || 'One Way';
   const trackingUrl = `https://dropcars.in/track/${bid}`;
+  const sosUrl = `https://dropcars.in/sos?ref=${bid}`;
+  const driverClaimUrl = `https://driver.dropcars.in/trip/${bid}`;
   const reviewToken = data.reviewToken || bid;
   const reviewUrl = `https://dropcars.in/review/${reviewToken}`;
   const invoiceUrl = `https://dropcars.in/invoice/${bid}`;
   const advancePayUrl = `https://dropcars.in/pay-advance/${bid}`;
+  const startOtp = data.startOtp || (data.bookingId ? String(data.bookingId).padStart(4, '0').slice(-4) : '0000');
 
   switch (type) {
     case 'booking_confirmed': {
       const fare = data.totalFare || data.baseFare || 0;
-      return `🚗 *${brand.toUpperCase()} - BOOKING CONFIRMED*
-Booking ID: *${bid}*
-Status: *Confirmed & Fleet Allocated*
+      const advance = data.advanceAmount || 0;
+      const balance = Math.max(0, fare - advance);
+
+      return `🚗 *${brand.toUpperCase()} - OFFICIAL TRIP BOOKING CONFIRMATION*
+📋 Booking Reference: *#${bid}*
+⚡ Status: *Confirmed & Scheduled*
 
 👤 *Customer Details:*
 • Name: ${custName}
 • Contact: ${data.customerPhone || 'N/A'}
 
 📍 *Trip Schedule:*
-• Route: ${pickup} ➔ ${drop}
-• Pickup: ${date} at ${time}
-• Vehicle: ${vehicle} (${tripType})
-${fare > 0 ? `• Quoted Fare: ₹${fare.toLocaleString('en-IN')} (Tolls & Driver Beta Included)\n` : ''}
-🔗 *Live Trip Tracking Link:*
+• Route: *${pickup}* ➔ *${drop}*
+• Pickup Date & Time: *${date} at ${time}*
+• Vehicle Category: *${vehicle}* (${tripType})
+${data.distanceKm ? `• Package Distance Limit: *~${data.distanceKm} KM* (Extra KM billed if exceeded)\n` : ''}
+💰 *Fare & Payment Breakdown:*
+• Total Trip Fare: ₹${fare.toLocaleString('en-IN')} (Includes Fuel & Chauffeur Allowance)
+• Advance Paid / Received: ₹${advance.toLocaleString('en-IN')}
+• *Balance Payable to Driver: ₹${balance.toLocaleString('en-IN')}*
+
+🔑 *Trip Security Start OTP: ${startOtp}*
+_(Please share this 4-digit OTP with your assigned chauffeur to start the journey)_
+
+✅ *Inclusions:* Dedicated AC Cab, Fuel Charges, Driver Day Allowance.
+ℹ️ *Highway Tolls & Permits:* As per Fastag logs & border checkpost receipts unless pre-included in package.
+
+🔗 *Live Trip Tracking & Status Link:*
 ${trackingUrl}
 
-📞 *24/7 Support Helpline:* tel:${brandPhone}
-Thank you for choosing ${brand}! Have a safe and pleasant journey.`;
+🚨 *24x7 SOS & Emergency Support:*
+${sosUrl}
+
+📞 *24/7 Helpline:* +91 ${brandPhone}
+_Thank you for choosing ${brand}! Have a safe & comfortable journey._`;
     }
 
     case 'driver_assigned': {
-      const dName = data.driverName || 'Professional Driver';
+      const dName = data.driverName || 'Professional Chauffeur';
       const dPhone = data.driverPhone || brandPhone;
       const cName = data.carName || vehicle;
-      const cNumber = data.carNumber || 'Plate assigned on arrival';
+      const cNumber = data.carNumber || 'Vehicle arriving shortly';
+      const fare = data.totalFare || data.baseFare || 0;
+      const advance = data.advanceAmount || 0;
+      const balance = Math.max(0, fare - advance);
 
-      return `🚖 *${brand.toUpperCase()} - DRIVER & CAB DETAILS*
-Booking ID: *${bid}*
+      return `🚖 *${brand.toUpperCase()} - ASSIGNED CHAUFFEUR & VEHICLE DETAILS*
+📋 Booking Reference: *#${bid}*
 
-Your cab has been assigned for your journey on ${date} at ${time}.
+Your cab has been dispatched for your journey on *${date} at ${time}*.
 
-👤 *Driver Details:*
-• Driver Name: *${dName}*
+👤 *Assigned Chauffeur:*
+• Name: *${dName}*
 • Mobile: ${dPhone}
 • Tap to Call: tel:${dPhone.replace(/\D/g, '')}
 
 🚗 *Vehicle Details:*
-• Vehicle: *${cName}*
-• Plate Number: *${cNumber}*
+• Model: *${cName}*
+• Registration Plate: *${cNumber}*
 
-📍 *Live Cab Tracking Link:*
+📍 *Trip Route:* ${pickup} ➔ ${drop}
+💰 *Balance to Driver at Trip End: ₹${balance.toLocaleString('en-IN')}*
+
+🔑 *Trip Security Start OTP: ${startOtp}*
+_(Please share this OTP with driver at pickup time)_
+
+📍 *Live Chauffeur & Trip Tracking:*
 ${trackingUrl}
 
-Driver will report 15 minutes before pickup time. For immediate assistance, call ${brandPhone}.`;
+🚨 *24x7 Safety Assistance & SOS:*
+${sosUrl}
+
+Driver will report 15 minutes prior to scheduled departure. For instant assistance, call +91 ${brandPhone}.`;
     }
 
     case 'group_broadcast': {
@@ -170,25 +206,26 @@ Driver will report 15 minutes before pickup time. For immediate assistance, call
           const commAmt = Math.round(grossFare * (data.commissionPercent / 100));
           const netPayout = Math.max(0, grossFare - commAmt);
           fareBreakdown = `💰 *Fare Breakdown:*
-• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)
-• App Commission (${data.commissionPercent}%): ₹${commAmt.toLocaleString('en-IN')}
+• Gross Customer Fare: ₹${grossFare.toLocaleString('en-IN')}
+• Platform Commission (${data.commissionPercent}%): ₹${commAmt.toLocaleString('en-IN')}
 • *Net Driver Payout: ₹${netPayout.toLocaleString('en-IN')}*`;
         } else {
-          fareBreakdown = `💰 *Fare:*
-• Gross Fare: ₹${grossFare.toLocaleString('en-IN')} (Includes Toll & Beta)`;
+          fareBreakdown = `💰 *Gross Fare:* ₹${grossFare.toLocaleString('en-IN')}`;
         }
       }
 
-      return `🚖 *${brand.toUpperCase()} - NEW TRIP AVAILABLE* 🚖
-Booking: *${bid}*
+      return `🚖 *${brand.toUpperCase()} - NEW OPEN TRIP DISPATCH* 🚖
+Booking Ref: *#${bid}*
 
 📍 *Route:* ${pickup} ➔ ${drop}
 📅 *Date & Time:* ${date} at ${time}
-🚗 *Vehicle Required:* ${vehicle} (${tripType})
-${data.distanceKm ? `📏 *Distance:* ~${data.distanceKm} KM\n` : ''}${fareBreakdown ? `${fareBreakdown}\n` : ''}
-⚡ *Interested Drivers/Vendors:*
-Reply / Call immediately to claim: tel:${brandPhone}
-Claim via Driver App or Helpline. First come, first served!`;
+🚗 *Vehicle Type:* ${vehicle} (${tripType})
+${data.distanceKm ? `📏 *Distance Limit:* ~${data.distanceKm} KM\n` : ''}${fareBreakdown ? `${fareBreakdown}\n` : ''}
+⚡ *1-Click Web Claim (No App Required):*
+👉 ${driverClaimUrl}
+
+📞 *Or Claim via Helpline:* tel:${brandPhone}
+_First confirmed driver partner gets instant assignment!_`;
     }
 
     case 'advance_request': {

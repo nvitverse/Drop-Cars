@@ -108,11 +108,16 @@ export default function VehicleOwnersScreen() {
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
 
+  const ownersCountRef = React.useRef(0);
+  useEffect(() => {
+    ownersCountRef.current = vehicleOwners.length;
+  }, [vehicleOwners.length]);
+
   const fetchVehicleOwners = useCallback(
     async (reset = true, search = activeSearch, status = statusTab, tier = tierTab) => {
       try {
         setError(null);
-        const skip = reset ? 0 : vehicleOwners.length;
+        const skip = reset ? 0 : ownersCountRef.current;
         if (!reset) setLoadingMore(true);
         else setLoading(true);
 
@@ -127,16 +132,16 @@ export default function VehicleOwnersScreen() {
         const newOwners = Array.isArray(data?.vehicle_owners) ? data.vehicle_owners : [];
         setVehicleOwners((prev) => (reset ? newOwners : [...prev, ...newOwners]));
         setHasMore(newOwners.length === PAGE_SIZE);
-        setTotalCount(typeof data?.total_count === 'number' ? data.total_count : newOwners.length);
+        setTotalCount(typeof data?.total_count === 'number' ? data.total_count : (reset ? newOwners.length : ownersCountRef.current + newOwners.length));
       } catch (err) {
-        if (reset) setError('Failed to load fleet owners. Pull to refresh.');
+        if (reset) setError('Failed to load fleet partners. Pull to refresh.');
       } finally {
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
       }
     },
-    [activeSearch, statusTab, tierTab, vehicleOwners.length]
+    [activeSearch, statusTab, tierTab]
   );
 
   useEffect(() => {
@@ -161,7 +166,7 @@ export default function VehicleOwnersScreen() {
   };
 
   const handleLoadMore = () => {
-    if (!loadingMore && !loading && hasMore) {
+    if (!loadingMore && !loading && hasMore && vehicleOwners.length >= PAGE_SIZE) {
       fetchVehicleOwners(false, activeSearch, statusTab, tierTab);
     }
   };
@@ -436,13 +441,13 @@ export default function VehicleOwnersScreen() {
             </TouchableOpacity>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.headerTitle}>Vehicle Owners</Text>
+                <Text style={styles.headerTitle}>Fleet Directory</Text>
                 <View style={styles.headerCountBadge}>
                   <Text style={styles.headerCountText}>{totalCount}</Text>
                 </View>
               </View>
               <Text style={styles.headerSubtitle}>
-                Fleet owners, verified cars & driver directories
+                Fleet partners, verified cars & driver directories
               </Text>
             </View>
           </View>
@@ -591,21 +596,35 @@ export default function VehicleOwnersScreen() {
             />
           }
           onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
+          onEndReachedThreshold={0.15}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <EmptyState
-              icon={<Car size={40} color={themeColors.textMuted} />}
-              title={activeSearch || tierTab !== 'all' || statusTab !== 'all' ? 'No matching fleet owners' : 'No vehicle owners registered'}
-              message={activeSearch ? `No results for "${activeSearch}"` : 'Vehicle owner accounts will show up here.'}
-            />
+            error ? (
+              <View style={{ padding: 24, alignItems: 'center', gap: 10 }}>
+                <Car size={40} color={colors.primary} />
+                <Text style={{ color: themeColors.text, fontSize: 15, fontWeight: '800' }}>Unable to load Fleet Directory</Text>
+                <Text style={{ color: themeColors.textSecondary, fontSize: 12.5, textAlign: 'center' }}>{error}</Text>
+                <TouchableOpacity
+                  onPress={() => fetchVehicleOwners(true, activeSearch, statusTab, tierTab)}
+                  style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, marginTop: 4 }}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Tap to Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <EmptyState
+                icon={<Car size={40} color={themeColors.textMuted} />}
+                title={activeSearch || tierTab !== 'all' || statusTab !== 'all' ? 'No matching fleet partners' : 'No fleet partners registered'}
+                message={activeSearch ? `No results for "${activeSearch}"` : 'Fleet partner accounts will show up here.'}
+              />
+            )
           }
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.footerLoaderWrap}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={[styles.footerLoaderText, { color: themeColors.textSecondary }]}>
-                  Loading more fleet owners...
+                  Loading more fleet partners...
                 </Text>
               </View>
             ) : hasMore && vehicleOwners.length > 0 ? (

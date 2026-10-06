@@ -21,6 +21,16 @@ const ALIASES: [RegExp, string][] = [
   [/\b(vizag|visakhapatnam|vishakhapatnam)\b/g, 'visakhapatnam'],
   [/\b(coimbatore|kovai)\b/g, 'coimbatore'],
   [/\b(kanyakumari|cape comorin)\b/g, 'kanyakumari'],
+  [/\b(singarapettai|singarapet|singarapetta|singarapettay|singarappettai)\b/g, 'singarapettai'],
+  [/\b(nallavanpalayam|nalavanpalayam|nallavan palayam|nalavan palayam|nallavanpalayam dist)\b/g, 'nallavanpalayam'],
+  [/\b(perumbakkam|perumbakam|perumpakkam)\b/g, 'perumbakkam'],
+  [/\b(tirupattur|tiruppattur|thirupattur|thiruppathur|tirupathur)\b/g, 'tirupattur'],
+  [/\b(tiruvannamalai|thiruvannamalai|tvmalai)\b/g, 'tiruvannamalai'],
+  [/\b(sathanur|sathanur dam|sathanur reservoir)\b/g, 'sathanur'],
+  [/\b(chengam|sengam)\b/g, 'chengam'],
+  [/\b(cheyyar|seyyar)\b/g, 'cheyyar'],
+  [/\b(polur|poloor)\b/g, 'polur'],
+  [/\b(vandavasi|wandiwash)\b/g, 'vandavasi'],
   [/\b(railway station|rly station|junction|jn)\b/g, 'station'],
   [/\b(bus stand|bus stop|busstand|bus terminus|bus terminal)\b/g, 'bus stand'],
   [/\b(intl|international)\b/g, 'international'],
@@ -76,8 +86,10 @@ export function scorePlace(q: string, place: string): number | null {
       if (budget > 0) {
         // compare against the word, and against a same-length prefix of it (a half-typed word with a typo)
         const d = Math.min(editDistance(tok, w), editDistance(tok, w.slice(0, tok.length)));
-        // a typo-only match counts as WEAK (x10) - see rankPlaces
-        if (d <= budget) best = Math.min(best, d * 10);
+        if (d <= budget) {
+          const penalty = d <= 1 ? 0.8 : d <= 2 ? 1.5 : d * 4;
+          best = Math.min(best, penalty);
+        }
       }
     }
     if (best === Infinity) return null;
@@ -90,7 +102,7 @@ export function scorePlace(q: string, place: string): number | null {
  *  Typo-only matches are WEAK: they are returned only while the query is too short for an online lookup. Otherwise an
  *  empty result lets the picker's online lookup run - that is what finds villages / hill stations that are not in our
  *  list yet (Polur, Vedaranyam, Munnar ...) instead of showing a look-alike town ("Mannargudi") for them. */
-export function rankPlaces(q: string, places: string[], limit = 12): string[] {
+export function rankPlaces(q: string, places: string[], limit = 16): string[] {
   const strong: { p: string; s: number }[] = [];
   const weak: { p: string; s: number }[] = [];
   for (const p of places) {
@@ -98,7 +110,7 @@ export function rankPlaces(q: string, places: string[], limit = 12): string[] {
     if (s === null) continue;
     (s < 10 ? strong : weak).push({ p, s });
   }
-  const pool = strong.length === 0 && q.trim().length < 4 ? weak : strong;
+  const pool = strong.length > 0 ? [...strong, ...weak.slice(0, 6)] : weak;
   pool.sort((a, b) => a.s - b.s || a.p.length - b.p.length || a.p.localeCompare(b.p));
   const seen = new Set<string>();
   const out: string[] = [];

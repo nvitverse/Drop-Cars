@@ -144,15 +144,23 @@ export const MASTER_SOUTH_INDIAN_DESTINATIONS: string[] = [
   'Ulundurpettai, Kallakurichi, Tamil Nadu',
   'Tirukoilur, Kallakurichi, Tamil Nadu',
   'Kalvarayan Hills, Kallakurichi, Tamil Nadu',
-  'Chengam, Tiruvannamalai, Tamil Nadu',
-  'Polur, Tiruvannamalai, Tamil Nadu',
-  'Arani, Tiruvannamalai, Tamil Nadu',
-  'Vandavasi, Tiruvannamalai, Tamil Nadu',
-  'Cheyyar, Tiruvannamalai, Tamil Nadu',
-  'Kalasapakkam, Tiruvannamalai, Tamil Nadu',
-  'Kilpennathur, Tiruvannamalai, Tamil Nadu',
+  'Chengam, Tiruvannamalai Dist, Tamil Nadu',
+  'Polur, Tiruvannamalai Dist, Tamil Nadu',
+  'Arani, Tiruvannamalai Dist, Tamil Nadu',
+  'Vandavasi, Tiruvannamalai Dist, Tamil Nadu',
+  'Cheyyar, Tiruvannamalai Dist, Tamil Nadu',
+  'Kalasapakkam, Tiruvannamalai Dist, Tamil Nadu',
+  'Kilpennathur, Tiruvannamalai Dist, Tamil Nadu',
+  'Nallavanpalayam, Tiruvannamalai Dist, Tamil Nadu',
+  'Naidumangalam, Tiruvannamalai Dist, Tamil Nadu',
+  'Veraiyur, Tiruvannamalai Dist, Tamil Nadu',
+  'Singarapettai, Tirupattur / Krishnagiri Dist, Tamil Nadu',
+  'Perumbakkam, Chennai, Tamil Nadu',
+  'Perumbakkam, Tiruvannamalai Dist, Tamil Nadu',
+  'Tirupattur, Tirupattur Dist, Tamil Nadu',
+  'Tirupattur, Sivaganga Dist, Tamil Nadu',
+  'Tirupattur, Trichy Dist, Tamil Nadu',
   'Jawadhu Hills (Jamunamarathur), Tiruvannamalai, Tamil Nadu',
-  'Naidumangalam, Tiruvannamalai, Tamil Nadu',
   'Chidambaram, Cuddalore, Tamil Nadu',
   'Virudhachalam, Cuddalore, Tamil Nadu',
   'Panruti, Cuddalore, Tamil Nadu',
@@ -526,6 +534,25 @@ export async function addRecentSearch(loc: string): Promise<void> {
   } catch {}
 }
 
+const NON_OPERATIONAL_STATES_REGEX = /\b(jharkhand|arunachal pradesh|bihar|madhya pradesh|rajasthan|haryana|punjab|uttar pradesh|uttarakhand|himachal|gujarat|odisha|west bengal|manipur|nagaland|mizoram|tripura|meghalaya|sikkim|chhattisgarh|jammu|kashmir|ladakh|assam)\b/i;
+
+const KNOWN_TOWN_DISTRICTS: Record<string, string> = {
+  nallavanpalayam: 'Tiruvannamalai Dist, Tamil Nadu',
+  singarapettai: 'Tirupattur / Krishnagiri Dist, Tamil Nadu',
+  sathanur: 'Tiruvannamalai Dist, Tamil Nadu',
+  perumbakkam: 'Chennai / Tiruvannamalai Dist, Tamil Nadu',
+  naidumangalam: 'Tiruvannamalai Dist, Tamil Nadu',
+  chengam: 'Tiruvannamalai Dist, Tamil Nadu',
+  polur: 'Tiruvannamalai Dist, Tamil Nadu',
+  arani: 'Tiruvannamalai Dist, Tamil Nadu',
+  cheyyar: 'Tiruvannamalai Dist, Tamil Nadu',
+  vandavasi: 'Tiruvannamalai Dist, Tamil Nadu',
+  kalasapakkam: 'Tiruvannamalai Dist, Tamil Nadu',
+  kilpennathur: 'Tiruvannamalai Dist, Tamil Nadu',
+  veraiyur: 'Tiruvannamalai Dist, Tamil Nadu',
+  tirupattur: 'Tirupattur Dist, Tamil Nadu',
+};
+
 async function loadCities(): Promise<string[]> {
   if (citiesCache) return citiesCache;
   if (inflight) return inflight;
@@ -534,7 +561,9 @@ async function loadCities(): Promise<string[]> {
     const saved = await loadSavedLocations();
     try {
       const remoteList = await apiService.makeRequest<string[]>('/cities/public');
-      const arr = Array.isArray(remoteList) ? remoteList : [];
+      const arr = Array.isArray(remoteList)
+        ? remoteList.filter((c) => typeof c === 'string' && !NON_OPERATIONAL_STATES_REGEX.test(c))
+        : [];
       const merged = Array.from(new Set([...saved, ...MASTER_SOUTH_INDIAN_DESTINATIONS, ...arr]));
       citiesCache = merged;
       return merged;
@@ -554,7 +583,11 @@ async function loadCities(): Promise<string[]> {
 function formatPlaceParts(place: string): { main_text: string; secondary_text: string } {
   const parts = place.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length === 0) return { main_text: place, secondary_text: '' };
-  if (parts.length === 1) return { main_text: parts[0], secondary_text: 'Tamil Nadu / India' };
+  if (parts.length === 1) {
+    const key = parts[0].toLowerCase();
+    const known = KNOWN_TOWN_DISTRICTS[key];
+    return { main_text: parts[0], secondary_text: known || 'Tamil Nadu, India' };
+  }
   return {
     main_text: parts[0],
     secondary_text: parts.slice(1).join(', '),
@@ -591,9 +624,10 @@ export async function getCitySuggestions(input: string): Promise<PlacePrediction
 async function searchOsmNominatim(query: string): Promise<PlacePrediction[]> {
   try {
     const cleanQ = query.trim();
+    // Bias bounding box to South India (Tamil Nadu, Karnataka, Andhra Pradesh, Kerala)
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-      cleanQ + ', India'
-    )}&format=json&addressdetails=1&limit=6&countrycodes=in`;
+      cleanQ
+    )}&format=json&addressdetails=1&limit=8&countrycodes=in&viewbox=76.0,14.5,80.5,8.0&bounded=0`;
     const resp = await fetch(url, {
       headers: {
         'Accept': 'application/json',
@@ -617,10 +651,17 @@ async function searchOsmNominatim(query: string): Promise<PlacePrediction[]> {
         addr.county ||
         addr.district ||
         item.display_name.split(',')[0];
-      const state = addr.state || 'India';
-      const district = addr.state_district || addr.county || '';
-      const secondary = [district, state].filter(Boolean).join(', ') || 'India';
-      const fullDesc = `${name}, ${secondary}`;
+      const state = addr.state || 'Tamil Nadu';
+      const rawDistrict = addr.state_district || addr.county || addr.district || '';
+      const district = rawDistrict && !name.toLowerCase().includes(rawDistrict.toLowerCase())
+        ? `${rawDistrict} Dist`
+        : '';
+      const secondary = [district, state].filter(Boolean).join(', ') || 'Tamil Nadu, India';
+      const fullDesc = district ? `${name}, ${district}, ${state}` : `${name}, ${state}`;
+
+      const isSouthIndia = ['tamil nadu', 'puducherry', 'pondicherry', 'karnataka', 'andhra pradesh', 'kerala', 'telangana'].some(
+        (s) => state.toLowerCase().includes(s)
+      );
 
       predictions.push({
         place_id: `osm_${item.place_id || Math.random()}`,
@@ -629,8 +670,12 @@ async function searchOsmNominatim(query: string): Promise<PlacePrediction[]> {
           main_text: name,
           secondary_text: secondary,
         },
-      });
+        _priority: isSouthIndia ? 1 : 2,
+      } as any);
     }
+
+    // Sort South Indian locations first
+    predictions.sort((a: any, b: any) => (a._priority || 2) - (b._priority || 2));
     return predictions;
   } catch (e) {
     console.warn('Nominatim lookup error:', e);

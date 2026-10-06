@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -155,33 +156,62 @@ export default function CustomersScreen() {
     });
   };
 
+  const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
+  const whatsappCustomer = (phone: string) => Linking.openURL(`https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}`);
+  const createBookingForCustomer = (item: Customer) => {
+    router.push({
+      pathname: '/create-booking',
+      params: {
+        customerName: item.full_name,
+        customerPhone: item.primary_number,
+      },
+    } as any);
+  };
+
   const renderCustomerItem = ({ item }: { item: Customer }) => {
     const segment = item.segment || 'INDIVIDUAL';
+    const isCorporate = segment === 'CORPORATE';
+    const isB2B = segment === 'B2B';
+
     return (
       <Card
         onPress={() => openCustomer(item)}
-        style={styles.customerCard}
+        style={[styles.customerCard, { borderColor: isCorporate ? '#F59E0B60' : isB2B ? '#3B82F660' : themeColors.border }]}
       >
         <View style={styles.cardHeader}>
-          <View style={[styles.avatarBox, { backgroundColor: themeColors.primaryLight }]}>
-            {segment === 'INDIVIDUAL' ? (
-              <UserCheck size={18} color={themeColors.primary} />
+          <View style={[styles.avatarBox, { backgroundColor: isCorporate ? '#FEF3C7' : isB2B ? '#DBEAFE' : themeColors.primaryLight }]}>
+            {isCorporate ? (
+              <Building2 size={18} color="#D97706" />
+            ) : isB2B ? (
+              <Building2 size={18} color="#2563EB" />
             ) : (
-              <Building2 size={18} color={themeColors.primary} />
+              <UserCheck size={18} color={themeColors.primary} />
             )}
           </View>
           <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={[styles.nameText, { color: themeColors.text }]} numberOfLines={1}>{item.full_name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={[styles.nameText, { color: themeColors.text }]} numberOfLines={1}>{item.full_name}</Text>
+              {isCorporate && (
+                <View style={[styles.microBadge, { backgroundColor: '#F59E0B20', borderColor: '#F59E0B' }]}>
+                  <Text style={[styles.microBadgeText, { color: '#D97706' }]}>Corporate</Text>
+                </View>
+              )}
+              {isB2B && (
+                <View style={[styles.microBadge, { backgroundColor: '#3B82F620', borderColor: '#3B82F6' }]}>
+                  <Text style={[styles.microBadgeText, { color: '#2563EB' }]}>B2B</Text>
+                </View>
+              )}
+            </View>
             {!!item.company_name && (
-              <Text style={[styles.companyText, { color: themeColors.textSecondary }]} numberOfLines={1}>{item.company_name}</Text>
+              <Text style={[styles.companyText, { color: themeColors.textSecondary }]} numberOfLines={1}>🏢 {item.company_name}</Text>
             )}
             <View style={styles.metaRow}>
-              <Phone size={12} color={themeColors.textMuted} />
+              <Phone size={11} color={themeColors.textMuted} />
               <Text style={[styles.phoneText, { color: themeColors.textSecondary }]}>{item.primary_number}</Text>
             </View>
             {!!item.email && (
               <View style={styles.metaRow}>
-                <Mail size={12} color={themeColors.textMuted} />
+                <Mail size={11} color={themeColors.textMuted} />
                 <Text style={[styles.phoneText, { color: themeColors.textMuted }]} numberOfLines={1}>{item.email}</Text>
               </View>
             )}
@@ -195,6 +225,39 @@ export default function CustomersScreen() {
               variant={SEGMENT_VARIANT[segment]}
               size="sm"
             />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick action bar */}
+        <View style={[styles.cardActions, { borderTopColor: themeColors.border }]}>
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { backgroundColor: '#05966915', borderColor: '#05966940' }]}
+            onPress={() => callCustomer(item.primary_number)}
+          >
+            <Phone size={13} color="#059669" />
+            <Text style={[styles.quickActionText, { color: '#059669' }]}>Call</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { backgroundColor: '#16A34A15', borderColor: '#16A34A40' }]}
+            onPress={() => whatsappCustomer(item.primary_number)}
+          >
+            <Sparkles size={13} color="#16A34A" />
+            <Text style={[styles.quickActionText, { color: '#16A34A' }]}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { backgroundColor: themeColors.primaryLight, borderColor: themeColors.primary + '40' }]}
+            onPress={() => createBookingForCustomer(item)}
+          >
+            <Text style={[styles.quickActionText, { color: themeColors.primary }]}>+ Book Trip</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border }]}
+            onPress={() => openCustomer(item)}
+          >
+            <Text style={[styles.quickActionText, { color: themeColors.textSecondary }]}>Details ›</Text>
           </TouchableOpacity>
         </View>
       </Card>
@@ -211,12 +274,20 @@ export default function CustomersScreen() {
             <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text>
           </View>
         </View>
-        {newCustomersToday != null && newCustomersToday > 0 && (
-          <View style={[styles.newTodayBadge, { backgroundColor: themeColors.successLight }]}>
-            <Sparkles size={11} color={themeColors.success} />
-            <Text style={[styles.newTodayText, { color: themeColors.success }]}>+{newCustomersToday} today</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {newCustomersToday != null && newCustomersToday > 0 && (
+            <View style={[styles.newTodayBadge, { backgroundColor: themeColors.successLight }]}>
+              <Sparkles size={11} color={themeColors.success} />
+              <Text style={[styles.newTodayText, { color: themeColors.success }]}>+{newCustomersToday} today</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: themeColors.primary }]}
+            onPress={() => router.push('/create-b2b-client' as any)}
+          >
+            <Text style={styles.headerBtnText}>+ B2B Client</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Segment Tabs */}
@@ -385,6 +456,49 @@ const styles = StyleSheet.create({
   phoneText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  microBadge: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  microBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  quickActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  quickActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  headerBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBtnText: {
+    color: '#FFF',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   footerLoader: {
     paddingVertical: 12,

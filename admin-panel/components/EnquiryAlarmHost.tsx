@@ -12,13 +12,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';
-import { BellRing, CheckCircle2, Phone, MapPin, Calendar, IndianRupee, Globe, Clock, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react-native';
+import { BellRing, CheckCircle2, Phone, MapPin, Calendar, IndianRupee, Globe, Clock, ChevronRight, ChevronLeft, Sparkles, X } from 'lucide-react-native';
 import { enquiriesApi, WebsiteEnquiry } from '@/services/enquiriesApi';
 import { apiService } from '@/services/api';
 import { playAlarmSound, stopAlarmSound, forceStopAlarmSound, playMildNotificationSound } from '@/utils/alarmSound';
 import { alertHealth } from '@/services/alertHealth';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import { useTheme } from '@/context/ThemeContext';
+import { useStaffDuty } from '@/context/StaffDutyContext';
 import { parseIstTimestamp, formatEnquiryReceivedTime, formatPickupDateTime } from '@/utils/performance';
 
 // Legacy keys preserved for backwards compatibility
@@ -32,6 +33,8 @@ const DISMISSED_STORAGE_KEY = 'dropcars_admin_enquiry_dismissed_v2';
 const DEFAULT_RING_SECONDS = 15;
 const DEFAULT_REPEAT_MINUTES = 3;
 const FRESH_ALERT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window for new lead instant alarm
+
+const SNOOZED_STORAGE_KEY = 'dropcars_enquiry_snoozed_until_v1';
 
 // Event listener mechanism for "Test Alarm" button
 type AlarmTestListener = (fakeEnquiry: WebsiteEnquiry) => void;
@@ -84,6 +87,30 @@ export default function EnquiryAlarmHost() {
   const [snoozedUntil, setSnoozedUntil] = useState<Record<number, number>>({});
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
+
+  const { isOnDuty, isOnBreak } = useStaffDuty();
+
+  // Load persisted snooze map on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(SNOOZED_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const now = Date.now();
+          const valid: Record<number, number> = {};
+          if (parsed && typeof parsed === 'object') {
+            Object.entries(parsed).forEach(([idStr, timestamp]) => {
+              if (typeof timestamp === 'number' && timestamp > now) {
+                valid[Number(idStr)] = timestamp;
+              }
+            });
+          }
+          setSnoozedUntil(valid);
+        }
+      } catch {}
+    })();
+  }, []);
 
   // Track when staff was inside CRM / Leads screen
   const isInsideLeads = pathname === '/enquiries' || (pathname.includes('orders') && (params?.segment === 'crm' || params?.tab === 'leads' || params?.tab === 'crm'));
@@ -205,8 +232,9 @@ export default function EnquiryAlarmHost() {
 
   // 6. Polling loop for active unacknowledged enquiries (every 10s)
   useEffect(() => {
-    if (!isAuth || pathname === '/login' || !enabledNow) {
+    if (!isAuth || pathname === '/login' || !enabledNow || !isOnDuty || isOnBreak) {
       stopAlarmSound('enquiry');
+      forceStopAlarmSound();
       setUnackQueue([]);
       return;
     }
@@ -309,12 +337,17 @@ export default function EnquiryAlarmHost() {
       isMounted = false;
       if (timer) clearInterval(timer);
     };
-  }, [snoozedUntil, isAuth, pathname, enabledNow, isInsideLeads]);
+  }, [snoozedUntil, isAuth, pathname, enabledNow, isInsideLeads, isOnDuty, isOnBreak]);
 
   const activeEnquiry = unackQueue[currentIndex] || unackQueue[0] || null;
 
   const snoozeEnquiry = (id: number, resumeInMs: number) => {
-    setSnoozedUntil((prev) => ({ ...prev, [id]: Date.now() + resumeInMs }));
+    const nextSnoozeUntil = Date.now() + resumeInMs;
+    setSnoozedUntil((prev) => {
+      const updated = { ...prev, [id]: nextSnoozeUntil };
+      AsyncStorage.setItem(SNOOZED_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     setUnackQueue((prev) => {
       const remaining = prev.filter((e) => e.id !== id);
       if (remaining.length === 0) forceStopAlarmSound();
@@ -376,7 +409,7 @@ export default function EnquiryAlarmHost() {
     router.push({ pathname: '/(tabs)/orders', params: { segment: 'crm' } } as any);
   };
 
-  if (!activeEnquiry) return null;
+  if (!isOnDuty || isOnBreak || !activeEnquiry) return null;
 
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -394,7 +427,7 @@ export default function EnquiryAlarmHost() {
           {/* Header Banner */}
           <View style={styles.headerBanner}>
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <BellRing size={26} color="#FFFFFF" />
+              <BellRing size={24} color="#FFFFFF" />
             </Animated.View>
             <View style={{ flex: 1 }}>
               <Text style={styles.headerTitle}>
@@ -407,6 +440,15 @@ export default function EnquiryAlarmHost() {
             <View style={styles.timerBadge}>
               <Text style={styles.timerText}>{formatTimer(elapsedSecs)}</Text>
             </View>
+            {/* Top-Right Dismiss / Snooze [X] Button */}
+            <TouchableOpacity
+              onPress={() => snoozeEnquiry(activeEnquiry.id, 10 * 60 * 1000)}
+              style={styles.closeBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Dismiss Alert for 10m"
+            >
+              <X size={18} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
 
           {/* Details Box */}
@@ -591,6 +633,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  closeBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   contentBox: {
     padding: 16,

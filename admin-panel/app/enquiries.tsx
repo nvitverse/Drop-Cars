@@ -790,8 +790,8 @@ export default function EnquiriesScreen({ isTab = false, hideHeader = false, ini
     setCustomizeTarget(enquiry);
     setEditPickup(enquiry.pickup || '');
     setEditDrop(enquiry.drop_location || '');
-    const normTrip = normalizeTripCategory(enquiry.trip_type ?? undefined);
-    const normVehicle = normalizeVehicleCategory(enquiry.vehicle_type ?? undefined);
+    const normTrip = normalizeTripCategory(enquiry.trip_type || undefined);
+    const normVehicle = normalizeVehicleCategory(enquiry.vehicle_type || undefined);
     setEditTripType(normTrip);
     setEditVehicleType(normVehicle);
     setEditTravelDate(enquiry.travel_date || '');

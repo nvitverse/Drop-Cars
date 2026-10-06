@@ -24,6 +24,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Clock,
+  MessageSquare,
 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { apiService } from '@/services/api';
@@ -55,6 +56,9 @@ export default function LiveFleetMapScreen() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const [cityFilter, setCityFilter] = useState<string>('ALL');
+  const CITIES = ['ALL', 'Chennai', 'Tiruvannamalai', 'Coimbatore', 'Salem', 'Bangalore', 'Madurai', 'Trichy', 'Pondicherry', 'Vellore', 'Hosur'];
+
   const loadFleetData = async () => {
     try {
       setRefreshing(true);
@@ -76,23 +80,18 @@ export default function LiveFleetMapScreen() {
     Linking.openURL(`tel:${phone}`);
   };
 
-  // There is no manual-dispatch screen in this app: assign-car.tsx is the
-  // "register a new car under a vehicle owner" form and never reads a
-  // driver_id param, so this button used to route to it and silently do
-  // nothing useful with the driver we picked here. Manual assignment
-  // (backend: POST /orders/{order_id}/manual-assign) needs a specific
-  // ORDER to assign, not just a driver - this screen only has a driver, no
-  // order context - so a real one-click "dispatch this driver" action
-  // can't be wired from here without a new order-selection step. Until
-  // that exists, route staff to the Bookings list pre-filtered to live/
-  // unassigned orders so they can pick an order and assign a driver to it
-  // there, instead of implying a working dispatch action that isn't real.
+  const openWhatsApp = (phone: string) => {
+    const clean = phone.replace(/\D/g, '').slice(-10);
+    Linking.openURL(`https://wa.me/91${clean}`);
+  };
+
   const goToUnassignedOrders = () => {
     router.push('/(tabs)/orders?tab=live' as any);
   };
 
   const filteredFleet = fleet.filter((d) => {
     const matchesStatus = statusFilter === 'ALL' || d.status === statusFilter;
+    const matchesCity = cityFilter === 'ALL' || (d.city || '').toLowerCase().includes(cityFilter.toLowerCase());
     const matchesSearch =
       !searchQuery ||
       d.driver_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -100,7 +99,7 @@ export default function LiveFleetMapScreen() {
       d.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.vehicle_number.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesCity && matchesSearch;
   });
 
   const availableCount = fleet.filter((f) => f.status === 'AVAILABLE').length;
@@ -183,6 +182,24 @@ export default function LiveFleetMapScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {/* City filter chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipScroll, { marginTop: 4 }]}>
+            {CITIES.map((c) => (
+              <TouchableOpacity
+                key={c}
+                style={[
+                  styles.chip,
+                  { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+                  cityFilter === c && { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+                ]}
+                onPress={() => setCityFilter(c)}>
+                <Text style={[styles.chipText, { color: themeColors.text }, cityFilter === c && { color: '#FFF' }]}>
+                  {c === 'ALL' ? '📍 All Locations' : `📍 ${c}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Drivers List Grid */}
@@ -245,13 +262,13 @@ export default function LiveFleetMapScreen() {
                 </Text>
                 {driver.latitude != null && driver.longitude != null ? (
                   <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${driver.latitude},${driver.longitude}`)}>
-                    <Text style={[styles.subDetailText, { color: themeColors.primary, fontWeight: '700' }]}>
-                      📍 Open live location{(driver as any).location_updated_at ? ` · ${new Date((driver as any).location_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                    <Text style={[styles.subDetailText, { color: '#2563EB', fontWeight: '800' }]}>
+                      📍 Open live GPS{(driver as any).location_updated_at ? ` · ${new Date((driver as any).location_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
                     </Text>
                   </TouchableOpacity>
                 ) : (
                   <Text style={[styles.subDetailText, { color: themeColors.textMuted }]}>
-                    📍 Location is shared only during an active trip
+                    📍 Location updates live during active trips
                   </Text>
                 )}
               </View>
@@ -259,12 +276,17 @@ export default function LiveFleetMapScreen() {
               <View style={styles.cardActions}>
                 <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#10B981' }]} onPress={() => openPhone(driver.phone)}>
                   <Phone size={14} color="#FFF" />
-                  <Text style={styles.actionBtnText}>Call Driver</Text>
+                  <Text style={styles.actionBtnText}>Call</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#16A34A' }]} onPress={() => openWhatsApp(driver.phone)}>
+                  <MessageSquare size={14} color="#FFF" />
+                  <Text style={styles.actionBtnText}>WhatsApp</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#4F46E5' }]} onPress={goToUnassignedOrders}>
                   <UserCheck size={14} color="#FFF" />
-                  <Text style={styles.actionBtnText}>View Pending Bookings</Text>
+                  <Text style={styles.actionBtnText}>Assign Booking</Text>
                 </TouchableOpacity>
               </View>
             </View>

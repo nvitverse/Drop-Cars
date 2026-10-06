@@ -281,71 +281,60 @@ export default function CarsScreen() {
   };
 
   const renderCarItem = ({ item }: { item: CarItem }) => {
-    const isUpdating = updatingStatus.has(item.id);
-    const toggleValue = isActiveStatus(item.car_status);
-    
     return (
-      <Card
-        style={styles.carCard}
+      <TouchableOpacity
+        activeOpacity={0.88}
+        onPress={() => handleInfoPress(item)}
       >
-        <View style={styles.cardHeader}>
-          <View style={[styles.avatarBox, { backgroundColor: themeColors.primaryLight }]}>
-            <Car size={18} color={themeColors.primary} />
-          </View>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.carName, { color: themeColors.text }]} numberOfLines={1}>{item.car_name}</Text>
-              <StatusPill
-                label={getStatusLabel(item.car_status)}
-                variant={getStatusVariant(item.car_status)}
-                size="sm"
-              />
+        <Card style={styles.carCard}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.avatarBox, { backgroundColor: item.car_status === 'ONLINE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.12)' }]}>
+              <Car size={20} color={item.car_status === 'ONLINE' ? '#10B981' : themeColors.primary} />
             </View>
-            <Text style={[styles.carNumber, { color: themeColors.primary }]}>{item.car_number}</Text>
-            <Text style={[styles.carType, { color: themeColors.textSecondary }]}>{formatCarType(item.car_type)} • {item.year_of_the_car}</Text>
-            {!!item.rating_count && (
-              <View style={styles.ratingRow}>
-                <Star size={11} color="#F59E0B" fill="#F59E0B" />
-                <Text style={[styles.ratingText, { color: themeColors.textSecondary }]}>{(item.rating_avg || 0).toFixed(1)} ({item.rating_count})</Text>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.carName, { color: themeColors.text }]} numberOfLines={1}>{item.car_name}</Text>
+                <StatusPill
+                  label={getStatusLabel(item.car_status)}
+                  variant={getStatusVariant(item.car_status)}
+                  size="sm"
+                />
               </View>
-            )}
-            <Text style={[styles.ownerName, { color: themeColors.textMuted }]} numberOfLines={1}>Owner: {item.vehicle_owner_name}</Text>
-          </View>
-
-          <View style={styles.rightActions}>
-            <Switch
-              value={toggleValue}
-              onValueChange={(val) => handleToggleStatus(item, val)}
-              disabled={isUpdating}
-              trackColor={{ false: themeColors.border, true: themeColors.success }}
-              thumbColor={themeColors.surface}
-              style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
-            />
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: themeColors.surfaceAlt }]}
-                onPress={() => handleInfoPress(item)}
-              >
-                <Info size={13} color={themeColors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: themeColors.surfaceAlt }]}
-                onPress={() => handleDocumentPress(item)}
-              >
-                <FileText size={13} color={themeColors.success} />
-              </TouchableOpacity>
-              {isOwner && (
-                <TouchableOpacity
-                  style={[styles.smallBtn, { backgroundColor: themeColors.errorLight }]}
-                  onPress={() => handleDeleteCar(item)}
-                >
-                  <Trash2 size={13} color={themeColors.error} />
-                </TouchableOpacity>
+              <Text style={[styles.carNumber, { color: themeColors.primary }]}>{item.car_number}</Text>
+              <Text style={[styles.carType, { color: themeColors.textSecondary }]}>{formatCarType(item.car_type)} • {item.year_of_the_car}</Text>
+              {!!item.rating_count && (
+                <View style={styles.ratingRow}>
+                  <Star size={11} color="#F59E0B" fill="#F59E0B" />
+                  <Text style={[styles.ratingText, { color: themeColors.textSecondary }]}>{(item.rating_avg || 0).toFixed(1)} ({item.rating_count})</Text>
+                </View>
               )}
+              <Text style={[styles.ownerName, { color: themeColors.textMuted }]} numberOfLines={1}>Owner: {item.vehicle_owner_name}</Text>
+            </View>
+
+            <View style={styles.rightActions}>
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5' }]}
+                  onPress={(e) => { e.stopPropagation(); handleDocumentPress(item); }}
+                >
+                  <FileText size={14} color="#10B981" />
+                </TouchableOpacity>
+                {isOwner && (
+                  <TouchableOpacity
+                    style={[styles.smallBtn, { backgroundColor: themeColors.errorLight }]}
+                    onPress={(e) => { e.stopPropagation(); handleDeleteCar(item); }}
+                  >
+                    <Trash2 size={14} color={themeColors.error} />
+                  </TouchableOpacity>
+                )}
+                <View style={{ padding: 4 }}>
+                  <ChevronRight size={18} color={themeColors.textMuted} />
+                </View>
+              </View>
             </View>
           </View>
-        </View>
-      </Card>
+        </Card>
+      </TouchableOpacity>
     );
   };
 
@@ -451,9 +440,45 @@ export default function CarsScreen() {
                   <Text style={[styles.infoLabel, { color: themeColors.textMuted }]}>Owner</Text>
                   <Text style={[styles.infoValue, { color: themeColors.text }]}>{selectedCar.vehicle_owner_name}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: themeColors.textMuted }]}>Status</Text>
-                  <Text style={[styles.infoValue, { color: themeColors.text }]}>{getStatusLabel(selectedCar.car_status)}</Text>
+                <View style={[styles.infoRow, { alignItems: 'center' }]}>
+                  <Text style={[styles.infoLabel, { color: themeColors.textMuted }]}>Verification Status</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isActiveStatus(selectedCar.car_status) ? '#10B981' : '#F59E0B' }}>
+                      {getStatusLabel(selectedCar.car_status)}
+                    </Text>
+                    <Switch
+                      value={isActiveStatus(selectedCar.car_status)}
+                      onValueChange={(val) => {
+                        handleToggleStatus(selectedCar, val);
+                        setSelectedCar(prev => prev ? { ...prev, car_status: val ? 'ONLINE' : 'PROCESSING' } : null);
+                      }}
+                      trackColor={{ false: themeColors.border, true: '#10B981' }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+                </View>
+
+                {/* Direct Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      backgroundColor: themeColors.primary,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                    }}
+                    onPress={() => {
+                      setShowInfoModal(false);
+                      handleDocumentPress(selectedCar);
+                    }}
+                  >
+                    <FileText size={15} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>Car Documents</Text>
+                  </TouchableOpacity>
                 </View>
               </ScrollView>
             )}

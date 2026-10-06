@@ -41,7 +41,11 @@ import ThemeToggle from '@/components/ThemeToggle';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import Toast, { useToast } from '@/components/Toast';
 
+// The first one takes the money from the partner's own wallet (the server debits it in the same step). All others mean the money
+// already arrived outside the app (UPI / bank / cash) and staff only record it.
+const WALLET_CHANNEL = 'Wallet (deduct from partner wallet)';
 const PAYMENT_CHANNELS = [
+  WALLET_CHANNEL,
   'GPay (Google Pay)',
   'PhonePe',
   'Direct Bank Transfer (NEFT/IMPS)',
@@ -118,9 +122,10 @@ export default function FleetSubscriptionsScreen() {
   // Open Payment Modal
   const openPayModal = (fleet: any) => {
     setSelectedFleet(fleet);
-    setPayChannel(PAYMENT_CHANNELS[0]);
+    const planFee = fleet.subscription_type === 'YEARLY' ? 1000 : 199;
+    setPayChannel(Number(fleet.wallet_balance || 0) >= planFee ? WALLET_CHANNEL : PAYMENT_CHANNELS[1]);   // wallet first when it can pay
     setPayRef('');
-    setPayAmount(fleet.subscription_type === 'YEARLY' ? '1000' : '199');
+    setPayAmount(String(planFee));
     setPayPlan(fleet.subscription_type === 'YEARLY' ? 'YEARLY' : 'MONTHLY');
     setPayDurationDays(fleet.subscription_type === 'YEARLY' ? '365' : '30');
     setMarkTrusted(true);
@@ -139,6 +144,10 @@ export default function FleetSubscriptionsScreen() {
       Alert.alert('Payment Channel Required', 'Please specify where the payment was received.');
       return;
     }
+    if (payChannel === WALLET_CHANNEL && Number(selectedFleet.wallet_balance || 0) < amountNum) {
+      Alert.alert('Wallet is short', `Wallet has ₹${selectedFleet.wallet_balance || 0}, this needs ₹${amountNum}. Ask the partner to add money, or choose UPI / bank / cash if they paid outside.`);
+      return;
+    }
 
     setSubmittingAction(true);
     try {
@@ -152,7 +161,7 @@ export default function FleetSubscriptionsScreen() {
         notes: payNotes || undefined,
       });
 
-      showToast(`Subscription marked PAID via ${payChannel}!`, 'success');
+      showToast(payChannel === WALLET_CHANNEL ? `₹${amountNum} taken from the wallet. Partner is now Trusted.` : `Subscription marked PAID via ${payChannel}!`, 'success');
       setPayModalVisible(false);
       loadData();
     } catch (e: any) {
@@ -237,7 +246,16 @@ export default function FleetSubscriptionsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: borderCol }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/fleet-hub');
+            }
+          }}
+          style={styles.backBtn}
+        >
           <ArrowLeft size={22} color={textCol} />
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
@@ -530,6 +548,15 @@ export default function FleetSubscriptionsScreen() {
                   );
                 })}
               </ScrollView>
+              {payChannel === WALLET_CHANNEL ? (
+                <Text style={{ fontSize: 12, fontWeight: '700', marginBottom: 12, color: Number(selectedFleet?.wallet_balance || 0) >= (parseFloat(payAmount) || 0) ? '#047857' : '#B91C1C' }}>
+                  Wallet ₹{selectedFleet?.wallet_balance || 0}
+                  {(parseFloat(payAmount) || 0) > 0 ? `  →  after payment ₹${Number(selectedFleet?.wallet_balance || 0) - (parseFloat(payAmount) || 0)}` : ''}
+                  {Number(selectedFleet?.wallet_balance || 0) < (parseFloat(payAmount) || 0) ? '  (not enough)' : ''}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 12, marginBottom: 12, color: subText }}>Money already received outside the app: only record it (the wallet is not touched).</Text>
+              )}
 
               {/* UTR / Ref Number */}
               <Text style={[styles.fieldLabel, { color: textCol }]}>Transaction ID / UTR / Receipt Ref</Text>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -95,7 +95,7 @@ function timeUntil(iso?: string | null): string {
   return `in ${Math.floor(hrs / 24)} d ${hrs % 24} h`;
 }
 
-const pair = (a?: number, b?: number) => `${a ?? 0} | ${b ?? 0}`;
+const pair = (a?: number, b?: number) => (b && b > 0 ? `${a ?? 0} | ${b}` : `${a ?? 0}`);
 
 export default function WebsiteBookingApprovalsScreen() {
   const router = useRouter();
