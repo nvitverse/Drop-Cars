@@ -217,9 +217,25 @@ def record_manual_subscription_payment(
     admin_name = getattr(current_admin, "username", "Admin")
 
     plan = payload.plan_type.upper()
+    if plan not in ("MONTHLY", "YEARLY", "CUSTOM"):
+        raise HTTPException(status_code=400, detail="Plan must be MONTHLY, YEARLY or CUSTOM")
     duration = payload.duration_days
     if not duration:
         duration = 365 if plan == "YEARLY" else 30
+
+    # Paying from the partner's own WALLET: the amount is taken from the wallet in the same step (one ledger entry, one history row),
+    # so "paid" and "Trusted" can never be set without the money really moving. Any other channel (UPI / bank / cash) means the money
+    # arrived outside the app and staff only record it.
+    from_wallet = payload.payment_channel.strip().lower().startswith("wallet")
+    if from_wallet:
+        from app.crud.wallet import debit_wallet, get_owner_balance
+        amount_int = int(round(payload.amount))
+        balance = get_owner_balance(db, str(vehicle_owner_id))
+        if balance < amount_int:
+            raise HTTPException(status_code=400, detail=f"Wallet has only ₹{balance}; this plan needs ₹{amount_int}. Ask the partner to add money, or record a UPI / bank / cash payment instead.")
+        debit_wallet(db, vehicle_owner_id=str(vehicle_owner_id), amount=amount_int, reference_id=None,
+                     reference_type="SUBSCRIPTION_FEE_WALLET",
+                     notes=f"{plan.title()} partner subscription paid from wallet (recorded by {admin_name})")
 
     start_date = today
     # If currently active and paid in future, extend from future date
@@ -300,6 +316,9 @@ def record_manual_subscription_payment(
         "vehicle_owner_id": str(vehicle_owner_id),
         "billing_next_date": end_date.isoformat(),
         "is_trusted": details.admin_trusted_override,
+        "tier": details.tier,
+        "subscription_type": details.subscription_type,
+        "wallet_balance": details.wallet_balance,
         "payment_channel": clean_channel,
         "payment_ref": clean_ref,
     }
