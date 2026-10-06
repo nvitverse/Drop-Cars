@@ -283,10 +283,8 @@ $invoiceDate = !empty($bookingRow['created_at']) ? date('d M Y', strtotime($book
 <div class="invoice-card">
     <div class="invoice-header">
         <div>
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:0.5rem;">
-                <img src="/assets/brand/DropCars_Logo_Invoice_Header.svg" alt="Drop Cars ®" style="height:42px; width:auto; display:block;" />
-            </div>
-            <div class="brand-sub">South India Premium Taxi Network · Registered Trademark</div>
+            <div class="brand-title">🚗 DROP CARS</div>
+            <div class="brand-sub">South India Premium Taxi Network</div>
             <div style="font-size:0.78rem; color:var(--muted); margin-top:0.3rem;">
                 <?php echo htmlspecialchars($gstBusinessName); ?> · GSTIN: <strong><?php echo htmlspecialchars($gstNumber); ?></strong><br>
                 <?php if (!empty($gstBusinessAddress)): ?><?php echo htmlspecialchars($gstBusinessAddress); ?><br><?php endif; ?>

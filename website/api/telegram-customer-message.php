@@ -47,11 +47,10 @@ function dropcars_telegram_enquiry_admin_html(
     $lines[] = '';
     $lines[] = '👤 <b>Customer:</b> ' . dropcars_tg_h($customerName) . ($isRegularCustomer ? ' ⭐ <i>(Regular Customer)</i>' : '');
 
-    $cleanPhone = preg_replace('/[^\d]/', '', $contactValue);
-    if (strlen($cleanPhone) >= 10) {
-        $waPhone = (strlen($cleanPhone) === 10) ? '91' . $cleanPhone : $cleanPhone;
-        $displayPhone = (strlen($cleanPhone) === 10) ? '+91 ' . substr($cleanPhone, 0, 5) . ' ' . substr($cleanPhone, 5) : '+' . $cleanPhone;
-        $lines[] = '📞 <b>Phone:</b> <a href="tel:+' . $waPhone . '">' . dropcars_tg_h($displayPhone) . '</a>';
+    require_once __DIR__ . '/../helpers/phone-sanitizer.php';
+    $normPhone = dropcars_normalize_phone($contactValue);
+    if ($normPhone['valid']) {
+        $lines[] = '📞 <b>Phone:</b> <a href="tel:' . $normPhone['intlWithPlus'] . '">' . dropcars_tg_h($normPhone['formatted']) . '</a>';
     } else {
         $lines[] = '📞 <b>Phone:</b> ' . dropcars_tg_h($contactValue);
     }

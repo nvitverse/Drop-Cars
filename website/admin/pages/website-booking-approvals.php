@@ -108,7 +108,7 @@ $backendUnreachable = !$pendingResult['ok'];
         <form method="POST" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
             <div>
                 <strong style="color:#1e40af;font-size:0.95rem;display:block;">⚡ Post All Confirmed Bookings to All Apps</strong>
-                <span style="color:#3b82f6;font-size:0.8rem;font-weight:600;">Applies -₹1/km base tariff, ₹300 Driver Allowance, or 15% All-Inclusive profit margin.</span>
+                <span style="color:#3b82f6;font-size:0.8rem;font-weight:600;">Applies standard base tariff, ₹300 Driver Allowance, or 15% All-Inclusive profit margin.</span>
             </div>
             <button type="submit" name="approve_all" value="1" onclick="return confirm('Post all confirmed bookings to all apps immediately with auto-tariff pricing?');" style="background:#1d4ed8;color:#ffffff;border:none;padding:0.6rem 1.2rem;border-radius:8px;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 2px 4px rgba(29,78,216,0.3);">
                 Post All (<?php echo count($pending); ?>) Now

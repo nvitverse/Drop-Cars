@@ -2773,11 +2773,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const text = (locationText || '').toString().toLowerCase();
         if (!text) return '';
 
-        // 2. State name in the address text
-        const knownStates = ['tamil nadu', 'karnataka', 'kerala', 'andhra pradesh', 'telangana', 'puducherry', 'pondicherry', 'maharashtra', 'goa', 'gujarat'];
+        // 2. Puducherry UT check FIRST (Google Maps frequently appends ', Tamil Nadu' to Pondicherry locations)
+        if (
+            text.includes('puducherry') ||
+            text.includes('pondicherry') ||
+            text.includes('karaikal') ||
+            text.includes('karaikkal') ||
+            text.includes('mahe') ||
+            text.includes('yanam')
+        ) {
+            return 'puducherry';
+        }
+
+        // 3. Other state names in the address text
+        const knownStates = ['karnataka', 'kerala', 'andhra pradesh', 'telangana', 'tamil nadu', 'maharashtra', 'goa', 'gujarat'];
         for (let i = 0; i < knownStates.length; i += 1) {
             if (text.includes(knownStates[i])) {
-                return knownStates[i] === 'pondicherry' ? 'puducherry' : knownStates[i];
+                return knownStates[i];
             }
         }
 

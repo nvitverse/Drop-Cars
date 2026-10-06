@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -25,8 +26,13 @@ if (!is_array($data)) {
 
 $partnerType = trim((string)($data['partnerType'] ?? 'Partner'));
 $fullName = trim((string)($data['fullName'] ?? ''));
-$phone = trim((string)($data['phone'] ?? ''));
-$email = trim((string)($data['email'] ?? ''));
+$rawEmail = trim((string)($data['email'] ?? ''));
+$email = '';
+if ($rawEmail !== '') {
+    require_once __DIR__ . '/../helpers/email-sanitizer.php';
+    $sanitized = dropcars_sanitize_and_fix_email($rawEmail, false);
+    $email = $sanitized['valid'] ? $sanitized['email'] : $rawEmail;
+}
 $city = trim((string)($data['city'] ?? ''));
 $companyName = trim((string)($data['companyName'] ?? ''));
 $fleetSize = trim((string)($data['fleetSize'] ?? ''));
@@ -118,7 +124,11 @@ if ($enableEmail && $appPassword !== '' && is_file($phpmailerPath)) {
         dropcars_phpmailer_apply_smtp($mail, $smtp);
         $mail->addAddress($mailTo);
         $mail->CharSet = 'UTF-8';
-        $mail->MessageID = '<partner-' . uniqid('', true) . '@gmail.com>';
+        $mailDomain = 'dropcars.in';
+        if (!empty($smtp['mailFrom']) && strpos($smtp['mailFrom'], '@') !== false) {
+            $mailDomain = substr(strrchr($smtp['mailFrom'], '@'), 1);
+        }
+        $mail->MessageID = '<partner-' . uniqid('', true) . '@' . $mailDomain . '>';
         $mail->addCustomHeader('X-Entity-Ref-ID', 'partner-' . $requestId . '-' . uniqid());
         $mail->Subject = $subject;
         $mail->Body = $bodyHtml;

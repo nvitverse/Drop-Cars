@@ -5,6 +5,155 @@
  * @param array<string, mixed> $fb
  */
 
+if (!function_exists('dropcars_infer_state_from_location')) {
+    function dropcars_infer_state_from_location(string $locationText): string {
+        $text = strtolower(trim($locationText));
+        if ($text === '') return '';
+
+        // Puducherry / Pondicherry / Karaikal are Union Territory enclaves inside Tamil Nadu.
+        // Google Maps frequently appends ", Tamil Nadu" to Pondicherry addresses.
+        // Check Puducherry FIRST before Tamil Nadu so it is never misclassified.
+        if (
+            strpos($text, 'puducherry') !== false ||
+            strpos($text, 'pondicherry') !== false ||
+            strpos($text, 'karaikal') !== false ||
+            strpos($text, 'karaikkal') !== false ||
+            strpos($text, 'mahe') !== false ||
+            strpos($text, 'yanam') !== false
+        ) {
+            return 'puducherry';
+        }
+
+        $knownStates = [
+            'karnataka',
+            'kerala',
+            'andhra pradesh',
+            'telangana',
+            'tamil nadu',
+            'maharashtra',
+            'goa',
+            'gujarat'
+        ];
+        foreach ($knownStates as $st) {
+            if (strpos($text, $st) !== false) {
+                return $st;
+            }
+        }
+
+        $cityToState = [
+            // Tamil Nadu
+            'chennai' => 'tamil nadu', 'coimbatore' => 'tamil nadu', 'madurai' => 'tamil nadu', 'trichy' => 'tamil nadu',
+            'tiruchirappalli' => 'tamil nadu', 'vellore' => 'tamil nadu', 'salem' => 'tamil nadu', 'erode' => 'tamil nadu',
+            'tirunelveli' => 'tamil nadu', 'thanjavur' => 'tamil nadu', 'dindigul' => 'tamil nadu', 'karur' => 'tamil nadu',
+            'namakkal' => 'tamil nadu', 'krishnagiri' => 'tamil nadu', 'dharmapuri' => 'tamil nadu', 'cuddalore' => 'tamil nadu',
+            'villupuram' => 'tamil nadu', 'kanchipuram' => 'tamil nadu', 'chengalpattu' => 'tamil nadu', 'thiruvallur' => 'tamil nadu',
+            'nagapattinam' => 'tamil nadu', 'thiruvarur' => 'tamil nadu', 'ramanathapuram' => 'tamil nadu', 'sivagangai' => 'tamil nadu',
+            'virudhunagar' => 'tamil nadu', 'thoothukudi' => 'tamil nadu', 'tenkasi' => 'tamil nadu', 'nilgiris' => 'tamil nadu',
+            'ooty' => 'tamil nadu', 'kodaikanal' => 'tamil nadu', 'tiruppur' => 'tamil nadu', 'ariyalur' => 'tamil nadu',
+            'pudukkottai' => 'tamil nadu', 'theni' => 'tamil nadu', 'kallakurichi' => 'tamil nadu', 'tirupattur' => 'tamil nadu',
+            'ranipet' => 'tamil nadu', 'tiruvannamalai' => 'tamil nadu', 'kanyakumari' => 'tamil nadu', 'rameshwaram' => 'tamil nadu',
+            'hosur' => 'tamil nadu', 'bhavani' => 'tamil nadu', 'chidambaram' => 'tamil nadu', 'perambalur' => 'tamil nadu',
+            'velankanni' => 'tamil nadu', 'mahabalipuram' => 'tamil nadu', 'katpadi' => 'tamil nadu', 'ambur' => 'tamil nadu',
+            // Karnataka
+            'bangalore' => 'karnataka', 'bengaluru' => 'karnataka', 'mysore' => 'karnataka', 'mangalore' => 'karnataka',
+            // Kerala
+            'kochi' => 'kerala', 'cochin' => 'kerala', 'trivandrum' => 'kerala', 'thiruvananthapuram' => 'kerala', 'palakkad' => 'kerala', 'calicut' => 'kerala',
+            // Andhra Pradesh
+            'tirupati' => 'andhra pradesh', 'chittoor' => 'andhra pradesh', 'nellore' => 'andhra pradesh',
+            // Telangana
+            'hyderabad' => 'telangana', 'secunderabad' => 'telangana',
+            // Puducherry
+            'pondicherry' => 'puducherry', 'puducherry' => 'puducherry', 'karaikal' => 'puducherry', 'karaikkal' => 'puducherry'
+        ];
+        foreach ($cityToState as $city => $state) {
+            if (strpos($text, $city) !== false) {
+                return $state;
+            }
+        }
+        return '';
+    }
+}
+
+if (!function_exists('dropcars_detect_border_transitions')) {
+    function dropcars_detect_border_transitions(string $pickup, string $drop, array $stops = []): array {
+        $points = [];
+        if (trim($pickup) !== '') $points[] = trim($pickup);
+        foreach ($stops as $s) {
+            $sv = is_string($s) ? trim($s) : (is_array($s) && isset($s['value']) ? trim((string)$s['value']) : '');
+            if ($sv !== '') $points[] = $sv;
+        }
+        if (trim($drop) !== '') $points[] = trim($drop);
+
+        if (count($points) < 2) return [];
+
+        $neighbors = [
+            'tamil nadu' => ['kerala', 'karnataka', 'andhra pradesh', 'puducherry'],
+            'kerala' => ['tamil nadu', 'karnataka'],
+            'karnataka' => ['tamil nadu', 'kerala', 'andhra pradesh', 'telangana'],
+            'andhra pradesh' => ['tamil nadu', 'karnataka', 'telangana'],
+            'telangana' => ['andhra pradesh', 'karnataka'],
+            'puducherry' => ['tamil nadu'],
+        ];
+
+        $transitions = [];
+        for ($i = 0; $i < count($points) - 1; $i++) {
+            $fromState = dropcars_infer_state_from_location($points[$i]);
+            $toState = dropcars_infer_state_from_location($points[$i + 1]);
+            if ($fromState === '' || $toState === '' || $fromState === $toState) continue;
+
+            $queue = [[$fromState]];
+            $visited = [$fromState => true];
+            $foundPath = null;
+            while (!empty($queue)) {
+                $path = array_shift($queue);
+                $last = end($path);
+                if ($last === $toState) {
+                    $foundPath = $path;
+                    break;
+                }
+                foreach (($neighbors[$last] ?? []) as $next) {
+                    if (isset($visited[$next])) continue;
+                    $visited[$next] = true;
+                    $newPath = $path;
+                    $newPath[] = $next;
+                    $queue[] = $newPath;
+                }
+            }
+
+            if ($foundPath !== null && count($foundPath) > 1) {
+                for ($k = 0; $k < count($foundPath) - 1; $k++) {
+                    $f = $foundPath[$k];
+                    $t = $foundPath[$k + 1];
+                    $transitions[] = [
+                        'from' => $f,
+                        'to' => $t,
+                        'andhraBorder' => ($f === 'andhra pradesh' || $t === 'andhra pradesh')
+                    ];
+                }
+            } else {
+                $transitions[] = [
+                    'from' => $fromState,
+                    'to' => $toState,
+                    'andhraBorder' => ($fromState === 'andhra pradesh' || $toState === 'andhra pradesh')
+                ];
+            }
+        }
+
+        $unique = [];
+        $seen = [];
+        foreach ($transitions as $tr) {
+            $f = strtolower(trim((string)$tr['from']));
+            $t = strtolower(trim((string)$tr['to']));
+            if ($f === '' || $t === '' || $f === $t) continue;
+            $key = ($f < $t) ? ($f . '::' . $t) : ($t . '::' . $f);
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $unique[] = $tr;
+        }
+        return $unique;
+    }
+}
+
 /**
  * Normalize breakdown so we never show "~0 km" as the route when vehicle rows bill a positive distance.
  * Safe to call on any payload; fixes legacy sessions and third-party JSON.
@@ -16,6 +165,9 @@ function dropcars_fare_breakdown_sanitize(array $fb): array
 {
     if ($fb === []) {
         return $fb;
+    }
+    if (empty($fb['borderTransitions']) && !empty($fb['pickup']) && !empty($fb['drop'])) {
+        $fb['borderTransitions'] = dropcars_detect_border_transitions((string)$fb['pickup'], (string)$fb['drop'], (array)($fb['stops'] ?? []));
     }
     $mode = (string) ($fb['tripMode'] ?? '');
 
@@ -121,6 +273,7 @@ function dropcars_fare_breakdown_html(array $fb, string $selectedVehicleKey = ''
                 continue;
             }
             $vData = $vehicles[$vk];
+            $vData['actualRouteKm'] = $fb['actualRouteKmOneWay'] ?? ($fb['actualRouteKm'] ?? 0);
             $vData['fareType'] = $fareType;
             $vData['borderTransitions'] = $fb['borderTransitions'] ?? [];
             $vData['includeTolls'] = $includeTolls;
@@ -153,6 +306,7 @@ function dropcars_fare_breakdown_html(array $fb, string $selectedVehicleKey = ''
                 continue;
             }
             $vData = $vehicles[$vk];
+            $vData['actualRouteKm'] = $fb['actualRouteKm'] ?? ($fb['actualRouteKmOneWay'] ?? 0);
             $vData['fareType'] = $fareType;
             $vData['borderTransitions'] = $fb['borderTransitions'] ?? [];
             $vData['includeTolls'] = $includeTolls;
@@ -251,7 +405,7 @@ function dropcars_fare_breakdown_vehicle_row_html(callable $esc, string $vk, arr
     $includeTolls = isset($v['includeTolls']) ? (bool)$v['includeTolls'] : (isset($v['fareType']) && $v['fareType'] === 'inclusive');
     $includeTaxes = isset($v['includeTaxes']) ? (bool)$v['includeTaxes'] : (isset($v['fareType']) && $v['fareType'] === 'inclusive');
 
-    $dist = isset($v['actualRouteKm']) || isset($v['actualRouteKmTotal']) ? (float)($v['actualRouteKm'] ?? $v['actualRouteKmTotal']) : 0;
+    $dist = (float)($v['actualRouteKm'] ?? $v['actualRouteKmTotal'] ?? $fb['actualRouteKm'] ?? $fb['actualRouteKmOneWay'] ?? 0);
     
     // Toll calculations
     $estToll = round($dist * 2.0);
@@ -438,7 +592,7 @@ function dropcars_fare_breakdown_plain(array $fb, string $selectedVehicleKey = '
         $includeTolls = isset($fb['includeTolls']) ? (bool)$fb['includeTolls'] : ($fareType === 'inclusive');
         $includeTaxes = isset($fb['includeTaxes']) ? (bool)$fb['includeTaxes'] : ($fareType === 'inclusive');
 
-        $dist = isset($v['actualRouteKm']) || isset($v['actualRouteKmTotal']) ? (float)($v['actualRouteKm'] ?? $v['actualRouteKmTotal']) : 0;
+        $dist = (float)($v['actualRouteKm'] ?? $v['actualRouteKmTotal'] ?? $fb['actualRouteKm'] ?? $fb['actualRouteKmOneWay'] ?? 0);
         $estToll = round($dist * 2.0);
         if (isset($v['liveToll']) && $v['liveToll'] !== '' && is_numeric($v['liveToll'])) {
             $estToll = max(0, (int) $v['liveToll']);
@@ -584,3 +738,4 @@ function dropcars_fare_breakdown_included_extras(array $fb, array $v, string $vk
     }
     return ['toll' => $toll, 'permit' => $permit];
 }
+

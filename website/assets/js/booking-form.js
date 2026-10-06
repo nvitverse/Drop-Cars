@@ -139,6 +139,54 @@
     return null;
   }
 
+  function showPromoMsg(msg, isSuccess, isLoginPrompt) {
+    var promoMsgEl = document.getElementById("promo-msg");
+    var promoApplyBtn = document.getElementById("promo-apply-btn");
+    var promoCodeInput = document.getElementById("promo-code");
+    if (!promoMsgEl) return;
+
+    if (!msg) {
+      promoMsgEl.style.display = "none";
+      promoMsgEl.className = "promo-inline-msg";
+      promoMsgEl.innerHTML = "";
+      if (promoApplyBtn) {
+        promoApplyBtn.classList.remove("is-applied");
+        promoApplyBtn.textContent = "Apply";
+      }
+      if (promoCodeInput) {
+        promoCodeInput.style.borderColor = "";
+      }
+      return;
+    }
+
+    promoMsgEl.style.display = "block";
+    if (isSuccess) {
+      promoMsgEl.className = "promo-inline-msg is-success";
+      promoMsgEl.innerHTML = "✅ " + msg;
+      if (promoApplyBtn) {
+        promoApplyBtn.classList.add("is-applied");
+        promoApplyBtn.textContent = "Applied ✓";
+      }
+      if (promoCodeInput) {
+        promoCodeInput.style.borderColor = "#16a34a";
+      }
+    } else {
+      promoMsgEl.className = "promo-inline-msg is-error";
+      if (isLoginPrompt) {
+        promoMsgEl.innerHTML = '🔒 <strong>Please log in with your email</strong> to apply promo codes. <a href="/pages/customer-login.php?promo=1" style="color:#2563eb; font-weight:700; text-decoration:underline; margin-left:4px;">Log In Now &rarr;</a>';
+      } else {
+        promoMsgEl.innerHTML = "❌ " + msg;
+      }
+      if (promoApplyBtn) {
+        promoApplyBtn.classList.remove("is-applied");
+        promoApplyBtn.textContent = "Apply";
+      }
+      if (promoCodeInput) {
+        promoCodeInput.style.borderColor = "#dc2626";
+      }
+    }
+  }
+
   /** First-seen label on #calculate-fare-btn (e.g. home "Check Fare Now" vs city "Check Route Fare"). */
   var calculateFareBtnDefaultLabel = "";
   var stickyCalculateBtn = document.getElementById("sticky-calculate-btn");
@@ -230,39 +278,31 @@
     if (silent) return;
     var btns = [calculateBtn, stickyCalculateBtn].filter(Boolean);
     var formCard = document.querySelector(".booking-card");
-    var existingBadge = formCard ? formCard.querySelector(".inline-fare-loader-badge") : null;
 
     if (loading) {
       if (responseEl) {
         responseEl.textContent = "";
         responseEl.style.display = "none";
       }
-      if (!existingBadge && formCard) {
-        var badge = document.createElement("div");
-        badge.className = "inline-fare-loader-badge";
-        badge.style.cssText = "display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0; padding: 12px 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1.5px solid #bfdbfe; border-radius: 12px; color: #0284c7; font-weight: 800; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(14,165,233,0.12);";
-        badge.innerHTML =
-          '<span style="width: 16px; height: 16px; border: 2.5px solid #0284c7; border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; flex-shrink: 0;"></span>' +
-          '<span>Calculating exact route distance &amp; best fares...</span>';
-        var submitWrap = formCard.querySelector(".submit-wrapper") || formCard.querySelector("form");
-        if (submitWrap) {
-          submitWrap.parentNode.insertBefore(badge, submitWrap);
-        }
+      if (formCard) {
+        formCard.classList.add("is-calculating");
       }
       btns.forEach(function(btn) {
         btn.disabled = true;
+        btn.classList.add("btn-calculating");
         btn.innerHTML =
-          '<span style="width: 14px; height: 14px; border: 2px solid #ffffff; border-top-color: transparent; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: -2px; animation: spin 0.8s linear infinite;"></span>Calculating Best Fare...';
+          '<span class="fare-calc-spin"></span><span class="fare-calc-text">Calculating Best Fare...</span>';
       });
     } else {
-      if (existingBadge && existingBadge.parentNode) {
-        existingBadge.parentNode.removeChild(existingBadge);
+      if (formCard) {
+        formCard.classList.remove("is-calculating");
       }
       if (responseEl) {
         responseEl.textContent = "";
         responseEl.style.display = "";
       }
       btns.forEach(function(btn) {
+        btn.classList.remove("btn-calculating");
         btn.innerHTML = "";
         btn.textContent = getCalculateFareBtnLabel();
         btn.disabled = false;
@@ -623,18 +663,31 @@
   function inferStateFromLocation(locationText) {
     var text = (locationText || "").toString().toLowerCase();
     if (!text) return "";
+
+    // Puducherry / Pondicherry / Karaikal are Union Territory enclaves inside Tamil Nadu.
+    // Google Maps frequently appends ", Tamil Nadu" to Pondicherry addresses.
+    // Check Puducherry FIRST before Tamil Nadu so it is never misclassified.
+    if (
+      text.indexOf("puducherry") !== -1 ||
+      text.indexOf("pondicherry") !== -1 ||
+      text.indexOf("karaikal") !== -1 ||
+      text.indexOf("karaikkal") !== -1 ||
+      text.indexOf("mahe") !== -1 ||
+      text.indexOf("yanam") !== -1
+    ) {
+      return "puducherry";
+    }
+
     var knownStates = [
-      "tamil nadu",
       "karnataka",
       "kerala",
       "andhra pradesh",
       "telangana",
-      "puducherry",
-      "pondicherry",
+      "tamil nadu",
     ];
     for (var i = 0; i < knownStates.length; i += 1) {
       if (text.indexOf(knownStates[i]) !== -1) {
-        return knownStates[i] === "pondicherry" ? "puducherry" : knownStates[i];
+        return knownStates[i];
       }
     }
     var cityToState = {
@@ -1906,9 +1959,25 @@
     if (serviceType === "multi_city") {
       inclusionsList.push("Intermediate stop charges included");
     }
+    var borderTransitionsList = (state.fareOptions && state.fareOptions.borderTransitions) || [];
+    var activeBorders = uniqueBorderTransitions(borderTransitionsList);
+    var activeBorderCount = activeBorders.length;
+    var borderTaxPerVehicle = { SEDAN: 500, SUV: 1000, INNOVA: 1500, CRYSTA: 1500 };
+    var currentBorderTax = borderTaxPerVehicle[currentVehicle] || 500;
+    var totalBorderTaxAmt = activeBorders.reduce(function(sum, b) {
+      if ((currentVehicle === 'INNOVA' || currentVehicle === 'CRYSTA') && b.andhraBorder) {
+        return sum + 2000;
+      }
+      return sum + currentBorderTax;
+    }, 0);
+
     if (isInclusive) {
       inclusionsList.push("Toll charges included");
-      inclusionsList.push("State border tax included (if crossing state border)");
+      if (activeBorderCount > 0) {
+        inclusionsList.push("State border tax included (₹" + totalBorderTaxAmt.toLocaleString("en-IN") + " for " + (activeBorderCount === 1 ? "1 state border crossing" : activeBorderCount + " state border crossings") + ")");
+      } else {
+        inclusionsList.push("State border tax included (if crossing state border)");
+      }
     }
     if (state.isGstApplied) {
       inclusionsList.push(gstPercent + "% GST included" + (gstNumber ? " (GSTIN: " + gstNumber + ")" : ""));
@@ -1922,7 +1991,11 @@
     var exclusionsList = [];
     if (!isInclusive) {
       exclusionsList.push("Toll charges, as applicable");
-      exclusionsList.push("State border tax (applicable only if crossing state border)");
+      if (activeBorderCount > 0) {
+        exclusionsList.push("State border tax: ₹" + totalBorderTaxAmt.toLocaleString("en-IN") + " (" + (activeBorderCount === 1 ? "1 state border crossing" : activeBorderCount + " state border crossings") + ", payable extra at border/driver)");
+      } else {
+        exclusionsList.push("State border tax (applicable only if crossing state border)");
+      }
     }
 
     // Always show extra km charge (Rental has its own extra-hour/km lines below)
@@ -2654,10 +2727,12 @@
               base_fare: baseFare
             })
           })
-          .then(r => r.json())
-          .then(data => {
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
             if (data.success) {
               state.appliedCoupon = { code: promoCode, type: data.type, value: data.value };
+              var discText = data.type === "percentage" ? (data.value + "% OFF") : ("₹" + data.value + " OFF");
+              showPromoMsg('Promo code <strong>' + promoCode + '</strong> applied! (' + discText + ')', true);
               // Re-calculate with discount
               estimates = {
                 SEDAN: calculateEstimateForVehicle(serviceType, fareDistanceHint, "SEDAN", formData, state.appliedCoupon),
@@ -2669,23 +2744,24 @@
             } else {
               state.appliedCoupon = null;
               if (data.require_login) {
-                alert(data.message || 'Please log in to apply promo codes.');
-                window.location.href = '/pages/customer-login.php?promo=1';
-                return;
-              } else if (data.message) {
-                alert(data.message);
+                showPromoMsg(data.message, false, true);
+              } else {
+                showPromoMsg(data.message || "Invalid or expired promo code.", false);
               }
             }
             applyDiscountAndFinish();
           })
-          .catch(() => {
+          .catch(function() {
             state.appliedCoupon = null;
+            showPromoMsg("Unable to validate promo code.", false);
             applyDiscountAndFinish();
           });
         }
       } else {
         state.appliedCoupon = null;
+        showPromoMsg("", false);
         applyDiscountAndFinish();
+      }
       }
 
       function applyDiscountAndFinish() {
@@ -2785,10 +2861,7 @@
           });
         }
 
-        if (calculateBtn) {
-          calculateBtn.disabled = false;
-          calculateBtn.textContent = getCalculateFareBtnLabel();
-        }
+        setFareLoadingUI(false, silent);
         state.isCalculating = false;
 
         var leadEstimate = currentVehicle && estimates[currentVehicle] ? estimates[currentVehicle] : (estimates.SEDAN || 0);
@@ -2823,12 +2896,7 @@
     state.isCalculating = true;
     if (responseEl && !silent) responseEl.textContent = "";
     if (!silent) {
-       var btns = [calculateBtn, stickyCalculateBtn].filter(Boolean);
-       btns.forEach(function(btn) {
-         btn.disabled = true;
-         btn.innerHTML = "";
-         btn.textContent = "Calculating...";
-       });
+       setFareLoadingUI(true, false);
     }
 
     if (serviceType === "hourly_rental") {
@@ -3133,8 +3201,8 @@
               cleanBookingId = "DC" + cleanBookingId.substring(2);
           } else if (cleanBookingId.startsWith("E")) {
               cleanBookingId = "DC" + cleanBookingId.substring(1);
-          } else if (cleanBookingId.startsWith("DC")) {
-              cleanBookingId = "DC" + cleanBookingId.substring(2);
+          } else if (cleanBookingId.startsWith("C")) {
+              cleanBookingId = "DC" + cleanBookingId.substring(1);
           }
       }
       var passCount = (formData.get("passengerCount") || "1").toString().trim();
@@ -3312,19 +3380,84 @@
     stickyCalculateBtn.addEventListener("click", handleCalculateFare);
   }
 
+  function handleApplyPromoCode(e) {
+    if (e) e.preventDefault();
+    var promoCodeInput = document.getElementById("promo-code");
+    var promoApplyBtn = document.getElementById("promo-apply-btn");
+    if (!promoCodeInput) return;
+
+    var code = promoCodeInput.value.trim().toUpperCase();
+    if (!code) {
+      showPromoMsg("Please enter a promo code first.", false);
+      return;
+    }
+
+    if (promoApplyBtn) {
+      promoApplyBtn.disabled = true;
+      promoApplyBtn.textContent = "Checking...";
+    }
+
+    var serviceType = getCurrentServiceType();
+    var currentVehicleKey = (document.getElementById("vehicle-type-input") && document.getElementById("vehicle-type-input").value) || "SEDAN";
+    var baseFare = (state.fareOptions && state.fareOptions.estimates && state.fareOptions.estimates[currentVehicleKey]) || 0;
+
+    fetch("/api/validate-coupon.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: code,
+        trip_type: serviceType,
+        base_fare: baseFare
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (promoApplyBtn) promoApplyBtn.disabled = false;
+      if (data.success) {
+        state.appliedCoupon = { code: code, type: data.type, value: data.value };
+        var discText = data.type === "percentage" ? (data.value + "% OFF") : ("₹" + data.value + " OFF");
+        showPromoMsg('Promo code <strong>' + code + '</strong> applied! (' + discText + ')', true);
+        if (state.fareCalculated || (state.fareOptions && state.fareOptions.estimates)) {
+          handleCalculateFare(null, { silent: true });
+        }
+      } else {
+        state.appliedCoupon = null;
+        if (data.require_login) {
+          showPromoMsg(data.message, false, true);
+        } else {
+          showPromoMsg(data.message || "Invalid or expired promo code.", false);
+        }
+        if (state.fareCalculated) {
+          handleCalculateFare(null, { silent: true });
+        }
+      }
+    })
+    .catch(function() {
+      if (promoApplyBtn) promoApplyBtn.disabled = false;
+      state.appliedCoupon = null;
+      showPromoMsg("Unable to validate promo code. Please try again.", false);
+    });
+  }
+
   var promoApplyBtn = document.getElementById("promo-apply-btn");
   if (promoApplyBtn) {
-    promoApplyBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-      handleCalculateFare(null);
-    });
+    promoApplyBtn.addEventListener("click", handleApplyPromoCode);
   }
   var promoCodeInput = document.getElementById("promo-code");
   if (promoCodeInput) {
     promoCodeInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.keyCode === 13) {
         e.preventDefault();
-        handleCalculateFare(null);
+        handleApplyPromoCode(e);
+      }
+    });
+    promoCodeInput.addEventListener("input", function() {
+      if (!this.value.trim() && state.appliedCoupon) {
+        state.appliedCoupon = null;
+        showPromoMsg("", false);
+        if (state.fareCalculated) {
+          handleCalculateFare(null, { silent: true });
+        }
       }
     });
   }

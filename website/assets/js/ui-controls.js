@@ -981,23 +981,22 @@
       
       // Capture the current height of the host (booking card) to prevent layout collapse
       var currentHeight = host.offsetHeight;
-      if (currentHeight > 0) {
-        host.style.height = currentHeight + "px";
-        host.style.transition = "height " + SWAP_MS + "ms " + SWAP_EASE;
-      }
 
       ensurePanel().appendChild(modal);      // move WHOLE modal (keeps its classes/styles)
       modal.classList.add("is-swapped");
       swapped = true;
       window.scrollTo(0, scrollYBefore);
 
-      // Measure target height of the new panel
-      var targetHeight = panel ? panel.offsetHeight : 0;
-      if (targetHeight > 0) {
-        // Animate host height to target height smoothly!
-        setTimeout(function() {
+      // Accurately measure natural content height of the modal card
+      var modalCard = modal.querySelector(".quote-modal__card") || modal;
+      var targetHeight = Math.max(modalCard.scrollHeight || modalCard.offsetHeight, 480);
+
+      if (currentHeight > 0) {
+        host.style.height = currentHeight + "px";
+        host.style.transition = "height " + SWAP_MS + "ms " + SWAP_EASE;
+        requestAnimationFrame(function() {
           host.style.height = targetHeight + "px";
-        }, 10);
+        });
       }
     }
     if (!panel) ensurePanel();
@@ -1008,8 +1007,6 @@
     panel.style.position = "absolute";
     panel.style.inset = "0";
 
-    // Use setTimeout (not requestAnimationFrame) â€” rAF is paused when the tab
-    // isn't actively painting, which left the panel stuck closed.
     setTimeout(function () {
       host.classList.add("is-fare-open");
     }, 20);
@@ -1017,7 +1014,7 @@
       if (swapped && panel && !active) {
         panel.style.position = "";
         panel.style.inset = "";
-        // Clear locked height to let the card flow naturally again
+        // Content is already at targetHeight, so clearing locked height is completely seamless
         host.style.height = "";
         host.style.transition = "";
       }
@@ -1056,19 +1053,13 @@
     }
 
     // Measure target height of the form (which will be restored)
-    form.style.position = "absolute";
-    form.style.visibility = "hidden";
-    form.style.display = "block";
-    var targetHeight = form.offsetHeight;
-    form.style.position = "";
-    form.style.visibility = "";
-    form.style.display = "";
-
-    if (targetHeight > 0) {
-      // Animate host height back to form height smoothly!
-      setTimeout(function() {
+    var targetHeight = form.scrollHeight || form.offsetHeight || currentHeight;
+    if (currentHeight > 0 && targetHeight > 0) {
+      host.style.height = currentHeight + "px";
+      host.style.transition = "height " + SWAP_MS + "ms " + SWAP_EASE;
+      requestAnimationFrame(function() {
         host.style.height = targetHeight + "px";
-      }, 10);
+      });
     }
 
     host.classList.remove("is-fare-open");
@@ -1287,6 +1278,8 @@
   var touchpadTimer = null;
 
   host.addEventListener("wheel", function (e) {
+    // If vertical scroll intent, exit immediately to never block native page scrolling
+    if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) return;
     if (!panel) return;
     var target = e.target;
     if (target && (target.closest(".drawer-vehicle-tabs") || target.closest(".drawer-vehicle-tab") || target.closest(".vehicle-selector-grid"))) {
@@ -1299,7 +1292,7 @@
 
     // Detect horizontal touchpad wheel swiping
     if (!touchpadSwipeActive) {
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 2) {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 6) {
         touchpadSwipeActive = true;
         touchpadAccumulatorX = 0; // start relative to rest state
         setTransition(false);

@@ -2721,13 +2721,28 @@ $airportRoutes = [
                                 <input type="email" name="contactEmail" placeholder="name@email.com" id="contact-email" />
                             </label>
 
+                            <?php 
+                            $isCustomerAuth = function_exists('dropcars_customer_logged_in') ? dropcars_customer_logged_in() : (!empty($_SESSION['customer_phone']) || !empty($_SESSION['customer_email']) || !empty($_SESSION['customer_id']));
+                            $loginTargetUrl = function_exists('dropcars_url') ? dropcars_url('pages/customer-login.php?promo=1') : '/pages/customer-login.php?promo=1';
+                            ?>
+                            <?php if ($isCustomerAuth): ?>
                             <div class="field promo-field" id="promo-field">
-                                <span>Promo Code (Optional)</span>
+                                <span>🎁 Promo Code (Optional)</span>
                                 <div style="display: flex; gap: 0.35rem; width: 100%;">
-                                    <input type="text" name="promoCode" id="promo-code" placeholder="Enter Code" autocomplete="off" aria-label="Promo code" style="flex: 1; min-width: 0;" />
+                                    <input type="text" name="promoCode" id="promo-code" placeholder="Enter Code" autocomplete="off" aria-label="Promo code" style="flex: 1; min-width: 0; text-transform: uppercase; font-weight: 700;" />
                                     <button type="button" class="btn-promo-apply" id="promo-apply-btn" style="flex-shrink: 0; padding: 0 0.75rem; height: 42px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; background: linear-gradient(135deg, #0284c7, #1d4ed8); color: #ffffff; border: none; cursor: pointer;">Apply</button>
                                 </div>
+                                <div id="promo-msg" class="promo-inline-msg"></div>
                             </div>
+                            <?php else: ?>
+                            <div class="field promo-field" id="promo-login-cta" style="justify-content: center;">
+                                <a href="<?php echo htmlspecialchars($loginTargetUrl, ENT_QUOTES, 'UTF-8'); ?>" class="promo-login-cta-link" style="padding: 8px 10px; font-size: 0.78rem;" title="Log in to access promo codes">
+                                    <span class="promo-cta-icon">🎁</span>
+                                    <span class="promo-cta-text" style="font-size: 0.75rem;">Log in to use promo codes</span>
+                                    <span class="promo-cta-btn" style="padding: 3px 8px; font-size: 0.72rem;">Log In &rarr;</span>
+                                </a>
+                            </div>
+                            <?php endif; ?>
 
                             <div class="field hidden" id="whatsapp-field" style="grid-column: span 2;">
                                 <span>WhatsApp Number *</span>

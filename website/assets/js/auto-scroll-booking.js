@@ -54,33 +54,26 @@
     scrollToForm(smooth);
   };
 
-  // Don't auto-scroll if the user navigated with a specific hash (e.g. #faq)
-  var hash = window.location.hash;
-  if (hash && hash !== '#booking-form' && hash !== '#booking' && hash !== '#airport-booking-form') {
-    return;
-  }
+  // Only auto-scroll on load if explicitly requested via hash or query param
+  var hash = window.location.hash || '';
+  var hasExplicitHash = (hash === '#booking-form' || hash === '#booking' || hash === '#airport-booking-form');
+  var hasScrollParam = false;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    hasScrollParam = params.get('scroll') === 'booking' || params.get('focus') === 'booking';
+  } catch (e) {}
 
-  // Trigger smooth scroll on page load
-  function initAutoScroll() {
-    // Primary smooth scroll after layout paint
-    setTimeout(function () {
-      scrollToForm(true);
-    }, 250);
-
-    // Secondary pass to ensure accurate positioning after late image/font reflows
-    setTimeout(function () {
-      scrollToForm(true);
-    }, 650);
-  }
-
-  if (document.readyState === 'complete') {
-    initAutoScroll();
-  } else {
-    window.addEventListener('load', initAutoScroll);
-    document.addEventListener('DOMContentLoaded', function () {
+  if (hasExplicitHash || hasScrollParam) {
+    function initAutoScroll() {
       setTimeout(function () {
         scrollToForm(true);
-      }, 200);
-    });
+      }, 150);
+    }
+
+    if (document.readyState === 'complete') {
+      initAutoScroll();
+    } else {
+      window.addEventListener('load', initAutoScroll);
+    }
   }
 })();

@@ -10,19 +10,24 @@
  */
 require_once __DIR__ . '/../config/session.php';
 session_start();
+date_default_timezone_set('Asia/Kolkata');
 header('Content-Type: application/json');
 
 // Prevent browser caching
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$email = trim((string)($_POST['email'] ?? ''));
-$name  = trim((string)($_POST['name']  ?? ''));
-$phone = trim((string)($_POST['phone'] ?? ''));
+require_once __DIR__ . '/../helpers/email-sanitizer.php';
 
-if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode(['status' => 'error', 'message' => 'A valid email address is required.']);
+$rawEmail = trim((string)($_POST['email'] ?? ''));
+$name     = trim((string)($_POST['name']  ?? ''));
+$phone    = trim((string)($_POST['phone'] ?? ''));
+
+$sanitized = dropcars_sanitize_and_fix_email($rawEmail, true);
+if (!$sanitized['valid']) {
+    echo json_encode(['status' => 'error', 'message' => $sanitized['error']]);
     exit;
 }
+$email = $sanitized['email'];
 
 // ── Rate-limit: max 3 sends per email per 10 minutes ──────────────────────────
 $rateBucket = 'otp_rate_' . md5($email);

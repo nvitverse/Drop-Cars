@@ -298,7 +298,11 @@ if (!function_exists('dropcars_dispatch_all_confirmation_notifications')) {
         $dropClean = strtolower(preg_replace('/[^a-z0-9]/', '', (string)$drop));
         $threadKeySource = preg_replace('/\s+/', '', $threadContactRaw) . '||' . $pickupClean . '||' . $dropClean;
         $threadHash = substr(sha1($threadKeySource), 0, 24);
-        $threadRootMessageId = '<trip-thread-' . $threadHash . '@gmail.com>';
+        $mailDomain = 'dropcars.in';
+        if (!empty($smtp['mailFrom']) && strpos($smtp['mailFrom'], '@') !== false) {
+            $mailDomain = substr(strrchr($smtp['mailFrom'], '@'), 1);
+        }
+        $threadRootMessageId = '<trip-thread-' . $threadHash . '@' . $mailDomain . '>';
 
         // Minimalist premium HTML template matching the website's confirmation mail
         $bodyHtml = '
@@ -349,7 +353,7 @@ if (!function_exists('dropcars_dispatch_all_confirmation_notifications')) {
                 dropcars_phpmailer_apply_smtp($mail, $smtp);
                 $mail->addAddress($customerEmail);
                 $mail->CharSet = 'UTF-8';
-                $mail->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
+                $mail->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@' . $mailDomain . '>';
                 $mail->addCustomHeader('In-Reply-To', $threadRootMessageId);
                 $mail->addCustomHeader('References', $threadRootMessageId);
                 $mail->addCustomHeader('X-DropCars-Thread-Key', $threadHash);
@@ -370,7 +374,7 @@ if (!function_exists('dropcars_dispatch_all_confirmation_notifications')) {
                     dropcars_phpmailer_apply_smtp($mail2, $smtp);
                     $mail2->addAddress($customerEmail);
                     $mail2->CharSet = 'UTF-8';
-                    $mail2->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
+                    $mail2->MessageID = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@' . $mailDomain . '>';
                     $mail2->addCustomHeader('In-Reply-To', $threadRootMessageId);
                     $mail2->addCustomHeader('References', $threadRootMessageId);
                     $mail2->addCustomHeader('X-DropCars-Thread-Key', $threadHash);

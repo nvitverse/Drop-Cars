@@ -32,4 +32,15 @@
   window.visualViewport.addEventListener("resize", updateViewportState);
   window.visualViewport.addEventListener("scroll", updateViewportState);
   updateViewportState();
+
+  // Prevent iOS Safari horizontal viewport drift on input focus/blur
+  document.addEventListener("focusout", function (e) {
+    if (e.target && e.target.matches && e.target.matches("input, select, textarea")) {
+      setTimeout(function () {
+        if (window.scrollX !== 0 || (window.visualViewport && window.visualViewport.pageLeft !== 0)) {
+          window.scrollTo(0, window.scrollY);
+        }
+      }, 50);
+    }
+  }, { passive: true });
 })();

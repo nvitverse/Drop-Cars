@@ -10,8 +10,9 @@
   min-height: auto;
   display: flex;
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
   transition: background 0.3s;
+  touch-action: pan-x pan-y pinch-zoom !important;
 }
 
 /* Base slider layout behind content */
@@ -26,7 +27,7 @@
   background: #0f172a !important;
   cursor: grab;
   user-select: none;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 /* Vibrant ambient colored overlay — applied for dark mode & default hero slider */
@@ -145,7 +146,7 @@
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .hero-text-slide.active {
@@ -472,7 +473,7 @@
 /* ── Booking Card Column ─────────────────────────────────────────────── */
 .hero .booking-card {
   width: 100%;
-  max-width: 455px;
+  max-width: 1120px;
   flex-shrink: 0;
   /* No animation delay — prevents layout shift on page load */
   animation: none;
@@ -482,7 +483,7 @@
 
 @media (min-width: 1024px) {
   .hero .booking-card {
-    max-width: 1100px !important;
+    max-width: 1120px !important;
     width: 100% !important;
     margin: 0 auto !important;
   }

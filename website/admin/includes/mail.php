@@ -61,6 +61,19 @@ function dropcars_admin_send_mail(string $to, string $subject, string $htmlBody,
         }
     }
 
+    // Sanitize and auto-correct email typos before dispatching
+    $sanitizerPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'helpers' . DIRECTORY_SEPARATOR . 'email-sanitizer.php';
+    if (is_file($sanitizerPath)) {
+        require_once $sanitizerPath;
+        if (function_exists('dropcars_sanitize_and_fix_email')) {
+            $sanitized = dropcars_sanitize_and_fix_email($to, true);
+            if (!$sanitized['valid']) {
+                return ['ok' => false, 'error' => $sanitized['error']];
+            }
+            $to = $sanitized['email'];
+        }
+    }
+
     if ($smtp['appPassword'] === '' && $smtp['hostingerSmtpPass'] === '') {
         return ['ok' => false, 'error' => 'SMTP not configured (set Gmail App Password in api/config.php or config/env.php).'];
     }

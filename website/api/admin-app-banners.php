@@ -55,6 +55,36 @@ function admin_app_banner_row_out(array $row): array
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $reqType = $_GET['type'] ?? '';
+    if ($reqType === 'check_smtp') {
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
+        require_once __DIR__ . '/smtp-settings.php';
+        $cfg = is_file(__DIR__ . '/config.php') ? (include __DIR__ . '/config.php') : [];
+        $smtp = dropcars_resolve_smtp($cfg, false, 'leads');
+        $sendRes = dropcars_send_mail_with_fallback(
+            $smtp,
+            __DIR__ . '/phpmailer/src',
+            'support@dropcars.in',
+            'Drop Cars Live SMTP Check',
+            '<p>Live test</p>',
+            'Live test',
+            [],
+            $cfg
+        );
+        echo json_encode([
+            'success' => true,
+            'probe_time' => date('Y-m-d H:i:s'),
+            'file' => __FILE__,
+            'smtp' => [
+                'user' => $smtp['smtpUser'],
+                'from' => $smtp['mailFrom'],
+                'fromName' => $smtp['mailFromName']
+            ],
+            'send_result' => $sendRes
+        ]);
+        exit;
+    }
     if ($reqType === 'festival') {
         $cfgPath = dirname(__DIR__) . '/api/config.php';
         $cfg = is_file($cfgPath) ? (include $cfgPath) : [];

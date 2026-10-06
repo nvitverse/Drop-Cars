@@ -177,22 +177,22 @@ if (!function_exists('dropcars_send_mail_with_fallback')) {
             }
         };
 
-        // ── Attempt 1 & 2: Primary / Resolved Segment Account (587 TLS → 465 SSL) ──
+        // ── Attempt 1 & 2: Primary / Resolved Segment Account (465 SSL → 587 TLS) ──
         if (!empty($smtp['appPassword']) && !empty($smtp['smtpUser'])) {
             try {
                 $m = new \PHPMailer\PHPMailer\PHPMailer(true);
                 $m->isSMTP();
                 $m->Host       = 'smtp.gmail.com';
                 $m->SMTPAuth   = true;
-                $m->SMTPSecure = 'tls';
-                $m->Port       = 587;
-                $m->Timeout    = 8;
+                $m->SMTPSecure = 'ssl';
+                $m->Port       = 465;
+                $m->Timeout    = 6;
                 dropcars_phpmailer_apply_smtp($m, $smtp);
                 $applyCommon($m);
                 $m->send();
-                return ['ok' => true, 'error' => '', 'account_used' => $smtp['smtpUser'] . ' (587 TLS)'];
+                return ['ok' => true, 'error' => '', 'account_used' => $smtp['smtpUser'] . ' (465 SSL)'];
             } catch (\Exception $e) {
-                $errors[] = 'Primary:587 (' . $smtp['smtpUser'] . '): ' . $e->getMessage();
+                $errors[] = 'Primary:465 (' . $smtp['smtpUser'] . '): ' . $e->getMessage();
             }
 
             try {
@@ -200,15 +200,15 @@ if (!function_exists('dropcars_send_mail_with_fallback')) {
                 $m2->isSMTP();
                 $m2->Host       = 'smtp.gmail.com';
                 $m2->SMTPAuth   = true;
-                $m2->SMTPSecure = 'ssl';
-                $m2->Port       = 465;
-                $m2->Timeout    = 8;
+                $m2->SMTPSecure = 'tls';
+                $m2->Port       = 587;
+                $m2->Timeout    = 6;
                 dropcars_phpmailer_apply_smtp($m2, $smtp);
                 $applyCommon($m2);
                 $m2->send();
-                return ['ok' => true, 'error' => '', 'account_used' => $smtp['smtpUser'] . ' (465 SSL)'];
+                return ['ok' => true, 'error' => '', 'account_used' => $smtp['smtpUser'] . ' (587 TLS)'];
             } catch (\Exception $e2) {
-                $errors[] = 'Primary:465 (' . $smtp['smtpUser'] . '): ' . $e2->getMessage();
+                $errors[] = 'Primary:587 (' . $smtp['smtpUser'] . '): ' . $e2->getMessage();
             }
         }
 

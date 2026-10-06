@@ -196,6 +196,7 @@ function dropcars_build_customer_email(array $booking, string $eventName, array 
             $gst_amount_val = (float)($booking['gst_amount'] ?: 0.00);
             $include_gst_val = (int)($booking['include_gst'] ?? 0);
 
+            $routeMapUrl = 'https://www.google.com/maps/dir/?api=1&origin=' . rawurlencode(strip_tags($pickup)) . '&destination=' . rawurlencode(strip_tags($drop));
             $subject = "⏳ Booking Request Placed - Booking ID: {$bookingId}";
             $contentHtml = '
                 <div class="premium-badge" style="background:#fffbeb; color:#b45309;">Request Placed</div>
@@ -205,7 +206,7 @@ function dropcars_build_customer_email(array $booking, string $eventName, array 
                 
                 <div class="trip-card">
                     <div class="trip-row"><span class="trip-label">Booking ID</span><span class="trip-value">#' . $bookingId . '</span></div>
-                    <div class="trip-row"><span class="trip-label">Route</span><span class="trip-value">' . $pickup . ' ➔ ' . $drop . '</span></div>
+                    <div class="trip-row"><span class="trip-label">Route</span><span class="trip-value">' . $pickup . ' ➔ ' . $drop . '<br><a href="' . htmlspecialchars($routeMapUrl) . '" target="_blank" style="color:#0b4a8f;font-weight:700;font-size:12px;text-decoration:underline;display:inline-block;margin-top:4px;">🗺️ View Map &amp; Directions ↗</a></span></div>
                     <div class="trip-row"><span class="trip-label">Pickup Schedule</span><span class="trip-value">' . date('d M Y', strtotime($date)) . ' at ' . $time . '</span></div>
                     <div class="trip-row"><span class="trip-label">Car Category</span><span class="trip-value">' . $vehicle . '</span></div>
                     <div class="trip-row" style="border-top: 1px solid #cbd5e1; margin-top: 10px; padding-top: 8px;">
@@ -258,6 +259,7 @@ function dropcars_build_customer_email(array $booking, string $eventName, array 
             $gst_amount_val = (float)($booking['gst_amount'] ?: 0.00);
             $include_gst_val = (int)($booking['include_gst'] ?? 0);
 
+            $routeMapUrl = 'https://www.google.com/maps/dir/?api=1&origin=' . rawurlencode(strip_tags($pickup)) . '&destination=' . rawurlencode(strip_tags($drop));
             $subject = "\u{2705} Ride Confirmed! Booking ID: {$bookingId} - Drop Cars";
             $contentHtml = '
                 <div class="premium-badge">Booking Confirmed</div>
@@ -267,7 +269,7 @@ function dropcars_build_customer_email(array $booking, string $eventName, array 
                 
                 <div class="trip-card">
                     <div class="trip-row"><span class="trip-label">Booking ID</span><span class="trip-value">#' . $bookingId . '</span></div>
-                    <div class="trip-row"><span class="trip-label">Route</span><span class="trip-value">' . $pickup . ' ➔ ' . $drop . '</span></div>
+                    <div class="trip-row"><span class="trip-label">Route</span><span class="trip-value">' . $pickup . ' ➔ ' . $drop . '<br><a href="' . htmlspecialchars($routeMapUrl) . '" target="_blank" style="color:#0b4a8f;font-weight:700;font-size:12px;text-decoration:underline;display:inline-block;margin-top:4px;">🗺️ View Map &amp; Directions ↗</a></span></div>
                     <div class="trip-row"><span class="trip-label">Pickup Schedule</span><span class="trip-value">' . date('d M Y', strtotime($date)) . ' at ' . $time . '</span></div>
                     <div class="trip-row"><span class="trip-label">Car Category</span><span class="trip-value">' . $vehicle . '</span></div>
                     <div class="trip-row" style="border-top: 1px solid #cbd5e1; margin-top: 10px; padding-top: 8px;">

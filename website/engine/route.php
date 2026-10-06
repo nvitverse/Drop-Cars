@@ -868,7 +868,7 @@ $routeMapIframeSrc = 'https://maps.google.com/maps?saddr='
                         </span>
                     </div>
 
-                    <div class="booking-card booking-card--home" aria-label="<?php echo htmlspecialchars($themeName); ?> booking form" style="margin-top: 0 !important;">
+                    <div class="booking-card booking-card--home swap-host" aria-label="<?php echo htmlspecialchars($themeName); ?> booking form" style="margin-top: 0 !important;">
                         <form id="booking-form" class="booking-form">
                             <div class="trip-type-block">
                                 <label class="field trip-type-field">
@@ -1070,12 +1070,31 @@ $routeMapIframeSrc = 'https://maps.google.com/maps?saddr='
                                 </div>
                             </div>
 
-                            <!-- Promo Code Field -->
-                            <div class="promo-row" id="promo-field" style="margin-top: 0.75rem; margin-bottom: 0.5rem;">
-                                <span class="promo-row__text" style="color: var(--text);">Promo Code (Optional)</span>
-                                <input type="text" name="promoCode" id="promo-code" placeholder="Enter Code" autocomplete="off" aria-label="Promo code" />
-                                <button type="button" class="btn-promo-apply" id="promo-apply-btn">Apply</button>
+                            <!-- Promo Code / Customer Login Flow -->
+                            <?php 
+                            $isCustomerAuth = function_exists('dropcars_customer_logged_in') ? dropcars_customer_logged_in() : (!empty($_SESSION['customer_phone']) || !empty($_SESSION['customer_email']) || !empty($_SESSION['customer_id']));
+                            $loginTargetUrl = function_exists('dropcars_url') ? dropcars_url('pages/customer-login.php?promo=1') : '/pages/customer-login.php?promo=1';
+                            ?>
+                            <?php if ($isCustomerAuth): ?>
+                            <div class="promo-row promo-row--logged-in" id="promo-field">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span class="promo-row__text" style="color: var(--text); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.02em;">🎁 Promo Code (Optional)</span>
+                                </div>
+                                <div class="promo-row__input-group">
+                                    <input type="text" name="promoCode" id="promo-code" placeholder="Enter Code" autocomplete="off" aria-label="Promo code" />
+                                    <button type="button" class="btn-promo-apply" id="promo-apply-btn">Apply</button>
+                                </div>
+                                <div id="promo-msg" class="promo-inline-msg"></div>
                             </div>
+                            <?php else: ?>
+                            <div class="promo-row promo-row--login-cta" id="promo-login-cta">
+                                <a href="<?php echo htmlspecialchars($loginTargetUrl, ENT_QUOTES, 'UTF-8'); ?>" class="promo-login-cta-link" title="Log in to access promo codes">
+                                    <span class="promo-cta-icon">🎁</span>
+                                    <span class="promo-cta-text">Log in with your email to access promo codes &amp; discounts</span>
+                                    <span class="promo-cta-btn">Log In &rarr;</span>
+                                </a>
+                            </div>
+                            <?php endif; ?>
                             <div class="submit-wrapper">
                                 <button type="button" class="btn-primary" id="calculate-fare-btn">Check Fare Now</button>
                                 <div id="fare-card" class="fare-card" style="display: none;">

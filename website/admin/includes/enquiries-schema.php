@@ -6,6 +6,9 @@ date_default_timezone_set('Asia/Kolkata');
 
 if (!function_exists('dropcars_ensure_enquiries_columns')) {
     function dropcars_ensure_enquiries_columns(PDO $pdo) {
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
         static $ensured = false;
         if ($ensured) return;
         $ensured = true;
@@ -496,29 +499,51 @@ if (!function_exists('dropcars_ensure_marketing_tables')) {
     }
 }
 
+if (!function_exists('dropcars_ensure_daily_sequences_table')) {
+    function dropcars_ensure_daily_sequences_table(PDO $pdo) {
+        static $ensured = false;
+        if ($ensured) return;
+        $ensured = true;
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `daily_sequences` (
+                `date_code` VARCHAR(10) NOT NULL,
+                `prefix` VARCHAR(10) NOT NULL,
+                `last_seq` INT NOT NULL DEFAULT 0,
+                `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`date_code`, `prefix`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        } catch (Throwable $e) {}
+    }
+}
+
 if (!function_exists('dropcars_max_daily_booking_sequence')) {
     /**
-     * Max numeric suffix for date code (yymmdd) across both enquiries and bookings tables.
+     * Max numeric suffix for date code (yymmdd) for a specific prefix/table.
      */
-    function dropcars_max_daily_booking_sequence(?PDO $pdo, string $ymd, string $prefix = '') {
+    function dropcars_max_daily_booking_sequence(?PDO $pdo, string $ymd, string $prefix = 'E'): int {
         $max = 0;
-        $pattern = '%' . $ymd . '%';
-        $tables = ['enquiries', 'bookings'];
+        $isBooking = ($prefix === 'DC' || $prefix === 'C');
+        $targetTable = $isBooking ? 'bookings' : 'enquiries';
         
         if ($pdo instanceof PDO) {
-            foreach ($tables as $table) {
-                try {
-                    $stmt = $pdo->prepare("SELECT `booking_id` FROM `{$table}` WHERE `booking_id` LIKE ?");
-                    $stmt->execute([$pattern]);
-                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                        $bid = trim((string)($row['booking_id'] ?? ''));
-                        if (preg_match('/^(?:E|C|DE|DC)?' . preg_quote($ymd, '/') . '(\d+)$/i', $bid, $m)) {
-                            $max = max($max, (int)$m[1]);
-                        }
-                    }
-                } catch (Throwable $e) {
-                    error_log("Error getting max sequence for {$table}: " . $e->getMessage());
+            try {
+                if ($isBooking) {
+                    $stmt = $pdo->prepare("SELECT `booking_id` FROM `bookings` WHERE `booking_id` LIKE ? OR `booking_id` LIKE ? OR `booking_id` LIKE ?");
+                    $stmt->execute(['DC' . $ymd . '%', 'C' . $ymd . '%', '%#' . $ymd . '%']);
+                } else {
+                    $stmt = $pdo->prepare("SELECT `booking_id` FROM `enquiries` WHERE `booking_id` LIKE ? OR `booking_id` LIKE ?");
+                    $stmt->execute(['E' . $ymd . '%', '%E' . $ymd . '%']);
                 }
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $bid = trim((string)($row['booking_id'] ?? ''));
+                    if ($bid === '') continue;
+                    $cleanBid = preg_replace('/[^A-Za-z0-9]/', '', $bid);
+                    if (preg_match('/(?:' . preg_quote($ymd, '/') . ')(\d+)$/i', $cleanBid, $m)) {
+                        $max = max($max, (int)$m[1]);
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log("Error getting max sequence for {$targetTable}: " . $e->getMessage());
             }
         }
         return $max;
@@ -527,32 +552,77 @@ if (!function_exists('dropcars_max_daily_booking_sequence')) {
 
 if (!function_exists('dropcars_next_enquiry_booking_id')) {
     /**
-     * Next ID: E + YYMMDD + NN for enquiries, C + YYMMDD + NN for bookings.
-     * Combines Database Max Check + Atomic File Counter to guarantee strict consecutive sequencing (01, 02, 03...)
+     * Next ID: E + YYMMDD + NN for enquiries, DC + YYMMDD + NN for confirmed bookings.
+     * Guarantees strict consecutive daily sequencing (01, 02, 03... 40).
      */
-    function dropcars_next_enquiry_booking_id(?PDO $pdo = null, string $prefix = 'E') {
+    function dropcars_next_enquiry_booking_id(?PDO $pdo = null, string $prefix = 'E'): string {
         $p = strtoupper(trim($prefix));
-        $prefixOut = ($p === 'DC' || $p === 'C') ? 'C' : 'E';
+        $isBooking = ($p === 'DC' || $p === 'C');
+        $prefixOut = $isBooking ? 'DC' : 'E';
         $ymd = date('ymd');
         
-        // 1. Get current max from DB
-        $dbMax = ($pdo instanceof PDO) ? dropcars_max_daily_booking_sequence($pdo, $ymd, $prefixOut) : 0;
+        $nextSeq = 1;
+        $dbMax = 0;
         
-        // 2. Atomic daily file sequence tracking to prevent duplicate ID collision even before DB commit
-        $seqDir = __DIR__ . '/../../api/storage';
-        if (!is_dir($seqDir)) {
-            @mkdir($seqDir, 0775, true);
+        // 1. If DB available, use atomic table sequence + max existing
+        if ($pdo instanceof PDO) {
+            try {
+                dropcars_ensure_daily_sequences_table($pdo);
+                $dbMax = dropcars_max_daily_booking_sequence($pdo, $ymd, $prefixOut);
+                
+                // Atomically update sequence in DB
+                $stmtSeq = $pdo->prepare("INSERT INTO `daily_sequences` (`date_code`, `prefix`, `last_seq`) 
+                    VALUES (?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE `last_seq` = GREATEST(`last_seq` + 1, VALUES(`last_seq`) + 1)");
+                $stmtSeq->execute([$ymd, $prefixOut, $dbMax]);
+                
+                $stmtGet = $pdo->prepare("SELECT `last_seq` FROM `daily_sequences` WHERE `date_code` = ? AND `prefix` = ? LIMIT 1");
+                $stmtGet->execute([$ymd, $prefixOut]);
+                $seqVal = (int) $stmtGet->fetchColumn();
+                $nextSeq = max($seqVal, $dbMax + 1, 1);
+            } catch (Throwable $e) {
+                error_log('[dropcars] Sequence DB error: ' . $e->getMessage());
+                $nextSeq = $dbMax + 1;
+            }
         }
-        $seqFile = $seqDir . '/seq_' . $ymd . '.txt';
+        
+        // 2. File-based atomic fallback / sync per prefix
+        $candidateDirs = [
+            dirname(__DIR__, 2) . '/api/storage',
+            dirname(__DIR__, 2) . '/storage',
+            dirname(__DIR__) . '/storage',
+            __DIR__ . '/../storage',
+            __DIR__ . '/../../api/storage',
+            sys_get_temp_dir() . '/dropcars_storage',
+            sys_get_temp_dir()
+        ];
+        $seqDir = null;
+        foreach ($candidateDirs as $dir) {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            if (is_dir($dir) && is_writable($dir)) {
+                $seqDir = $dir;
+                break;
+            }
+        }
+        if (!$seqDir) {
+            $seqDir = sys_get_temp_dir();
+        }
+        
+        $seqFile = rtrim($seqDir, '/\\') . '/seq_' . $prefixOut . '_' . $ymd . '.txt';
         $fileSeq = 0;
         
         $fp = @fopen($seqFile, 'c+');
         if ($fp) {
             if (flock($fp, LOCK_EX)) {
+                rewind($fp);
                 $content = trim((string) stream_get_contents($fp));
-                $fileSeq = (int) $content;
+                if ($content !== '' && is_numeric($content)) {
+                    $fileSeq = (int) $content;
+                }
                 
-                $nextSeq = max($dbMax, $fileSeq) + 1;
+                $nextSeq = max($nextSeq, $fileSeq + 1);
                 
                 ftruncate($fp, 0);
                 rewind($fp);
@@ -562,30 +632,33 @@ if (!function_exists('dropcars_next_enquiry_booking_id')) {
                 fclose($fp);
             } else {
                 fclose($fp);
-                $nextSeq = $dbMax + 1;
+                $nextSeq = max($nextSeq, $fileSeq + 1);
+                @file_put_contents($seqFile, (string)$nextSeq, LOCK_EX);
             }
         } else {
-            $nextSeq = $dbMax + 1;
+            @file_put_contents($seqFile, (string)$nextSeq, LOCK_EX);
         }
 
         $candidateId = $prefixOut . $ymd . str_pad((string) $nextSeq, 2, '0', STR_PAD_LEFT);
         
-        // 3. Double check DB uniqueness if PDO is connected
+        // 3. Double check DB uniqueness against target table
         if ($pdo instanceof PDO) {
             try {
-                $stmtE = $pdo->prepare("SELECT COUNT(*) FROM `enquiries` WHERE `booking_id` = ? LIMIT 1");
-                $stmtB = $pdo->prepare("SELECT COUNT(*) FROM `bookings` WHERE `booking_id` = ? LIMIT 1");
+                $targetTable = $isBooking ? 'bookings' : 'enquiries';
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$targetTable}` WHERE `booking_id` = ? LIMIT 1");
                 $tries = 0;
                 while ($tries < 100) {
-                    $stmtE->execute([$candidateId]);
-                    $stmtB->execute([$candidateId]);
-                    if ((int)$stmtE->fetchColumn() === 0 && (int)$stmtB->fetchColumn() === 0) {
+                    $stmt->execute([$candidateId]);
+                    if ((int)$stmt->fetchColumn() === 0) {
                         break;
                     }
                     $nextSeq++;
                     $candidateId = $prefixOut . $ymd . str_pad((string) $nextSeq, 2, '0', STR_PAD_LEFT);
                     $tries++;
                 }
+                // Keep daily_sequences in sync with resolved candidate
+                $updSeq = $pdo->prepare("UPDATE `daily_sequences` SET `last_seq` = GREATEST(`last_seq`, ?) WHERE `date_code` = ? AND `prefix` = ?");
+                $updSeq->execute([$nextSeq, $ymd, $prefixOut]);
             } catch (Throwable $e) {
                 error_log("dropcars_next_enquiry_booking_id collision check error: " . $e->getMessage());
             }

@@ -9,6 +9,23 @@
 
   var keyRouteDistances = window.DROP_CARS_DISTANCES || {};
 
+  // Lazily hydrate distance cache in background without blocking initial page parse
+  if (typeof window !== "undefined" && (!window.DROP_CARS_DISTANCES || Object.keys(window.DROP_CARS_DISTANCES).length === 0)) {
+    if (typeof fetch === "function") {
+      setTimeout(function () {
+        fetch("/data/distance_cache.json")
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && typeof data === "object") {
+              window.DROP_CARS_DISTANCES = data;
+              keyRouteDistances = data;
+            }
+          })
+          .catch(function () {});
+      }, 1500); // 1.5s delay after page load ensures critical rendering is 100% complete
+    }
+  }
+
   function normalizePlace(value) {
     var raw = (value || "").toString().toLowerCase().trim();
     if (!raw) return "";

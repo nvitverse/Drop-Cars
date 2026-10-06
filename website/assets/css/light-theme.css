@@ -521,7 +521,7 @@ html:not(.dark-mode) .promo-row input {
   background: #ffffff !important;
   border: 1.5px solid #e2e8f0 !important;
   border-radius: 5px !important;
-  font-size: 0.95rem !important;
+  font-size: 16px !important;
   color: #0f172a !important;
   padding: 0.7rem 0.9rem !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01) !important;

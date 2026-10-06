@@ -1023,8 +1023,12 @@ if ($threadKeySource === '||||') {
     $threadKeySource = 'unknown';
 }
 $threadHash          = substr(sha1($threadKeySource), 0, 24);
-$threadRootMessageId = '<booking-thread-' . $threadHash . '@gmail.com>';
-$currentMessageId   = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@gmail.com>';
+$mailDomain = 'dropcars.in';
+if (!empty($mailFrom) && strpos($mailFrom, '@') !== false) {
+    $mailDomain = substr(strrchr($mailFrom, '@'), 1);
+}
+$threadRootMessageId = '<booking-thread-' . $threadHash . '@' . $mailDomain . '>';
+$currentMessageId   = '<confirm-' . preg_replace('/[^A-Za-z0-9]/', '', (string)$bookingId) . '-' . uniqid('', true) . '@' . $mailDomain . '>';
 
 $phpmailerPath = __DIR__ . '/phpmailer/src/PHPMailer.php';
 // Skip blocking SMTP on the single-threaded php -S dev server.
@@ -1234,9 +1238,13 @@ if ($targetStatus !== 'confirmed') {
                 $vData = $fareBreakdown['vehicles'][$mappedKey];
                 if (isset($vData['perKmRate'])) $backendCostPerKm = (int)$vData['perKmRate'];
                 if (isset($vData['driverBata'])) $backendDriverBata = (int)$vData['driverBata'];
-                if (isset($vData['stateTax'])) $backendPermitCharges += (int)$vData['stateTax'];
-                if (isset($vData['permitCharges'])) $backendPermitCharges += (int)$vData['permitCharges'];
-                if (isset($vData['toll'])) $backendTollCharges += (int)$vData['toll'];
+                if (!empty($includeTaxes)) {
+                    if (isset($vData['stateTax'])) $backendPermitCharges += (int)$vData['stateTax'];
+                    if (isset($vData['permitCharges'])) $backendPermitCharges += (int)$vData['permitCharges'];
+                }
+                if (!empty($includeTolls)) {
+                    if (isset($vData['toll'])) $backendTollCharges += (int)$vData['toll'];
+                }
             }
             if ($backendCostPerKm === null && !empty($_waTariffs)) {
                 $_waTTSearch = $waIsRound ? 'round' : 'oneway';

@@ -41,6 +41,19 @@ if (!function_exists('dropcars_shell_admin_logged_in')) {
     }
 }
 
+if (!function_exists('dropcars_customer_logged_in')) {
+    function dropcars_customer_logged_in() {
+        if (session_status() === PHP_SESSION_NONE) {
+            $sessPath = __DIR__ . '/../config/session.php';
+            if (is_file($sessPath)) {
+                require_once $sessPath;
+            }
+            @session_start();
+        }
+        return !empty($_SESSION['customer_phone']) || !empty($_SESSION['customer_email']) || !empty($_SESSION['customer_id']);
+    }
+}
+
 class UIShell {
     private $theme;
     private $themes;
@@ -192,13 +205,14 @@ class UIShell {
             require_once __DIR__ . '/../config/session.php';
             @session_start();
         }
-        $customerLoggedIn = !empty($_SESSION['customer_phone']);
+        $customerLoggedIn = dropcars_customer_logged_in();
         $customerName = 'Customer';
         if ($customerLoggedIn) {
+            $customerName = htmlspecialchars($_SESSION['customer_name'] ?? 'Member', ENT_QUOTES, 'UTF-8');
             try {
                 require_once __DIR__ . '/../admin/config/database.php';
                 $pdo = $GLOBALS['db'];
-                if ($pdo instanceof PDO) {
+                if ($pdo instanceof PDO && !empty($_SESSION['customer_phone'])) {
                     $stmt = $pdo->prepare("SELECT `name` FROM `customers` WHERE `phone` = ? LIMIT 1");
                     $stmt->execute([$_SESSION['customer_phone']]);
                     $cName = $stmt->fetchColumn();
@@ -654,7 +668,6 @@ class UIShell {
         }
         $mapsKeyJs = htmlspecialchars($mapsKey, ENT_QUOTES, 'UTF-8');
         $mapsKeyUrl = rawurlencode($mapsKey);
-        $distanceCache = @file_get_contents(__DIR__ . '/../data/distance_cache.json') ?: '{}';
         $config = @file_get_contents(__DIR__ . '/../data/config.json') ?: '{}';
         
         $enableWhatsApp = $this->config['enableWhatsAppWidget'] ?? true;
@@ -702,7 +715,7 @@ class UIShell {
         $cfgV = max($cfgV, $configJsonV);
         $scripts = "
     <script>
-        window.DROP_CARS_DISTANCES = {$distanceCache};
+        window.DROP_CARS_DISTANCES = window.DROP_CARS_DISTANCES || {};
         window.DROP_CARS_CONFIG = {$config};
         window.DROP_CARS_UX = " . json_encode([
             'enableWhatsApp' => $enableWhatsApp,

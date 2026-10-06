@@ -781,9 +781,9 @@ html.dark-mode .section-eyebrow { color: #38bdf8 !important; }
   color: #ffffff !important;
   border-color: #0284c7 !important;
 }
-.logo-brand-pill { border-color: #3b82f6 !important; }
-.logo__mark { background: #0D47A1 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
-.logo__text { background: #ffffff !important; color: #0D47A1 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+.logo-brand-pill { border-color: #070d18 !important; }
+.logo__mark { background: #070d18 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+.logo__text { background: #ffffff !important; color: #070d18 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
 
 /* ── Footer – dark ── */
 html.dark-mode .site-footer { background: #040810 !important; color: rgba(226,240,255,0.65) !important; border-top: 1px solid #0f172a !important; }
@@ -818,9 +818,9 @@ html.dark-mode .footer__theme-panel .footer__theme-link.active {
   color: #ffffff !important;
   border-color: #0ea5e9 !important;
 }
-html.dark-mode .logo-brand-pill { border-color: #3b82f6 !important; }
-html.dark-mode .logo__mark { background: #0D47A1 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
-html.dark-mode .logo__text { background: #ffffff !important; color: #0D47A1 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+html.dark-mode .logo-brand-pill { border-color: #070d18 !important; }
+html.dark-mode .logo__mark { background: #070d18 !important; color: #ffffff !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
+html.dark-mode .logo__text { background: #ffffff !important; color: #070d18 !important; border: none !important; margin: 0 !important; border-radius: 0 !important; }
 
 /* Manual country code input styling in dark mode */
 html.dark-mode .country-code-manual-inline {

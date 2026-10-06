@@ -226,6 +226,20 @@ $tripType = $data['serviceType'] ?? 'one_way';
 $vehicleType = $data['vehicleType'] ?? 'Sedan'; // Preferred from passenger count
 $fareEstimate = (int) ($data['fareEstimate'] ?? 0);
 $distance = (int) ($data['distanceHint'] ?? $data['distance'] ?? 0);
+
+// Curated route distance guard: if standard highway distance exists and client sent an excessive detour (> 20%)
+require_once __DIR__ . '/../engine/seo-core.php';
+$seoCore = new SEOCore();
+$normPickup = $seoCore->normalizeCitySlug(preg_replace('/[^a-zA-Z0-9\s-]/', '', strtolower($dropSource ? $pickupSource : $pickup)));
+$normDrop   = $seoCore->normalizeCitySlug(preg_replace('/[^a-zA-Z0-9\s-]/', '', strtolower($dropSource ?: $drop)));
+$rInfo = $seoCore->getRouteInfo($normPickup, $normDrop);
+if ($rInfo && !empty($rInfo['distanceKm'])) {
+    $stdDistance = (int)$rInfo['distanceKm'];
+    if ($stdDistance > 0 && $distance > $stdDistance * 1.2 && $tripType === 'one_way') {
+        $distance = $stdDistance;
+    }
+}
+
 $selectedVehicle = strtoupper((string)($data['selectedVehicle'] ?? ''));
 $vehicleMeta = [
     'SEDAN' => ['name' => 'Sedan (Dzire/Aura or Equivalent)', 'capacity' => '4 seats', 'ac' => 'A/C'],
@@ -380,25 +394,6 @@ $includeTaxes = isset($data['includeTaxes'])
         ? (bool)$data['fareBreakdown']['includeTaxes']
         : $isInclusive);
 
-$inclusions = "Air-conditioned vehicle with driver, Base fare and fuel charges, Driver allowance (bata), 24/7 customer support";
-if ($includeTolls) {
-    $inclusions .= ", Toll charges";
-}
-if ($includeTaxes) {
-    $inclusions .= ", State border tax";
-}
-
-$exclusions = "";
-if (!$includeTolls) {
-    $exclusions .= "Toll charges, as applicable, ";
-}
-if (!$includeTaxes) {
-    $exclusions .= "State border tax (applicable only if crossing state border), ";
-} else {
-    $exclusions .= "State border tax (if crossing border & not explicitly shown above), ";
-}
-$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "Extra {$extraKmRateStr}/KM (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
-
 $fareBreakdown = [];
 if (isset($data['fareBreakdown']) && is_array($data['fareBreakdown'])) {
     $fareBreakdown = $data['fareBreakdown'];
@@ -408,6 +403,50 @@ if (!empty($stops) && is_array($stops)) {
     $fareBreakdown['stops'] = $stops;
 }
 require_once __DIR__ . '/fare-breakdown-format.php';
+$fareBreakdown['pickup'] = $pickup;
+$fareBreakdown['drop'] = $drop;
+if (empty($fareBreakdown['borderTransitions'])) {
+    $fareBreakdown['borderTransitions'] = dropcars_detect_border_transitions((string)$pickup, (string)$drop, is_array($stops) ? $stops : []);
+}
+
+$borderList = !empty($fareBreakdown['borderTransitions']) && is_array($fareBreakdown['borderTransitions']) ? $fareBreakdown['borderTransitions'] : [];
+$borderCount = count($borderList);
+$selVehUpper = strtoupper($selectedVehicle ?: $vehicleType);
+$vTaxRate = 500;
+if ($selVehUpper === 'SUV') $vTaxRate = 1000;
+if ($selVehUpper === 'INNOVA' || $selVehUpper === 'CRYSTA') $vTaxRate = 1500;
+$totalTaxCalculated = 0;
+foreach ($borderList as $b) {
+    if (($selVehUpper === 'INNOVA' || $selVehUpper === 'CRYSTA') && !empty($b['andhraBorder'])) {
+        $totalTaxCalculated += 2000;
+    } else {
+        $totalTaxCalculated += $vTaxRate;
+    }
+}
+
+$inclusions = "Air-conditioned vehicle with driver, Base fare and fuel charges, Driver allowance (bata), 24/7 customer support";
+if ($includeTolls) {
+    $inclusions .= ", Toll charges";
+}
+if ($includeTaxes) {
+    $inclusions .= ", State border tax" . ($totalTaxCalculated > 0 ? " included (₹" . number_format($totalTaxCalculated) . ")" : "");
+}
+
+$exclusions = "";
+if (!$includeTolls) {
+    $exclusions .= "Toll charges, as applicable, ";
+}
+if (!$includeTaxes) {
+    if ($totalTaxCalculated > 0) {
+        $exclusions .= "State border tax: ₹" . number_format($totalTaxCalculated) . " (" . ($borderCount === 1 ? "crossing 1 state border" : "crossing {$borderCount} state borders") . ", payable extra to driver), ";
+    } else {
+        $exclusions .= "State border tax (applicable only if crossing state border), ";
+    }
+} else {
+    $exclusions .= "State border tax (if crossing border & not explicitly shown above), ";
+}
+$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "Extra {$extraKmRateStr}/KM (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
+
 if ($selectedVehicle !== '') {
     $breakdownHtml = dropcars_fare_breakdown_html($fareBreakdown, $selectedVehicle);
     $breakdownPlain = dropcars_fare_breakdown_plain($fareBreakdown, $selectedVehicle);
@@ -556,7 +595,14 @@ if ($includeTaxes) $waCustomerMsg .= "🟢 State border permit / tax included (i
 $waCustomerMsg .= "\n⚠️ *WHAT'S EXTRA / EXCLUDED*\n";
 $waCustomerMsg .= "🔸 Parking and entry fees (if any, paid as actuals)\n";
 if (!$includeTolls) $waCustomerMsg .= "🔸 Highway toll charges (paid as actuals)\n";
-if (!$includeTaxes) $waCustomerMsg .= "🔸 State border tax (applicable only if crossing state border)\n";
+if (!$includeTaxes) {
+    if (!empty($fareBreakdown['borderTransitions'])) {
+        $taxAmtStr = ($selectedVehicle === 'INNOVA' || $selectedVehicle === 'CRYSTA') ? '₹1,500' : (($selectedVehicle === 'SUV') ? '₹1,000' : '₹500');
+        $waCustomerMsg .= "🔸 State permit / border tax: {$taxAmtStr} (crossing state border, paid to driver)\n";
+    } else {
+        $waCustomerMsg .= "🔸 State border tax (applicable only if crossing state border)\n";
+    }
+}
 if (!$isHourlyCheck) $waCustomerMsg .= "🔸 Extra KM beyond " . number_format($calculatedMinKm) . " KM at " . $extraKmRateStr . "/KM" . $garageText . "\n";
 
 $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n⚡ *CONFIRM YOUR TRIP*\n━━━━━━━━━━━━━━━━━━━\n";
@@ -791,13 +837,13 @@ $bodyHtml .= $breakdownHtml
                 <div style='font-weight:700; color:#0f8a5f; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;'>✓ What's Included</div>
                 <ul style='list-style: none; padding-left: 0; margin: 0; font-size: 13px; color: #2c3e50;'>
                     <li style='margin-bottom: 6px;'>🟢 Base fare and fuel charges</li>
-                    <li style='margin-bottom: 6px;'>🟢 Driver allowance (bata)</li>" . ($includeTolls ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 Toll charges included</li>" : "") . ($includeTaxes ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 State border tax included (if crossing state border)</li>" : "") . "
+                    <li style='margin-bottom: 6px;'>🟢 Driver allowance (bata)</li>" . ($includeTolls ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 Toll charges included</li>" : "") . ($includeTaxes ? "<li style='margin-bottom: 6px; font-weight: 700; color: #0f8a5f;'>🟢 State border tax included" . ($totalTaxCalculated > 0 ? " (₹" . number_format($totalTaxCalculated) . ")" : "") . "</li>" : "") . "
                 </ul>
             </div>
             <div style='display: table-cell; width: 50%; vertical-align: top; padding-left: 10px; border-left: 1px solid #eef3fb;'>
                 <div style='font-weight:700; color:#d97706; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;'>⚠️ What's Excluded</div>
                 <ul style='list-style: none; padding-left: 0; margin: 0; font-size: 13px; color: #64748b;'>
-                    <li style='margin-bottom: 6px;'>🔴 Parking and entry fees, (if any)</li>" . ($includeTolls ? "" : "<li style='margin-bottom: 6px;'>🔴 Toll charges, as applicable</li>") . ($includeTaxes ? "" : "<li style='margin-bottom: 6px;'>🔴 State border tax (applicable only if crossing state border)</li>") . "
+                    <li style='margin-bottom: 6px;'>🔴 Parking and entry fees, (if any)</li>" . ($includeTolls ? "" : "<li style='margin-bottom: 6px;'>🔴 Toll charges, as applicable</li>") . ($includeTaxes ? "" : ($totalTaxCalculated > 0 ? "<li style='margin-bottom: 6px; font-weight: 700; color: #c2410c;'>🔴 State border tax: ₹" . number_format($totalTaxCalculated) . " (crossing state border, payable extra)</li>" : "<li style='margin-bottom: 6px;'>🔴 State border tax (applicable only if crossing state border)</li>")) . "
                     " . ($isHourlyCheck ? "" : "<li style='margin-bottom: 6px;'>🔴 Extra " . $extraKmRateStr . "/KM (if exceeded the KMs calculated" . $garageText . ")</li>") . "
                     <li style='margin-bottom: 6px;'>🔴 " . $waitingChargeText . "</li>
                 </ul>
@@ -1213,8 +1259,12 @@ if ($enableEmail && $appPassword) {
         $threadKeySource = 'unknown';
     }
     $threadHash = substr(sha1($threadKeySource), 0, 24);
-    $threadRootMessageId = '<trip-thread-' . $threadHash . '@gmail.com>';
-    $currentMessageId = '<enquiry-' . preg_replace('/[^A-Za-z0-9]/', '', (string) $bookingId) . '-' . uniqid('', true) . '@gmail.com>';
+    $mailDomain = 'dropcars.in';
+    if (!empty($mailFrom) && strpos($mailFrom, '@') !== false) {
+        $mailDomain = substr(strrchr($mailFrom, '@'), 1);
+    }
+    $threadRootMessageId = '<trip-thread-' . $threadHash . '@' . $mailDomain . '>';
+    $currentMessageId = '<enquiry-' . preg_replace('/[^A-Za-z0-9]/', '', (string) $bookingId) . '-' . uniqid('', true) . '@' . $mailDomain . '>';
 
     // Thread grouping: the first email for a trip owns the thread-root
     // Message-ID; any later repeat submission replies into that same thread so
