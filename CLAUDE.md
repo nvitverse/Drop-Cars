@@ -37,3 +37,13 @@
 
 ## 5. Communication with Other Sessions
 - If creating a major refactor or adding a new global component, add a brief note in `AI_COLLABORATION_LOG.md` so other Claude/Antigravity sessions are instantly aware.
+
+---
+
+## 6. Backend deploys: ONE branch, ONE script (added 2026-10-06)
+Cloud Run serves exactly one version. A deploy from any folder replaces the live API with THAT folder's code, so a stale or half-edited copy silently deletes other people's work (this happened on 2026-10-02: a day of fixes disappeared).
+- **Shared branch for the backend:** `deploy/merged-2026-10-06` (or the branch that replaced it - see the newest line in `AI_COLLABORATION_LOG.md`). Both tools start from it, commit to it (or merge into it) and push.
+- **Never run `gcloud run deploy` by hand.** Use `powershell -File scripts\deploy-backend.ps1`. It refuses unless: `backend/` is fully committed, your branch contains the commit that is live now (service label `git-sha`), the commit is pushed, and the tests pass. Use `-DryRun` to only check.
+- **Commit before you deploy and merge before you deploy.** If the script says "your branch does not contain what is live", run `git merge <that sha>` (or `git fetch; git merge origin/<shared branch>`), resolve, test, retry. Do not copy files from other folders to get around it.
+- **Never put a password, token or key in source.** SMTP, Razorpay, Firebase and similar secrets are Cloud Run environment variables / platform settings.
+- After deploying, add one line to `AI_COLLABORATION_LOG.md`: what went live, commit, revision.

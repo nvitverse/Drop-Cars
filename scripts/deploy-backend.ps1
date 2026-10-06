@@ -65,7 +65,10 @@ if (-not $SkipTests) {
   Write-Host "Running backend tests..."
   Push-Location backend
   $env:TEMP = "C:\gtmp"; $env:TMP = "C:\gtmp"
-  python -m pytest -q tests -W ignore
+  $py = $env:DROPCARS_PYTHON
+  if (-not $py) { $py = 'C:\Users\Administrator\Desktop\dropcars-review\backend\.venv\Scripts\python.exe' }
+  if (-not (Test-Path $py)) { $py = 'python' }
+  & $py -m pytest -q tests -W ignore
   $code = $LASTEXITCODE
   Pop-Location
   if ($code -ne 0) { Fail "Backend tests failed. Fix them before deploying." }
