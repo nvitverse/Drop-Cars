@@ -261,6 +261,9 @@ class VendorOrderDetailResponse(BaseModel):
     toll_charges: Optional[int] = None
     night_charges: Optional[int] = None
     waiting_time: Optional[int] = None
+    waiting_minutes: Optional[int] = None
+    # How the final bill was worked out (crud/end_records.py build_closing_breakdown); rebuilt for trips closed before it was stored
+    closing_breakdown: Optional[Dict[str, Any]] = None
     pickup_notes: Optional[str] = None
 
     # Source-specific details for HOURLY_RENTAL

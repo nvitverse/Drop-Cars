@@ -7063,6 +7063,7 @@ class SystemSettingsUpdateSchema(BaseModel):
     unaccepted_short_notice_hours: Optional[float] = None
     unaccepted_short_notice_percent: Optional[float] = None
     urgent_reminder_max_count: Optional[int] = None
+    trip_otp_enforced: Optional[int] = None
     multicity_waiting_rate_per_hour: Optional[float] = None
     multicity_waiting_free_minutes: Optional[int] = None
     fleet_payment_channels: Optional[str] = None
@@ -7106,6 +7107,7 @@ def update_system_settings_endpoint(
         "ai_bot_enabled", "ai_bot_daily_limit", "ai_bot_global_daily_limit", "doc_ai_enabled", "doc_ai_daily_limit",
         "gst_number", "gst_business_name", "gst_business_address",
         "fleet_payment_channels", "fleet_payment_link_message", "fleet_payment_link_expiry_hours", "staff_permission_keys",
+        "trip_otp_enforced", "multicity_waiting_rate_per_hour", "multicity_waiting_free_minutes",
     }
     if any(k in updates for k in _owner_only):
         require_owner(current_admin)

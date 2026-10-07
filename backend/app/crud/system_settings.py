@@ -53,6 +53,7 @@ SYSTEM_SETTING_DEFAULTS = {
     "unaccepted_short_notice_percent": "50",    # ... rings once this % of the time between posting and pickup has passed
     "multicity_waiting_rate_per_hour": "60",    # Rs billed per hour of waiting on a multi-city trip (60 = the old Rs 1 per minute)
     "multicity_waiting_free_minutes": "0",      # waiting minutes that are never billed (waiting hours included in the booking are free too)
+    "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only
     "urgent_reminder_max_count": "1",           # drivers get this many "closing soon" pushes per booking (was one per minute)
     "fleet_payment_channels": "Wallet,GPay,PhonePe,Paytm,Bank Transfer,Cash in Hand",   # comma separated; "Wallet" debits the partner's wallet
     "fleet_payment_link_message": "Hello {name}, please pay Rs.{amount} for your Drop Cars {plan} Trusted Partner plan using this secure link:\n{link}\nYour account is upgraded automatically as soon as the payment is done. - Drop Cars",

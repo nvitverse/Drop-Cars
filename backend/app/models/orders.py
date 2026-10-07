@@ -126,6 +126,9 @@ class Order(Base):
     night_charges = Column(Integer, nullable=True)
     waiting_time = Column(Integer, nullable=True)   # the waiting CHARGE in rupees billed on a multi-city trip (what every app shows with a rupee sign)
     waiting_minutes = Column(Integer, nullable=True)  # the minutes the driver entered at trip end (audit)
+    # How the final bill was worked out, line by line, written once at trip close (crud/end_records.py build_closing_breakdown).
+    # The Admin App shows it and builds the invoice from it, so the invoice can no longer disagree with what was billed.
+    closing_breakdown = Column(JSON, nullable=True)
 
     # Cancellation tracking
     cancelled_by = Column(SqlEnum(CancelledByEnum, name="cancelled_by_enum"), nullable=True)

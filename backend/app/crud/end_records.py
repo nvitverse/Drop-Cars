@@ -19,6 +19,97 @@ from app.crud.notification import send_trip_status_notification_to_vendor_and_ve
 SELF_SOURCED_PLATFORM_FEE_PERCENT = 10
 
 
+def build_closing_breakdown(*, trip_type, km_driven, billed_km, min_km_floor, planned_km, days, cost_per_km, extra_cost_per_km,
+                            driver_allowance, extra_driver_allowance, permit_charges, extra_permit_charges, hill_charges,
+                            toll_charges, toll_is_actual, night_charges, waiting_minutes=None, waiting_charge=0,
+                            fare_type="ITEMIZED") -> dict:
+    """The customer's bill for a closed trip as plain numbered lines, plus the notes that explain WHY the numbers are what they are
+    (km driven vs minimum coverage vs planned, number of days, actual toll). Pure: no database."""
+    rate = int(cost_per_km or 0) + int(extra_cost_per_km or 0)
+    km_fare = rate * int(billed_km or 0)
+    bata = int(driver_allowance or 0) + int(extra_driver_allowance or 0)
+    permit = int(permit_charges or 0) + int(extra_permit_charges or 0)
+    lines = [{"key": "km", "label": f"Distance {int(billed_km or 0)} km x Rs {rate}", "amount": km_fare}]
+    if bata:
+        lines.append({"key": "bata", "label": f"Driver bata{f' ({days} days)' if days and days > 1 else ''}", "amount": bata})
+    for key, label, amt in (("permit", "State permit", permit), ("hill", "Hill / Ghat", int(hill_charges or 0)),
+                            ("toll", "Toll (actual, entered by driver)" if toll_is_actual else "Toll", int(toll_charges or 0)),
+                            ("night", "Night charges", int(night_charges or 0))):
+        if amt:
+            lines.append({"key": key, "label": label, "amount": amt})
+    if waiting_charge:
+        lines.append({"key": "waiting", "label": f"Waiting ({int(waiting_minutes or 0)} min)", "amount": int(waiting_charge)})
+    notes = []
+    if km_driven is not None:
+        if billed_km and int(billed_km) > int(km_driven):
+            notes.append(f"Driven {km_driven} km, but the minimum coverage is {int(min_km_floor or billed_km)} km"
+                         f"{f' ({days} days)' if days and days > 1 else ''}, so {int(billed_km)} km is billed.")
+        else:
+            notes.append(f"Driven {km_driven} km (odometer).")
+    if planned_km:
+        notes.append(f"The booking was quoted for {int(planned_km)} km.")
+    if fare_type == "ALL_INCLUSIVE":
+        notes.append("All-inclusive booking: the customer pays the agreed package amount; the lines above are the itemised cost, not the price charged.")
+    return {
+        "version": 1, "trip_type": str(trip_type), "fare_type": fare_type, "km_driven": km_driven, "km_billed": int(billed_km or 0),
+        "min_km_floor": int(min_km_floor) if min_km_floor else None, "planned_km": int(planned_km) if planned_km else None,
+        "days": int(days or 1), "rate_per_km": rate, "lines": lines, "itemised_total": sum(l["amount"] for l in lines), "notes": notes,
+    }
+
+
+def closing_breakdown_for_order(db, order) -> dict | None:
+    """The stored closing breakdown, or - for a trip closed before it was stored - a rebuild from the order, its rates and the
+    odometer record, marked `reconstructed`. Only for finished trips. Never raises."""
+    try:
+        if str(getattr(order.trip_status, "value", order.trip_status)).upper() != "COMPLETED":
+            return None
+        if order.closing_breakdown:
+            return order.closing_breakdown
+        new_order = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first() if (order.source and order.source.name == "NEW_ORDERS") else None
+        er = db.query(EndRecord).filter(EndRecord.order_id == order.id).order_by(EndRecord.id.desc()).first()
+        if not new_order or not er or not er.end_km or er.end_km <= 0:
+            return None
+        from app.utils.fare_rules import get_fare_rules
+        rules = get_fare_rules()
+        km_driven = er.end_km - er.start_km
+        billed, floor, days = km_driven, None, 1
+        if order.trip_type == OrderTypeEnum.ONEWAY:
+            floor = int(rules["oneway_min_km"])
+            billed = max(km_driven, floor)
+        elif order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
+            days = max(1, _actual_trip_days(order.start_date_time, er.updated_at or er.created_at))
+            key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
+            floor = int(rules[key]) * days
+            billed = max(km_driven, floor)
+        da, eda = int(new_order.driver_allowance or 0), int(new_order.extra_driver_allowance or 0)
+        if days > 1:
+            da, eda = da * days, eda * days
+        waiting = int(order.waiting_time or 0) if order.trip_type == OrderTypeEnum.MULTY_CITY else 0
+        bd = build_closing_breakdown(
+            trip_type=getattr(order.trip_type, "value", order.trip_type), km_driven=km_driven, billed_km=billed, min_km_floor=floor,
+            planned_km=order.trip_distance, days=days, cost_per_km=new_order.cost_per_km, extra_cost_per_km=new_order.extra_cost_per_km,
+            driver_allowance=da, extra_driver_allowance=eda, permit_charges=new_order.permit_charges,
+            extra_permit_charges=new_order.extra_permit_charges, hill_charges=new_order.hill_charges,
+            toll_charges=int(order.updated_toll_charges or 0) or int(new_order.toll_charges or 0), toll_is_actual=bool(order.updated_toll_charges),
+            night_charges=int(order.night_charges or 0), waiting_minutes=order.waiting_minutes or (waiting or None), waiting_charge=waiting,
+            fare_type=str(getattr(getattr(order, "fare_type", None), "value", getattr(order, "fare_type", None)) or "ITEMIZED"),
+        )
+        bd["reconstructed"] = True
+        total = int(order.closed_vendor_price or 0)
+        bd.update({"customer_total": total, "driver_net": order.driver_profit, "poster_share": order.vendor_profit,
+                   "platform_fee": order.admin_profit, "advance_received": int(order.advance_received or 0),
+                   "cash_to_collect": max(0, total - int(order.advance_received or 0))})
+        diff = total - bd["itemised_total"]
+        if abs(diff) >= 1:
+            bd["notes"].append(f"The final total (Rs {total}) differs from the itemised lines (Rs {bd['itemised_total']}) by Rs {diff}: "
+                               f"convenience fee, an all-inclusive package amount, or a rule that changed after this trip closed.")
+        bd["notes"].append("This bill was rebuilt from the saved rates and odometer record because the trip closed before bills were stored.")
+        return bd
+    except Exception as e:  # noqa: BLE001
+        print(f"closing breakdown rebuild failed: {e}")
+        return None
+
+
 def multicity_waiting_charge(db, minutes, included_hours=None, days=1) -> int:
     """Rupees to bill for the waiting time a driver entered (in MINUTES) at the end of a multi-city trip.
     Before 2026-10-07 the minutes themselves were added to the fare as rupees (450 min = Rs 450), unchecked, even when waiting hours
@@ -160,7 +251,15 @@ def build_customer_bill(db, order) -> dict:
     if not order.closed_vendor_price and order.source and order.source.name == "HOURLY_RENTAL":
         total += conv   # not closed yet: the quoted hourly price does not carry the convenience fee, the closed one does
     lines = []
-    if new_order:
+    _snap = getattr(order, "closing_breakdown", None)
+    _all_incl = str(getattr(getattr(order, "fare_type", None), "value", getattr(order, "fare_type", None)) or "").upper() == "ALL_INCLUSIVE"
+    if _all_incl and total:
+        # an all-inclusive booking is billed as ONE agreed amount: showing the itemised lines plus a plug made the bill look wrong
+        lines.append({"label": "All-inclusive fare (agreed package)", "amount": max(0, total - conv), "included": True})
+    elif _snap and _snap.get("lines"):
+        # the exact lines the fare was worked out from at trip close (no rebuilding, no "Other charges" plug)
+        lines.extend({"label": l["label"], "amount": int(l["amount"]), "included": True} for l in _snap["lines"])
+    elif new_order:
         rate = int(new_order.cost_per_km or 0) + int(new_order.extra_cost_per_km or 0)
         if rate and billed_km:
             lines.append({"label": f"Distance ({billed_km} km x Rs {rate})", "amount": rate * billed_km, "included": True})
@@ -588,6 +687,22 @@ async def update_end_trip_record(
                 actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1,
             )
             order.waiting_time = waiting_charge
+        _bd_days = actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1
+        _bd_floor = (int(_min_rules["oneway_min_km"]) if order.trip_type == OrderTypeEnum.ONEWAY
+                     else (_min_rules["round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"] * _bd_days
+                           if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else None))
+        try:
+            order.closing_breakdown = build_closing_breakdown(
+                trip_type=getattr(order.trip_type, "value", order.trip_type), km_driven=total_km, billed_km=updated_km,
+                min_km_floor=_bd_floor, planned_km=order.trip_distance, days=_bd_days, cost_per_km=cost_per_km,
+                extra_cost_per_km=extra_cost_per_km, driver_allowance=driver_allowance, extra_driver_allowance=extra_driver_allowance,
+                permit_charges=permit_charges, extra_permit_charges=extra_permit_charges, hill_charges=hill_charges,
+                toll_charges=toll_charges, toll_is_actual=bool(order.updated_toll_charges), night_charges=night_charges,
+                waiting_minutes=waiting_time if order.trip_type == OrderTypeEnum.MULTY_CITY else None, waiting_charge=waiting_charge,
+                fare_type=str(getattr(getattr(order, "fare_type", None), "value", getattr(order, "fare_type", None)) or "ITEMIZED"),
+            )
+        except Exception as _bd_err:
+            print(f"closing breakdown failed (bill unaffected): {_bd_err}")
         closed_vendor_price = ((cost_per_km+extra_cost_per_km)*updated_km) + (driver_allowance+extra_driver_allowance) + (permit_charges+extra_permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
         closed_driver_price = ((cost_per_km)*updated_km) + (driver_allowance) + (permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
 
@@ -687,6 +802,19 @@ async def update_end_trip_record(
             admin_profit = 0 if commission_waived else math.ceil(base_amount * rates["admin"] / 100)
             commision_amount = 0 if commission_waived else rates["admin"]
             driver_profit = closed_vendor_price - vendor_profit - admin_profit
+
+        # Final totals go onto the breakdown too (what the customer pays, and how it splits)
+        try:
+            if order.closing_breakdown:
+                _bd = dict(order.closing_breakdown)
+                _bd.update({
+                    "customer_total": int(closed_vendor_price), "driver_net": int(driver_profit), "poster_share": int(vendor_profit),
+                    "platform_fee": int(admin_profit), "advance_received": int(order.advance_received or 0),
+                    "cash_to_collect": max(0, int(closed_vendor_price) - int(order.advance_received or 0)),
+                })
+                order.closing_breakdown = _bd
+        except Exception as _bd_err:
+            print(f"closing breakdown totals failed (bill unaffected): {_bd_err}")
 
         # Set final computed profits on order
         order.closed_vendor_price = closed_vendor_price

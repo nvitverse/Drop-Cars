@@ -405,6 +405,8 @@ def get_admin_order_details(db: Session, order_id: int) -> Optional[AdminOrderDe
         advance_received=getattr(order, 'advance_received', None),
         night_charges=order.night_charges,
         waiting_time=order.waiting_time,
+        waiting_minutes=getattr(order, "waiting_minutes", None),
+        closing_breakdown=__import__("app.crud.end_records", fromlist=["closing_breakdown_for_order"]).closing_breakdown_for_order(db, order),
         toll_charge_update=order.toll_charge_update or False,
         updated_toll_charges=order.updated_toll_charges,
         cost_per_km=cost_per_km,

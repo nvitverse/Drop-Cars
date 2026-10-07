@@ -110,7 +110,15 @@ interface Order {
   charge_items?: Array<{ label: string; included: boolean }>;
   advance_received?: number;
   night_charges?: number;
-  waiting_time?: number;
+  waiting_time?: number;            // the waiting CHARGE in rupees on a multi-city trip
+  waiting_minutes?: number;         // the minutes the driver entered
+  closing_breakdown?: {
+    lines: Array<{ key: string; label: string; amount: number }>;
+    notes: string[];
+    km_driven?: number | null; km_billed?: number; min_km_floor?: number | null; planned_km?: number | null; rate_per_km?: number; days?: number;
+    itemised_total?: number; customer_total?: number; driver_net?: number | null; poster_share?: number | null; platform_fee?: number | null;
+    advance_received?: number; cash_to_collect?: number; reconstructed?: boolean; fare_type?: string;
+  } | null;
   toll_charge_update?: boolean;
   updated_toll_charges?: number;
   cost_per_km?: number;
@@ -290,8 +298,9 @@ export default function OrdersScreen() {
 
     const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
     const assignedCar: any = order.assigned_car;
-    const startOtp = (order as any)?.start_trip_otp || (order as any)?.start_otp || (order?.id ? String(order.id).padStart(4, '0').slice(-4) : '0000');
-    const endOtp = (order as any)?.end_trip_otp || (order as any)?.end_otp || '9152';
+    // Only a real code is ever put in a message. (It used to invent one - the booking number, and a fixed 9152 - when none was known.)
+    const startOtp = (order as any)?.start_trip_otp || (order as any)?.start_otp || undefined;
+    const endOtp = (order as any)?.end_trip_otp || (order as any)?.end_otp || undefined;
 
     const templateData: WhatsAppTemplateData = {
       bookingId: order.id,
@@ -336,7 +345,43 @@ export default function OrdersScreen() {
     }
 
     const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
-    const invoiceData: Partial<InvoiceData> = {
+    // A closed trip is invoiced from how it was ACTUALLY billed at trip close (km driven / minimum coverage, real toll, waiting,
+    // extras) - not from the quote. It used to show the planned km (227) and the quoted fare for a trip driven 315 km.
+    const bd = (order.trip_status || '').toUpperCase() === 'COMPLETED' ? order.closing_breakdown : null;
+    const bdAmount = (key: string) => Number(bd?.lines?.find((l) => l.key === key)?.amount || 0);
+    const bdGap = bd ? Number(bd.customer_total || 0) - Number(bd.itemised_total || 0) : 0;
+    const invoiceData: Partial<InvoiceData> = bd ? {
+      invoiceNumber: String(order.id),
+      date: order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+      customerName: order.customer_name || 'Customer',
+      customerPhone: order.customer_number || '',
+      pickup: fromCity,
+      dropLocation: toCity,
+      pickupDate: order.start_date_time ? new Date(order.start_date_time).toLocaleDateString('en-IN') : undefined,
+      pickupTime: order.start_date_time ? new Date(order.start_date_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : undefined,
+      vehicleType: formatCarType(order.car_type || 'SEDAN_4_PLUS_1'),
+      tripType: order.trip_type || 'One Way',
+      distanceKm: bd.km_billed,
+      ratePerKm: bd.rate_per_km,
+      baseFare: bdAmount('km'),
+      driverBata: bdAmount('bata'),
+      permitCharges: bdAmount('permit'),
+      hillsCharges: bdAmount('hill'),
+      tollCharges: bdAmount('toll'),
+      nightCharges: bdAmount('night'),
+      waitingCharges: bdAmount('waiting'),
+      extraCharges: bdGap > 0 ? bdGap : 0,
+      discountAmount: bdGap < 0 ? -bdGap : 0,
+      advancePaid: Number(bd.advance_received ?? order.advance_received ?? 0),
+      startingKm: (order.end_records?.[0] as any)?.start_km,
+      closingKm: (order.end_records?.[0] as any)?.end_km,
+      isCompleted: true,
+      driverName: assigned?.driver_name || (assigned as any)?.full_name,
+      driverPhone: assigned?.driver_number || (assigned as any)?.primary_number,
+      cabName: (assigned as any)?.car_name,
+      cabNumber: assigned?.vehicle_number || (assigned as any)?.reg_id,
+      notes: (bd.notes || []).join(' '),
+    } : {
       invoiceNumber: String(order.id),
       date: order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
       customerName: order.customer_name || 'Customer',
@@ -1915,8 +1960,8 @@ export default function OrdersScreen() {
                   )}
                   {!!selectedOrder.waiting_time && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Waiting Time:</Text>
-                      <Text style={styles.detailValue}>{selectedOrder.waiting_time} min</Text>
+                      <Text style={styles.detailLabel}>Waiting charge{selectedOrder.waiting_minutes ? ` (${selectedOrder.waiting_minutes} min)` : ''}:</Text>
+                      <Text style={styles.detailValue}>{formatCurrency(selectedOrder.waiting_time)}</Text>
                     </View>
                   )}
                   {selectedOrder.toll_charge_update && (
@@ -2475,6 +2520,36 @@ export default function OrdersScreen() {
                 ))}
               </View>
             )}
+
+            {/* FINAL BILL - exactly how the closing amount was worked out */}
+            {(selectedOrder.trip_status || '').toUpperCase() === 'COMPLETED' && selectedOrder.closing_breakdown ? (
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Final bill - how it was calculated</Text>
+                {selectedOrder.closing_breakdown.lines.map((l) => (
+                  <View key={l.key} style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{l.label}</Text>
+                    <Text style={styles.detailValue}>{formatCurrency(l.amount)}</Text>
+                  </View>
+                ))}
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { fontWeight: '800' }]}>Customer total</Text>
+                  <Text style={[styles.detailValue, styles.detailValueEmphasis]}>{formatCurrency(selectedOrder.closing_breakdown.customer_total ?? selectedOrder.closed_vendor_price ?? 0)}</Text>
+                </View>
+                {selectedOrder.closing_breakdown.advance_received ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Advance already paid</Text>
+                    <Text style={styles.detailValue}>- {formatCurrency(selectedOrder.closing_breakdown.advance_received)}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Cash collected by driver</Text>
+                  <Text style={styles.detailValue}>{formatCurrency(selectedOrder.closing_breakdown.cash_to_collect ?? 0)}</Text>
+                </View>
+                {(selectedOrder.closing_breakdown.notes || []).map((n, i) => (
+                  <Text key={i} style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 6 }}>{n}</Text>
+                ))}
+              </View>
+            ) : null}
 
             {/* Invoice & WhatsApp Action Buttons in Details Modal */}
             <View style={{ gap: 10, marginTop: 16, marginBottom: 24 }}>
@@ -4327,8 +4402,9 @@ export default function OrdersScreen() {
       {(() => {
         // Preserve current order info during fade-out animation to prevent flicker
         const activeOrder = otpModalOrder || (selectedOrder ? selectedOrder : null);
-        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || (activeOrder?.id ? String(activeOrder.id).padStart(4, '0').slice(-4) : '0000');
-        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '9152';
+        // the real codes only - '----' until a driver is assigned (it used to show the booking number and a fixed 9152 as if they were codes)
+        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || '----';
+        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '----';
 
         return (
           <Modal
@@ -4592,13 +4668,13 @@ export default function OrdersScreen() {
               <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }}>START KM</Text>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, marginTop: 4 }}>
-                  {odoModalOrder?.end_records?.[0]?.start_km ? `${odoModalOrder.end_records[0].start_km} km` : '42,100 km'}
+                  {odoModalOrder?.end_records?.[0]?.start_km ? `${odoModalOrder.end_records[0].start_km} km` : '-'}
                 </Text>
               </View>
               <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }}>END KM</Text>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981', marginTop: 4 }}>
-                  {odoModalOrder?.end_records?.[0]?.end_km ? `${odoModalOrder.end_records[0].end_km} km` : '42,420 km'}
+                  {odoModalOrder?.end_records?.[0]?.end_km ? `${odoModalOrder.end_records[0].end_km} km` : '-'}
                 </Text>
               </View>
             </View>

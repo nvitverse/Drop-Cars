@@ -118,7 +118,9 @@ export function buildWhatsAppMessage(type: TemplateType, data: WhatsAppTemplateD
   const reviewUrl = `https://dropcars.in/review/${reviewToken}`;
   const invoiceUrl = `https://dropcars.in/invoice/${bid}`;
   const advancePayUrl = `https://dropcars.in/pay-advance/${bid}`;
-  const startOtp = data.startOtp || (data.bookingId ? String(data.bookingId).padStart(4, '0').slice(-4) : '0000');
+  // Only a real trip code is ever sent to a customer. It used to fall back to the last digits of the booking number, a code nobody could
+  // use (the trip would not start) that looked real.
+  const startOtp = data.startOtp || '';
 
   switch (type) {
     case 'booking_confirmed': {
@@ -144,9 +146,9 @@ ${data.distanceKm ? `• Package Distance Limit: *~${data.distanceKm} KM* (Extra
 • Advance Paid / Received: ₹${advance.toLocaleString('en-IN')}
 • *Balance Payable to Driver: ₹${balance.toLocaleString('en-IN')}*
 
-🔑 *Trip Security Start OTP: ${startOtp}*
+${startOtp ? `🔑 *Trip Security Start OTP: ${startOtp}*
 _(Please share this 4-digit OTP with your assigned chauffeur to start the journey)_
-
+` : ''}
 ✅ *Inclusions:* Dedicated AC Cab, Fuel Charges, Driver Day Allowance.
 ℹ️ *Highway Tolls & Permits:* As per Fastag logs & border checkpost receipts unless pre-included in package.
 
@@ -186,9 +188,9 @@ Your cab has been dispatched for your journey on *${date} at ${time}*.
 📍 *Trip Route:* ${pickup} ➔ ${drop}
 💰 *Balance to Driver at Trip End: ₹${balance.toLocaleString('en-IN')}*
 
-🔑 *Trip Security Start OTP: ${startOtp}*
+${startOtp ? `🔑 *Trip Security Start OTP: ${startOtp}*
 _(Please share this OTP with driver at pickup time)_
-
+` : ''}
 📍 *Live Chauffeur & Trip Tracking:*
 ${trackingUrl}
 
