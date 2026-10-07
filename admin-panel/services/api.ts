@@ -2950,16 +2950,23 @@ class ApiService {
 
   async getPettyCashBook(startDate?: string, endDate?: string, category?: string): Promise<any> {
     const params = new URLSearchParams();
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
+    if (startDate) params.append('date_from', startDate);
+    if (endDate) params.append('date_to', endDate);
     if (category) params.append('category', category);
-    return this.makeRequest(`/admin/workers/petty-cash?${params.toString()}`);
+    return this.makeRequest(`/admin/workers/cashbook?${params.toString()}`).catch(() => {
+      return this.makeRequest(`/admin/workers/petty-cash?${params.toString()}`);
+    });
   }
 
   async recordPettyCashEntry(payload: any): Promise<any> {
-    return this.makeRequest('/admin/workers/petty-cash', {
+    return this.makeRequest('/admin/workers/cashbook', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }).catch(() => {
+      return this.makeRequest('/admin/workers/petty-cash', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
     });
   }
 
@@ -2971,18 +2978,31 @@ class ApiService {
     return this.recordPettyCashEntry(data);
   }
 
-  async getWorkersPayroll(month?: string): Promise<any> {
+  async getWorkersPayroll(month?: string, workerId?: string): Promise<any> {
     const params = new URLSearchParams();
     if (month) params.append('month', month);
-    return this.makeRequest(`/admin/workers/payroll?${params.toString()}`);
+    if (workerId) {
+      return this.makeRequest(`/admin/workers/${encodeURIComponent(workerId)}/payroll?${params.toString()}`);
+    }
+    return this.makeRequest(`/admin/workers/payroll?${params.toString()}`).catch(async () => {
+      // If single worker endpoint is used, compute list across active workers
+      const workersRes = await this.getWorkers(true);
+      const list = workersRes.workers || [];
+      const payrolls = await Promise.all(
+        list.map((w: any) => this.getWorkersPayroll(month, w.id).catch(() => null))
+      );
+      return { month: month || '', workers: payrolls.filter(Boolean) };
+    });
   }
 
   async getWorkerPayrollSummary(workerId: string, month: string): Promise<any> {
-    return this.getWorkersPayroll(month);
+    return this.getWorkersPayroll(month, workerId);
   }
 
   async getWorkersAuditLogs(limit = 50): Promise<any> {
-    return this.makeRequest(`/admin/workers/audit-logs?limit=${limit}`);
+    return this.makeRequest(`/admin/workers/audit-trail?limit=${limit}`).catch(() => {
+      return this.makeRequest(`/admin/workers/audit-logs?limit=${limit}`);
+    });
   }
 
   async getTeamAuditTrail(limit = 30): Promise<any> {
@@ -2990,9 +3010,14 @@ class ApiService {
   }
 
   async syncWorkersBatchOffline(payload: any): Promise<any> {
-    return this.makeRequest('/admin/workers/sync-batch', {
+    return this.makeRequest('/admin/workers/sync-offline-batch', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }).catch(() => {
+      return this.makeRequest('/admin/workers/sync-batch', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
     });
   }
 

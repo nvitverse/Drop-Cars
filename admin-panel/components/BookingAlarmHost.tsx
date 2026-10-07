@@ -316,15 +316,15 @@ export default function BookingAlarmHost() {
                 <BellRing size={30} color="#FFFFFF" />
               )}
             </Animated.View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.headerTitle} numberOfLines={2}>
                 {isUnassignedAlert
                   ? (activeBooking.alarm_title ? `🚨 ${activeBooking.alarm_title}` : '🚨 URGENT: UNASSIGNED BOOKING (<1 HR PICKUP)!')
                   : activeBooking.is_urgent
                     ? '⚡ URGENT BOOKING - NEEDS APPROVAL!'
                     : '🎉 NEW BOOKING AWAITING APPROVAL!'}
               </Text>
-              <Text style={styles.headerSubtitle}>
+              <Text style={styles.headerSubtitle} numberOfLines={2}>
                 {isUnassignedAlert
                   ? (activeBooking.alarm_subtitle ? `⏰ ${activeBooking.alarm_subtitle}` : `⏰ Pickup in ${activeBooking.mins_to_pickup ?? 60} mins · No driver assigned!`)
                   : activeBooking.auto_post_at
