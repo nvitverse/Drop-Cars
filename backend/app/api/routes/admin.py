@@ -6245,6 +6245,70 @@ def get_urgent_unassigned_alarm_bookings(
             "is_urgent": mins_to_pickup <= 30,
             "mins_to_pickup": mins_to_pickup,
         })
+
+    # Posted bookings NOBODY has accepted. Owner rule 2026-10-07: alarm the staff 2 hours before pickup; a booking posted
+    # inside the last 4 hours rings once half of the time between posting and pickup has gone (posted 7 am for a 10 am pickup
+    # -> rings 8:30). All three numbers live in booking_alarm_config so they can be changed without a deploy.
+    try:
+        from sqlalchemy import exists as _exists
+        from app.crud.customer_booking_request import get_platform_setting_value as _gv
+        before_min = int(float(_gv(db, "unaccepted_alarm_minutes_before", "120")))
+        short_hours = float(_gv(db, "unaccepted_short_notice_hours", "4"))
+        short_pct = float(_gv(db, "unaccepted_short_notice_percent", "50"))
+        has_taker = _exists().where(
+            OrderAssignment.order_id == Order.id,
+            OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
+        )
+        open_orders = (
+            db.query(Order)
+            .filter(
+                Order.trip_status == Trip_status.PENDING,
+                Order.cancelled_by.is_(None),
+                Order.start_date_time > now,
+                Order.start_date_time <= now + timedelta(days=3),
+                ~has_taker,
+            )
+            .order_by(Order.start_date_time.asc())
+            .limit(60)
+            .all()
+        )
+        seen = {i["order_id"] for i in items}
+        for order in open_orders:
+            if order.id in seen or not order.created_at:
+                continue
+            pickup, posted = order.start_date_time, order.created_at
+            from app.crud.order_assignments import unaccepted_alarm_fire_at
+            fire_at = unaccepted_alarm_fire_at(posted, pickup, before_min, short_hours, short_pct)
+            if now < fire_at:
+                continue
+            try:
+                origin, destination = _origin_and_destination_from_index_map(order.pickup_drop_location or {})
+                route_str = f"{origin} → {destination}"
+            except Exception:
+                route_str = None
+            mins_to_pickup = int((pickup - now).total_seconds() // 60)
+            items.append({
+                "id": str(order.id),
+                "order_id": order.id,
+                "customer_name": order.customer_name,
+                "customer_number": order.customer_number,
+                "pickup_drop_location": order.pickup_drop_location,
+                "route_str": route_str,
+                "trip_type": order.trip_type.value if hasattr(order.trip_type, "value") else str(order.trip_type),
+                "car_type": order.car_type.value if hasattr(order.car_type, "value") else str(order.car_type),
+                "start_date_time": pickup.isoformat(),
+                "quoted_total_amount": order.vendor_price,
+                "total_booking_amount": order.vendor_price,
+                "source": order.source.value if hasattr(order.source, "value") else str(order.source),
+                "created_at": posted.isoformat(),
+                "is_urgent": mins_to_pickup <= 30,
+                "mins_to_pickup": mins_to_pickup,
+                "alarm_reason": "NOBODY_ACCEPTED",
+                "alarm_title": "NOBODY HAS ACCEPTED THIS BOOKING",
+                "alarm_subtitle": f"Pickup in {mins_to_pickup} mins - posted but no driver has accepted yet",
+            })
+    except Exception as _e:
+        print(f"unaccepted booking alarm check failed (continuing): {_e}")
     return items
 
 
@@ -6995,6 +7059,10 @@ class SystemSettingsUpdateSchema(BaseModel):
     ai_bot_global_daily_limit: Optional[int] = None  # AI answers for everyone per day (cost guard)
     doc_ai_enabled: Optional[int] = None             # 1 = AI (Gemini vision) reads uploaded document photos; sends the photo to Google - paid tier only
     doc_ai_daily_limit: Optional[int] = None
+    unaccepted_alarm_minutes_before: Optional[int] = None
+    unaccepted_short_notice_hours: Optional[float] = None
+    unaccepted_short_notice_percent: Optional[float] = None
+    urgent_reminder_max_count: Optional[int] = None
     fleet_payment_channels: Optional[str] = None
     fleet_payment_link_message: Optional[str] = None
     fleet_payment_link_expiry_hours: Optional[str] = None

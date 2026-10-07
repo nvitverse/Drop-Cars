@@ -42,6 +42,8 @@ type BookingAlarmItem = {
   is_urgent: boolean;
   is_urgent_unassigned?: boolean;
   mins_to_pickup?: number;
+  alarm_title?: string;
+  alarm_subtitle?: string;
   auto_post_at?: string | null;
   auto_post_reason?: string | null;
   is_held?: boolean;
@@ -317,14 +319,14 @@ export default function BookingAlarmHost() {
             <View style={{ flex: 1 }}>
               <Text style={styles.headerTitle}>
                 {isUnassignedAlert
-                  ? '🚨 URGENT: UNASSIGNED BOOKING (<1 HR PICKUP)!'
+                  ? (activeBooking.alarm_title ? `🚨 ${activeBooking.alarm_title}` : '🚨 URGENT: UNASSIGNED BOOKING (<1 HR PICKUP)!')
                   : activeBooking.is_urgent
                     ? '⚡ URGENT BOOKING - NEEDS APPROVAL!'
                     : '🎉 NEW BOOKING AWAITING APPROVAL!'}
               </Text>
               <Text style={styles.headerSubtitle}>
                 {isUnassignedAlert
-                  ? `⏰ Pickup in ${activeBooking.mins_to_pickup ?? 60} mins · No driver assigned!`
+                  ? (activeBooking.alarm_subtitle ? `⏰ ${activeBooking.alarm_subtitle}` : `⏰ Pickup in ${activeBooking.mins_to_pickup ?? 60} mins · No driver assigned!`)
                   : activeBooking.auto_post_at
                     ? `Queue (${currentIndex + 1} of ${queue.length}) · auto-posts ${new Date(activeBooking.auto_post_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${activeBooking.auto_post_reason ? ` · ${activeBooking.auto_post_reason}` : ''}`
                     : `Queue (${currentIndex + 1} of ${queue.length}) · waits for staff`}

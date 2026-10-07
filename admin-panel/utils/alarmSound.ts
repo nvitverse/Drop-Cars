@@ -1,6 +1,6 @@
 import { Platform, AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { setAudioModeAsync } from 'expo-audio';
+import { setAudioModeAsync, createAudioPlayer } from 'expo-audio';
 
 let audioCtx: any = null;
 let alarmInterval: any = null;
@@ -8,6 +8,32 @@ let isRinging = false;
 let safetyTimeout: any = null;
 
 let alarmsAllowed = true;
+
+// Phone (Android / iOS): the alarm used to be vibration only - the siren was written for the web build and never played a sound
+// on a real phone, so enquiry / booking alarms were silent. A bundled siren file now loops until the alarm is stopped.
+let nativePlayer: any = null;
+
+function startNativeSiren() {
+  if (Platform.OS === 'web' || nativePlayer) return;
+  try {
+    nativePlayer = createAudioPlayer(require('../assets/sounds/alarm_siren.wav'));
+    nativePlayer.loop = true;
+    nativePlayer.volume = 1.0;
+    nativePlayer.play();
+  } catch (e) {
+    nativePlayer = null;
+    console.warn('Alarm siren could not start:', e);
+  }
+}
+
+function stopNativeSiren() {
+  if (!nativePlayer) return;
+  try {
+    nativePlayer.pause();
+    nativePlayer.remove?.();
+  } catch (e) {}
+  nativePlayer = null;
+}
 
 export function setAlarmsAllowed(allowed: boolean) {
   alarmsAllowed = allowed;
@@ -169,6 +195,8 @@ export function playAlarmSound(source: string = 'default') {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   } catch (e) {}
 
+  startNativeSiren();
+
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -251,6 +279,7 @@ export function playAlarmSound(source: string = 'default') {
 
 function hardStop() {
   isRinging = false;
+  stopNativeSiren();
   if (safetyTimeout) {
     clearTimeout(safetyTimeout);
     safetyTimeout = null;

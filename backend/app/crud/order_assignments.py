@@ -604,6 +604,16 @@ async def cancel_expired_unaccepted_orders(db: Session) -> int:
     return cancelled
 
 
+def unaccepted_alarm_fire_at(posted, pickup, minutes_before: float = 120, short_hours: float = 4, short_percent: float = 50):
+    """When the staff alarm for a posted-but-unaccepted booking should start ringing.
+    Normal booking: `minutes_before` (2 h) ahead of pickup. A booking posted inside the last `short_hours` (4 h) rings once
+    `short_percent` (50 %) of the time between posting and pickup has passed (posted 7:00, pickup 10:00 -> 8:30)."""
+    total_min = (pickup - posted).total_seconds() / 60.0
+    if total_min <= short_hours * 60:
+        return posted + timedelta(minutes=total_min * short_percent / 100.0)
+    return pickup - timedelta(minutes=minutes_before)
+
+
 async def send_urgent_booking_reminders(db: Session) -> int:
     """Bookings nobody has accepted yet, closing in on their acceptance
     deadline: re-fire the new-booking push (capped at 3 times per booking)
@@ -616,12 +626,18 @@ async def send_urgent_booking_reminders(db: Session) -> int:
     now = datetime.now(_tz.utc)
     window_end = now + timedelta(minutes=5)
     notified = 0
+    # Owner rule 2026-10-07: drivers get ONE reminder in the last minutes, not one every minute (was up to 3). Editable.
+    from app.crud.customer_booking_request import get_platform_setting_value
+    try:
+        max_reminders = max(0, int(get_platform_setting_value(db, "urgent_reminder_max_count", "1")))
+    except ValueError:
+        max_reminders = 1
 
     candidates = db.query(Order).filter(
         Order.trip_status == "PENDING",
         Order.cancelled_by.is_(None),
         Order.acceptance_deadline.isnot(None),
-        Order.urgent_notify_count < 3,
+        Order.urgent_notify_count < max_reminders,
     ).all()
 
     for order in candidates:

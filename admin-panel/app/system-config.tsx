@@ -84,6 +84,10 @@ const FIELD_GROUPS: { title: string; fields: FieldConfig[] }[] = [
     title: 'Operational Limits',
     fields: [
       { key: 'driver_search_radius_km', label: 'Driver Search Radius', hint: 'Max km to broadcast a new booking to nearby drivers', unit: 'km', iconColor: '#0EA5E9' },
+      { key: 'unaccepted_alarm_minutes_before', label: 'Staff Alarm: Nobody Accepted (min before pickup)', hint: 'A posted booking nobody accepted rings the staff this many minutes before pickup', unit: 'min', iconColor: '#EF4444' },
+      { key: 'unaccepted_short_notice_hours', label: 'Short-Notice Booking Window', hint: 'A booking posted within this many hours of pickup uses the percentage below instead', unit: 'hr', iconColor: '#EF4444' },
+      { key: 'unaccepted_short_notice_percent', label: 'Short-Notice Alarm Point', hint: 'Rings when this % of the time between posting and pickup has passed (posted 7am, pickup 10am, 50% = 8:30am)', unit: '%', iconColor: '#EF4444' },
+      { key: 'urgent_reminder_max_count', label: 'Driver "Closing Soon" Pushes', hint: 'How many reminders drivers get in the last 5 minutes before a booking auto-cancels (1 = a single push)', unit: 'x', iconColor: '#8B5CF6' },
       { key: 'driver_auto_acceptance_timeout_minutes', label: 'Driver Acceptance Timeout', hint: 'Minutes a driver has to accept before the booking auto-cancels', unit: 'min', iconColor: '#8B5CF6' },
     ],
   },
