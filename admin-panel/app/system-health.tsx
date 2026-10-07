@@ -630,10 +630,21 @@ export default function SystemHealthScreen() {
                   title="Run background auto-checks now"
                   hint="Posts due website bookings, cancels timed-out assignments, resolves stale chats."
                   onPress={() =>
-                    run(
-                      'sweep',
-                      () => apiService.runSweepNow(),
-                      'The background auto-checks have completed.'
+                    Alert.alert(
+                      'Run Background Checks?',
+                      'This triggers the live system sweep to process due website bookings, time out dead assignments, and refresh state.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Run Sweep',
+                          onPress: () =>
+                            run(
+                              'sweep',
+                              () => apiService.runSweepNow(),
+                              'The background auto-checks have completed.'
+                            ),
+                        },
+                      ]
                     )
                   }
                 />
@@ -645,7 +656,18 @@ export default function SystemHealthScreen() {
                   hint="Updates local distance cache across all apps to preserve $0 Maps API quota."
                   top
                   onPress={() =>
-                    run('cities', () => apiService.refreshCitiesNow(), 'City list & cache reloaded.')
+                    Alert.alert(
+                      'Reload City Cache?',
+                      'This queries and refreshes the serviceable cities and route distance caches.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Reload',
+                          onPress: () =>
+                            run('cities', () => apiService.refreshCitiesNow(), 'City list & cache reloaded.'),
+                        },
+                      ]
+                    )
                   }
                 />
                 <ActionRow

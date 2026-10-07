@@ -298,6 +298,76 @@ def generate_driver_settlement(
     return settlement
 
 
+class GenerateMonthRequest(BaseModel):
+    year: int
+    month: int
+
+
+@router.get("/admin/tax/driver-settlements")
+def list_driver_settlements(
+    year: int, month: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
+):
+    """Every driver's settlement for one month (latest revision of each), with the driver's name."""
+    require_tax_accounts_permission(current_admin)
+    from app.models.car_driver import CarDriver
+    rows = (
+        db.query(DriverSettlement)
+        .filter(DriverSettlement.period_year == year, DriverSettlement.period_month == month)
+        .order_by(DriverSettlement.revision.desc(), DriverSettlement.generated_at.desc())
+        .all()
+    )
+    seen, out = set(), []
+    for r in rows:
+        if str(r.driver_id) in seen:
+            continue
+        seen.add(str(r.driver_id))
+        d = db.query(CarDriver).filter(CarDriver.id == str(r.driver_id)).first()
+        out.append({
+            "id": str(r.id), "driver_id": str(r.driver_id), "driver_name": d.full_name if d else None,
+            "period_year": r.period_year, "period_month": r.period_month, "revision": r.revision, "trip_count": r.trip_count,
+            "total_fares_collected": r.total_fares_collected, "cash_collected": r.cash_collected,
+            "online_collected": r.online_collected, "company_commission": r.company_commission, "tds_amount": r.tds_amount,
+            "net_payable": r.net_payable, "status": str(getattr(r.status, "value", r.status)),
+            "generated_at": r.generated_at.isoformat() if r.generated_at else None,
+            "finalized_at": r.finalized_at.isoformat() if r.finalized_at else None,
+        })
+    return {"settlements": out, "year": year, "month": month}
+
+
+@router.post("/admin/tax/driver-settlements/generate-month")
+def generate_driver_settlements_for_month(
+    payload: GenerateMonthRequest, request: Request,
+    db: Session = Depends(get_db), current_admin=Depends(get_current_admin),
+):
+    """Generate (or refresh the drafts of) the settlement for every driver who completed a trip in the month."""
+    require_tax_accounts_permission(current_admin)
+    from app.models.orders import Order, Trip_status
+    from app.models.end_records import EndRecord
+    start, end = settlements_crud._month_bounds(payload.year, payload.month)
+    driver_ids = [
+        str(r[0]) for r in db.query(EndRecord.driver_id).join(Order, Order.id == EndRecord.order_id)
+        .filter(Order.trip_status == Trip_status.COMPLETED)
+        .filter(EndRecord.created_at >= start, EndRecord.created_at < end).distinct().all() if r[0]
+    ]
+    made = 0
+    for did in driver_ids:
+        try:
+            s = settlements_crud.generate_monthly_settlement(
+                db, driver_id=did, year=payload.year, month=payload.month, generated_by_admin_id=str(current_admin.id),
+            )
+            made += 1
+            log_finance_action(
+                db, staff_id=str(current_admin.id), staff_username=current_admin.username, staff_role=current_admin.role,
+                action="DRIVER_SETTLEMENT_GENERATED", entity_type="driver_settlement", entity_id=str(s.id),
+                new_value={"driver_id": did, "period": f"{payload.year}-{payload.month:02d}", "net_payable": s.net_payable},
+                ip_address=_client_ip(request),
+            )
+        except Exception as e:  # one driver must not stop the rest
+            db.rollback()
+            print(f"settlement for {did} failed: {e}")
+    return {"generated": made, "drivers": len(driver_ids), "message": f"Settlements ready for {made} driver(s)"}
+
+
 @router.post("/admin/tax/driver-settlements/{settlement_id}/finalize", response_model=DriverSettlementOut)
 def finalize_driver_settlement(
     settlement_id: str, request: Request, db: Session = Depends(get_db), current_admin=Depends(get_current_admin),

@@ -557,17 +557,22 @@ export default function StaffManagementScreen() {
                     return (
                       <TouchableOpacity
                         key={opt.key}
-                        style={[styles.permChip, active && styles.permChipActive, pendingPermKey === `${member.id}:${opt.key}` && { opacity: 0.5 }]}
+                        style={[
+                          styles.permChip,
+                          { backgroundColor: isDark ? '#1E293B' : '#F3F4F6', borderColor: themeColors.border },
+                          active && styles.permChipActive,
+                          pendingPermKey === `${member.id}:${opt.key}` && { opacity: 0.5 },
+                        ]}
                         onPress={() => handleTogglePermissionLive(member, opt.key)}
                         disabled={pendingPermKey === `${member.id}:${opt.key}`}
                       >
-                        <Icon size={13} color={active ? 'white' : '#6B7280'} />
-                        <Text style={[styles.permChipText, active && styles.permChipTextActive]}>{opt.label}</Text>
+                        <Icon size={13} color={active ? 'white' : themeColors.textSecondary} />
+                        <Text style={[styles.permChipText, { color: themeColors.textSecondary }, active && styles.permChipTextActive]}>{opt.label}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-                <Text style={styles.permLabel}>Specific actions:</Text>
+                <Text style={[styles.permLabel, { color: themeColors.textSecondary, marginTop: 8 }]}>Specific actions:</Text>
                 <View style={styles.permRow}>
                   {ACTION_PERMISSION_OPTIONS.map((opt) => {
                     const active = member.permissions.includes(opt.key);
@@ -575,12 +580,18 @@ export default function StaffManagementScreen() {
                     return (
                       <TouchableOpacity
                         key={opt.key}
-                        style={[styles.permChip, styles.actionPermChip, active && styles.permChipActive, pendingPermKey === `${member.id}:${opt.key}` && { opacity: 0.5 }]}
+                        style={[
+                          styles.permChip,
+                          styles.actionPermChip,
+                          { backgroundColor: isDark ? '#1E293B' : '#F3F4F6', borderColor: themeColors.border },
+                          active && styles.permChipActive,
+                          pendingPermKey === `${member.id}:${opt.key}` && { opacity: 0.5 },
+                        ]}
                         onPress={() => handleTogglePermissionLive(member, opt.key)}
                         disabled={pendingPermKey === `${member.id}:${opt.key}`}
                       >
-                        <Icon size={13} color={active ? 'white' : '#6B7280'} />
-                        <Text style={[styles.permChipText, active && styles.permChipTextActive]}>{opt.label}</Text>
+                        <Icon size={13} color={active ? 'white' : themeColors.textSecondary} />
+                        <Text style={[styles.permChipText, { color: themeColors.textSecondary }, active && styles.permChipTextActive]}>{opt.label}</Text>
                       </TouchableOpacity>
                     );
                   })}

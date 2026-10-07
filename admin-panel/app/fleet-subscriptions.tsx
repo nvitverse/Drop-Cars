@@ -603,10 +603,10 @@ export default function FleetSubscriptionsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Payment Channel (Where they paid) */}
               <Text style={[styles.fieldLabel, { color: textCol }]}>Payment Channel (Where they paid) *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4, marginBottom: 12 }}>
                 {channelList.map((ch) => {
                   const isSel = payChannel === ch;
                   return (
@@ -618,6 +618,7 @@ export default function FleetSubscriptionsScreen() {
                         {
                           backgroundColor: isSel ? '#0D47A1' : isDark ? '#1E293B' : '#F1F5F9',
                           borderColor: isSel ? '#0D47A1' : borderCol,
+                          marginRight: 0,
                         },
                       ]}
                     >
@@ -629,7 +630,7 @@ export default function FleetSubscriptionsScreen() {
                 })}
               </ScrollView>
               {payChannel === LINK_CHANNEL ? (
-                <Text style={{ fontSize: 12, marginBottom: 12, color: subText }}>
+                <Text style={{ fontSize: 12, marginBottom: 12, color: subText, lineHeight: 16 }}>
                   Creates a secure Razorpay link and opens WhatsApp with the message ready to send. When the partner pays, the plan activates and the partner becomes Trusted automatically.
                 </Text>
               ) : payChannel === WALLET_CHANNEL ? (
@@ -639,7 +640,7 @@ export default function FleetSubscriptionsScreen() {
                   {Number(selectedFleet?.wallet_balance || 0) < (parseFloat(payAmount) || 0) ? '  (not enough)' : ''}
                 </Text>
               ) : (
-                <Text style={{ fontSize: 12, marginBottom: 12, color: subText }}>Money already received outside the app: only record it (the wallet is not touched).</Text>
+                <Text style={{ fontSize: 12, marginBottom: 12, color: subText, lineHeight: 16 }}>Money already received outside the app: only record it (the wallet is not touched).</Text>
               )}
 
               {/* UTR / Ref Number */}
@@ -667,9 +668,9 @@ export default function FleetSubscriptionsScreen() {
               <Text style={[styles.fieldLabel, { color: textCol }]}>Subscription Plan Duration</Text>
               <View style={styles.planBtnRow}>
                 {[
-                  { plan: 'MONTHLY', days: '30', label: '1 Month (30 Days)' },
-                  { plan: 'YEARLY', days: '365', label: '1 Year (365 Days)' },
-                  { plan: 'CUSTOM', days: payDurationDays, label: 'Custom Days' },
+                  { plan: 'MONTHLY', days: '30', label: '1 Month (30d)' },
+                  { plan: 'YEARLY', days: '365', label: '1 Year (365d)' },
+                  { plan: 'CUSTOM', days: payDurationDays, label: 'Custom' },
                 ].map((p) => {
                   const isSel = payPlan === p.plan;
                   return (
@@ -689,7 +690,7 @@ export default function FleetSubscriptionsScreen() {
                         },
                       ]}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: isSel ? '#FFFFFF' : textCol }}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: isSel ? '#FFFFFF' : textCol, textAlign: 'center' }}>
                         {p.label}
                       </Text>
                     </TouchableOpacity>
@@ -699,7 +700,7 @@ export default function FleetSubscriptionsScreen() {
 
               {payPlan === 'CUSTOM' && (
                 <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC', borderColor: borderCol, color: textCol, marginTop: 8 }]}
+                  style={[styles.input, { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC', borderColor: borderCol, color: textCol, marginTop: 4 }]}
                   placeholder="Number of days to extend"
                   placeholderTextColor={subText}
                   keyboardType="numeric"
@@ -734,15 +735,15 @@ export default function FleetSubscriptionsScreen() {
                 onChangeText={setPayNotes}
               />
               {payChannel === LINK_CHANNEL && linkInfo ? (
-                <View style={[styles.checkRow, { backgroundColor: isDark ? '#12261C' : '#ECFDF5', borderColor: '#10B981', flexDirection: 'column', alignItems: 'flex-start' }]}>
+                <View style={[styles.checkRow, { backgroundColor: isDark ? '#12261C' : '#ECFDF5', borderColor: '#10B981', flexDirection: 'column', alignItems: 'flex-start', padding: 12 }]}>
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#047857' }}>Link created: ₹{linkInfo.amount} {String(linkInfo.plan).toLowerCase()} plan</Text>
                   <Text selectable style={{ fontSize: 12, color: textCol, marginVertical: 6 }}>{linkInfo.short_url}</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity onPress={() => (linkInfo.whatsapp_url ? Linking.openURL(linkInfo.whatsapp_url) : Share.share({ message: linkInfo.message }))} style={[styles.planBtn, { backgroundColor: '#25D366', borderColor: '#25D366' }]}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Send on WhatsApp again</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                    <TouchableOpacity onPress={() => (linkInfo.whatsapp_url ? Linking.openURL(linkInfo.whatsapp_url) : Share.share({ message: linkInfo.message }))} style={[styles.planBtn, { flex: 1.3, backgroundColor: '#25D366', borderColor: '#25D366', paddingVertical: 10 }]}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' }}>Send on WhatsApp</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => Share.share({ message: linkInfo.message })} style={[styles.planBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: textCol }}>Share…</Text>
+                    <TouchableOpacity onPress={() => Share.share({ message: linkInfo.message })} style={[styles.planBtn, { flex: 0.7, backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: borderCol, paddingVertical: 10 }]}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: textCol, textAlign: 'center' }}>Share…</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -752,20 +753,20 @@ export default function FleetSubscriptionsScreen() {
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 onPress={() => setPayModalVisible(false)}
-                style={[styles.modalCancelBtn, { borderColor: borderCol }]}
+                style={[styles.modalCancelBtn, { borderColor: borderCol, minWidth: 80, alignItems: 'center' }]}
               >
                 <Text style={{ fontWeight: '700', color: textCol }}>{payChannel === LINK_CHANNEL && linkInfo ? 'Close' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={payChannel === LINK_CHANNEL ? (linkInfo ? checkPaymentLink : sendPaymentLink) : submitManualPayment}
                 disabled={submittingAction || checkingLink}
-                style={[styles.modalConfirmBtn, { backgroundColor: '#0D47A1' }]}
+                style={[styles.modalConfirmBtn, { flex: 1, backgroundColor: '#0D47A1', alignItems: 'center', justifyContent: 'center' }]}
               >
                 {submittingAction || checkingLink ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>
-                    {payChannel === LINK_CHANNEL ? (linkInfo ? 'Check payment' : 'Create link & share on WhatsApp') : 'Confirm Payment & Activate'}
+                  <Text style={{ fontWeight: '800', color: '#FFFFFF', fontSize: 13, textAlign: 'center' }} numberOfLines={1}>
+                    {payChannel === LINK_CHANNEL ? (linkInfo ? 'Check Payment' : 'Create & Send Link') : 'Confirm Payment'}
                   </Text>
                 )}
               </TouchableOpacity>

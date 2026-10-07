@@ -52,6 +52,7 @@ import {
   CreditCard,
   FileCheck,
   Clock,
+  TrendingUp,
 } from 'lucide-react-native';
 import axiosInstance from '@/app/api/axiosInstance';
 import DocumentUpdateModal from '@/components/DocumentUpdateModal';
@@ -1119,6 +1120,32 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            <View style={[s.rowDivider, { backgroundColor: colors.border, marginVertical: 10 }]} />
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}
+              onPress={() => router.push('/documents-review')}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <FileCheck size={18} color={colors.primary} />
+                <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.text }}>View Verification Summary & Checklist</Text>
+              </View>
+              <ChevronRight size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 6 }}
+              onPress={() => router.push('/vo-pending-orders')}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TrendingUp size={18} color="#059669" />
+                <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.text }}>Vehicle Owner Pending Orders & Fare Bids</Text>
+              </View>
+              <ChevronRight size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
         </View>
 

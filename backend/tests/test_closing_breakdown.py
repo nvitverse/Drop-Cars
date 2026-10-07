@@ -24,3 +24,11 @@ def test_minimum_coverage_is_explained_when_it_is_billed():
 def test_waiting_charge_has_its_own_line_with_the_minutes():
     bd = _bd(waiting_minutes=450, waiting_charge=450)
     assert any(l["key"] == "waiting" and "450 min" in l["label"] and l["amount"] == 450 for l in bd["lines"])
+
+
+def test_settlement_month_routes_exist_and_need_login():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.get("/api/admin/tax/driver-settlements?year=2026&month=9").status_code in (401, 403)
+    assert c.post("/api/admin/tax/driver-settlements/generate-month", json={"year": 2026, "month": 9}).status_code in (401, 403)

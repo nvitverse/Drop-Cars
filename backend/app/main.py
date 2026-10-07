@@ -78,6 +78,8 @@ import app.models.own_fleet
 import app.models.quality_case
 import app.models.sos_alert
 import app.models.fleet_swap_audit
+import app.models.driver_tour_ledger
+import app.models.customer_review_queue
 
 # A startup "ALTER TABLE" needs an exclusive lock. If some other session holds the table (a long transaction), Postgres
 # queues the ALTER - and every later query on that table queues BEHIND it, so the whole live API freezes until the
@@ -285,6 +287,12 @@ app.include_router(fleet_swap_router.router, prefix="/api", tags=["Fleet Driver 
 
 from app.api.routes import notification_sounds as notification_sounds_router
 app.include_router(notification_sounds_router.router, prefix="/api", tags=["Notification Sounds"])
+
+from app.api.routes import workers as workers_router
+app.include_router(workers_router.router, prefix="/api", tags=["Workers & Operations Hub"])
+
+from app.api.routes import driver_tours as driver_tours_router
+app.include_router(driver_tours_router.router, tags=["Driver Tours, Fleet & Autopilot"])
 
 
 @app.on_event("startup")

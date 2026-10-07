@@ -57,6 +57,17 @@ def build_closing_breakdown(*, trip_type, km_driven, billed_km, min_km_floor, pl
     }
 
 
+def all_inclusive_extra_km(updated_km, km_limit, driver_rate, house_rate, has_gst) -> dict:
+    """Extra km on an all-inclusive booking: driven beyond the package limit. The customer is billed the driver's extra-km rate PLUS
+    the vendor / house extra-km rate for each extra km, and 5% GST on all of it when the booking carries GST. Pure."""
+    extra_km = max(0, int(updated_km or 0) - int(km_limit or 0)) if int(km_limit or 0) > 0 else 0
+    driver = extra_km * max(0, int(driver_rate or 0))
+    house = extra_km * max(0, int(house_rate or 0))
+    gst = math.ceil((driver + house) * 0.05) if (has_gst and (driver + house) > 0) else 0
+    return {"extra_km": extra_km, "driver": driver, "house": house, "gst": gst, "total": driver + house + gst,
+            "rate": max(0, int(driver_rate or 0)) + max(0, int(house_rate or 0)), "km_limit": int(km_limit or 0)}
+
+
 def closing_breakdown_for_order(db, order) -> dict | None:
     """The stored closing breakdown, or - for a trip closed before it was stored - a rebuild from the order, its rates and the
     odometer record, marked `reconstructed`. Only for finished trips. Never raises."""
@@ -253,12 +264,16 @@ def build_customer_bill(db, order) -> dict:
     lines = []
     _snap = getattr(order, "closing_breakdown", None)
     _all_incl = str(getattr(getattr(order, "fare_type", None), "value", getattr(order, "fare_type", None)) or "").upper() == "ALL_INCLUSIVE"
+    _snap_lines = [l for l in ((_snap or {}).get("lines") or []) if l.get("key") != "convenience"]
     if _all_incl and total:
-        # an all-inclusive booking is billed as ONE agreed amount: showing the itemised lines plus a plug made the bill look wrong
-        lines.append({"label": "All-inclusive fare (agreed package)", "amount": max(0, total - conv), "included": True})
-    elif _snap and _snap.get("lines"):
+        # an all-inclusive booking is billed as ONE agreed amount, plus extra km driven beyond the package limit (and the GST on it)
+        _extras = [l for l in _snap_lines if l.get("key") in ("extra_km", "extra_gst")]
+        _extras_total = sum(int(l["amount"]) for l in _extras)
+        lines.append({"label": "All-inclusive fare (agreed package)", "amount": max(0, total - conv - _extras_total), "included": True})
+        lines.extend({"label": l["label"], "amount": int(l["amount"]), "included": True} for l in _extras)
+    elif _snap_lines:
         # the exact lines the fare was worked out from at trip close (no rebuilding, no "Other charges" plug)
-        lines.extend({"label": l["label"], "amount": int(l["amount"]), "included": True} for l in _snap["lines"])
+        lines.extend({"label": l["label"], "amount": int(l["amount"]), "included": True} for l in _snap_lines)
     elif new_order:
         rate = int(new_order.cost_per_km or 0) + int(new_order.extra_cost_per_km or 0)
         if rate and billed_km:
@@ -724,6 +739,7 @@ async def update_end_trip_record(
                 resolve_commission_class, compute_split, get_commission_rates, get_trip_category, get_fee_settings, fees_for_order,
                 CLASS_STANDARD, CLASS_POSTER_ALL_INCLUSIVE,
             )
+            _ai_extra = None
             _cls = resolve_commission_class(
                 fare_type=getattr(order, "fare_type", None) or getattr(new_order, "fare_type", None),
                 vendor_id=_vendor_id,
@@ -758,6 +774,21 @@ async def update_end_trip_record(
                 _markup = (getattr(order, "extra_amount", None) or getattr(new_order, "extra_amount", None) or 0) if _cls == CLASS_POSTER_ALL_INCLUSIVE else 0
                 _split = compute_split(_cls, total_booking=_total_booking, markup=_markup, cc_on=not commission_waived, fees=fees_for_order(db, order_id, _cls, get_fee_settings(db)),
                                        pct_override=getattr(order, "commission_percent", None))
+                # Km driven beyond the package limit: the customer pays it (+5% GST when the booking carries GST); the driver earns his own
+                # extra-km rate for it, the rest goes to the poster / platform. The split is changed here, once, so the wallet settlement
+                # and the order's own totals can never disagree.
+                _ai_extra = all_inclusive_extra_km(
+                    updated_km,
+                    int(getattr(order, "trip_distance", None) or getattr(new_order, "trip_distance", None) or getattr(new_order, "calculated_trip_distance", None) or 0),
+                    int(getattr(new_order, "cost_per_km", 0) or 0), int(getattr(new_order, "extra_cost_per_km", 0) or 0),
+                    bool(getattr(order, "gst_included", False) or getattr(new_order, "gst_included", False) or getattr(order, "gst_amount", 0) or getattr(new_order, "gst_amount", 0)),
+                )
+                if _ai_extra["extra_km"] > 0 and _ai_extra["total"] > 0:
+                    _split = dict(_split)
+                    _split["customer_total"] += _ai_extra["total"]
+                    _split["driver_net"] += _ai_extra["driver"]
+                    _house_key = "poster_share" if _cls == CLASS_POSTER_ALL_INCLUSIVE else "platform_fee"
+                    _split[_house_key] += _ai_extra["house"] + _ai_extra["gst"]
                 commision_amount = _split["fee_pct"]
                 closed_driver_price = _split["driver_net"]
             closed_vendor_price = _split["customer_total"]
@@ -807,6 +838,23 @@ async def update_end_trip_record(
         try:
             if order.closing_breakdown:
                 _bd = dict(order.closing_breakdown)
+                _conv = int((_split or {}).get("convenience_fee", 0) or 0) if _split else 0
+                _lines = list(_bd.get("lines") or [])
+                if str(_bd.get("fare_type")) == "ALL_INCLUSIVE":
+                    # one agreed amount (plus any extra km), not the itemised cost lines
+                    _bd["itemised_lines"] = _lines
+                    _extra_lines = []
+                    if _ai_extra and _ai_extra["extra_km"] > 0 and (_ai_extra["driver"] + _ai_extra["house"]) > 0:
+                        _extra_lines.append({"key": "extra_km", "label": f"Extra distance {_ai_extra['extra_km']} km x Rs {_ai_extra['rate']} (package limit {_ai_extra['km_limit']} km)",
+                                             "amount": _ai_extra["driver"] + _ai_extra["house"]})
+                        if _ai_extra["gst"]:
+                            _extra_lines.append({"key": "extra_gst", "label": "GST 5% on extra distance", "amount": _ai_extra["gst"]})
+                        _bd["extra_km"] = _ai_extra["extra_km"]
+                    _pkg = int(closed_vendor_price) - _conv - sum(l["amount"] for l in _extra_lines)
+                    _lines = [{"key": "package", "label": "All-inclusive package (agreed amount)", "amount": _pkg}] + _extra_lines
+                if _conv:
+                    _lines.append({"key": "convenience", "label": "Convenience fee", "amount": _conv})
+                _bd["lines"] = _lines
                 _bd.update({
                     "customer_total": int(closed_vendor_price), "driver_net": int(driver_profit), "poster_share": int(vendor_profit),
                     "platform_fee": int(admin_profit), "advance_received": int(order.advance_received or 0),
