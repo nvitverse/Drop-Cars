@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
     gap: 8,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   carCard: {
     marginBottom: 4,

@@ -1123,10 +1123,11 @@ export default function AdminChatsScreen() {
 
       {/* Thread Chat Modal */}
       <Modal visible={Boolean(openRow)} animationType="slide" onRequestClose={() => setOpenRow(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'bottom']}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
             <View style={[styles.chatHeader, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
               <TouchableOpacity onPress={() => setOpenRow(null)} style={{ padding: 6, marginRight: 6 }}>
@@ -1142,6 +1143,7 @@ export default function AdminChatsScreen() {
               ref={listRef}
               data={messages}
               keyExtractor={(item) => String(item.id)}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: 14, gap: 10 }}
               onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
               renderItem={({ item }) => (
@@ -1435,7 +1437,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   loadingContainer: { padding: 16, gap: 8 },
-  listContainer: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 40 },
+  listContainer: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 110 },
   assistantsContainer: {
     paddingHorizontal: 16,
     gap: 8,

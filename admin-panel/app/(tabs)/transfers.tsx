@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   countText: { fontSize: 12, fontWeight: '700' },
   loadingContainer: { padding: 16, gap: 8 },
-  listContainer: { padding: 16, gap: 8, paddingBottom: 40 },
+  listContainer: { padding: 16, gap: 8, paddingBottom: 110 },
   card: { marginBottom: 4, padding: 12 },
   cardHeader: {
     flexDirection: 'row',

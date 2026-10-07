@@ -10,6 +10,7 @@ import {
   Modal,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -553,7 +554,11 @@ export default function AITrainingScreen() {
           ))}
         </ScrollView>
       ) : activeTab === 'SIMULATOR' ? (
-        <View style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
           {/* Language selector & Multi-turn Session Reset */}
           <View style={[styles.simTop, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -595,7 +600,10 @@ export default function AITrainingScreen() {
           </View>
 
           {/* Chat Messages */}
-          <ScrollView contentContainerStyle={{ padding: 14, gap: 10, flexGrow: 1 }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: 14, gap: 10, flexGrow: 1 }}
+          >
             {simResults.map((msg, idx) => (
               <View key={idx}>
                 <View
@@ -669,7 +677,7 @@ export default function AITrainingScreen() {
               <Send size={16} color="#FFF" />
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       ) : (
         /* Settings Tab */
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>

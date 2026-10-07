@@ -1401,7 +1401,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingBottom: 110,
     flexGrow: 1,
   },
   accountCard: {

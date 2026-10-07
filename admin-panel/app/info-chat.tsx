@@ -103,7 +103,7 @@ export default function InfoChatScreen() {
   const chips = useMemo(() => TOPICS, []);
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: c.background }]} edges={['top']}>
+    <SafeAreaView style={[s.container, { backgroundColor: c.background }]} edges={['top', 'bottom']}>
       <View style={[s.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/' as any))} style={{ padding: 6, marginRight: 8 }} accessibilityLabel="Go back">
           <ArrowLeft size={22} color={c.text} />
@@ -120,12 +120,13 @@ export default function InfoChatScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={(m) => String(m.id)}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 14, gap: 10 }}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -493,7 +493,7 @@ function ScheduleModal({ item, c, isDark, onClose, onSave }: { item: PendingBook
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
         <View style={[styles.modalCard, { backgroundColor: c.surface, borderColor: c.border, borderWidth: 1 }]}>
           <Text style={[styles.modalTitle, { color: c.text }]}>When should it post?</Text>
           <Text style={[styles.modalSubtitle, { color: c.textSecondary }]}>
@@ -560,7 +560,7 @@ function CustomizeModal({ item, c, isDark, onClose, onSave }: { item: PendingBoo
   const num = (k: string) => Math.max(0, Math.round(Number(vals[k]) || 0));
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
         <View style={[styles.modalCard, { backgroundColor: c.surface, borderColor: c.border, borderWidth: 1, maxHeight: '90%' }]}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={[styles.modalTitle, { color: c.text }]}>Customize driver fare</Text>
