@@ -4,6 +4,17 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Backend LIVE: Cloud Run revision `drop-cars-api-00299` = commit `8068f0b` (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
+Deployed through `scripts\deploy-backend.ps1` (run by the owner); live label `git-sha` verified equal to `8068f0b`. Backend only - Admin/Driver OTAs are NOT published yet.
+- Staff add fixed: allowed staff permissions = built-ins (+enquiries/chats/tasks/support/accounts) + platform setting `staff_permission_keys`.
+- Standard -> Trusted upgrade: `/admin/fleet-subscriptions/options`, `/{id}/payment-link`, `/{id}/payment-link/check` (Razorpay payment links; the sweep activates paid links once). Fees/channels/WhatsApp text/expiry are platform settings.
+- Staff alarm for posted bookings nobody accepted (`/admin/urgent-unassigned-alarm-bookings`): rings 2 h before pickup, or at 50% of posting->pickup time if posted inside 4 h (settings `unaccepted_alarm_minutes_before`, `unaccepted_short_notice_hours`, `unaccepted_short_notice_percent`).
+- Drivers get ONE "closing soon" push instead of up to 3 (setting `urgent_reminder_max_count`, default 1).
+- Not included on purpose: Antigravity's `ensure_platform_smtp_settings` startup hook (hardcodes the Gmail app password and overwrites the DB value each start).
+- Antigravity: before any deploy, `git pull` this branch and use `scripts\deploy-backend.ps1`; do not `gcloud run deploy` from `dropcars-review\backend`.
+
+---
+
 ### Recent Changes (2026-10-01)
 
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
