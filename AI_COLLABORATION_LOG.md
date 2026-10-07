@@ -4,8 +4,12 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
-### Customer App + backend, NOT yet deployed (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
-Customer App has no OTA channel; these ship with the next Customer APK ("build pannu"). Backend part needs the owner to run `scripts\deploy-backend.ps1`.
+### Customer App is now OTA-ready (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
+Self-hosted OTA exactly like the Driver App: `app.json` has `runtimeVersion "1.0.0"` + `updates.url` -> `/api/app-updates/customer/manifest` (backend `KNOWN_APPS` now includes `customer`), `expo-updates ~0.28.18` in package.json/lock, `components/OtaUpdateGate.tsx` mounted in `app/_layout.tsx`, `scripts/publish-ota.js` (default app `customer`). The FIRST Customer APK ("build pannu") must be built from this tree; after that every JS-only change ships with `cd customer-app; OTA_MAX_WORKERS=1 node scripts/publish-ota.js --app customer --message "..."` (rollback: `--rollback <updateId>`). Native changes (new native package, permissions, app.json native fields, SDK upgrade) need a new APK and a bumped `runtimeVersion`.
+The backend entry below went live with revision `drop-cars-api-00300` (= `53516a9`); the `customer` allowlist needs one more deploy.
+
+### Customer App + backend (Claude, 2026-10-07) - live on revision 00300
+Customer App changes ship with the first Customer APK.
 - Customer App: sign-in is now required (`app/index.tsx` redirects to `/auth` without a saved session; `app/(customer)/_layout.tsx` guards every tab). Removed the made-up profile ("Karthik S.") and the fake starting wallet (Rs 450 + promo + referral code) in `contexts/WalletContext.tsx`.
 - Customer App prices come from the backend now: new `POST /customer/bookings/quote-all` (one live price per vehicle from the rate card); `book/standard.tsx` uses it for vehicle cards and the summary and no longer adds invented toll / permit / 5% GST / Rs 15 fee / promo rows (the old local tariff is only an "Estimated" fallback, and for LOCAL packages). `utils/taxiPricing.ts` `fareFromServer`.
 - Customer cancel + refund from the app: `POST /customer/bookings/{id}/cancel` and `/request-refund` (same rules as the website's OTP cancel, `api/routes/customer_bookings.py`), `refund_eligible` / `refund_status` on the booking; My Trips has Cancel booking / Request refund buttons and cancelled bookings move to "Past".

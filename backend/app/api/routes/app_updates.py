@@ -21,7 +21,7 @@ from fastapi import APIRouter, Header, Response
 router = APIRouter(tags=["AppUpdates"])
 
 BUCKET_URL = "https://storage.googleapis.com/drop-cars-apk-downloads"
-KNOWN_APPS = {"driver", "vendor", "admin"}
+KNOWN_APPS = {"driver", "vendor", "admin", "customer"}
 _cache: Dict[str, Any] = {}
 CACHE_SECONDS = 45
 

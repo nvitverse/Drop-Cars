@@ -46,6 +46,12 @@
         }
       ]
     ],
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://drop-cars-api-207918408785.asia-south2.run.app/api/app-updates/customer/manifest",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "experiments": {
       "typedRoutes": true
     },
