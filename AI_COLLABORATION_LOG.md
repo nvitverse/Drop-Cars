@@ -5,7 +5,8 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 ---
 
 ### Backend LIVE: Cloud Run revision `drop-cars-api-00299` = commit `8068f0b` (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
-Deployed through `scripts\deploy-backend.ps1` (run by the owner); live label `git-sha` verified equal to `8068f0b`. Backend only - Admin/Driver OTAs are NOT published yet.
+Deployed through `scripts\deploy-backend.ps1` (run by the owner); live label `git-sha` verified equal to `8068f0b`.
+OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group `e5d7dfe8`, `production` group `a436c863` (settings screens, Trusted upgrade sheet, alarm/notification sounds, enquiry popup fix, 9 previously unreachable screens in Settings, update applies at app launch); Driver App self-hosted update `4e663bc0` (runtime 1.0.0). The Driver export must be run from `Drop-Cars-Full-Repo\driver-app` (its node_modules link resolves; a junction from the worktree does not).
 - Staff add fixed: allowed staff permissions = built-ins (+enquiries/chats/tasks/support/accounts) + platform setting `staff_permission_keys`.
 - Standard -> Trusted upgrade: `/admin/fleet-subscriptions/options`, `/{id}/payment-link`, `/{id}/payment-link/check` (Razorpay payment links; the sweep activates paid links once). Fees/channels/WhatsApp text/expiry are platform settings.
 - Staff alarm for posted bookings nobody accepted (`/admin/urgent-unassigned-alarm-bookings`): rings 2 h before pickup, or at 50% of posting->pickup time if posted inside 4 h (settings `unaccepted_alarm_minutes_before`, `unaccepted_short_notice_hours`, `unaccepted_short_notice_percent`).
