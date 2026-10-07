@@ -94,6 +94,27 @@ export async function fetchAndApplyOTAUpdate(): Promise<{
   }
 }
 
+let launchCheckDone = false;
+
+/**
+ * Once per app start: if a newer live update exists, download it and restart straight into it. Without this the phone only
+ * downloaded the update in the background and showed it on the NEXT launch, so staff kept running the old screens (missing
+ * buttons, old popups) for a whole extra open/close. Never throws; gives up quietly if the network is slow.
+ */
+export async function applyLatestUpdateOnLaunch(): Promise<void> {
+  if (launchCheckDone || __DEV__ || Platform.OS === 'web') return;
+  launchCheckDone = true;
+  try {
+    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    const check = await Promise.race([Updates.checkForUpdateAsync(), timeout]);
+    if (!check.isAvailable) return;
+    const result = await Promise.race([Updates.fetchUpdateAsync(), new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 25000))]);
+    if (result.isNew) await Updates.reloadAsync();
+  } catch (e) {
+    // offline / slow: the normal background download still happens, the update shows on the next start
+  }
+}
+
 /**
  * Gets currently active bundle & update info.
  */

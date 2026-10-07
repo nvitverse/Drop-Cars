@@ -87,6 +87,10 @@ export default function EnquiryAlarmHost() {
   const [snoozedUntil, setSnoozedUntil] = useState<Record<number, number>>({});
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
+  // The snooze map and the dismissed list are read from storage asynchronously. The first poll used to run BEFORE they were
+  // loaded, so every time the app was reopened each enquiry popped up again even though it was snoozed / closed.
+  const [snoozeLoaded, setSnoozeLoaded] = useState(false);
+  const [dismissedLoaded, setDismissedLoaded] = useState(false);
 
   const { isOnDuty, isOnBreak } = useStaffDuty();
 
@@ -109,6 +113,7 @@ export default function EnquiryAlarmHost() {
           setSnoozedUntil(valid);
         }
       } catch {}
+      setSnoozeLoaded(true);
     })();
   }, []);
 
@@ -221,6 +226,7 @@ export default function EnquiryAlarmHost() {
         const stored = await AsyncStorage.getItem(DISMISSED_STORAGE_KEY);
         if (stored) dismissedIdsRef.current = new Set(JSON.parse(stored));
       } catch {}
+      setDismissedLoaded(true);
     })();
   }, []);
 
@@ -232,6 +238,7 @@ export default function EnquiryAlarmHost() {
 
   // 6. Polling loop for active unacknowledged enquiries (every 10s)
   useEffect(() => {
+    if (!snoozeLoaded || !dismissedLoaded) return;      // wait for the saved snooze / closed list before showing anything
     if (!isAuth || pathname === '/login' || !enabledNow || !isOnDuty || isOnBreak) {
       stopAlarmSound('enquiry');
       forceStopAlarmSound();
@@ -337,7 +344,7 @@ export default function EnquiryAlarmHost() {
       isMounted = false;
       if (timer) clearInterval(timer);
     };
-  }, [snoozedUntil, isAuth, pathname, enabledNow, isInsideLeads, isOnDuty, isOnBreak]);
+  }, [snoozedUntil, snoozeLoaded, dismissedLoaded, isAuth, pathname, enabledNow, isInsideLeads, isOnDuty, isOnBreak]);
 
   const activeEnquiry = unackQueue[currentIndex] || unackQueue[0] || null;
 

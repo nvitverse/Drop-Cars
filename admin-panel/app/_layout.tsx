@@ -11,6 +11,7 @@ import EnquiryAlarmHost from '@/components/EnquiryAlarmHost';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
+import { applyLatestUpdateOnLaunch } from '@/utils/otaUpdates';
 
 import { ThemeProvider } from '@/context/ThemeContext';
 import { StaffDutyProvider } from '@/context/StaffDutyContext';
@@ -48,6 +49,11 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // Start straight on the newest live update instead of one launch later.
+  useEffect(() => {
+    applyLatestUpdateOnLaunch();
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;
