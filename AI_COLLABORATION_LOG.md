@@ -9,7 +9,11 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 - Customers now receive their codes: `CustomerBookingOut.start_trip_otp / end_trip_otp` (Customer App card), and `GET /api/website/bookings/{id}/trip-codes` for the website (PHP part is for Antigravity, see the prompt, item 10). The "driver assigned" e-mail keeps working.
 - Multi-city waiting time: the driver enters MINUTES but the backend added them to the bill as RUPEES, unchecked, ignoring the waiting hours already included in the booking. `crud/end_records.py multicity_waiting_charge`: included hours free, capped at the trip length, rate from settings `multicity_waiting_rate_per_hour` (default 60 = same as the old Rs 1/min) and `multicity_waiting_free_minutes`; `orders.waiting_time` now holds the rupee charge, `orders.waiting_minutes` (new column) the minutes.
 - Trip-end screen asks only for items explicitly `included === false`; the Admin All-Inclusive extra-km line is a booking note now, not a charge item (a charge item became an amount field at trip end).
-- 226 backend tests pass.
+- Closed-trip bill: the Admin App invoice for a COMPLETED trip was built from the QUOTE (planned 227 km, quoted fare) while the driver had closed at 315 km. Now `orders.closing_breakdown` (new JSON column, written at trip close by `build_closing_breakdown`, rebuilt for older trips by `closing_breakdown_for_order`) holds the exact lines (km billed vs driven vs minimum coverage, bata x days, permit, toll, waiting, night) plus the totals; `AdminOrderDetailResponse` returns it, the Admin order detail shows a "Final bill" card, `openInvoiceModalForOrder` fills the invoice from it, and `build_customer_bill` uses its lines (no more "Other charges / Adjustment" plug; all-inclusive shows one agreed amount).
+- Invented values removed from Admin: WhatsApp / View-OTP fallbacks (booking number, fixed 9152) and fake odometer numbers (42,100 / 42,420).
+- Setting `trip_otp_enforced` (owner-only, default 1) and the waiting-rate settings are in Settings.
+- Design / website follow-ups are in `ANTIGRAVITY_PROMPT_2_Round2_UIUX.md`.
+- 229 backend tests pass.
 
 ---
 
