@@ -63,12 +63,16 @@ interface CustomerBooking {
   assignment_status: string | null; // OrderAssignment.assignment_status: PENDING | ASSIGNED | DRIVING | COMPLETED | CANCELLED
   gst_included?: boolean;
   gst_amount?: number;
+  refund_eligible?: boolean | null;
+  refund_status?: string | null; // null | REQUESTED | PROCESSED | DENIED
 }
 
 type RideBucket = 'UPCOMING' | 'RUNNING' | 'COMPLETED';
 
 function bucketOf(booking: CustomerBooking): RideBucket {
   if (booking.assignment_status === 'DRIVING') return 'RUNNING';
+  // Cancelled / rejected bookings are history, not "upcoming" (they used to stay under Upcoming forever).
+  if (booking.status === 'REJECTED' || booking.trip_status === 'CANCELLED') return 'COMPLETED';
   if (booking.trip_status === 'COMPLETED' || booking.assignment_status === 'COMPLETED') return 'COMPLETED';
   return 'UPCOMING';
 }
@@ -178,7 +182,7 @@ export default function MyTripsScreen() {
         </View>
 
         <View style={themeStyles.bucketTabs}>
-          {([['UPCOMING', 'Upcoming'], ['RUNNING', 'Running'], ['COMPLETED', 'Completed']] as [RideBucket, string][]).map(([key, label]) => (
+          {([['UPCOMING', 'Upcoming'], ['RUNNING', 'Running'], ['COMPLETED', 'Past']] as [RideBucket, string][]).map(([key, label]) => (
             <TouchableOpacity
               key={key}
               style={[themeStyles.bucketTab, activeBucket === key && themeStyles.bucketTabActive]}
@@ -221,7 +225,7 @@ export default function MyTripsScreen() {
                     <Inbox color="#0EA5E9" size={32} />
                   </View>
                   <Text style={themeStyles.emptyStateTitle}>
-                    {activeBucket === 'UPCOMING' ? 'No Upcoming Rides' : activeBucket === 'RUNNING' ? 'No Ride In Progress' : 'No Completed Rides Yet'}
+                    {activeBucket === 'UPCOMING' ? 'No Upcoming Rides' : activeBucket === 'RUNNING' ? 'No Ride In Progress' : 'No Past Rides Yet'}
                   </Text>
                 </View>
               );
@@ -296,12 +300,64 @@ function BookingCard({ booking, themeStyles, isDark, onPaid }: { booking: Custom
   const [showGstModal, setShowGstModal] = useState(false);
   const [fetchingGst, setFetchingGst] = useState(false);
   const [payingGst, setPayingGst] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [requestingRefund, setRequestingRefund] = useState(false);
   const [gstQuote, setGstQuote] = useState<{
     km_fare: number;
     gst_amount: number;
     gateway_charge: number;
     total_upgrade_amount: number;
   } | null>(null);
+
+  // Cancel: only before the trip has started. The server decides whether the advance is refundable (refunded until a driver and car are assigned).
+  const canCancel =
+    (booking.status === 'PENDING' || booking.status === 'APPROVED') &&
+    booking.trip_status !== 'COMPLETED' && booking.trip_status !== 'CANCELLED' &&
+    booking.assignment_status !== 'DRIVING' && booking.assignment_status !== 'COMPLETED';
+
+  const handleCancel = () => {
+    Alert.alert(
+      'Cancel this booking?',
+      booking.is_paid
+        ? 'If no driver has been assigned yet, your advance is fully refundable. Once a driver is assigned it is not refundable.'
+        : 'This booking has not been paid yet. It will simply be cancelled.',
+      [
+        { text: 'Keep booking', style: 'cancel' },
+        {
+          text: 'Yes, cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancelling(true);
+              const res = await axiosInstance.post(`/api/customer/bookings/${booking.id}/cancel`, {});
+              Alert.alert(
+                'Booking cancelled',
+                res.data?.refund_eligible ? 'Your advance is eligible for a refund. You can request it from this booking.' : 'Your booking has been cancelled.',
+              );
+              onPaid();
+            } catch (e: any) {
+              Alert.alert('Could not cancel', String(e?.response?.data?.detail || e?.message || 'Please try again or call support.'));
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRequestRefund = async () => {
+    try {
+      setRequestingRefund(true);
+      const res = await axiosInstance.post(`/api/customer/bookings/${booking.id}/request-refund`, {});
+      Alert.alert('Refund requested', String(res.data?.message || 'It will be processed within 1-5 working days.'));
+      onPaid();
+    } catch (e: any) {
+      Alert.alert('Could not request refund', String(e?.response?.data?.detail || e?.message || 'Please try again or call support.'));
+    } finally {
+      setRequestingRefund(false);
+    }
+  };
 
   const handleDownloadInvoice = async () => {
     try {
@@ -510,6 +566,35 @@ function BookingCard({ booking, themeStyles, isDark, onPaid }: { booking: Custom
             {paying ? 'Processing…' : `Pay ₹${fare.toLocaleString('en-IN')}`}
           </Text>
         </TouchableOpacity>
+      ) : null}
+
+      {canCancel ? (
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: '#EF4444', borderRadius: 10, paddingVertical: 10, opacity: cancelling ? 0.7 : 1 }}
+          onPress={handleCancel}
+          disabled={cancelling}
+          accessibilityLabel="Cancel this booking"
+        >
+          {cancelling ? <ActivityIndicator color="#EF4444" size="small" /> : <AlertCircle color="#EF4444" size={15} />}
+          <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '800' }}>{cancelling ? 'Cancelling…' : 'Cancel booking'}</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {booking.refund_eligible && !booking.refund_status && (booking.status === 'REJECTED' || booking.trip_status === 'CANCELLED') ? (
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 10, opacity: requestingRefund ? 0.7 : 1 }}
+          onPress={handleRequestRefund}
+          disabled={requestingRefund}
+          accessibilityLabel="Request refund"
+        >
+          {requestingRefund ? <ActivityIndicator color="#FFFFFF" size="small" /> : <IndianRupee color="#FFFFFF" size={15} />}
+          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>{requestingRefund ? 'Requesting…' : 'Request refund'}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {booking.refund_status ? (
+        <Text style={{ fontSize: 12, fontWeight: '700', color: booking.refund_status === 'PROCESSED' ? '#10B981' : booking.refund_status === 'DENIED' ? '#EF4444' : '#F59E0B' }}>
+          Refund {booking.refund_status === 'REQUESTED' ? 'requested - it will be processed within 1-5 working days' : booking.refund_status.toLowerCase()}
+        </Text>
       ) : null}
 
       {booking.status === 'REJECTED' && booking.rejection_reason ? (

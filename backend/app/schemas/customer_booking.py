@@ -132,8 +132,16 @@ class CustomerBookingOut(BaseModel):
     gst_included: Optional[bool] = False
     gst_amount: Optional[float] = 0.0
 
+    # After a cancellation: is the advance refundable, and where is the refund request (None | REQUESTED | PROCESSED | DENIED)
+    refund_eligible: Optional[bool] = None
+    refund_status: Optional[str] = None
+
     class Config:
         from_attributes = True
+
+
+class CustomerCancelRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 class CustomerBookingPayResponse(BaseModel):

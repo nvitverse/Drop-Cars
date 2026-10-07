@@ -4,6 +4,16 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Customer App + backend, NOT yet deployed (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
+Customer App has no OTA channel; these ship with the next Customer APK ("build pannu"). Backend part needs the owner to run `scripts\deploy-backend.ps1`.
+- Customer App: sign-in is now required (`app/index.tsx` redirects to `/auth` without a saved session; `app/(customer)/_layout.tsx` guards every tab). Removed the made-up profile ("Karthik S.") and the fake starting wallet (Rs 450 + promo + referral code) in `contexts/WalletContext.tsx`.
+- Customer App prices come from the backend now: new `POST /customer/bookings/quote-all` (one live price per vehicle from the rate card); `book/standard.tsx` uses it for vehicle cards and the summary and no longer adds invented toll / permit / 5% GST / Rs 15 fee / promo rows (the old local tariff is only an "Estimated" fallback, and for LOCAL packages). `utils/taxiPricing.ts` `fareFromServer`.
+- Customer cancel + refund from the app: `POST /customer/bookings/{id}/cancel` and `/request-refund` (same rules as the website's OTP cancel, `api/routes/customer_bookings.py`), `refund_eligible` / `refund_status` on the booking; My Trips has Cancel booking / Request refund buttons and cancelled bookings move to "Past".
+- Test fix: `tests/test_driver_route_requests.py` was flaky (DB clock vs process clock); 214 tests pass.
+- Still open for Antigravity (website owner): admin-app endpoint for the website's site settings (advance %, pricing rules, surcharges, referral reward) - needs PHP that can be tested; Customer App coupon entry; customer forgot-password; Razorpay key from the backend instead of hardcoded in the app; LOCAL packages priced by the backend; remove the random sample pin in `book/dropbid.tsx`.
+
+---
+
 ### Backend LIVE: Cloud Run revision `drop-cars-api-00299` = commit `8068f0b` (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
 Deployed through `scripts\deploy-backend.ps1` (run by the owner); live label `git-sha` verified equal to `8068f0b`.
 OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group `e5d7dfe8`, `production` group `a436c863` (settings screens, Trusted upgrade sheet, alarm/notification sounds, enquiry popup fix, 9 previously unreachable screens in Settings, update applies at app launch); Driver App self-hosted update `4e663bc0` (runtime 1.0.0). The Driver export must be run from `Drop-Cars-Full-Repo\driver-app` (its node_modules link resolves; a junction from the worktree does not).

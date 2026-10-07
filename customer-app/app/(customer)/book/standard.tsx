@@ -32,7 +32,7 @@ import {
   LOCAL_PACKAGES,
   StandardVehicleCategory,
 } from '@/constants/bookingConfig';
-import { computeStandardFare } from '@/utils/taxiPricing';
+import { computeStandardFare, fareFromServer, ServerFare } from '@/utils/taxiPricing';
 import { StandardTripType } from '@/types/booking';
 import axiosInstance from '@/app/api/axiosInstance';
 
@@ -342,10 +342,23 @@ export default function StandardBookingScreen() {
   // brief window before this real fetch resolves.
   const [realDistanceKm, setRealDistanceKm] = useState<number | null>(null);
   const realDistanceRequestId = useRef(0);
+  // Live price per vehicle from the backend (the owner's tariffs). Keyed by the backend car type.
+  const [serverFares, setServerFares] = useState<Record<string, ServerFare> | null>(null);
+  const BACKEND_CAR_TYPE: Record<string, string> = {
+    HATCHBACK: 'HATCHBACK', SEDAN: 'SEDAN_4_PLUS_1', ETIOS: 'ETIOS_4_PLUS_1',
+    NEW_SEDAN: 'NEW_SEDAN_2022_MODEL', SUV: 'SUV', INNOVA: 'INNOVA',
+    CRYSTA: 'INNOVA_CRYSTA', HYCROSS: 'INNOVA_CRYSTA',
+  };
+  const liveFareFor = (vehicleId: string) => {
+    if (!serverFares || draft.tripType === 'LOCAL') return null;
+    const q = serverFares[BACKEND_CAR_TYPE[vehicleId] || ''];
+    return q ? fareFromServer(q, { tripType: draft.tripType, farePlan: draft.farePlan, vehicleCategory: vehicleId as any }) : null;
+  };
 
   useEffect(() => {
     if (draft.tripType === 'LOCAL' || !draft.pickup.trim() || !draft.drop.trim()) {
       setRealDistanceKm(null);
+      setServerFares(null);
       return;
     }
     const thisRequestId = ++realDistanceRequestId.current;
@@ -362,21 +375,20 @@ export default function StandardBookingScreen() {
         CRYSTA: 'INNOVA_CRYSTA', HYCROSS: 'INNOVA_CRYSTA',
       };
       try {
-        const res = await axiosInstance.post('/api/customer/bookings/quote', {
+        // One call returns a live price for every vehicle (the owner's tariffs); the distance comes from the same answer.
+        const res = await axiosInstance.post('/api/customer/bookings/quote-all', {
           pickup_drop_location: location,
           trip_type: backendTripType,
-          car_type: carTypeMap[draft.vehicleCategory] || 'SEDAN_4_PLUS_1',
         });
         if (thisRequestId === realDistanceRequestId.current) {
-          // Response total_km is already the full round-trip/multi-city
-          // distance for those trip types - computeStandardFare's own
-          // *2 doubling is only for its estimateDistanceKm() fallback
-          // path, so divide back to the one-way figure it expects here.
-          const totalKm = res.data?.fare?.total_km ?? null;
-          const oneWayKm = totalKm != null && (draft.tripType === 'ROUNDTRIP' || draft.tripType === 'MULTICITY')
-            ? totalKm / 2
-            : totalKm;
-          setRealDistanceKm(oneWayKm);
+          const fares: Record<string, ServerFare> = res.data?.fares || {};
+          setServerFares(Object.keys(fares).length ? fares : null);
+          const anyFare = fares[carTypeMap[draft.vehicleCategory] || 'SEDAN_4_PLUS_1'] || Object.values(fares)[0];
+          if (anyFare) {
+            // total_km is already the full round-trip / multi-city distance; the local fallback expects the one-way figure
+            const km = anyFare.total_km ?? null;
+            setRealDistanceKm(km != null && (draft.tripType === 'ROUNDTRIP' || draft.tripType === 'MULTICITY') ? km / 2 : km);
+          }
         }
       } catch (e) {
         // Keep the previous estimate/real value - never block the booking flow.
@@ -387,6 +399,8 @@ export default function StandardBookingScreen() {
 
   const fare = useMemo(() => {
     if (!draft.pickup || !draft.drop) return null;
+    const live = liveFareFor(draft.vehicleCategory);
+    if (live) return live;
     return computeStandardFare({
       tripType: draft.tripType,
       farePlan: draft.farePlan,
@@ -396,7 +410,7 @@ export default function StandardBookingScreen() {
       localPackageId: draft.localPackageId,
       realDistanceKmOverride: realDistanceKm,
     });
-  }, [draft.pickup, draft.drop, draft.tripType, draft.farePlan, draft.vehicleCategory, draft.localPackageId, realDistanceKm]);
+  }, [draft.pickup, draft.drop, draft.tripType, draft.farePlan, draft.vehicleCategory, draft.localPackageId, realDistanceKm, serverFares]);
 
   const shareDiscountAmount = draft.shareEnabled && fare
     ? Math.round(fare.totalFare * (BOOKING_CONFIG.SHARE_AND_SAVE_DISCOUNT_PERCENT / 100))
@@ -1270,13 +1284,14 @@ export default function StandardBookingScreen() {
                 const isRecommended = v.id === recommendedCategoryFor(totalPassengers);
                 const hasSeatingOptions = SEATING_OPTION_MODELS.includes(v.id);
                 const seatingPref = seatingPrefByVehicle[v.id] ?? (totalPassengers > 6 ? 'SEVEN' : 'ANY');
-                const vFare = computeStandardFare({
+                const vFare = liveFareFor(v.id) ?? computeStandardFare({
                   tripType: draft.tripType,
                   farePlan: draft.farePlan,
                   vehicleCategory: v.id,
                   pickup: draft.pickup,
                   drop: draft.drop,
                   localPackageId: draft.localPackageId,
+                  realDistanceKmOverride: realDistanceKm,
                 });
                 return (
                   <View key={v.id} style={[s.vehicleCard, isSelected && s.vehicleCardActive, hasSeatingOptions && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
@@ -1311,7 +1326,7 @@ export default function StandardBookingScreen() {
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={s.vehicleFare}>₹{vFare.totalFare}</Text>
-                        <Text style={s.vehicleFareSub}>All-inclusive</Text>
+                        <Text style={s.vehicleFareSub}>{vFare.isLive ? 'Fare' : 'Estimated'}</Text>
                       </View>
                     </TouchableOpacity>
 
@@ -1515,15 +1530,19 @@ export default function StandardBookingScreen() {
                 <View style={s.divider} />
                 {fare && (
                   <>
-                    <Row label="Fare" value={`₹${fare.distanceFare}`} />
+                    <Row label={`Fare${fare.billedKm ? ` (${fare.billedKm} km)` : ''}`} value={`₹${fare.distanceFare}`} />
                     <Row label="Driver Beta" value={`₹${fare.driverBeta}`} />
+                    {(fare.permitAmount || 0) > 0 && <Row label="State permit" value={`₹${fare.permitAmount}`} />}
+                    {(fare.hillAmount || 0) > 0 && <Row label="Hill / Ghat" value={`₹${fare.hillAmount}`} />}
                     {fare.tollAmount > 0 && <Row label="Toll" value={`₹${fare.tollAmount}`} />}
-                    <Row label="GST (5%)" value={`₹${fare.gstAmount}`} />
-                    <Row label="Platform Convenience Fee" value={wallet?.isPremiumMember ? "₹0 (Premium Pass Active 🎉)" : `₹${BOOKING_CONFIG.PLATFORM_CONVENIENCE_FEE}`} />
-                    {draft.shareEnabled && <Row label="Drop Saver seat discount" value={`− ₹${shareDiscountAmount}`} accent />}
-                    {(wallet?.promoRewardBalance || 0) > 0 && (
-                      <Row label="Promo Wallet Reward applied" value={`− ₹${Math.min(Math.round(fare.totalFare * 0.1), 50, wallet?.promoRewardBalance || 0)}`} accent />
+                    {(fare.nightAmount || 0) > 0 && <Row label="Night charges" value={`₹${fare.nightAmount}`} />}
+                    {!fare.isLive && (
+                      <>
+                        <Row label="GST (5%)" value={`₹${fare.gstAmount}`} />
+                        <Row label="Platform Convenience Fee" value={wallet?.isPremiumMember ? "₹0 (Premium Pass Active 🎉)" : `₹${BOOKING_CONFIG.PLATFORM_CONVENIENCE_FEE}`} />
+                      </>
                     )}
+                    {draft.shareEnabled && <Row label="Drop Saver seat discount" value={`− ₹${shareDiscountAmount}`} accent />}
                     <View style={s.divider} />
                     <Row label="Total payable · All-inclusive" value={`₹${finalPayable}`} big />
                   </>

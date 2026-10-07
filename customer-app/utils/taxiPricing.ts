@@ -146,6 +146,12 @@ export function estimateDistanceKm(pickup: string, drop: string): number {
 }
 
 export interface StandardFareBreakdown {
+  // true when these numbers come from the live backend quote (the tariffs the owner edits in the Admin App);
+  // false = the old built-in estimate, used only until the quote arrives or when it cannot be fetched
+  isLive?: boolean;
+  permitAmount?: number;
+  hillAmount?: number;
+  nightAmount?: number;
   tripType: StandardTripType;
   farePlan?: FarePlan;
   vehicleCategory: StandardVehicleCategory;
@@ -236,6 +242,53 @@ export function computeStandardFare(params: {
     driverBeta: rate.driverBeta,
     distanceFare,
     ...tax,
+  };
+}
+
+// One vehicle's live price from POST /customer/bookings/quote-all.
+export interface ServerFare {
+  total_km: number;
+  trip_time: string;
+  base_km_amount: number;
+  driver_allowance: number;
+  extra_driver_allowance: number;
+  permit_charges: number;
+  extra_permit_charges: number;
+  hill_charges: number;
+  toll_charges: number;
+  night_charges: number;
+  total_amount: number;
+  customer_amount: number;
+}
+
+// What the customer pays is the backend's customer_amount, nothing added on top (no invented toll / permit / GST). GST is an optional
+// upgrade the customer can take later from My Trips.
+export function fareFromServer(q: ServerFare, ctx: { tripType: StandardTripType; farePlan?: FarePlan; vehicleCategory: StandardVehicleCategory }): StandardFareBreakdown {
+  const driverBeta = (q.driver_allowance || 0) + (q.extra_driver_allowance || 0);
+  const permitAmount = (q.permit_charges || 0) + (q.extra_permit_charges || 0);
+  const hillAmount = q.hill_charges || 0;
+  const tollAmount = q.toll_charges || 0;
+  const nightAmount = q.night_charges || 0;
+  const total = q.customer_amount || q.total_amount || 0;
+  const distanceFare = Math.max(0, total - driverBeta - permitAmount - hillAmount - tollAmount - nightAmount);
+  const km = q.total_km || 0;
+  return {
+    isLive: true,
+    tripType: ctx.tripType,
+    farePlan: ctx.farePlan,
+    vehicleCategory: ctx.vehicleCategory,
+    distanceKm: km,
+    billedKm: km,
+    perKmRate: km > 0 ? Math.round(distanceFare / km) : 0,
+    driverBeta,
+    distanceFare,
+    tollAmount,
+    permitAmount,
+    hillAmount,
+    nightAmount,
+    gstAmount: 0,
+    subtotalBeforeTax: total,
+    totalFare: total,
   };
 }
 

@@ -100,7 +100,7 @@ export default function CustomerMenuScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={themeStyles.profileName}>{user?.name || 'Karthik S.'}</Text>
+              <Text style={themeStyles.profileName}>{user?.name || 'Customer'}</Text>
               <View style={[themeStyles.verifiedPill, isCarpoolMode && { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
                 <ShieldCheck color="#10B981" size={10} />
                 <Text style={themeStyles.verifiedPillText}>
@@ -108,7 +108,7 @@ export default function CustomerMenuScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={themeStyles.profilePhone}>{user?.phone || '+91 98765 43210'}</Text>
+            <Text style={themeStyles.profilePhone}>{user?.phone || ''}</Text>
           </View>
         </View>
       </LinearGradient>

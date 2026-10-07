@@ -21,44 +21,23 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  // Local placeholder only (the real customer wallet is read from the backend on the Wallet screen). It used to start with a made-up
+  // balance of Rs 450, Rs 120 promo and a fake referral code that showed up in the booking summary as a discount - it now starts empty.
   const [wallet, setWallet] = useState<Wallet>({
     id: '1',
-    userId: '2',
-    balance: 450,
-    mainCashBalance: 450,        // Main Cash / Refund Wallet (100% Usable & Withdrawable)
-    promoRewardBalance: 120,     // Promo / Reward Wallet (Referrals & Marketing Promos)
+    userId: '',
+    balance: 0,
+    mainCashBalance: 0,
+    promoRewardBalance: 0,
     promoExpiryTimestamp: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
     minBalance: 100,
     isActive: true,
     isPremiumMember: false,
-    referralCode: 'DROPRIDER99',
-    totalReferralsCount: 3,
+    referralCode: '',
+    totalReferralsCount: 0,
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: 'tx_1',
-      walletId: '1',
-      walletType: 'MAIN_CASH',
-      type: 'credit',
-      amount: 500,
-      description: 'Razorpay PG Deposit',
-      status: 'completed',
-      razorpayOrderId: 'order_9872',
-      razorpayPaymentId: 'pay_3819',
-      createdAt: '2025-08-20T08:00:00Z',
-    },
-    {
-      id: 'tx_2',
-      walletId: '1',
-      walletType: 'PROMO_REWARD',
-      type: 'credit',
-      amount: 100,
-      description: 'Referral Bonus (User B First Ride)',
-      status: 'completed',
-      createdAt: '2025-08-22T10:15:00Z',
-    },
-  ]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const addFunds = async (amount: number, walletType: WalletType = 'MAIN_CASH'): Promise<boolean> => {
     try {

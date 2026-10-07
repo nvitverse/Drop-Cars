@@ -24,7 +24,7 @@ from app.crud.notification import send_push_notification_to_customer
 from app.schemas.customer_booking import (
     CustomerQuoteRequest, CustomerQuoteResponse, FareBreakdownOut,
     CustomerBookingCreate, CustomerBookingOut,
-    CustomerBookingPayResponse, CustomerBookingVerifyRequest,
+    CustomerBookingPayResponse, CustomerBookingVerifyRequest, CustomerCancelRequest,
     DriverShortOut, CarShortOut
 )
 from app.schemas.rating import RateableTripOut, RatingSubmitRequest, RatingOut
@@ -101,6 +101,33 @@ def customer_quote(payload: CustomerQuoteRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to calculate fare quote: {str(e)}"
         )
+
+
+class CustomerQuoteAllRequest(BaseModel):
+    pickup_drop_location: dict
+    trip_type: str
+
+
+@router.post("/customer/bookings/quote-all", dependencies=[Depends(get_current_user_flexible)])
+def customer_quote_all(payload: CustomerQuoteAllRequest, db: Session = Depends(get_db)):
+    """One price per vehicle type for the same trip, from the live rate card (the tariffs the owner edits in the Admin App).
+    The Customer App shows exactly these numbers on its vehicle cards and summary, so what the customer sees is what they pay."""
+    if not isinstance(payload.pickup_drop_location, dict) or len(payload.pickup_drop_location) < 2:
+        raise HTTPException(status_code=400, detail="pickup_drop_location must contain at least a pickup and a drop")
+    fares = {}
+    last_error = None
+    for car_type in CarTypeEnum:
+        try:
+            fare, _ = _calculate_fare_internal(db, payload.pickup_drop_location, payload.trip_type, car_type.value)
+            fares[car_type.value] = FareBreakdownOut(**fare)
+        except HTTPException:
+            raise
+        except Exception as e:
+            last_error = e
+            continue
+    if not fares:
+        raise HTTPException(status_code=400, detail=f"Failed to calculate fare quote: {last_error}")
+    return {"trip_type": payload.trip_type, "fares": fares}
 
 
 @router.post("/customer/bookings", response_model=CustomerBookingOut, status_code=status.HTTP_201_CREATED)
@@ -255,6 +282,8 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
         assignment_status=assignment_status_out,
         gst_included=bool(getattr(request, "gst_included", False)),
         gst_amount=float(getattr(request, "gst_amount", 0.0) or 0.0),
+        refund_eligible=getattr(request, "refund_eligible", None),
+        refund_status=getattr(request, "refund_status", None),
     )
 
 
@@ -285,6 +314,83 @@ def get_booking_details(
         raise HTTPException(status_code=404, detail="Booking request not found")
 
     return _enrich_booking_out(db, request)
+
+
+@router.post("/customer/bookings/{id}/cancel")
+def cancel_my_booking(
+    id: UUID,
+    body: CustomerCancelRequest,
+    db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer),
+):
+    """The customer cancels their own booking from the app. Same rules as the website's cancel (api/routes/website_bookings.py
+    confirm_cancel), minus the e-mail OTP: the signed-in customer is already proven by their login token.
+    - waiting for admin review (PENDING): rejected, nothing was posted, the advance is refundable.
+    - approved with an order: cancel_order_by_customer decides (refundable until a driver + car is assigned)."""
+    request = db.query(CustomerBookingRequest).filter(
+        CustomerBookingRequest.id == id,
+        CustomerBookingRequest.customer_id == current_customer.id,
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    if request.status not in ("PENDING", "APPROVED"):
+        raise HTTPException(status_code=400, detail=f"This booking is already {request.status.lower()} and cannot be cancelled")
+
+    now = datetime.utcnow()
+    if request.status == "PENDING":
+        request.status = "REJECTED"
+        request.rejection_reason = "Cancelled by customer before admin review"
+        request.decided_at = now
+        request.decided_by = "CUSTOMER"
+        request.refund_eligible = bool(request.is_paid)
+        db.commit()
+        return {"status": "CANCELLED", "refund_eligible": bool(request.is_paid)}
+
+    from app.crud.order_assignments import cancel_order_by_customer
+    if not request.linked_order_id:
+        raise HTTPException(status_code=400, detail="No linked order found for this booking")
+    try:
+        result = cancel_order_by_customer(db, request.linked_order_id, body.reason)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    request.refund_eligible = bool(result["refund_eligible"]) and bool(request.is_paid)
+    db.commit()
+    try:
+        from app.utils.website_status_webhook import notify_website_of_status
+        notify_website_of_status(db, request.linked_order_id, "CANCELLED")
+    except Exception as e:
+        print(f"customer cancel: website status webhook failed (cancel still done): {e}")
+    return {"status": "CANCELLED", "refund_eligible": bool(request.refund_eligible)}
+
+
+@router.post("/customer/bookings/{id}/request-refund")
+async def request_my_refund(
+    id: UUID,
+    db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer),
+):
+    """After an eligible cancellation: queue the refund for an admin to review (same queue as the website's refund requests)."""
+    request = db.query(CustomerBookingRequest).filter(
+        CustomerBookingRequest.id == id,
+        CustomerBookingRequest.customer_id == current_customer.id,
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    if request.status not in ("REJECTED", "APPROVED") or request.refund_eligible is not True:
+        raise HTTPException(status_code=400, detail="This booking is not eligible for a refund")
+    if request.refund_status == "REQUESTED":
+        raise HTTPException(status_code=400, detail="A refund has already been requested for this booking")
+    if request.refund_status == "PROCESSED":
+        raise HTTPException(status_code=400, detail="This refund has already been processed")
+    request.refund_status = "REQUESTED"
+    request.refund_requested_at = datetime.utcnow()
+    db.commit()
+    try:
+        from app.crud.notification import send_push_notification_to_admin
+        await send_push_notification_to_admin(db, title="Refund requested", message=f"{request.customer_name} requested a refund for booking {request.id}.")
+    except Exception as e:
+        print(f"Refund-request admin alert failed (request still recorded): {e}")
+    return {"status": "REQUESTED", "message": "Your refund has been requested. It will be processed within 1-5 working days."}
 
 
 @router.get("/customer/bookings/{id}/live-location")

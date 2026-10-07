@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Tabs, useRouter, usePathname } from 'expo-router';
+import { Tabs, Redirect, useRouter, usePathname } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Home,
   Car,
@@ -30,6 +31,7 @@ export default function CustomerTabsLayout() {
   const isDark = themeMode !== 'system' ? themeMode === 'dark' : systemColorScheme === 'dark';
   const insets = useSafeAreaInsets();
   const { activeMode } = useServiceMode();
+  const { user } = useAuth();
 
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 6);
 
@@ -37,6 +39,9 @@ export default function CustomerTabsLayout() {
   const isCarpoolMode = activeMode === 'CARPOOL';
 
   const activeColor = isCarpoolMode ? '#0EA5E9' : (isDark ? '#F59E0B' : '#D97706');
+
+  // No saved sign-in (first launch, or after Logout): go to sign in. Nothing inside the app works without a real customer session.
+  if (!user) return <Redirect href={'/auth' as any} />;
 
   return (
     <View style={{ flex: 1 }}>

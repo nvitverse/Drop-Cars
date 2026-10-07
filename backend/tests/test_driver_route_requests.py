@@ -100,7 +100,10 @@ def test_matching_route_auto_assignment():
         order_id=order_id,
         pickup_city="Chennai",
         drop_city="Madurai",
-        car_type="Sedan"
+        car_type="Sedan",
+        # The route's available_from is the DATABASE clock (server default now()); a few ms of drift between it and this process
+        # made this test flaky. Real orders arrive well after a driver posted the route, so look a few seconds ahead.
+        order_time=datetime.now(timezone.utc) + timedelta(seconds=5),
     )
 
     print(f"Auto-Assignment Result: {res}")
