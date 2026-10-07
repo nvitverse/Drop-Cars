@@ -2407,10 +2407,10 @@ export default function CreateBookingScreen() {
                   )}
 
                   {/* Customer's all-inclusive amount + what it covers */}
-                  <View style={{ backgroundColor: themeColors.primaryTint, borderWidth: 1, borderColor: colors.primary + '33', borderRadius: 8, padding: 10, marginBottom: 12 }}>
-                    <Text style={[styles.priceLabel, { color: colors.primary }]}>Customer all-inclusive amount (₹)</Text>
+                  <View style={{ backgroundColor: isDark ? '#1E293B' : '#F0FDF4', borderWidth: 1, borderColor: isDark ? '#334155' : '#86EFAC', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                    <Text style={[styles.priceLabel, { color: isDark ? '#34D399' : '#059669', fontSize: 13, fontWeight: '800' }]}>Customer all-inclusive amount (₹)</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, { backgroundColor: isDark ? '#0F172A' : '#FFFFFF', fontWeight: '800', fontSize: 16 }]}
                       value={custAllInclAmount}
                       onChangeText={(v) => setCustAllInclAmount(stripLeadingZero(v.replace(/[^0-9]/g, '')))}
                       keyboardType="numeric"
@@ -2418,7 +2418,7 @@ export default function CreateBookingScreen() {
                       placeholderTextColor={colors.textMuted}
                       accessibilityLabel="Customer all-inclusive amount"
                     />
-                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 6, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 6, marginBottom: 8, lineHeight: 15 }}>
                       What does this amount cover? Any amount above 0 counts as included. Km limit: {aiKm} km (set above).
                     </Text>
                     <View style={styles.priceGrid}>
@@ -2429,38 +2429,80 @@ export default function CreateBookingScreen() {
                         ['Hill / Ghat (₹)', aiHill, setAiHill],
                         ['Parking (₹)', aiParking, setAiParking],
                         ['Other (₹)', aiOther, setAiOther],
-                      ] as [string, string, (v: string) => void][]).map(([label, val, setter]) => (
-                        <View key={label} style={styles.priceCell}>
-                          <Text style={styles.priceLabel}>{label}{Number(val) > 0 ? '  ✓ included' : ''}</Text>
-                          <TextInput
-                            style={styles.priceInput}
-                            value={val}
-                            onChangeText={(v) => setter(stripLeadingZero(v.replace(/[^0-9]/g, '')))}
-                            keyboardType="numeric"
-                            placeholder="0"
-                            placeholderTextColor={colors.textMuted}
-                          />
-                        </View>
-                      ))}
+                      ] as [string, string, (v: string) => void][]).map(([label, val, setter]) => {
+                        const isInc = Number(val) > 0;
+                        return (
+                          <View key={label} style={[styles.priceCell, { minWidth: '45%' }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text style={[styles.priceLabel, { marginBottom: 0, fontSize: 11.5 }]} numberOfLines={1}>{label}</Text>
+                              {isInc && (
+                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#059669', backgroundColor: isDark ? '#064E3B' : '#DCFCE7', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                                  ✓ Inc
+                                </Text>
+                              )}
+                            </View>
+                            <TextInput
+                              style={[styles.priceInput, { backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }, isInc && { borderColor: '#10B981' }]}
+                              value={val}
+                              onChangeText={(v) => setter(stripLeadingZero(v.replace(/[^0-9]/g, '')))}
+                              keyboardType="numeric"
+                              placeholder="0"
+                              placeholderTextColor={colors.textMuted}
+                            />
+                          </View>
+                        );
+                      })}
                     </View>
-                    <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 6, lineHeight: 16 }}>
                       Beyond {aiKm} km the customer pays ₹{aiCustomerRatePerExtraKm}/km{includeGst ? ` + 5% GST (₹${(aiCustomerRatePerExtraKm * 1.05).toFixed(2)}/km)` : ''}.
                     </Text>
+                  </View>
+
+                  {/* Driver Pricing Mode Toggle */}
+                  <View style={{ marginBottom: 12, padding: 10, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6 }}>DRIVER PAYMENT MODE</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => setAiStandardDriver(true)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 8,
+                          borderRadius: 6,
+                          borderWidth: 1.5,
+                          borderColor: aiStandardDriver ? colors.primary : themeColors.border,
+                          backgroundColor: aiStandardDriver ? (isDark ? '#312E81' : '#EEF2FF') : 'transparent',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: aiStandardDriver ? colors.primary : themeColors.textSecondary, textAlign: 'center' }}>
+                          Standard Tariff (Auto)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setAiStandardDriver(false)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 8,
+                          borderRadius: 6,
+                          borderWidth: 1.5,
+                          borderColor: !aiStandardDriver ? colors.primary : themeColors.border,
+                          backgroundColor: !aiStandardDriver ? (isDark ? '#312E81' : '#EEF2FF') : 'transparent',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: !aiStandardDriver ? colors.primary : themeColors.textSecondary, textAlign: 'center' }}>
+                          Custom Driver Amount
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <View style={styles.priceGrid}>
                     {/* Row 1: Driver Share & Vendor Extra (Markup) */}
                     <View style={styles.priceCell}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 6 }}>
-                        <Text style={[styles.priceLabel, { marginBottom: 0, flexShrink: 1 }]}>Driver Amount (₹) *</Text>
-                        <TouchableOpacity
-                          onPress={() => setAiStandardDriver((v) => !v)}
-                          style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.primary, backgroundColor: aiStandardDriver ? colors.primary : 'transparent' }}
-                          accessibilityLabel="Pay the driver as per the standard tariff"
-                        >
-                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: aiStandardDriver ? '#FFFFFF' : colors.primary }}>As per standard tariff</Text>
-                        </TouchableOpacity>
-                      </View>
+                      <Text style={styles.priceLabel}>Driver Amount (₹) *</Text>
                       <TextInput
                         style={[styles.priceInput, aiStandardDriver && { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', fontWeight: '800' }]}
                         value={driverAllowance}
@@ -2518,7 +2560,7 @@ export default function CreateBookingScreen() {
                     {/* Row 3: Extra km rate (Driver) & Extra km rate (Vendor) */}
                     <View style={styles.priceCell}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Driver extra fare /km (₹)</Text>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]} numberOfLines={1}>Driver extra /km (₹)</Text>
                         {tip('Driver extra fare /km', 'Rate paid to driver for each additional km driven beyond the included Km limit.')}
                       </View>
                       <TextInput
@@ -2532,7 +2574,7 @@ export default function CreateBookingScreen() {
                     </View>
                     <View style={styles.priceCell}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <Text style={[styles.priceLabel, { marginBottom: 0 }]}>Vendor extra /km (₹)</Text>
+                        <Text style={[styles.priceLabel, { marginBottom: 0 }]} numberOfLines={1}>Vendor extra /km (₹)</Text>
                         {tip('Vendor extra /km', 'Additional markup billed to customer per extra km beyond the included Km limit.')}
                       </View>
                       <TextInput
@@ -2570,8 +2612,8 @@ export default function CreateBookingScreen() {
                   </View>
 
                   {aiStandardDriver && (
-                    <View style={{ marginTop: 12, backgroundColor: themeColors.surface, borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10 }}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: themeColors.text, marginBottom: 8 }}>Driver paid as per the standard tariff</Text>
+                    <View style={{ marginTop: 12, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0', borderRadius: 8, padding: 12 }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: themeColors.text, marginBottom: 8 }}>Driver paid as per standard tariff</Text>
                       <View style={styles.priceGrid}>
                         <View style={styles.priceCell}>
                           <Text style={styles.priceLabel}>Driver rate /km (₹)</Text>
@@ -2582,15 +2624,17 @@ export default function CreateBookingScreen() {
                           <TextInput style={styles.priceInput} value={aiBata} onChangeText={(v) => setAiBata(v.replace(/[^0-9]/g, ''))} keyboardType="numeric" placeholder={String(aiDefaults.driver_allowance || 300)} placeholderTextColor={colors.textMuted} />
                         </View>
                       </View>
-                      <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 6 }}>
+                      <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 6, lineHeight: 16 }}>
                         {aiKm} km × ₹{aiRate} = ₹{Math.round(aiKm * aiRate)}  +  bata ₹{aiBataDay}{aiDays > 1 ? ` × ${aiDays} days` : ''} = ₹{aiBataDay * aiDays}
                         {aiIncludedTotal > 0 ? `  +  included charges ₹${aiIncludedTotal}` : ''}
                         {'\n'}Driver gets ₹{aiStandardFare.toLocaleString('en-IN')}. {custAllInclAmount.trim() !== '' ? `Our share: ₹${Math.max(0, (Number(custAllInclAmount) || 0) - aiStandardFare).toLocaleString('en-IN')}.` : 'Enter the customer all-inclusive amount to see our share.'}
                       </Text>
                       {custAllInclAmount.trim() !== '' && (Number(custAllInclAmount) || 0) < aiStandardFare && (
-                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#EF4444', marginTop: 4 }}>
-                          The customer amount is lower than the driver's standard fare, so we would lose money on this booking.
-                        </Text>
+                        <View style={{ marginTop: 8, padding: 8, borderRadius: 6, backgroundColor: isDark ? '#450A0A' : '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' }}>
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#EF4444', lineHeight: 15 }}>
+                            ⚠️ The customer amount is lower than the driver's standard fare, so we would lose money on this booking.
+                          </Text>
+                        </View>
                       )}
                     </View>
                   )}

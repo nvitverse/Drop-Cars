@@ -43,6 +43,7 @@ import {
   EyeOff,
   ArrowLeftRight,
   KeyRound,
+  ChevronRight,
   CheckCircle2,
   RefreshCw,
 } from 'lucide-react-native';
@@ -1420,15 +1421,31 @@ export default function FleetOwnerDetailScreen() {
             {/* Upgrade the proper way: choose Monthly/Yearly and take payment (wallet, UPI/bank/cash, or a WhatsApp payment link) */}
             {selectedTierTarget === 'PREFERRED' && (
               <TouchableOpacity
-                style={{ marginBottom: 14, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#10B981', backgroundColor: isDark ? '#064E3B33' : '#ECFDF5' }}
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  borderRadius: 10,
+                  borderWidth: 1.5,
+                  borderColor: '#10B981',
+                  backgroundColor: isDark ? '#064E3B33' : '#ECFDF5',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
                 onPress={() => {
                   setTierModalVisible(false);
                   router.push({ pathname: '/fleet-subscriptions', params: { search: owner?.primary_number || '', openPay: '1' } } as any);
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={{ fontWeight: '800', fontSize: 13, color: '#047857' }}>Upgrade with payment (Monthly / Yearly)</Text>
-                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 2 }}>Wallet, UPI / bank / cash, or send a payment link on WhatsApp. Activates automatically.</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '800', fontSize: 13.5, color: '#047857' }}>Upgrade with payment (Monthly / Yearly)</Text>
+                  <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 3, lineHeight: 15 }}>
+                    Wallet, UPI / bank / cash, or send a payment link on WhatsApp. Activates automatically.
+                  </Text>
+                </View>
+                <ChevronRight size={18} color="#10B981" />
               </TouchableOpacity>
             )}
 

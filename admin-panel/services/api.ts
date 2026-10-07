@@ -2325,15 +2325,84 @@ class ApiService {
     });
   }
 
-  // GST Tax Invoicing & Filing Hub
-  async getTaxInvoices(params?: { invoice_type?: string; from_date?: string; to_date?: string; skip?: number; limit?: number }): Promise<any[]> {
-    const q = new URLSearchParams();
-    if (params?.invoice_type) q.set('invoice_type', params.invoice_type);
-    if (params?.from_date) q.set('from_date', params.from_date);
-    if (params?.to_date) q.set('to_date', params.to_date);
-    if (params?.skip) q.set('skip', String(params.skip));
-    if (params?.limit) q.set('limit', String(params.limit));
-    return this.makeRequest(`/admin/tax/invoices?${q.toString()}`);
+  // GST Tax Invoicing, Reports & Settlements Hub
+  async getTaxInvoices(params?: any): Promise<any> {
+    const qs = params ? (typeof params === 'string' ? params : new URLSearchParams(params).toString()) : '';
+    return this.makeRequest(`/admin/tax/invoices${qs ? `?${qs}` : ''}`);
+  }
+
+  async getTaxSetupStatus(): Promise<any> {
+    return this.makeRequest('/admin/tax/setup-status');
+  }
+
+  async getTaxCompanyProfile(): Promise<any> {
+    return this.makeRequest('/admin/tax/company-profile');
+  }
+
+  async updateTaxCompanyProfile(payload: any): Promise<any> {
+    return this.makeRequest('/admin/tax/company-profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTaxRates(): Promise<any> {
+    return this.makeRequest('/admin/tax/rates');
+  }
+
+  async updateTaxRate(key: string, value: number): Promise<any> {
+    return this.makeRequest('/admin/tax/rates', {
+      method: 'PUT',
+      body: JSON.stringify({ key, value }),
+    });
+  }
+
+  async getTaxInvoiceDetail(invoiceId: string): Promise<any> {
+    return this.makeRequest(`/admin/tax/invoices/${encodeURIComponent(invoiceId)}`);
+  }
+
+  async issueCreditNote(invoiceId: string, reason: string): Promise<any> {
+    return this.makeRequest(`/admin/tax/invoices/${encodeURIComponent(invoiceId)}/credit-note`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getGstr1Report(month?: string): Promise<any> {
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/gstr1${qs}`);
+  }
+
+  async getGstr3bReport(month?: string): Promise<any> {
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/gstr3b${qs}`);
+  }
+
+  async getSection95Report(month?: string): Promise<any> {
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/section-9-5${qs}`);
+  }
+
+  async getDriverSettlements(month?: string): Promise<any> {
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/settlements${qs}`);
+  }
+
+  async generateDriverSettlements(month?: string): Promise<any> {
+    return this.makeRequest('/admin/tax/settlements/generate', {
+      method: 'POST',
+      body: JSON.stringify(month ? { month } : {}),
+    });
+  }
+
+  async finalizeDriverSettlement(settlementId: string): Promise<any> {
+    return this.makeRequest(`/admin/tax/settlements/${encodeURIComponent(settlementId)}/finalize`, {
+      method: 'POST',
+    });
+  }
+
+  async getFinanceAuditLog(limit = 50): Promise<any> {
+    return this.makeRequest(`/admin/tax/audit-log?limit=${limit}`);
   }
 
   async getTaxSequenceStatus(): Promise<{ series: string; financial_year: string; last_number: number; next_invoice_number: string }> {
@@ -2549,10 +2618,38 @@ class ApiService {
     return this.makeRequest('/admin/settings/system', { method: 'POST', body: JSON.stringify({ maps_api_keys: JSON.stringify(keys) }) });
   }
 
-  // --- Autopilot & Tour Features ---
+  // --- Autopilot, Tours & Fleet Operations ---
+  async getActiveToursSummary(): Promise<any> {
+    return this.makeRequest('/admin/tours/active-summary');
+  }
+
+  async getTourLedger(tourId: string): Promise<any> {
+    return this.makeRequest(`/admin/tours/${encodeURIComponent(tourId)}/ledger`);
+  }
+
+  async settleTour(tourId: string, payload: { closing_odometer: number; physical_cash_returned: number; settlement_notes?: string }): Promise<any> {
+    return this.makeRequest(`/admin/tours/${encodeURIComponent(tourId)}/settle`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async submitTourExpense(type: 'fuel' | 'road' | 'bank-deposit', payload: any): Promise<any> {
+    return this.makeRequest(`/admin/tours/expenses/${type}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async verifyTourExpense(expenseId: string, action: 'VERIFIED' | 'REJECTED', notes?: string): Promise<any> {
+    return this.makeRequest(`/admin/tours/expenses/${encodeURIComponent(expenseId)}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ action, notes }),
+    });
+  }
+
   async getOwnFleetReturnMatches(): Promise<any> {
-    // Own-fleet return match feature not yet on backend — use fleet-hub counts as proxy
-    return this.makeRequest('/admin/fleet-hub/counts').catch(() => ({ matches: [], total: 0 }));
+    return this.makeRequest('/admin/fleet/own-fleet-matches').catch(() => ({ matches: [], total: 0 }));
   }
 
   async recordBookingCommission(data: {
@@ -2579,15 +2676,19 @@ class ApiService {
     return this.makeRequest(`/admin/reviews/queue${q}`);
   }
 
+  async submitReviewAction(itemId: string, payload: { action: string; customer_rating_reported?: number; customer_feedback_notes?: string }): Promise<any> {
+    return this.makeRequest(`/admin/reviews/${encodeURIComponent(itemId)}/action`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async submitReviewQueueAction(queueId: string, data: {
     action: string;
     customer_rating_reported?: number;
     customer_feedback_notes?: string;
   }): Promise<any> {
-    return this.makeRequest(`/admin/reviews/${queueId}/action`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    return this.submitReviewAction(queueId, data);
   }
 
   async getAutopilotConfig(): Promise<{
@@ -2599,27 +2700,40 @@ class ApiService {
     fastag_low_balance_threshold: number;
     google_review_place_url: string;
   }> {
-    // Autopilot config is stored in system-settings JSON blob
-    const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
-    let cfg: any = {};
-    try { cfg = JSON.parse(settings.autopilot_config || '{}'); } catch { cfg = {}; }
-    return {
-      lead_auto_distribution_enabled: cfg.lead_auto_distribution_enabled ?? false,
-      lead_distribution_mode: cfg.lead_distribution_mode ?? 'round_robin',
-      lead_assigned_staff_id: cfg.lead_assigned_staff_id ?? '',
-      fastag_bridge_provider: cfg.fastag_bridge_provider ?? '',
-      fastag_api_key_configured: cfg.fastag_api_key_configured ?? false,
-      fastag_low_balance_threshold: cfg.fastag_low_balance_threshold ?? 100,
-      google_review_place_url: cfg.google_review_place_url ?? '',
-    };
+    return this.makeRequest<any>('/admin/autopilot/config').catch(async () => {
+      const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
+      let cfg: any = {};
+      try { cfg = JSON.parse(settings.autopilot_config || '{}'); } catch { cfg = {}; }
+      return {
+        lead_auto_distribution_enabled: cfg.lead_auto_distribution_enabled ?? false,
+        lead_distribution_mode: cfg.lead_distribution_mode ?? 'round_robin',
+        lead_assigned_staff_id: cfg.lead_assigned_staff_id ?? '',
+        fastag_bridge_provider: cfg.fastag_bridge_provider ?? '',
+        fastag_api_key_configured: cfg.fastag_api_key_configured ?? false,
+        fastag_low_balance_threshold: cfg.fastag_low_balance_threshold ?? 100,
+        google_review_place_url: cfg.google_review_place_url ?? '',
+      };
+    });
   }
 
   async updateAutopilotConfig(data: any): Promise<any> {
-    const current = await this.getAutopilotConfig().catch(() => ({}));
-    const merged = { ...current, ...data };
-    return this.makeRequest('/admin/settings/system', {
+    return this.makeRequest('/admin/autopilot/config', {
       method: 'POST',
-      body: JSON.stringify({ autopilot_config: JSON.stringify(merged) }),
+      body: JSON.stringify(data),
+    }).catch(async () => {
+      const current = await this.getAutopilotConfig().catch(() => ({}));
+      const merged = { ...current, ...data };
+      return this.makeRequest('/admin/settings/system', {
+        method: 'POST',
+        body: JSON.stringify({ autopilot_config: JSON.stringify(merged) }),
+      });
+    });
+  }
+
+  async sendBroadcastMessage(payload: { title: string; message: string; target_filter?: string; route_city?: string; discount_code?: string }): Promise<any> {
+    return this.makeRequest('/admin/broadcast/send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -2630,10 +2744,11 @@ class ApiService {
     route_city?: string;
     discount_code?: string;
   }): Promise<any> {
-    // CRM broadcast endpoint
-    return this.makeRequest('/crm/whatsapp/broadcast', {
-      method: 'POST',
-      body: JSON.stringify(data),
+    return this.sendBroadcastMessage(data).catch(() => {
+      return this.makeRequest('/crm/whatsapp/broadcast', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
     });
   }
   async getAlarmConfig(): Promise<{
@@ -2768,84 +2883,121 @@ class ApiService {
     });
   }
 
-  // Team Hub / Staff / Attendance / Advances / Cashbook
-  // Backend team-hub module is not yet deployed — these methods return graceful
-  // empty shapes so the admin UI loads without crashing. Data is persisted
-  // via system-settings JSON blobs as a temporary bridge until the backend
-  // team-hub routes are added.
-  async getWorkers(activeOnly = true): Promise<any> {
-    const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
-    let workers: any[] = [];
-    try { workers = JSON.parse(settings.team_hub_workers || '[]'); } catch { workers = []; }
-    if (activeOnly) workers = workers.filter((w: any) => w.active !== false);
-    return { workers, total: workers.length };
+  // Workers, Team Hub, Attendance, Advances, Petty Cash & Payroll
+  async getWorkers(activeOnly = true, role?: string, isCompanyDriver?: boolean): Promise<{ workers: any[]; total: number }> {
+    const params = new URLSearchParams();
+    if (activeOnly !== undefined) params.append('active_only', String(activeOnly));
+    if (role) params.append('role', role);
+    if (isCompanyDriver !== undefined) params.append('is_company_driver', String(isCompanyDriver));
+    return this.makeRequest(`/admin/workers?${params.toString()}`).catch(async () => {
+      const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
+      let workers: any[] = [];
+      try { workers = JSON.parse(settings.team_hub_workers || '[]'); } catch { workers = []; }
+      if (activeOnly) workers = workers.filter((w: any) => w.active !== false);
+      return { workers, total: workers.length };
+    });
   }
 
-  async getDailyAttendance(date: string): Promise<any> {
-    const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
-    let attendance: any[] = [];
-    try { attendance = JSON.parse(settings[`team_hub_attendance_${date}`] || '[]'); } catch { attendance = []; }
-    return { date, records: attendance };
+  async createWorker(payload: any): Promise<{ message: string; id: string }> {
+    return this.makeRequest('/admin/workers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
-  async getWorkerAdvances(): Promise<any> {
-    const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
-    let advances: any[] = [];
-    try { advances = JSON.parse(settings.team_hub_advances || '[]'); } catch { advances = []; }
-    return { advances, total: advances.length };
+  async updateWorker(workerId: string, payload: any): Promise<{ message: string }> {
+    return this.makeRequest(`/admin/workers/${encodeURIComponent(workerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
   }
 
-  async getCashbook(date: string): Promise<any> {
-    const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
-    let entries: any[] = [];
-    try { entries = JSON.parse(settings[`team_hub_cashbook_${date}`] || '[]'); } catch { entries = []; }
-    return { date, entries, total_income: 0, total_expense: 0, net: 0 };
-  }
-
-  async getTeamAuditTrail(limit = 30): Promise<any> {
-    return this.makeRequest(`/admin/team-hub/audit-trail?limit=${limit}`);
+  async getDailyAttendance(targetDate?: string, role?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (targetDate) params.append('target_date', targetDate);
+    if (role) params.append('role', role);
+    return this.makeRequest(`/admin/workers/attendance?${params.toString()}`).catch(async () => {
+      const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
+      let attendance: any[] = [];
+      try { attendance = JSON.parse(settings[`team_hub_attendance_${targetDate || ''}`] || '[]'); } catch { attendance = []; }
+      return { date: targetDate || '', records: attendance };
+    });
   }
 
   async markBulkAttendance(dateOrData: string | any, records?: any[]): Promise<any> {
     const payload = typeof dateOrData === 'string'
       ? { date: dateOrData, records: records || [] }
       : dateOrData;
-    return this.makeRequest('/admin/team-hub/attendance/bulk', {
+    return this.makeRequest('/admin/workers/attendance/bulk', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getWorkerAdvances(workerId?: string, month?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (workerId) params.append('worker_id', workerId);
+    if (month) params.append('month', month);
+    return this.makeRequest(`/admin/workers/advances?${params.toString()}`);
+  }
+
+  async recordWorkerAdvance(payload: any): Promise<any> {
+    return this.makeRequest('/admin/workers/advances', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getPettyCashBook(startDate?: string, endDate?: string, category?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (category) params.append('category', category);
+    return this.makeRequest(`/admin/workers/petty-cash?${params.toString()}`);
+  }
+
+  async recordPettyCashEntry(payload: any): Promise<any> {
+    return this.makeRequest('/admin/workers/petty-cash', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getCashbook(date: string): Promise<any> {
+    return this.getPettyCashBook(date, date);
+  }
+
+  async addCashbookEntry(data: any): Promise<any> {
+    return this.recordPettyCashEntry(data);
+  }
+
+  async getWorkersPayroll(month?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month);
+    return this.makeRequest(`/admin/workers/payroll?${params.toString()}`);
+  }
+
+  async getWorkerPayrollSummary(workerId: string, month: string): Promise<any> {
+    return this.getWorkersPayroll(month);
+  }
+
+  async getWorkersAuditLogs(limit = 50): Promise<any> {
+    return this.makeRequest(`/admin/workers/audit-logs?limit=${limit}`);
+  }
+
+  async getTeamAuditTrail(limit = 30): Promise<any> {
+    return this.getWorkersAuditLogs(limit);
+  }
+
+  async syncWorkersBatchOffline(payload: any): Promise<any> {
+    return this.makeRequest('/admin/workers/sync-batch', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   async syncOfflineBatch(batch: any): Promise<any> {
-    return this.makeRequest('/admin/team-hub/sync-offline-batch', {
-      method: 'POST',
-      body: JSON.stringify(batch),
-    });
-  }
-
-  async createWorker(data: any): Promise<any> {
-    return this.makeRequest('/admin/team-hub/workers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async recordWorkerAdvance(data: any): Promise<any> {
-    return this.makeRequest('/admin/team-hub/advances', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getWorkerPayrollSummary(workerId: string, month: string): Promise<any> {
-    return this.makeRequest(`/admin/team-hub/payroll-summary?worker_id=${workerId}&month=${month}`);
-  }
-
-  async addCashbookEntry(data: any): Promise<any> {
-    return this.makeRequest('/admin/team-hub/cashbook/entry', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    return this.syncWorkersBatchOffline(batch);
   }
 
   // --- SOS Emergency Management ---
@@ -3088,6 +3240,41 @@ class ApiService {
     }
 
     return { url: file.uri || `data:image/jpeg;base64,mock`, doc_type: docType };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Additional Gap Endpoints
+  // ---------------------------------------------------------------------------
+  async releaseWebsiteBookingHold(id: string): Promise<any> {
+    return this.makeRequest(`/admin/website-bookings/${encodeURIComponent(id)}/release-hold`, { method: 'POST' });
+  }
+
+  async holdWebsiteBooking(id: string, minutes = 30): Promise<any> {
+    return this.makeRequest(`/admin/website-bookings/${encodeURIComponent(id)}/hold`, {
+      method: 'POST',
+      body: JSON.stringify({ minutes }),
+    });
+  }
+
+  async getSubscriptionLookup(search?: string): Promise<any> {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.makeRequest(`/admin/subscription-lookup${qs}`);
+  }
+
+  async getAccountLedger(params?: any): Promise<any> {
+    const qs = params ? new URLSearchParams(params).toString() : '';
+    return this.makeRequest(`/admin/account-ledger${qs ? `?${qs}` : ''}`);
+  }
+
+  async updateVendorBusinessName(vendorId: string, businessName: string): Promise<any> {
+    return this.makeRequest(`/admin/vendors/${encodeURIComponent(vendorId)}/business-name`, {
+      method: 'PUT',
+      body: JSON.stringify({ business_name: businessName }),
+    });
+  }
+
+  async getVendorBalance(vendorId: string): Promise<any> {
+    return this.makeRequest(`/admin/vendors/${encodeURIComponent(vendorId)}/balance`);
   }
 }
 export const apiService = new ApiService();

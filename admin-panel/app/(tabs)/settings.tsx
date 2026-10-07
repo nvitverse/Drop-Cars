@@ -1028,6 +1028,42 @@ export default function SettingsScreen() {
               <ChevronRight size={18} color="#D1D5DB" />
             </TouchableOpacity>
 
+            <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/website-settings' as any)}>
+              <View style={styles.rowIcon}><Globe size={20} color="#3B82F6" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: themeColors.text }]}>Website Settings</Text>
+                <Text style={[styles.rowHint, { color: themeColors.textSecondary, lineHeight: 16 }]}>Advance payment %, minimum, UPI, surcharges & pricing rules</Text>
+              </View>
+              <ChevronRight size={18} color="#D1D5DB" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/tax-reports' as any)}>
+              <View style={styles.rowIcon}><Receipt size={20} color="#059669" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: themeColors.text }]}>Accounts & GST Reports</Text>
+                <Text style={[styles.rowHint, { color: themeColors.textSecondary, lineHeight: 16 }]}>GSTR-1, GSTR-3B, Sec 9(5), tax invoices & driver settlements</Text>
+              </View>
+              <ChevronRight size={18} color="#D1D5DB" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/driver-tours' as any)}>
+              <View style={styles.rowIcon}><Navigation size={20} color="#8B5CF6" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: themeColors.text }]}>Tours & Operations Hub</Text>
+                <Text style={[styles.rowHint, { color: themeColors.textSecondary, lineHeight: 16 }]}>Active running tours, ledger, own-fleet return matches & autopilot</Text>
+              </View>
+              <ChevronRight size={18} color="#D1D5DB" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/workers-payroll' as any)}>
+              <View style={styles.rowIcon}><Users size={20} color="#F59E0B" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: themeColors.text }]}>Workers & Payroll</Text>
+                <Text style={[styles.rowHint, { color: themeColors.textSecondary, lineHeight: 16 }]}>1-tap daily attendance, advances, petty cashbook & monthly salary</Text>
+              </View>
+              <ChevronRight size={18} color="#D1D5DB" />
+            </TouchableOpacity>
+
             {/* Screens that were built but had no menu entry (found by the 2026-10-07 reachability audit) */}
             {([
               { to: '/sos-alerts', label: 'SOS Emergency Hub', hint: 'Live SOS alerts from drivers and customers', color: '#EF4444', Icon: AlertTriangle },
@@ -1043,8 +1079,8 @@ export default function SettingsScreen() {
               <TouchableOpacity key={to} style={[styles.row, styles.rowBorder]} onPress={() => router.push(to as any)}>
                 <View style={styles.rowIcon}><Icon size={20} color={color} /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowLabel}>{label}</Text>
-                  <Text style={styles.rowHint}>{hint}</Text>
+                  <Text style={[styles.rowLabel, { color: themeColors.text }]}>{label}</Text>
+                  <Text style={[styles.rowHint, { color: themeColors.textSecondary, lineHeight: 16 }]}>{hint}</Text>
                 </View>
                 <ChevronRight size={18} color="#D1D5DB" />
               </TouchableOpacity>

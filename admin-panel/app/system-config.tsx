@@ -304,21 +304,21 @@ export default function SystemConfigScreen() {
               const changed = gstValues[f.key] !== gstOriginal[f.key];
               return (
                 <View key={f.key} style={[styles.fieldRow, idx < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border }]}>
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <View style={[styles.colorDot, { backgroundColor: '#10B981' }]} />
                       <Text style={[styles.fieldLabel, { color: themeColors.text }]}>{f.label}</Text>
                       {changed && <View style={styles.changedDot} />}
                     </View>
                   </View>
-                  <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: changed ? '#6366F1' : themeColors.border, minWidth: 170 }]}>
+                  <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: changed ? '#6366F1' : themeColors.border, flex: 1.4, minWidth: 140 }]}>
                     <TextInput
                       value={gstValues[f.key]}
                       onChangeText={(t) => setGstValues((prev) => ({ ...prev, [f.key]: t }))}
                       placeholder={f.placeholder}
                       placeholderTextColor={themeColors.textSecondary}
                       autoCapitalize={f.autoCapitalize}
-                      style={[styles.input, { color: changed ? '#6366F1' : themeColors.text }]}
+                      style={[styles.input, { color: changed ? '#6366F1' : themeColors.text, textAlign: 'left', flex: 1, fontSize: 14, fontWeight: '500' }]}
                     />
                   </View>
                 </View>
@@ -336,20 +336,22 @@ export default function SystemConfigScreen() {
           <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>PARTNER UPGRADE & STAFF</Text>
           <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             {TEXT_SETTING_FIELDS.map((f, idx, arr) => {
+              const isMultiline = f.key === 'fleet_payment_link_message';
               const changed = (txtValues[f.key] ?? '') !== (txtOriginal[f.key] ?? '');
               return (
                 <View key={f.key} style={[{ padding: 12 }, idx < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border }]}>
                   <Text style={[styles.fieldLabel, { color: themeColors.text }]}>{f.label}{changed ? '  •' : ''}</Text>
-                  <Text style={[styles.fieldHint, { color: themeColors.textSecondary, marginBottom: 6 }]}>{f.hint}</Text>
-                  <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: changed ? '#6366F1' : themeColors.border }]}>
+                  <Text style={[styles.fieldHint, { color: themeColors.textSecondary, marginBottom: 8 }]}>{f.hint}</Text>
+                  <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: changed ? '#6366F1' : themeColors.border, minHeight: isMultiline ? 90 : 42, alignItems: isMultiline ? 'flex-start' : 'center', paddingVertical: isMultiline ? 8 : 6 }]}>
                     <TextInput
                       value={txtValues[f.key] ?? ''}
                       onChangeText={(v) => setTxtValues((prev) => ({ ...prev, [f.key]: v }))}
                       placeholder={f.placeholder}
                       placeholderTextColor={themeColors.textSecondary}
-                      multiline={f.key === 'fleet_payment_link_message'}
+                      multiline={isMultiline}
+                      numberOfLines={isMultiline ? 4 : 1}
                       autoCapitalize="none"
-                      style={[styles.input, { color: changed ? '#6366F1' : themeColors.text }]}
+                      style={[styles.input, { color: changed ? '#6366F1' : themeColors.text, textAlign: 'left', flex: 1, fontSize: 13, fontWeight: '400', width: '100%', ...(isMultiline ? { minHeight: 74, textAlignVertical: 'top' } : {}) }]}
                     />
                   </View>
                 </View>
@@ -371,7 +373,7 @@ export default function SystemConfigScreen() {
                 const isChanged = original && String((original as any)[field.key]) !== values[field.key];
                 return (
                   <View key={field.key} style={[styles.fieldRow, idx < group.fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border }]}>
-                    <View style={{ flex: 1, marginRight: 12 }}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={[styles.colorDot, { backgroundColor: field.iconColor }]} />
                         <Text style={[styles.fieldLabel, { color: themeColors.text }]}>{field.label}</Text>
@@ -380,15 +382,15 @@ export default function SystemConfigScreen() {
                       </View>
                       <Text style={[styles.fieldHint, { color: themeColors.textSecondary }]}>{field.hint}</Text>
                     </View>
-                    <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: isChanged ? '#6366F1' : themeColors.border }]}>
+                    <View style={[styles.inputBox, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: isChanged ? '#6366F1' : themeColors.border, flexShrink: 0 }]}>
                       <TextInput
                         value={values[field.key] ?? ''}
                         onChangeText={(t) => setValues(prev => ({ ...prev, [field.key]: t }))}
                         keyboardType="numeric"
-                        style={[styles.input, { color: isChanged ? '#6366F1' : themeColors.text }]}
+                        style={[styles.input, { color: isChanged ? '#6366F1' : themeColors.text, minWidth: 48, fontSize: 16 }]}
                         selectTextOnFocus
                       />
-                      <Text style={[styles.unit, { color: themeColors.textSecondary }]}>{field.unit}</Text>
+                      {field.unit ? <Text style={[styles.unit, { color: themeColors.textSecondary }]}>{field.unit}</Text> : null}
                     </View>
                   </View>
                 );

@@ -138,7 +138,25 @@ def build_customer_bill(db, order) -> dict:
     if not order.closed_vendor_price and order.source and order.source.name == "HOURLY_RENTAL":
         total += conv   # not closed yet: the quoted hourly price does not carry the convenience fee, the closed one does
     lines = []
-    if new_order:
+    from app.utils.commission import enum_value as _ev
+    is_all_inclusive = _ev(getattr(order, "fare_type", None)) == "ALL_INCLUSIVE" or (new_order and _ev(getattr(new_order, "fare_type", None)) == "ALL_INCLUSIVE")
+    if is_all_inclusive:
+        base_ai = int(getattr(order, "total_booking_amount", 0) or (new_order and getattr(new_order, "total_booking_amount", 0)) or 0)
+        extra_markup = int(getattr(order, "extra_amount", 0) or (new_order and getattr(new_order, "extra_amount", 0)) or 0)
+        km_limit = int(getattr(order, "trip_distance", 0) or (new_order and getattr(new_order, "trip_distance", 0)) or (new_order and getattr(new_order, "calculated_trip_distance", 0)) or 0)
+        if base_ai:
+            lines.append({"label": f"All-Inclusive Package ({km_limit} km)" if km_limit else "All-Inclusive Package", "amount": base_ai + extra_markup, "included": True})
+        rate = int((new_order and getattr(new_order, "cost_per_km", 0)) or 0) + int((new_order and getattr(new_order, "extra_cost_per_km", 0)) or 0)
+        extra_km = max(0, billed_km - km_limit) if (km_limit and billed_km > km_limit) else 0
+        if extra_km > 0 and rate > 0:
+            extra_cost = extra_km * rate
+            lines.append({"label": f"Extra distance ({extra_km} km x Rs {rate})", "amount": extra_cost, "included": True})
+            has_gst = bool(getattr(order, "gst_included", False) or (new_order and getattr(new_order, "gst_included", False)) or getattr(order, "gst_amount", 0) or (new_order and getattr(new_order, "gst_amount", 0)))
+            if has_gst:
+                extra_gst = math.ceil(extra_cost * 0.05)
+                if extra_gst > 0:
+                    lines.append({"label": "GST on extra distance (5%)", "amount": extra_gst, "included": True})
+    elif new_order:
         rate = int(new_order.cost_per_km or 0) + int(new_order.extra_cost_per_km or 0)
         if rate and billed_km:
             lines.append({"label": f"Distance ({billed_km} km x Rs {rate})", "amount": rate * billed_km, "included": True})
@@ -605,6 +623,14 @@ async def update_end_trip_record(
                 commision_amount = 0 if commission_waived else (getattr(order, "commission_percent", None) if getattr(order, "commission_percent", None) is not None else (_rates["vendor"] + _rates["admin"]))
                 closed_driver_price = _driver_fare
             else:
+                _km_limit = int(getattr(order, "trip_distance", None) or getattr(new_order, "trip_distance", None) or getattr(new_order, "calculated_trip_distance", None) or 0)
+                _rate = int(getattr(new_order, "cost_per_km", 0) or 0) + int(getattr(new_order, "extra_cost_per_km", 0) or 0)
+                _extra_km = max(0, updated_km - _km_limit) if (_km_limit > 0 and updated_km > _km_limit) else 0
+                _extra_km_cost = _extra_km * _rate if (_extra_km > 0 and _rate > 0) else 0
+                _has_gst = bool(getattr(order, "gst_included", False) or getattr(new_order, "gst_included", False) or getattr(order, "gst_amount", 0) or getattr(new_order, "gst_amount", 0))
+                _extra_gst = math.ceil(_extra_km_cost * 0.05) if (_has_gst and _extra_km_cost > 0) else 0
+                _total_extra = _extra_km_cost + _extra_gst
+
                 _total_booking = (
                     getattr(order, "total_booking_amount", None) or getattr(new_order, "total_booking_amount", None)
                     or (closed_vendor_price if _cls == CLASS_POSTER_ALL_INCLUSIVE else (getattr(order, "vendor_price", None) or closed_vendor_price))
@@ -615,10 +641,19 @@ async def update_end_trip_record(
                                        pct_override=getattr(order, "commission_percent", None))
                 commision_amount = _split["fee_pct"]
                 closed_driver_price = _split["driver_net"]
-            closed_vendor_price = _split["customer_total"]
-            vendor_profit = _split["poster_share"]
-            admin_profit = _split["platform_fee"]
-            driver_profit = _split["driver_net"]
+                closed_vendor_price = _split["customer_total"] + _total_extra
+                if _cls == CLASS_POSTER_ALL_INCLUSIVE:
+                    vendor_profit = _split["poster_share"] + _total_extra
+                    admin_profit = _split["platform_fee"]
+                else:
+                    vendor_profit = _split["poster_share"]
+                    admin_profit = _split["platform_fee"] + _total_extra
+                driver_profit = _split["driver_net"]
+            if _cls == CLASS_STANDARD:
+                closed_vendor_price = _split["customer_total"]
+                vendor_profit = _split["poster_share"]
+                admin_profit = _split["platform_fee"]
+                driver_profit = _split["driver_net"]
             use_new_settlement = True
         elif is_all_inclusive:
             total_booking = getattr(order, "total_booking_amount", None) or getattr(new_order, "total_booking_amount", None) or closed_vendor_price or 0
