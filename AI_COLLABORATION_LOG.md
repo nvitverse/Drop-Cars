@@ -4,6 +4,15 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Trip-code leak + multi-city billing fixes (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`, NOT yet deployed / OTA'd
+- Start/end trip codes leaked to the person who must ask for them: the accepting fleet owner's lists (`crud/order_details.py`, two places) returned `assignment.start_trip_otp`; the Driver App showed it (`components/BookingDetailModal.tsx`). Now only posters (vendor / poster list / admin) and the customer get codes. The server also accepted a BLANK code (`order_assignments.py` start-trip / end-trip skipped the check when `otp` was empty): now `crud/trip_otp.py check_trip_otp` refuses blank or wrong codes; platform setting `trip_otp_enforced` (default 1) is the emergency switch.
+- Customers now receive their codes: `CustomerBookingOut.start_trip_otp / end_trip_otp` (Customer App card), and `GET /api/website/bookings/{id}/trip-codes` for the website (PHP part is for Antigravity, see the prompt, item 10). The "driver assigned" e-mail keeps working.
+- Multi-city waiting time: the driver enters MINUTES but the backend added them to the bill as RUPEES, unchecked, ignoring the waiting hours already included in the booking. `crud/end_records.py multicity_waiting_charge`: included hours free, capped at the trip length, rate from settings `multicity_waiting_rate_per_hour` (default 60 = same as the old Rs 1/min) and `multicity_waiting_free_minutes`; `orders.waiting_time` now holds the rupee charge, `orders.waiting_minutes` (new column) the minutes.
+- Trip-end screen asks only for items explicitly `included === false`; the Admin All-Inclusive extra-km line is a booking note now, not a charge item (a charge item became an amount field at trip end).
+- 226 backend tests pass.
+
+---
+
 ### Customer App is now OTA-ready (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`
 Self-hosted OTA exactly like the Driver App: `app.json` has `runtimeVersion "1.0.0"` + `updates.url` -> `/api/app-updates/customer/manifest` (backend `KNOWN_APPS` now includes `customer`), `expo-updates ~0.28.18` in package.json/lock, `components/OtaUpdateGate.tsx` mounted in `app/_layout.tsx`, `scripts/publish-ota.js` (default app `customer`). The FIRST Customer APK ("build pannu") must be built from this tree; after that every JS-only change ships with `cd customer-app; OTA_MAX_WORKERS=1 node scripts/publish-ota.js --app customer --message "..."` (rollback: `--rollback <updateId>`). Native changes (new native package, permissions, app.json native fields, SDK upgrade) need a new APK and a bumped `runtimeVersion`.
 The backend entry below went live with revision `drop-cars-api-00300` (= `53516a9`); the `customer` allowlist needs one more deploy.

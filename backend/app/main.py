@@ -436,6 +436,7 @@ async def ensure_extra_kyc_document_columns() -> None:
         # Yearly registration/attachment fee paid via Razorpay (verification screen)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS registration_fee_paid_at TIMESTAMPTZ',
         # Booking-level trip OTPs, shown to the vendor right after posting (2026-09-30)
+        'ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiting_minutes INTEGER',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS start_trip_otp VARCHAR',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS end_trip_otp VARCHAR',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone_reveal_at TIMESTAMPTZ',

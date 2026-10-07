@@ -205,6 +205,8 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
     car_out = None
     trip_status_out = None
     assignment_status_out = None
+    start_otp_out = None
+    end_otp_out = None
 
     if request.linked_order_id:
         order = db.query(Order).filter(Order.id == request.linked_order_id).first()
@@ -218,6 +220,9 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
 
         if assignment:
             assignment_status_out = assignment.assignment_status.value if hasattr(assignment.assignment_status, "value") else assignment.assignment_status
+            from app.crud.trip_otp import otps_visible
+            if otps_visible(order, assignment):
+                start_otp_out, end_otp_out = assignment.start_trip_otp, assignment.end_trip_otp
             if assignment.driver_id:
                 driver = db.query(CarDriver).filter(CarDriver.id == str(assignment.driver_id)).first()
                 if driver:
@@ -284,6 +289,8 @@ def _enrich_booking_out(db: Session, request: CustomerBookingRequest) -> Custome
         gst_amount=float(getattr(request, "gst_amount", 0.0) or 0.0),
         refund_eligible=getattr(request, "refund_eligible", None),
         refund_status=getattr(request, "refund_status", None),
+        start_trip_otp=start_otp_out,
+        end_trip_otp=end_otp_out,
     )
 
 

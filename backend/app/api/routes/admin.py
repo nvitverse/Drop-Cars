@@ -7063,6 +7063,8 @@ class SystemSettingsUpdateSchema(BaseModel):
     unaccepted_short_notice_hours: Optional[float] = None
     unaccepted_short_notice_percent: Optional[float] = None
     urgent_reminder_max_count: Optional[int] = None
+    multicity_waiting_rate_per_hour: Optional[float] = None
+    multicity_waiting_free_minutes: Optional[int] = None
     fleet_payment_channels: Optional[str] = None
     fleet_payment_link_message: Optional[str] = None
     fleet_payment_link_expiry_hours: Optional[str] = None

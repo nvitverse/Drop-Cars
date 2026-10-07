@@ -1291,6 +1291,10 @@ export default function CreateBookingScreen() {
           .filter((r) => r.included && r.name.trim())
           .map((r) => `${r.name.trim()}${Number(r.allowance) > 0 ? ` (+₹${r.allowance})` : ''}`);
         if (customReqs.length > 0) parts.push(`Special Requests: ${customReqs.join(', ')}`);
+        if (fareType === 'ALL_INCLUSIVE' && aiCustomerRatePerExtraKm > 0) {
+          // information only: a note, not a charge item (a charge item would show up as an amount the driver must enter at trip end)
+          parts.push(`[Extra km beyond ${aiKm} km: Rs ${aiCustomerRatePerExtraKm}/km${includeGst ? ' + 5% GST' : ''}]`);
+        }
         const spotExclusions = customCharges
           .filter((c) => !c.included && c.name.trim())
           .map((c) => `${c.name.trim()}${Number(c.amount) > 0 ? ` (₹${c.amount})` : ''}`);
@@ -1351,9 +1355,6 @@ export default function CreateBookingScreen() {
         });
         if (fareType === 'ALL_INCLUSIVE') {
           aiIncludedItems.forEach((i) => items.push({ label: i.label, amount: i.amount, included: true }));
-          if (aiCustomerRatePerExtraKm > 0) {
-            items.push({ label: `Extra km beyond ${aiKm} km: Rs ${aiCustomerRatePerExtraKm}/km${includeGst ? ' + 5% GST' : ''}`, included: false });
-          }
         }
         if (includeGst) items.push({ label: 'GST on KM Fare (5%)', included: true });
         return items;

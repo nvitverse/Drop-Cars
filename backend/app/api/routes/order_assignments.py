@@ -814,8 +814,11 @@ async def start_trip(
             raise HTTPException(status_code=404, detail="No active assignment found for this order")
         if assignment.assignment_status == AssignmentStatusEnum.COMPLETED:
             raise HTTPException(status_code=400, detail="This trip is already completed - its codes are no longer valid")
-        if assignment.start_trip_otp and otp and otp.strip() and otp.strip() != assignment.start_trip_otp:
-            raise HTTPException(status_code=400, detail="Incorrect trip start code - ask the customer for the code from their confirmation email")
+        from app.crud.trip_otp import check_trip_otp
+        try:
+            check_trip_otp(db, assignment.start_trip_otp, otp, "start")
+        except ValueError as _otp_err:
+            raise HTTPException(status_code=400, detail=str(_otp_err))
 
         # Validate image file
         if not speedometer_img.content_type or not speedometer_img.content_type.startswith('image/'):
@@ -978,8 +981,11 @@ async def end_trip(
             raise HTTPException(status_code=404, detail="No active assignment found for this order")
         if assignment.assignment_status == AssignmentStatusEnum.COMPLETED:
             raise HTTPException(status_code=400, detail="This trip is already completed - its codes are no longer valid")
-        if assignment.end_trip_otp and otp and otp.strip() and otp.strip() != assignment.end_trip_otp:
-            raise HTTPException(status_code=400, detail="Incorrect trip end code - ask the customer for the code from their confirmation email")
+        from app.crud.trip_otp import check_trip_otp
+        try:
+            check_trip_otp(db, assignment.end_trip_otp, otp, "end")
+        except ValueError as _otp_err:
+            raise HTTPException(status_code=400, detail=str(_otp_err))
 
         # Validate close speedometer image file
         if not close_speedometer_img.content_type or not close_speedometer_img.content_type.startswith('image/'):

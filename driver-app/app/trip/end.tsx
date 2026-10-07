@@ -80,7 +80,8 @@ export default function EndTripScreen() {
       const items: { label: string; included: boolean }[] = JSON.parse(String(params.charge_items || '[]'));
       // Toll already has its own dedicated flow above (tollChargeUpdate) -
       // don't ask for it a second time here.
-      return items.filter((item) => !item.included && item.label !== 'Toll');
+      // strictly `false`: an item with no `included` flag is not something to collect (it used to be treated as excluded)
+      return items.filter((item) => (item as any).included === false && !(item as any).info && item.label !== 'Toll');
     } catch {
       return [];
     }

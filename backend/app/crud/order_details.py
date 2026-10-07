@@ -1051,8 +1051,12 @@ def get_vehicle_owner_orders_by_assignment_status(
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
             customer_number_notice = customer_number_notice(db, order, assignment),
-            start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
-            end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
+            # The start / end codes belong to the POSTER, who reads them to the customer; the driver then asks the customer for them.
+            # This list is the ACCEPTING fleet owner's view (and feeds their driver), so the codes are never sent here - handing them
+            # over let a trip be started and ended without the customer (reported 2026-10-07). Posters get them from
+            # get_vendor_order_details / the posted-bookings list.
+            start_trip_otp = None,
+            end_trip_otp = None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),
 
             # Pricing additions
@@ -1315,8 +1319,12 @@ def get_vehicle_owner_non_pending_orders(
             held_amount = assignment.held_amount,
             is_urgent = order.is_urgent,
             customer_number_notice = customer_number_notice(db, order, assignment),
-            start_trip_otp = assignment.start_trip_otp if _otps_visible(order, assignment) else None,
-            end_trip_otp = assignment.end_trip_otp if _otps_visible(order, assignment) else None,
+            # The start / end codes belong to the POSTER, who reads them to the customer; the driver then asks the customer for them.
+            # This list is the ACCEPTING fleet owner's view (and feeds their driver), so the codes are never sent here - handing them
+            # over let a trip be started and ended without the customer (reported 2026-10-07). Posters get them from
+            # get_vendor_order_details / the posted-bookings list.
+            start_trip_otp = None,
+            end_trip_otp = None,
             trip_link_url = _trip_link_url(assignment.trip_link_token),
             # Pricing additions
             waiting_charge=waiting_charge_val,

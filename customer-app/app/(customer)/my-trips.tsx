@@ -65,6 +65,8 @@ interface CustomerBooking {
   gst_amount?: number;
   refund_eligible?: boolean | null;
   refund_status?: string | null; // null | REQUESTED | PROCESSED | DENIED
+  start_trip_otp?: string | null; // the customer reads these to the driver
+  end_trip_otp?: string | null;
 }
 
 type RideBucket = 'UPCOMING' | 'RUNNING' | 'COMPLETED';
@@ -601,6 +603,26 @@ function BookingCard({ booking, themeStyles, isDark, onPaid }: { booking: Custom
         <View style={themeStyles.errorBadge}>
           <AlertCircle color="#EF4444" size={16} />
           <Text style={themeStyles.errorText}>{booking.rejection_reason}</Text>
+        </View>
+      ) : null}
+
+      {booking.driver_details && (booking.start_trip_otp || booking.end_trip_otp) ? (
+        <View style={{ backgroundColor: isDark ? 'rgba(14,165,233,0.12)' : '#F0F9FF', borderWidth: 1, borderColor: '#0EA5E9', borderRadius: 10, padding: 10, gap: 6 }}>
+          <Text style={{ color: isDark ? '#7DD3FC' : '#0369A1', fontSize: 12, fontWeight: '800' }}>Your trip codes (tell them only to your driver)</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {booking.start_trip_otp ? (
+              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }}>
+                <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 10.5, fontWeight: '700' }}>START CODE (at pickup)</Text>
+                <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', fontSize: 22, fontWeight: '900', letterSpacing: 4 }}>{booking.start_trip_otp}</Text>
+              </View>
+            ) : null}
+            {booking.end_trip_otp ? (
+              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }}>
+                <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 10.5, fontWeight: '700' }}>END CODE (at drop)</Text>
+                <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', fontSize: 22, fontWeight: '900', letterSpacing: 4 }}>{booking.end_trip_otp}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       ) : null}
 

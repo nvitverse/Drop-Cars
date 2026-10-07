@@ -19,6 +19,28 @@ from app.crud.notification import send_trip_status_notification_to_vendor_and_ve
 SELF_SOURCED_PLATFORM_FEE_PERCENT = 10
 
 
+def multicity_waiting_charge(db, minutes, included_hours=None, days=1) -> int:
+    """Rupees to bill for the waiting time a driver entered (in MINUTES) at the end of a multi-city trip.
+    Before 2026-10-07 the minutes themselves were added to the fare as rupees (450 min = Rs 450), unchecked, even when waiting hours
+    were already included in the booking. Now: waiting hours included in the booking are free, anything above the length of the trip
+    is ignored, and the rate is a setting (multicity_waiting_rate_per_hour, default 60 = the old Rs 1 per minute;
+    multicity_waiting_free_minutes, default 0)."""
+    from app.crud.customer_booking_request import get_platform_setting_value as _gv
+
+    def _num(key, default):
+        try:
+            return float(_gv(db, key, str(default)))
+        except (TypeError, ValueError):
+            return float(default)
+
+    rate_per_hour = max(0.0, _num("multicity_waiting_rate_per_hour", 60))
+    free_minutes = max(0, int(_num("multicity_waiting_free_minutes", 0))) + max(0, int(included_hours or 0)) * 60
+    cap = max(1, int(days or 1)) * 24 * 60
+    mins = max(0, min(int(minutes or 0), cap))
+    billable = max(0, mins - free_minutes)
+    return int(round(billable / 60.0 * rate_per_hour))
+
+
 def _actual_trip_days(start_date_time, actual_end_time, cutoff_hour: int = 6) -> int:
     """Real days spanned by a Round Trip/Multi City, using a 6 AM cutoff
     instead of calendar midnight - a trip that starts at noon and wraps up
@@ -452,9 +474,9 @@ async def update_end_trip_record(
     # If waiting time provided and trip type is Multy City, store it
     if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY:
         try:
-            order.waiting_time = int(waiting_time)
+            order.waiting_minutes = int(waiting_time)   # the rupee charge is worked out (and stored in waiting_time) below
         except Exception:
-            order.waiting_time = None
+            order.waiting_minutes = None
 
     # Vendor-less bookings (driver-posted / website / admin) settle with the shared commission split - see
     # utils/commission.py and _settle_trip below. Vendor bookings and Hourly Rental keep their own path.
@@ -558,8 +580,16 @@ async def update_end_trip_record(
                 extra_driver_allowance = extra_driver_allowance * actual_days
 
         print("Total Km is ",total_km)
-        closed_vendor_price = ((cost_per_km+extra_cost_per_km)*updated_km) + (driver_allowance+extra_driver_allowance) + (permit_charges+extra_permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + (waiting_time if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY else 0)
-        closed_driver_price = ((cost_per_km)*updated_km) + (driver_allowance) + (permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + (waiting_time if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY else 0)
+        waiting_charge = 0
+        if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY:
+            waiting_charge = multicity_waiting_charge(
+                db, waiting_time,
+                getattr(order, "waiting_hours_included", None) or getattr(new_order, "waiting_hours_included", None),
+                actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1,
+            )
+            order.waiting_time = waiting_charge
+        closed_vendor_price = ((cost_per_km+extra_cost_per_km)*updated_km) + (driver_allowance+extra_driver_allowance) + (permit_charges+extra_permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
+        closed_driver_price = ((cost_per_km)*updated_km) + (driver_allowance) + (permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
 
         # All-Inclusive Commission Rule: vendor_profit = Extra Amount, admin_profit = 5% of Total Booking Amount
         from app.utils.commission import enum_value as _ev

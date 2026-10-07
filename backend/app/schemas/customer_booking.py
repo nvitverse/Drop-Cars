@@ -136,6 +136,10 @@ class CustomerBookingOut(BaseModel):
     refund_eligible: Optional[bool] = None
     refund_status: Optional[str] = None
 
+    # The customer reads these two codes to the driver (at pickup and at the end of the trip); the driver cannot see them.
+    start_trip_otp: Optional[str] = None
+    end_trip_otp: Optional[str] = None
+
     class Config:
         from_attributes = True
 

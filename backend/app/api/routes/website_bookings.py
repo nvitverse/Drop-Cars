@@ -395,6 +395,17 @@ def update_website_booking_rates(id: UUID, body: WebsiteBookingRatesUpdate, db: 
     }
 
 
+@router.get("/website/bookings/{id}/trip-codes", dependencies=[Depends(require_website_key)])
+def website_trip_codes(id: UUID, db: Session = Depends(get_db)):
+    """The customer's trip start / end codes for the website's "My Bookings" page. The website must only call this for the booking
+    of the customer who is signed in there (e-mail login); the codes are what the customer reads to the driver."""
+    from app.crud.trip_otp import trip_codes_for_request
+    request = db.query(CustomerBookingRequest).filter(CustomerBookingRequest.id == id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Booking request not found")
+    return trip_codes_for_request(db, request)
+
+
 @router.post("/website/bookings/{id}/request-cancel-otp", dependencies=[Depends(require_website_key)])
 def request_cancel_otp(id: UUID, db: Session = Depends(get_db)):
     """Step 1 of a customer-initiated cancel: email a fresh OTP to the
