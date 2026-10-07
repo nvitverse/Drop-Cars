@@ -1028,6 +1028,28 @@ export default function SettingsScreen() {
               <ChevronRight size={18} color="#D1D5DB" />
             </TouchableOpacity>
 
+            {/* Screens that were built but had no menu entry (found by the 2026-10-07 reachability audit) */}
+            {([
+              { to: '/sos-alerts', label: 'SOS Emergency Hub', hint: 'Live SOS alerts from drivers and customers', color: '#EF4444', Icon: AlertTriangle },
+              { to: '/refund-requests', label: 'Refund Claims', hint: 'Customer refund requests from the website', color: '#F59E0B', Icon: Wallet },
+              { to: '/review-tasks', label: 'Mandatory Review Tasks', hint: 'Items that need a staff review before they can move on', color: '#6366F1', Icon: FileCheck },
+              { to: '/our-fleet-requests', label: 'Our Fleet Route Reservations', hint: 'Own-fleet vehicles reserved for return routes', color: '#10B981', Icon: Car },
+              { to: '/customer-insights', label: 'Customer Behaviour Insights', hint: 'Who books, how often, and who is drifting away', color: '#0EA5E9', Icon: Users },
+              { to: '/ai-automation-logs', label: 'AI & Automation Logs', hint: 'What the bot and automations did and why', color: '#8B5CF6', Icon: Globe },
+              { to: '/face-audit', label: 'Duty Face Checks', hint: 'Audit the face verifications drivers did on duty', color: '#14B8A6', Icon: ShieldCheck },
+              { to: '/staff-roles', label: 'Named Staff Roles', hint: 'Role templates (Dispatcher, Finance, Support) and their permissions', color: '#8B5CF6', Icon: Users },
+              { to: '/team-hub', label: 'Team & Operations Hub', hint: 'Team workload, tasks and operations in one place', color: '#3B82F6', Icon: Users },
+            ] as const).map(({ to, label, hint, color, Icon }) => (
+              <TouchableOpacity key={to} style={[styles.row, styles.rowBorder]} onPress={() => router.push(to as any)}>
+                <View style={styles.rowIcon}><Icon size={20} color={color} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>{label}</Text>
+                  <Text style={styles.rowHint}>{hint}</Text>
+                </View>
+                <ChevronRight size={18} color="#D1D5DB" />
+              </TouchableOpacity>
+            ))}
+
             <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/staff-management' as any)}>
               <View style={styles.rowIcon}><Users size={20} color="#8B5CF6" /></View>
               <View style={{ flex: 1 }}>

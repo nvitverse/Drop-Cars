@@ -111,6 +111,17 @@ export function playMildNotificationSound(forceLoud?: boolean) {
     }
   } catch (e) {}
 
+  // Phones: play the chime for real (before this the phone only vibrated; the synthesised chime below is web-only).
+  if (Platform.OS !== 'web') {
+    try {
+      const chime: any = createAudioPlayer(require('../assets/sounds/notify_chime.wav'));
+      chime.volume = isOffOrBg ? 1.0 : 0.4;
+      chime.play();
+      setTimeout(() => { try { chime.remove?.(); } catch (e) {} }, 3000);
+    } catch (e) {}
+    return;
+  }
+
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
