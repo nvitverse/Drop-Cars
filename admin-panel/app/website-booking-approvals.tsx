@@ -31,6 +31,7 @@ import { Card, StatusPill, EmptyState } from '@/components/ui';
 interface Preview {
   cost_per_km: number; extra_cost_per_km: number; driver_allowance: number; extra_driver_allowance: number;
   permit_charges: number; extra_permit_charges: number; permit_rule?: string | null;
+  toll_charges?: number; hill_charges?: number; gst_amount?: number;
 }
 interface PendingBookingRow {
   id: string;
@@ -547,6 +548,9 @@ const FIELDS: Array<[keyof Preview, string]> = [
   ['extra_driver_allowance', 'Extra bata'],
   ['permit_charges', 'Driver permit'],
   ['extra_permit_charges', 'Extra permit'],
+  ['toll_charges', 'Toll charges'],
+  ['hill_charges', 'Hill charges'],
+  ['gst_amount', 'GST amount'],
 ];
 
 function CustomizeModal({ item, c, isDark, onClose, onSave }: { item: PendingBookingRow | null; c: any; isDark: boolean; onClose: () => void; onSave: (body: any) => void }) {

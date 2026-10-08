@@ -177,10 +177,23 @@ export default function CreateBookingScreen() {
     extra_cost_per_km?: string;
     driver_allowance?: string;
     extra_driver_allowance?: string;
+    permit_charges?: string;
+    extra_permit_charges?: string;
+    hill_charges?: string;
+    toll_charges?: string;
+    night_charges?: string;
+    include_toll?: string;
+    include_permit?: string;
+    include_hill?: string;
+    include_gst?: string;
+    gst_amount?: string;
     advance_received?: string;
     trip_distance?: string;
     start_date?: string;
     start_time?: string;
+    end_date?: string;
+    end_time?: string;
+    total_booking_amount?: string;
     vendor_price?: string;
     fare_type?: string;
   }>();
@@ -225,6 +238,8 @@ export default function CreateBookingScreen() {
   const quoteRef = useRef<(silent?: boolean) => void>(() => {});
   // Vendor-extra fields the admin typed by hand survive a trip type / vehicle change.
   const touchedRates = useRef({ extraKm: false, extraBata: false });
+  const prevCarAndTrip = useRef<{ car: string; trip: string }>({ car: '', trip: '' });
+  const initialParamsLoaded = useRef(false);
 
   // Theme-aware shell styles reused across every card section below (kept
   // as plain objects, not StyleSheet.create, so they re-render with the
@@ -487,11 +502,22 @@ export default function CreateBookingScreen() {
     };
   };
 
-  // Populate initial values if passed via router params (e.g. Recreate booking flow)
+  // Populate initial values if passed via router params (e.g. Recreate booking flow, Edit/Customize flow)
   useEffect(() => {
     if (params.customer_name) setCustomerName(String(params.customer_name));
-    if (params.customer_phone) handleCustomerPhoneChange(String(params.customer_phone));
-    if (params.pickup || params.drop) {
+    if (params.customer_phone) {
+      const digits = String(params.customer_phone).replace(/[^0-9]/g, '');
+      setCustomerCountryCode('+91');
+      setCustomerPhone(digits.length > 10 ? digits.slice(-10) : digits);
+    }
+    if (params.stops_json) {
+      try {
+        const parsed = JSON.parse(params.stops_json);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setStops(parsed);
+        }
+      } catch {}
+    } else if (params.pickup || params.drop) {
       setStops([String(params.pickup || ''), String(params.drop || '')]);
     }
     if (params.trip_type) {
@@ -503,32 +529,133 @@ export default function CreateBookingScreen() {
       else setTripType('oneway');
     }
     if (params.car_type) {
-      setCarType(String(params.car_type));
+      setCarType(String(params.car_type).toUpperCase());
     }
     if (params.pickup_notes) {
-      setPickupNotes(String(params.pickup_notes));
-    }
-  }, [params.customer_name, params.customer_phone, params.pickup, params.drop, params.trip_type, params.car_type, params.pickup_notes]);
-
-  // Auto populate tariffs on car type / trip type change
-  useEffect(() => {
-    if (tripType !== 'hourly') {
-      const defs = getDefaultsForCarType(carType, tripType);
-      setCostPerKm(defs.cost_per_km);
-      setDriverAllowance(defs.driver_allowance);
-      if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
-      if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
-      const lr = pendingLeadRates.current;
-      if (lr) {
-        if (lr.cpk) setCostPerKm(String(lr.cpk));
-        if (lr.ecpk !== undefined && !isNaN(lr.ecpk)) setExtraCostPerKm(String(lr.ecpk));
-        pendingLeadRates.current = null;
+      const existing = String(params.pickup_notes).trim();
+      if (existing.toUpperCase() !== 'NILL' && existing.toLowerCase() !== 'null') {
+        setPickupNotes(existing);
       }
-    } else {
-      if (!costPerHour || costPerHour === '0') setCostPerHour('250');
-      if (!extraCostPerHour) setExtraCostPerHour('50');
-      if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('25');
-      if (!extraCostForAddonKm) setExtraCostForAddonKm('5');
+    }
+    if (params.start_date) setStartDate(String(params.start_date));
+    if (params.start_time) setStartTime(String(params.start_time));
+    if (params.end_date) setEndDate(String(params.end_date));
+    if (params.end_time) setEndTime(String(params.end_time));
+
+    if (params.cost_per_km) setCostPerKm(String(params.cost_per_km));
+    if (params.extra_cost_per_km) {
+      touchedRates.current.extraKm = true;
+      setExtraCostPerKm(String(params.extra_cost_per_km));
+    }
+    if (params.driver_allowance) setDriverAllowance(String(params.driver_allowance));
+    if (params.extra_driver_allowance) {
+      touchedRates.current.extraBata = true;
+      setExtraDriverAllowance(String(params.extra_driver_allowance));
+      setExtraAmount(String(params.extra_driver_allowance));
+    }
+    if (params.permit_charges) {
+      setPermitCharges(String(params.permit_charges));
+      if (params.include_permit !== undefined) setIncludePermit(params.include_permit === 'true');
+    }
+    if (params.extra_permit_charges) setExtraPermitCharges(String(params.extra_permit_charges));
+    if (params.hill_charges) {
+      setHillCharges(String(params.hill_charges));
+      if (params.include_hill !== undefined) setIncludeHill(params.include_hill === 'true');
+    }
+    if (params.toll_charges) {
+      setTollCharges(String(params.toll_charges));
+      setIncludeToll(Number(params.toll_charges) > 0 || params.include_toll === 'true');
+    } else if (params.include_toll !== undefined) {
+      setIncludeToll(params.include_toll === 'true');
+    }
+    if (params.include_gst !== undefined || params.gst_amount) {
+      const incGst = params.include_gst === 'true' || (Number(params.gst_amount) > 0);
+      setIncludeGst(incGst);
+      if (params.gst_amount) {
+        setGstAmount(String(params.gst_amount));
+        setGstTouched(true);
+      }
+    }
+    if (params.advance_received) setAdvanceReceived(String(params.advance_received));
+    if (params.trip_distance) {
+      setMinKm(String(params.trip_distance));
+      setMinKmTouched(true);
+    }
+    if (params.total_booking_amount) setTotalBookingAmount(String(params.total_booking_amount));
+    if (params.fare_type === 'ALL_INCLUSIVE') setFareType('ALL_INCLUSIVE');
+
+    initialParamsLoaded.current = true;
+  }, [
+    params.edit_order_id,
+    params.customer_name,
+    params.customer_phone,
+    params.pickup,
+    params.drop,
+    params.stops_json,
+    params.trip_type,
+    params.car_type,
+    params.pickup_notes,
+    params.start_date,
+    params.start_time,
+    params.end_date,
+    params.end_time,
+    params.cost_per_km,
+    params.extra_cost_per_km,
+    params.driver_allowance,
+    params.extra_driver_allowance,
+    params.permit_charges,
+    params.extra_permit_charges,
+    params.hill_charges,
+    params.toll_charges,
+    params.include_toll,
+    params.include_gst,
+    params.gst_amount,
+    params.advance_received,
+    params.trip_distance,
+    params.total_booking_amount,
+    params.fare_type,
+  ]);
+
+  // Auto populate tariffs on car type / trip type change (preserves custom values on initial mount)
+  useEffect(() => {
+    const isInitialMount = prevCarAndTrip.current.car === '' && prevCarAndTrip.current.trip === '';
+    const carChanged = prevCarAndTrip.current.car !== '' && prevCarAndTrip.current.car !== carType;
+    const tripChanged = prevCarAndTrip.current.trip !== '' && prevCarAndTrip.current.trip !== tripType;
+
+    if (isInitialMount) {
+      prevCarAndTrip.current = { car: carType, trip: tripType };
+      // Only set defaults if no initial custom rates were provided
+      if (!params.cost_per_km && !params.driver_allowance && tripType !== 'hourly') {
+        const defs = getDefaultsForCarType(carType, tripType);
+        setCostPerKm(defs.cost_per_km);
+        setDriverAllowance(defs.driver_allowance);
+        if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
+        if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
+      }
+      return;
+    }
+
+    prevCarAndTrip.current = { car: carType, trip: tripType };
+
+    if (carChanged || tripChanged) {
+      if (tripType !== 'hourly') {
+        const defs = getDefaultsForCarType(carType, tripType);
+        setCostPerKm(defs.cost_per_km);
+        setDriverAllowance(defs.driver_allowance);
+        if (!touchedRates.current.extraKm) setExtraCostPerKm(defs.extra_cost_per_km);
+        if (!touchedRates.current.extraBata) setExtraDriverAllowance(defs.extra_driver_allowance);
+        const lr = pendingLeadRates.current;
+        if (lr) {
+          if (lr.cpk) setCostPerKm(String(lr.cpk));
+          if (lr.ecpk !== undefined && !isNaN(lr.ecpk)) setExtraCostPerKm(String(lr.ecpk));
+          pendingLeadRates.current = null;
+        }
+      } else {
+        if (!costPerHour || costPerHour === '0') setCostPerHour('250');
+        if (!extraCostPerHour) setExtraCostPerHour('50');
+        if (!costForAddonKm || costForAddonKm === '0') setCostForAddonKm('25');
+        if (!extraCostForAddonKm) setExtraCostForAddonKm('5');
+      }
     }
   }, [carType, tripType]);
 
@@ -724,57 +851,7 @@ export default function CreateBookingScreen() {
     apiService.getFareRules().then((r) => { if (r) setFareRules((prev) => ({ ...prev, ...r })); }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (params.customer_name) setCustomerName(params.customer_name);
-    if (params.customer_phone) {
-      const digits = params.customer_phone.replace(/[^0-9]/g, '');
-      setCustomerCountryCode('+91');
-      setCustomerPhone(digits.length > 10 ? digits.slice(-10) : digits);
-    }
-    if (params.trip_type) {
-      const t = params.trip_type.toLowerCase();
-      const nextTrip: TripType = t.includes('round') ? 'roundtrip' : t.includes('multi') ? 'multicity' : t.includes('hour') ? 'hourly' : t.includes('local') ? 'local' : 'oneway';
-      setTripType(nextTrip);
-    }
-    if (params.car_type) {
-      const c = params.car_type.toUpperCase();
-      setCarType(c);
-    }
-    if (params.stops_json) {
-      try {
-        const parsed = JSON.parse(params.stops_json);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setStops(parsed);
-        }
-      } catch {}
-    } else if (params.pickup || params.drop) {
-      setStops([params.pickup || '', params.drop || '']);
-    }
-    if (params.pickup_notes) {
-      const existing = params.pickup_notes.trim();
-      if (existing.toUpperCase() !== 'NILL' && existing.toLowerCase() !== 'null') {
-        setPickupNotes(existing);
-      }
-    }
-    if (params.cost_per_km) setCostPerKm(params.cost_per_km);
-    if (params.extra_cost_per_km) {
-      touchedRates.current.extraKm = true;
-      setExtraCostPerKm(params.extra_cost_per_km);
-    }
-    if (params.driver_allowance) setDriverAllowance(params.driver_allowance);
-    if (params.extra_driver_allowance) {
-      touchedRates.current.extraBata = true;
-      setExtraAmount(params.extra_driver_allowance);
-    }
-    if (params.advance_received) setAdvanceReceived(params.advance_received);
-    if (params.trip_distance) {
-      setMinKm(params.trip_distance);
-      setMinKmTouched(true);
-    }
-    if (params.start_date) setStartDate(params.start_date);
-    if (params.start_time) setStartTime(params.start_time);
-    if (params.fare_type === 'ALL_INCLUSIVE') setFareType('ALL_INCLUSIVE');
-  }, [params.edit_order_id, params.customer_name, params.customer_phone, params.pickup, params.drop, params.trip_type, params.car_type]);
+
 
   // ---- All-inclusive: driver pay per the standard tariff, and the customer's package amount ----
   const aiDefaults = getDefaultsForCarType(carType, tripType);

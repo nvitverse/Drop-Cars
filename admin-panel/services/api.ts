@@ -921,6 +921,10 @@ class ApiService {
     return this.makeRequest(`/orders/${tripType}/quote`, {
       method: 'POST',
       body: JSON.stringify({ pickup_drop_location: locations, car_type: 'SEDAN_4_PLUS_1' }),
+    }).then((res: any) => {
+      const km = res?.fare?.total_km ?? res?.fare?.calculated_km ?? res?.total_km ?? res?.route_km;
+      const parsed = typeof km === 'number' ? km : (km ? parseFloat(km) : undefined);
+      return { route_km: isNaN(parsed as number) ? undefined : parsed };
     }).catch(() => ({ route_km: undefined }));
   }
 

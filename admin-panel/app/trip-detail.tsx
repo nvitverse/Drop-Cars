@@ -516,6 +516,13 @@ export default function TripDetailScreen() {
         {
           text: 'Edit & Post New',
           onPress: () => {
+            let startD = '';
+            let startT = '';
+            if (order.start_date_time) {
+              const parts = String(order.start_date_time).split(/T|\s/);
+              startD = parts[0] || '';
+              startT = (parts[1] || '').slice(0, 5);
+            }
             router.push({
               pathname: '/create-booking',
               params: {
@@ -526,6 +533,23 @@ export default function TripDetailScreen() {
                 trip_type: order.trip_type || 'oneway',
                 car_type: order.car_type || 'SEDAN_4_PLUS_1',
                 pickup_notes: order.pickup_notes || `Recreated from #${order.id || order._id}`,
+                cost_per_km: order.cost_per_km != null ? String(order.cost_per_km) : '',
+                extra_cost_per_km: order.extra_cost_per_km != null ? String(order.extra_cost_per_km) : '',
+                driver_allowance: order.driver_allowance != null ? String(order.driver_allowance) : '',
+                extra_driver_allowance: order.extra_driver_allowance != null ? String(order.extra_driver_allowance) : '',
+                permit_charges: order.permit_charges != null ? String(order.permit_charges) : '',
+                extra_permit_charges: order.extra_permit_charges != null ? String(order.extra_permit_charges) : '',
+                hill_charges: order.hill_charges != null ? String(order.hill_charges) : '',
+                toll_charges: order.toll_charges != null ? String(order.toll_charges) : '',
+                include_toll: order.toll_charges != null && Number(order.toll_charges) > 0 ? 'true' : (order.include_toll ? 'true' : 'false'),
+                include_gst: order.include_gst ? 'true' : 'false',
+                gst_amount: order.gst_amount != null ? String(order.gst_amount) : '',
+                advance_received: order.advance_received != null ? String(order.advance_received) : '',
+                trip_distance: order.trip_distance != null ? String(order.trip_distance) : '',
+                total_booking_amount: order.total_booking_amount != null ? String(order.total_booking_amount) : (order.vendor_price != null ? String(order.vendor_price) : ''),
+                start_date: startD,
+                start_time: startT,
+                fare_type: order.fare_type || '',
               },
             });
           },

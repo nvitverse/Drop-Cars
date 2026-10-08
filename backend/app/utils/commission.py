@@ -305,12 +305,14 @@ def estimate_split_for_order(db: Session, order) -> dict:
         rates = get_commission_rates(db, _cat, "STANDARD")
         return compute_split(cls, driver_fare=driver_fare, base_fare=min(base_fare, driver_fare) if base_fare else driver_fare,
                              extras=extras, cc_total_pct=rates["vendor"] + rates["admin"], cc_on=cc_on, fees=fees,
+                             gst_amount=int(getattr(order, "gst_amount", 0) or 0),
                              cc_min=(0 if _cat == "LOCAL" else int(fees.get("commission_min", COMMISSION_MIN))),
                              pct_override=getattr(order, "commission_percent", None))
 
     total_booking = int(getattr(order, "total_booking_amount", 0) or 0) or est or cust
     markup = int(getattr(order, "extra_amount", 0) or 0)
     return compute_split(cls, total_booking=total_booking, markup=markup, cc_on=cc_on, fees=fees_for_order(db, order.id, cls, fees),
+                         gst_amount=int(getattr(order, "gst_amount", 0) or 0),
                          pct_override=getattr(order, "commission_percent", None))
 
 
