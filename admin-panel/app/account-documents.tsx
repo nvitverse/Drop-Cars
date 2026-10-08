@@ -39,6 +39,7 @@ interface DocumentItem {
   car_name?: string | null;
   car_number?: string | null;
   expiry_date?: string | null;
+  date_label?: string | null; // 'Registration date' for an RC
 }
 
 const EXPIRY_TRACKED_TYPES = ['rc_front', 'insurance', 'licence'];
@@ -735,7 +736,7 @@ export default function AccountDocumentsScreen() {
 
                       {/* Expiry / Validity Date Field with Quick Date Picker Chips */}
                       <View style={styles.compactExpiryBox}>
-                        <Text style={styles.compactExpiryLabel}>Expiry / Valid Date:</Text>
+                        <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
                         <View style={styles.expiryInputRow}>
                           <DatePickButton
                             style={[styles.compactExpiryInput, { justifyContent: 'center' }]}

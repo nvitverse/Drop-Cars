@@ -115,7 +115,7 @@ export default function MyCarsScreen() {
   };
 
   // Get document status for a specific car and document type
-  const getDocumentStatus = (carId: string, documentType: string): 'PENDING' | 'INVALID' | 'VERIFIED' => {
+  const getDocumentStatus = (carId: string, documentType: string): 'PENDING' | 'INVALID' | 'VERIFIED' | 'NEEDS_REVIEW' => {
     const carStatus = documentStatuses.find(status => 
       status.entity_type === 'car' && status.entity_id === carId
     );
@@ -140,13 +140,19 @@ export default function MyCarsScreen() {
     return status !== 'VERIFIED' || (d !== null && d <= 15);
   };
   const expiryNotes = (carId: string): string[] =>
-    [['rc_front', 'RC'], ['insurance', 'Insurance']]
+    [['insurance', 'Insurance'], ['permit', 'Permit'], ['fc', 'FC']]   // an RC has no expiry date
       .map(([k, label]) => {
         const d = getDaysLeft(carId, k);
         if (d === null || d > 15) return '';
         return d < 0 ? `${label} expired ${-d} day(s) ago - tap it to renew` : `${label} expires in ${d} day(s) - tap it to renew`;
       })
       .filter(Boolean);
+
+  // Why a document is INVALID / waiting (sent by the server), so the owner knows what to fix without phoning support
+  const getDocumentReason = (carId: string, documentType: string): string | null => {
+    const st = documentStatuses.find((x: any) => x.entity_type === 'car' && x.entity_id === carId);
+    return (st?.documents?.[documentType] as any)?.reason || null;
+  };
 
   // Handle document update
   const handleDocumentUpdate = (carId: string, documentType: string, documentName: string) => {
@@ -565,17 +571,22 @@ export default function MyCarsScreen() {
           cars.map((car) => {
             const isExpanded = expandedCarId === car.id;
             const carStatus = availableCarsMap[car.id]?.car_status || 'AVAILABLE';
+            // A new vehicle has no FC for its first 2 years, so there is no FC tile unless one was uploaded
+            const hasFc = !!documentStatuses.find((x: any) => x.entity_type === 'car' && x.entity_id === car.id)?.documents?.fc;
             const docs = [
               { key: 'rc_front', label: t('myCars.rcFront') || 'RC Front' },
               { key: 'rc_back', label: t('myCars.rcBack') || 'RC Back' },
               { key: 'insurance', label: t('myCars.insurance') || 'Insurance' },
-              { key: 'fc', label: t('myCars.fc') || 'Fitness (FC)' },
+              ...(hasFc ? [{ key: 'fc', label: t('myCars.fc') || 'Fitness (FC)' }] : []),
               { key: 'permit', label: t('myCars.permit') || 'Permit' },
               { key: 'car_img', label: t('myCars.carImage') || 'Car Photo' },
             ];
             const verifiedDocs = docs.filter((d) => getDocumentStatus(car.id, d.key) === 'VERIFIED');
             const verifiedCount = verifiedDocs.length;
             const notes = expiryNotes(car.id);
+            const problems = docs
+              .map((d) => ({ d, reason: getDocumentReason(car.id, d.key), status: getDocumentStatus(car.id, d.key) }))
+              .filter((x) => !!x.reason && (x.status as string) === 'INVALID');
             const isAllVerified = verifiedCount === docs.length;
 
             const statusColor =
@@ -694,6 +705,14 @@ export default function MyCarsScreen() {
                       </View>
                     ))}
 
+                    {/* Why a document was not accepted and what to do */}
+                    {problems.map(({ d, reason }) => (
+                      <View key={`why-${d.key}`} style={[dynamicStyles.expiryWarningBox, { alignItems: 'flex-start' }]}>
+                        <AlertTriangle size={15} color="#DC2626" />
+                        <Text style={dynamicStyles.expiryWarningText}>{d.label}: {reason}  (tap the {d.label} tile below to upload again)</Text>
+                      </View>
+                    ))}
+
                     {/* Document Matrix Grid */}
                     <View style={dynamicStyles.docMatrixContainer}>
                       <Text style={dynamicStyles.docMatrixHeader}>Vehicle Documents & Compliance</Text>
@@ -790,6 +809,8 @@ export default function MyCarsScreen() {
           entityType="car"
           documentType={selectedDocument.documentType}
           documentName={selectedDocument.documentName}
+          currentReason={getDocumentReason(selectedDocument.entityId, selectedDocument.documentType)}
+          currentStatus={getDocumentStatus(selectedDocument.entityId, selectedDocument.documentType)}
           onSuccess={handleDocumentUpdateSuccess}
         />
       )}

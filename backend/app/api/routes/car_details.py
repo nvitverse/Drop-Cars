@@ -114,7 +114,13 @@ def signup_car_details(
     # run each real document (not car_img, which is just a photo of the
     # car, nothing to OCR) through auto-verification so a clean, non-
     # expired, colour document goes straight to VERIFIED.
-    from app.utils.document_verifier import get_auto_verified_status
+    from app.utils.document_verifier import get_auto_verification
+    from app.crud.document_notes import set_note
+    TYPED_EXPIRY = {
+        'insurance_img': getattr(car_form, 'insurance_expiry_date', None), 'fc_img': getattr(car_form, 'fc_expiry_date', None),
+        'permit_img': getattr(car_form, 'permit_expiry_date', None), 'pollution_img': getattr(car_form, 'pollution_expiry_date', None),
+    }
+    upload_notes = {}
     DOC_TYPE_FOR_FIELD = {
         'rc_front_img': 'rc', 'rc_back_img': 'rc',
         'insurance_img': 'insurance', 'fc_img': 'fc', 'permit_img': 'permit',
@@ -131,7 +137,10 @@ def signup_car_details(
             if doc_type:
                 image_bytes = image_file.file.read()
                 image_file.file.seek(0)
-                uploaded_statuses[f"{field_name}_url"] = get_auto_verified_status(image_bytes, doc_type)
+                _st, _why = get_auto_verification(image_bytes, doc_type, expected_expiry_date=TYPED_EXPIRY.get(field_name))
+                uploaded_statuses[f"{field_name}_url"] = _st
+                if _why:
+                    upload_notes[field_name] = _why
             # Create folder structure: car_details/{car_id}/{image_type}
             folder_path = f"car_details/{db_car.id}/{field_name}"
             image_url = upload_image_to_gcs(image_file, folder_path)
@@ -154,6 +163,12 @@ def signup_car_details(
     # Step 4: Update the database record with the GCS image URLs
     try:
         update_car_images(db, db_car.id, uploaded_urls, statuses=uploaded_statuses)
+        if upload_notes:
+            from app.models.car_details import CarDetails
+            _car_row = db.query(CarDetails).filter(CarDetails.id == db_car.id).first()
+            for _field, _why in upload_notes.items():
+                set_note(_car_row, _field.replace('_img', ''), uploaded_statuses.get(f"{_field}_url"), _why)
+            db.commit()
     except Exception as e:
         # If update fails, clean up uploaded images and raise error
         for uploaded_url in uploaded_files:
@@ -241,6 +256,7 @@ def get_all_cars_document_status(
     # ownership checks below, fixed 2026-09-04.
     cars = get_all_cars(db, str(current_user.vehicle_owner_id))
 
+    from app.crud.document_notes import reason_for
     car_statuses = []
     for car in cars:
         documents = {}
@@ -273,7 +289,8 @@ def get_all_cars_document_status(
                 "document_type": "fc",
                 "status": car.fc_status.value if car.fc_status else "Pending",
                 "image_url": car.fc_img_url,
-                "updated_at": None
+                "updated_at": None,
+                **_expiry_fields(car.fc_expiry_date),
             }
         if car.car_img_url:
             documents["car_img"] = {
@@ -287,8 +304,17 @@ def get_all_cars_document_status(
                 "document_type": "permit",
                 "status": car.permit_status.value if car.permit_status else "Pending",
                 "image_url": car.permit_img_url,
-                "updated_at": None
+                "updated_at": None,
+                **_expiry_fields(car.permit_expiry_date),
             }
+
+        _status_attr = {"rc_front": "rc_front_status", "rc_back": "rc_back_status", "insurance": "insurance_status",
+                        "fc": "fc_status", "permit": "permit_status", "car_img": "car_img_status"}
+        for _k, _doc in documents.items():
+            _doc["reason"] = reason_for(car, _k, getattr(car, _status_attr.get(_k, ""), None))
+            if _k in ("rc_front", "rc_back"):
+                _doc["date_label"] = "Registration date"
+                _doc["registration_date"] = car.registration_date.isoformat() if car.registration_date else None
 
         car_statuses.append(DocumentStatusListResponse(
             entity_id=car.id,
@@ -478,6 +504,7 @@ def update_car_document(
     document_type: str = Form(...),
     image: UploadFile = File(...),
     expiry_date: Optional[str] = Form(None),
+    registration_date: Optional[str] = Form(None),
     current_user: VehicleOwnerCredentials = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -527,14 +554,20 @@ def update_car_document(
         # Auto-verify (skip for "car" - that's just a photo of the vehicle,
         # nothing to OCR) before uploading, using the same UploadFile's
         # bytes (seek back to 0 so the actual GCS upload still works).
-        from app.utils.document_verifier import get_auto_verified_status
+        from app.utils.document_verifier import get_auto_verification
+        from app.crud.document_notes import set_note
         OCR_DOC_TYPE = {"rc_front": "rc", "rc_back": "rc", "insurance": "insurance", "fc": "fc", "permit": "permit"}
         new_status = DocumentStatusEnum.PENDING
+        new_reason = None
         if document_type in OCR_DOC_TYPE:
             image_bytes = image.file.read()
             image.file.seek(0)
             prev_status = getattr(car, f"{document_type}_status", None)
-            new_status = get_auto_verified_status(image_bytes, OCR_DOC_TYPE[document_type], previous_status=prev_status)
+            # the date typed next to the upload is checked against the date printed on the document (an RC has no expiry date)
+            new_status, new_reason = get_auto_verification(
+                image_bytes, OCR_DOC_TYPE[document_type],
+                expected_expiry_date=(expiry_date if document_type in ("insurance", "fc", "permit") else None),
+                previous_status=prev_status)
 
         # Upload new image
         folder_path = f"car_details/{car.id}/{document_type}"
@@ -544,6 +577,9 @@ def update_car_document(
         setattr(car, f"{document_type}_img_url", new_image_url)
         from app.crud.document_expiry import parse_expiry
         _exp = parse_expiry(expiry_date)
+        _reg = parse_expiry(registration_date)
+        if _reg and document_type in ("rc_front", "rc_back"):
+            car.registration_date = _reg
         # RC: no expiry date (its registration date is set separately); Insurance / FC / Permit each carry their own
         if _exp and document_type == "insurance":
             car.insurance_expiry_date = _exp
@@ -552,6 +588,7 @@ def update_car_document(
         elif _exp and document_type == "permit":
             car.permit_expiry_date = _exp
         setattr(car, f"{document_type}_status", new_status) if document_type != "car" else setattr(car, f"{document_type}_img_status", new_status)
+        set_note(car, document_type, new_status, new_reason)
         db.commit()
         db.refresh(car)
 
@@ -559,7 +596,8 @@ def update_car_document(
             message="Document updated successfully",
             document_type=document_type,
             new_image_url=new_image_url,
-            new_status=new_status.value.capitalize()
+            new_status=new_status.value.capitalize(),
+            reason=new_reason
         )
         
     except Exception as e:

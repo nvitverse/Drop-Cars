@@ -47,6 +47,7 @@ interface DocumentItem {
   car_name?: string | null;
   car_number?: string | null;
   expiry_date?: string | null;
+  date_label?: string | null; // 'Registration date' for an RC, 'Expiry date' for the rest
 }
 
 interface DocumentsResponse {
@@ -577,7 +578,7 @@ export default function CarDocumentsScreen() {
 
                         {/* Expiry / Validity Date Field */}
                         <View style={styles.compactExpiryBox}>
-                          <Text style={styles.compactExpiryLabel}>Expiry / Valid Date:</Text>
+                          <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
                           <View style={styles.expiryInputRow}>
                             <DatePickButton
                               style={[styles.compactExpiryInput, { justifyContent: 'center' }]}
@@ -604,7 +605,7 @@ export default function CarDocumentsScreen() {
                           </View>
 
                           {/* Quick Date Picker Chips */}
-                          <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
+                          <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, display: doc.date_label === 'Registration date' ? 'none' : 'flex' }}>
                             {['+1 Yr', '+2 Yrs', '+3 Yrs', '+5 Yrs'].map((chip, chipIdx) => {
                               const years = [1, 2, 3, 5][chipIdx];
                               return (
@@ -803,7 +804,7 @@ export default function CarDocumentsScreen() {
             <View style={styles.lightboxActionBar}>
               {/* Date Edit Row Inside Pop-up */}
               <View style={styles.lightboxDateBox}>
-                <Text style={styles.lightboxDateLabel}>Expiry Date:</Text>
+                <Text style={styles.lightboxDateLabel}>{currentDocument?.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry Date:'}</Text>
                 <DatePickButton
                   style={[styles.lightboxDateInput, { justifyContent: 'center' }]}
                   textStyle={{ fontSize: 12, fontWeight: '600', color: '#F8FAFC' }}
@@ -826,7 +827,7 @@ export default function CarDocumentsScreen() {
               </View>
 
               {/* Lightbox Quick Date Picker Chips */}
-              <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center', display: currentDocument?.date_label === 'Registration date' ? 'none' : 'flex' }}>
                 {['+1 Year', '+2 Years', '+3 Years', '+5 Years'].map((chip, chipIdx) => {
                   const years = [1, 2, 3, 5][chipIdx];
                   return (

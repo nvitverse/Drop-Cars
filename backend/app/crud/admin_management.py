@@ -1000,8 +1000,12 @@ def get_all_account_documents(db: Session, account_id: str, account_type: str) -
                 
                 for doc_type, doc_name, img_url, doc_status in car_doc_types:
                     if img_url:
-                        expiry = None          # the RC has no expiry date
-                        if doc_type == "insurance":
+                        expiry = None
+                        date_label = "Expiry date"
+                        if doc_type in ("rc_front", "rc_back"):
+                            expiry = car.registration_date     # the RC has no expiry date: its date is the REGISTRATION date
+                            date_label = "Registration date"
+                        elif doc_type == "insurance":
                             expiry = car.insurance_expiry_date
                         elif doc_type == "fc":
                             expiry = car.fc_expiry_date
@@ -1017,7 +1021,8 @@ def get_all_account_documents(db: Session, account_id: str, account_type: str) -
                             "car_id": car.id,
                             "car_name": car.car_name,
                             "car_number": car.car_number,
-                            "expiry_date": expiry.isoformat() if expiry else None
+                            "expiry_date": expiry.isoformat() if expiry else None,
+                            "date_label": date_label,
                         })
     
     elif account_type_lower in ["driver", "drivers", "quickdriver", "quickdrivers"]:
@@ -1423,7 +1428,7 @@ def update_document_expiry_date(db: Session, document_id: str, expiry_date) -> d
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Car not found with ID {car_id}")
 
         if doc_type in ("rc_front", "rc_back"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An RC has no expiry date. Set the car's registration date instead.")
+            car.registration_date = expiry_date      # an RC has no expiry date; this field is its registration date
         elif doc_type == "insurance":
             car.insurance_expiry_date = expiry_date
         elif doc_type == "fc":

@@ -10,6 +10,7 @@ import {
   Image,
   ScrollView,
   Platform,
+  useWindowDimensions,
   TextInput,
 } from 'react-native';
 import { X, Camera, Upload, CheckCircle2, RefreshCw, Calendar, User, CreditCard } from 'lucide-react-native';
@@ -32,6 +33,9 @@ export interface DocumentUpdateModalProps {
   initialDocumentNumber?: string;
   initialDriverName?: string;
   onSuccess: () => void;
+  /** Why the current upload is INVALID / waiting (from the server), shown at the top so the owner knows what to fix */
+  currentReason?: string | null;
+  currentStatus?: string | null;
 }
 
 export default function DocumentUpdateModal({
@@ -45,13 +49,18 @@ export default function DocumentUpdateModal({
   initialDocumentNumber = '',
   initialDriverName = '',
   onSuccess,
+  currentReason,
+  currentStatus,
 }: DocumentUpdateModalProps) {
   const { colors } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const { t } = useLanguage();
   const [frontImage, setFrontImage] = useState<string | null>(null);
   const [backImage, setBackImage] = useState<string | null>(null);
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [registrationDate, setRegistrationDate] = useState<string>('');
+  const [showRegPicker, setShowRegPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aadharNumber, setAadharNumber] = useState('');
   // Crop step: picked photo lands here first, cropped result goes to front/back.
@@ -113,6 +122,9 @@ export default function DocumentUpdateModal({
   const requiresExpiryDate =
     isLicenceDoc ||
     (!isDriverDoc && ['insurance', 'permit', 'fitness', 'fc', 'pollution', 'puc'].some((d) => docLower.includes(d)));
+
+  // An RC has no expiry date - only a registration date (asked on the front side)
+  const isRcFront = !isDriverDoc && entityType === 'car' && docLower === 'rc_front';
 
   // Determine which side(s) to show based on targetSide
   const showFront = targetSide ? targetSide === 'front' : true;
@@ -202,7 +214,11 @@ export default function DocumentUpdateModal({
     }
 
     if (requiresExpiryDate && !expiryDate) {
-      Alert.alert('Expiry Date Required', 'Please select a valid expiry date for this document.');
+      Alert.alert('Expiry Date Required', 'Please select the expiry date printed on this document.');
+      return;
+    }
+    if (isRcFront && !registrationDate) {
+      Alert.alert('Registration Date Required', 'Please select the registration date printed on the RC.');
       return;
     }
 
@@ -217,6 +233,7 @@ export default function DocumentUpdateModal({
 
     try {
       setUploading(true);
+      let outcome: any = null;
       const formData = new FormData();
 
       if (entityType === 'vehicle_owner') {
@@ -241,7 +258,7 @@ export default function DocumentUpdateModal({
         if (backImage) {
           await appendFileToFormData(formData, 'aadhar_back_image', backImage, `aadhar_back_${Date.now()}.jpg`, 'image/jpeg');
         }
-        await axiosInstance.post(`/api/users/cardriver/${entityId}/update-document`, formData);
+        outcome = (await axiosInstance.post(`/api/users/cardriver/${entityId}/update-document`, formData))?.data;
       } else if (entityType === 'driver') {
         formData.append('document_type', 'licence');
         if (targetSide) {
@@ -278,12 +295,13 @@ export default function DocumentUpdateModal({
           await appendFileToFormData(formData, 'licence_back_image', backFile.uri, backFile.name, backFile.type);
         }
 
-        await axiosInstance.post(`/api/users/cardriver/${entityId}/update-document`, formData);
+        outcome = (await axiosInstance.post(`/api/users/cardriver/${entityId}/update-document`, formData))?.data;
       } else {
         const rawKey = String(documentType || '').toLowerCase().trim();
         const normalizedDocKey = rawKey === 'car_img' ? 'car' : rawKey;
         formData.append('document_type', normalizedDocKey);
         if (expiryDate) formData.append('expiry_date', expiryDate);
+        if (isRcFront && registrationDate) formData.append('registration_date', registrationDate);
         if (frontImage) {
           const isPng = frontImage.toLowerCase().endsWith('.png');
           const file = {
@@ -293,12 +311,19 @@ export default function DocumentUpdateModal({
           } as any;
           await appendFileToFormData(formData, 'image', file.uri, file.name, file.type);
         }
-        await axiosInstance.post(`/api/users/cardetails/${entityId}/update-document`, formData);
+        const resp = await axiosInstance.post(`/api/users/cardetails/${entityId}/update-document`, formData);
+        outcome = resp?.data;
       }
 
-      Alert.alert(t('documentUpdateModal.successTitle'), t('documentUpdateModal.documentUpdatedSuccess'));
       onSuccess();
       handleClose();
+      // Tell the owner straight away if the new upload was rejected, and exactly what to do - no phone call needed
+      if (outcome?.reason && /invalid|needs/i.test(String(outcome.new_status || ''))) {
+        const invalid = /invalid/i.test(String(outcome.new_status));
+        Alert.alert(invalid ? 'Document not accepted' : 'Document received', outcome.reason);
+      } else {
+        Alert.alert(t('documentUpdateModal.successTitle'), t('documentUpdateModal.documentUpdatedSuccess'));
+      }
     } catch (error: any) {
       console.error('Error uploading document:', error);
       const msg = error?.response?.data?.detail || t('documentUpdateModal.updateFailedGeneric');
@@ -312,7 +337,9 @@ export default function DocumentUpdateModal({
     setFrontImage(null);
     setBackImage(null);
     setExpiryDate('');
+    setRegistrationDate('');
     setShowDatePicker(false);
+    setShowRegPicker(false);
     onClose();
   };
 
@@ -327,6 +354,7 @@ export default function DocumentUpdateModal({
     (showFront && !frontImage) ||
     (showBack && !backImage) ||
     (requiresExpiryDate && !expiryDate) ||
+    (isRcFront && !registrationDate) ||
     (isAadhaarDoc && aadharNumber.replace(/\D/g, '').length !== 12) ||
     (isDriverDoc && !isAadhaarDoc && (!dlStateCode.trim() || !dlYear.trim() || !dlSerial.trim()));
 
@@ -345,7 +373,21 @@ export default function DocumentUpdateModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: Math.max(380, Math.round(windowHeight * 0.62)) }} showsVerticalScrollIndicator={false}>
+            {/* Why the last upload was not accepted, and what to do */}
+            {!!currentReason && /invalid|needs/i.test(String(currentStatus || 'invalid')) && (
+              <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, borderRadius: 6, padding: 10, marginBottom: 12 }}>
+                <Text style={{ color: '#B91C1C', fontFamily: 'Inter-Bold', fontSize: 12.5, marginBottom: 2 }}>
+                  {/invalid/i.test(String(currentStatus || 'invalid')) ? 'Last upload was not accepted' : 'Last upload is waiting for a check'}
+                </Text>
+                <Text style={{ color: '#7F1D1D', fontSize: 12.5, lineHeight: 18 }}>{currentReason}</Text>
+              </View>
+            )}
+            {(requiresExpiryDate || isRcFront) && (
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8 }}>
+                Upload the photo of the original, then pick the {isRcFront ? 'registration date' : 'expiry date'} printed on it (date field is below the photo).
+              </Text>
+            )}
             {/* Driver Editable Details (Name & Document Number) */}
             {isAadhaarDoc && (
               <View style={styles.driverMetaSection}>
@@ -501,6 +543,45 @@ export default function DocumentUpdateModal({
                       <Text style={[styles.captureText, { color: '#334155' }]}>Gallery</Text>
                     </TouchableOpacity>
                   </View>
+                )}
+              </View>
+            )}
+
+            {/* Registration date - the RC has no expiry date */}
+            {isRcFront && (
+              <View style={{ marginTop: 16 }}>
+                <Text style={styles.fieldLabel}>
+                  RC REGISTRATION DATE <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 }}>
+                  <Calendar size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      value={registrationDate}
+                      onChange={(e) => setRegistrationDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      style={{ flex: 1, border: 'none', outline: 'none', backgroundColor: 'transparent', color: colors.text, fontSize: '13px', fontFamily: 'Inter-Medium', cursor: 'pointer' }}
+                    />
+                  ) : (
+                    <TouchableOpacity onPress={() => setShowRegPicker(true)} style={{ flex: 1 }}>
+                      <Text style={{ color: registrationDate ? colors.text : colors.textSecondary, fontSize: 13, fontFamily: 'Inter-Medium' }}>
+                        {registrationDate || 'Select Registration Date'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {Platform.OS !== 'web' && showRegPicker && (
+                  <DateTimePicker
+                    value={registrationDate ? new Date(registrationDate) : new Date()}
+                    mode="date"
+                    display="default"
+                    maximumDate={new Date()}
+                    onChange={(_: any, date?: Date) => {
+                      setShowRegPicker(false);
+                      if (date) setRegistrationDate(date.toISOString().split('T')[0]);
+                    }}
+                  />
                 )}
               </View>
             )}

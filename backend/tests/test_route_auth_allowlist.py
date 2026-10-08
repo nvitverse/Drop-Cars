@@ -63,6 +63,7 @@ PUBLIC_BY_DESIGN = {
     "GET /api/support/on-duty-contact",
     # Published app content: OTA manifest (checked before login), terms, cards, GST details.
     "GET /api/app-updates/{app}/manifest",
+    "GET /api/app-updates/{app}/version-check",
     "GET /api/public/app-content/{key}",
     "GET /api/public/terms/driver",
     "GET /api/public/gst-business-info",

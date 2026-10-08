@@ -16,7 +16,10 @@ import uuid
 from typing import Any, Dict, Optional
 
 import requests
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Depends, Header, Response
+from sqlalchemy.orm import Session
+
+from app.database.session import get_db
 
 router = APIRouter(tags=["AppUpdates"])
 
@@ -62,6 +65,35 @@ def _respond(parts: Dict[str, Dict[str, Any]]) -> Response:
         media_type=f"multipart/mixed; boundary={boundary}",
         headers={"expo-protocol-version": "1", "expo-sfv-version": "0", "cache-control": "private, max-age=0"},
     )
+
+
+DEFAULT_DOWNLOAD_URL = {
+    "driver": "https://dropcars.in/assets/apk/DropCars-Driver-App.apk",
+}
+
+
+@router.get("/app-updates/{app}/version-check")
+def version_check(app: str, build: Optional[int] = None, db: Session = Depends(get_db)):
+    """Tells an INSTALLED app whether it is too old to keep working. Driven by platform settings (Admin App > Settings), so nothing is
+    hardcoded and no new build is needed to change it:
+        min_app_build_<app>     installed build (Android versionCode) number below which the app must update; 0 / empty = never force
+        app_download_url_<app>  optional override of where the new APK is
+    Over-the-air JS updates still arrive silently; this is for apps whose native part is too old to receive them."""
+    if app not in KNOWN_APPS:
+        return {"force_update": False}
+    from app.crud.customer_booking_request import get_platform_setting_value
+    try:
+        minimum = int(str(get_platform_setting_value(db, f"min_app_build_{app}", "0") or "0").strip() or 0)
+    except ValueError:
+        minimum = 0
+    url = (get_platform_setting_value(db, f"app_download_url_{app}", "") or "").strip() or DEFAULT_DOWNLOAD_URL.get(app, "https://dropcars.in")
+    force = bool(minimum and build is not None and build < minimum)
+    return {
+        "force_update": force,
+        "min_build": minimum or None,
+        "download_url": url,
+        "message": "This version of Drop Cars is too old and no longer works properly. Please update the app to continue.",
+    }
 
 
 @router.get("/app-updates/{app}/manifest")

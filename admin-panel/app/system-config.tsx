@@ -89,6 +89,8 @@ const FIELD_GROUPS: { title: string; fields: FieldConfig[] }[] = [
       { key: 'unaccepted_short_notice_percent', label: 'Short-Notice Alarm Point', hint: 'Rings when this % of the time between posting and pickup has passed (posted 7am, pickup 10am, 50% = 8:30am)', unit: '%', iconColor: '#EF4444' },
       { key: 'multicity_waiting_rate_per_hour', label: 'Multi-City Waiting Rate (per hour)', hint: 'Billed on multi-city trips for waiting time the driver enters at trip end (waiting hours already included in the booking are free)', unit: '₹', iconColor: '#F59E0B' },
       { key: 'multicity_waiting_free_minutes', label: 'Multi-City Free Waiting', hint: 'Waiting minutes that are never billed on a multi-city trip', unit: 'min', iconColor: '#F59E0B' },
+      { key: 'min_app_build_driver', label: 'Force Driver App Update Below Build', hint: 'An installed Driver App with a build number below this sees a compulsory Update popup. 0 = never force. Set it to the build number of the newest APK', unit: '', iconColor: '#0EA5E9', dangerous: true },
+      { key: 'min_app_build_customer', label: 'Force Customer App Update Below Build', hint: 'Same for the Customer App. 0 = never force', unit: '', iconColor: '#0EA5E9', dangerous: true },
       { key: 'trip_otp_enforced', label: 'Require Customer Trip Code (1 = yes)', hint: '1 = a driver cannot start or end a trip without the code the customer gives. Set 0 only in an emergency', unit: '', iconColor: '#EF4444', dangerous: true },
       { key: 'urgent_reminder_max_count', label: 'Driver "Closing Soon" Pushes', hint: 'How many reminders drivers get in the last 5 minutes before a booking auto-cancels (1 = a single push)', unit: 'x', iconColor: '#8B5CF6' },
       { key: 'driver_auto_acceptance_timeout_minutes', label: 'Driver Acceptance Timeout', hint: 'Minutes a driver has to accept before the booking auto-cancels', unit: 'min', iconColor: '#8B5CF6' },
@@ -230,7 +232,7 @@ export default function SystemConfigScreen() {
       if (!original || parsed !== (original as any)[k]) updates[k] = parsed;
     });
     if (Object.keys(updates).length === 0) { showToast('No changes to save', 'info'); return; }
-    const dangerousKeys = ['gps_spoof_speed_kmh', 'otp_rate_limit_max', 'suspend_threshold', 'trip_otp_enforced'];
+    const dangerousKeys = ['gps_spoof_speed_kmh', 'otp_rate_limit_max', 'suspend_threshold', 'trip_otp_enforced', 'min_app_build_driver', 'min_app_build_customer'];
     const hasDangerous = Object.keys(updates).some(k => dangerousKeys.includes(k));
     const doSave = async () => {
       setSaving(true);

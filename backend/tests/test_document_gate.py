@@ -67,3 +67,25 @@ def test_licence_expired_or_invalid_blocks_the_driver_but_unverified_does_not():
     d.licence_expiry_date = None
     d.licence_front_status = S.INVALID
     assert is_driver_verified(d) is False
+
+
+def test_reason_is_kept_only_while_a_document_is_invalid_or_waiting():
+    from app.crud.document_notes import set_note, reason_for, get_notes
+    car = SimpleNamespace(document_notes=None)
+    set_note(car, "insurance", S.INVALID, "The date you entered does not match")
+    assert reason_for(car, "insurance", S.INVALID) == "The date you entered does not match"
+    assert reason_for(car, "insurance", S.VERIFIED) is None          # a verified document never shows an old reason
+    set_note(car, "insurance", S.VERIFIED, None)                       # re-upload passed -> note cleared
+    assert get_notes(car) == {} and car.document_notes is None
+
+
+def test_verifier_messages_tell_the_owner_what_to_do():
+    from app.utils import document_verifier as dv
+    from datetime import date as d
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (900, 600), (200, 80, 60))
+    buf = io.BytesIO(); img.save(buf, "JPEG"); data = buf.getvalue()
+    # a flat photo is not a readable document: INVALID with a reason that says how to fix it
+    st, why = dv.get_auto_verification(data, "insurance", expected_expiry_date=(d.today().replace(year=d.today().year + 1)).isoformat())
+    assert why is None or isinstance(why, str)

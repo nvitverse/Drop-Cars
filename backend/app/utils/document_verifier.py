@@ -492,7 +492,7 @@ def verify_uploaded_document(
     is_color, color_score = check_is_original_color(image_bytes)
     base: Dict[str, Any] = {"is_color": is_color, "color_score": color_score}
     if not is_color:
-        return _result("INVALID", "Original document not uploaded - please upload a colour photo of the original, not a photocopy.", base, 0.95,
+        return _result("INVALID", "Original document not uploaded - this looks like a photocopy / black-and-white photo. Upload a clear colour photo of the ORIGINAL.", base, 0.95,
                        extracted_expiry_date=None)
     is_clear, sharpness = check_is_clear(image_bytes)
     base.update({"is_clear": is_clear, "sharpness_score": sharpness})
@@ -555,7 +555,7 @@ def verify_uploaded_document(
 
     if wrong_type:
         lab = DOC_PROFILES.get(detected_kind, {}).get("label", "another document")
-        return _result("INVALID", f"This looks like a {lab}, not the {profile['label']}. Please upload the correct document.", base, 0.85,
+        return _result("INVALID", f"You uploaded a {lab} here, but this slot needs the {profile['label']}. Upload the {profile['label']}.", base, 0.85,
                        extracted_expiry_date=None, detected_document_type=detected_kind)
 
     # 3. numbers
@@ -593,11 +593,12 @@ def verify_uploaded_document(
             exp_typed = None
     for label_date in (exp_typed, detected_expiry if expiry_trusted else None):
         if label_date and label_date < today:
-            return _result("INVALID", "Document has expired - please upload a valid, renewed document.", base, 0.93,
+            _lab = profile["label"] if profile else "document"
+            return _result("INVALID", f"Your {_lab} expired on {label_date.strftime('%d %b %Y')}. Upload the renewed {_lab} and enter its new expiry date.", base, 0.93,
                            extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
         return _result("INVALID",
-                       f"Entered expiry ({exp_typed.isoformat()}) doesn't match the date found on the document ({detected_expiry.isoformat()}) - please upload the document and enter its correct date.",
+                       f"The date you entered ({exp_typed.strftime('%d %b %Y')}) does not match the date on the {profile['label'] if profile else 'document'} ({detected_expiry.strftime('%d %b %Y')}). Enter the date printed on the document, or upload the correct document.",
                        base, 0.75, extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True)
 
     # 5. typed values vs photo
@@ -638,7 +639,12 @@ def verify_uploaded_document(
                    document_number=doc_number, read_by="AI" if ai else "OCR")
 
 
-def get_auto_verified_status(
+def get_auto_verified_status(*args, **kwargs):
+    """Status only (see get_auto_verification for the status AND the reason)."""
+    return get_auto_verification(*args, **kwargs)[0]
+
+
+def get_auto_verification(
     image_bytes: bytes,
     document_type: str,
     expected_expiry_date: Optional[str] = None,
@@ -658,19 +664,20 @@ def get_auto_verified_status(
             expected_name=expected_name,
         )
         status_str = result.get("status")
+        reason = result.get("reason")
         if status_str == "VERIFIED":
-            return DocumentStatusEnum.VERIFIED
+            return DocumentStatusEnum.VERIFIED, None
         elif status_str == "INVALID":
             # INVALID = wrong / non-original / unreadable / expired / date does not match. Different from "not verified yet".
-            return DocumentStatusEnum.INVALID
+            return DocumentStatusEnum.INVALID, reason
         elif status_str == "NEEDS_REVIEW":
-            return DocumentStatusEnum.NEEDS_REVIEW
+            return DocumentStatusEnum.NEEDS_REVIEW, reason
     except Exception as e:
         logger.error(f"Auto-verification failed for document_type={document_type} (falling back to manual review): {e}")
 
     if previous_status is not None and previous_status != DocumentStatusEnum.PENDING:
-        return DocumentStatusEnum.NEEDS_REVIEW
-    return DocumentStatusEnum.PENDING
+        return DocumentStatusEnum.NEEDS_REVIEW, "A person will check this document."
+    return DocumentStatusEnum.PENDING, None
 
 
 def extract_aadhaar_fields(image_bytes: bytes) -> Dict[str, Optional[str]]:

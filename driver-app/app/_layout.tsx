@@ -21,6 +21,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { setupNotificationListeners } from '@/services/notifications/notificationService';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import OtaUpdateGate from '@/components/OtaUpdateGate';
+import ForceUpdateGate from '@/components/ForceUpdateGate';
 import { installUiTranslation } from '@/utils/uiTranslate';
 
 installUiTranslation(); // every on-screen English text goes through the language dictionary
@@ -117,6 +118,7 @@ export default function RootLayout() {
                   <StatusBar style="auto" />
                   <WebAlertHost />
                   <OtaUpdateGate />
+                  <ForceUpdateGate app="driver" />
                   </CarDriverProvider>
                   </BubbleProvider>
                 </NotificationProvider>

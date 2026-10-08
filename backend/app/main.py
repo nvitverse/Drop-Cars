@@ -1454,6 +1454,8 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text("ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_status document_status_enum DEFAULT 'PENDING'"))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS rc_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS registration_date DATE'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS document_notes TEXT'))
+        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS document_notes TEXT'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS insurance_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS fc_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))

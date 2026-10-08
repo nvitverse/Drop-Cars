@@ -2,12 +2,15 @@ import axiosInstance from '@/app/api/axiosInstance';
 
 export interface DocumentStatus {
   document_type: string;
-  status: 'PENDING' | 'INVALID' | 'VERIFIED';
+  status: 'PENDING' | 'INVALID' | 'VERIFIED' | 'NEEDS_REVIEW';
   image_url: string;
   updated_at: string | null;
   // licence / RC / insurance: re-upload opens once a document is within 15 days of expiring (or expired)
   expiry_date?: string | null;
   days_left?: number | null;
+  // why a document is INVALID / waiting, in plain words (what the owner must fix)
+  reason?: string | null;
+  date_label?: string | null;
 }
 
 export interface DocumentStatusResponse {

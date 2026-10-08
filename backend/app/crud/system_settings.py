@@ -53,6 +53,8 @@ SYSTEM_SETTING_DEFAULTS = {
     "unaccepted_short_notice_percent": "50",    # ... rings once this % of the time between posting and pickup has passed
     "multicity_waiting_rate_per_hour": "60",    # Rs billed per hour of waiting on a multi-city trip (60 = the old Rs 1 per minute)
     "multicity_waiting_free_minutes": "0",      # waiting minutes that are never billed (waiting hours included in the booking are free too)
+    "min_app_build_driver": "0",                # an installed Driver App with a build number below this must update (0 = off)
+    "min_app_build_customer": "0",              # same for the Customer App
     "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only
     "urgent_reminder_max_count": "1",           # drivers get this many "closing soon" pushes per booking (was one per minute)
     "fleet_payment_channels": "Wallet,GPay,PhonePe,Paytm,Bank Transfer,Cash in Hand",   # comma separated; "Wallet" debits the partner's wallet

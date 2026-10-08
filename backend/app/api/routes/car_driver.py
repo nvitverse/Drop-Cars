@@ -817,19 +817,22 @@ def get_driver_document_status(
         raise HTTPException(status_code=403, detail="Access denied. You can only view your own drivers.")
     
     documents = {}
+    from app.crud.document_notes import reason_for
     if driver.licence_front_img:
         documents["licence"] = {
             "document_type": "licence",
             "status": driver.licence_front_status.value if driver.licence_front_status else "Pending",
             "image_url": driver.licence_front_img,
-            "updated_at": None
+            "updated_at": None,
+            "reason": reason_for(driver, "licence", driver.licence_front_status),
         }
     if driver.licence_back_img:
         documents["licence_back"] = {
             "document_type": "licence_back",
             "status": driver.licence_back_status.value if driver.licence_back_status else "Pending",
             "image_url": driver.licence_back_img,
-            "updated_at": None
+            "updated_at": None,
+            "reason": reason_for(driver, "licence_back", driver.licence_back_status),
         }
     
     _add_aadhar_docs(driver, documents)
@@ -937,7 +940,8 @@ def update_driver_document(
 
     try:
         from app.crud.stale_documents import register_stale_file
-        from app.utils.document_verifier import get_auto_verified_status
+        from app.utils.document_verifier import get_auto_verified_status, get_auto_verification
+        from app.crud.document_notes import set_note
         from app.crud.document_expiry import parse_expiry
 
         if expiry_date:
@@ -962,15 +966,17 @@ def update_driver_document(
             folder_path = f"car_driver/{driver.id}/license"
             front_url = upload_image_to_gcs(licence_image, folder_path)
             prev_front_status = driver.licence_front_status
-            front_status = get_auto_verified_status(
+            front_status, front_why = get_auto_verification(
                 licence_bytes,
                 "licence",
+                expected_expiry_date=expiry_date,
                 expected_document_number=driver.licence_number,
                 expected_name=driver.full_name,
                 previous_status=prev_front_status
             )
             driver.licence_front_img = front_url
             driver.licence_front_status = front_status
+            set_note(driver, "licence", front_status, front_why)
             new_image_url = front_url
             new_status = front_status
 
@@ -988,7 +994,7 @@ def update_driver_document(
             back_folder_path = f"car_driver/{driver.id}/license_back"
             back_url = upload_image_to_gcs(licence_back_image, back_folder_path)
             prev_back_status = driver.licence_back_status
-            back_status = get_auto_verified_status(
+            back_status, back_why = get_auto_verification(
                 back_bytes,
                 "licence_back",
                 expected_document_number=driver.licence_number,
@@ -997,6 +1003,7 @@ def update_driver_document(
             )
             driver.licence_back_img = back_url
             driver.licence_back_status = back_status
+            set_note(driver, "licence_back", back_status, back_why)
             if not new_image_url:
                 new_image_url = back_url
                 new_status = back_status
@@ -1012,10 +1019,11 @@ def update_driver_document(
             up_bytes = up.file.read()
             up.file.seek(0)
             url = upload_image_to_gcs(up, f"car_driver/{driver.id}/aadhar_{side_name}")
-            st = get_auto_verified_status(
+            st, st_why = get_auto_verification(
                 up_bytes, "aadhar",
                 previous_status=getattr(driver, f"aadhar_{side_name}_status"),
             )
+            set_note(driver, "aadhar" if side_name == "front" else "aadhar_back", st, st_why)
             setattr(driver, f"aadhar_{side_name}_img", url)
             setattr(driver, f"aadhar_{side_name}_status", st)
             if not new_image_url:
@@ -1033,7 +1041,9 @@ def update_driver_document(
             message="Document updated successfully",
             document_type="licence",
             new_image_url=new_image_url or "",
-            new_status=new_status.value.capitalize() if new_status else "Pending"
+            new_status=new_status.value.capitalize() if new_status else "Pending",
+            reason=(__import__("app.crud.document_notes", fromlist=["x"]).get_notes(driver).get("licence")
+                    or __import__("app.crud.document_notes", fromlist=["x"]).get_notes(driver).get("aadhar")) if new_status and new_status.value in ("INVALID", "NEEDS_REVIEW") else None
         )
 
     except HTTPException as he:
@@ -1073,6 +1083,11 @@ def get_all_drivers_document_status(
             }
         
         _add_aadhar_docs(driver, documents)
+        from app.crud.document_notes import reason_for
+        _attr = {"licence": "licence_front_status", "licence_back": "licence_back_status",
+                 "aadhar": "aadhar_front_status", "aadhar_back": "aadhar_back_status"}
+        for _k, _doc in documents.items():
+            _doc["reason"] = reason_for(driver, _k, getattr(driver, _attr.get(_k, ""), None))
         driver_statuses.append(DocumentStatusListResponse(
             entity_id=driver.id,
             entity_type="driver",

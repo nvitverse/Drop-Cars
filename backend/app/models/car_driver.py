@@ -1,5 +1,5 @@
 # models/car_driver.py
-from sqlalchemy import Column, String, Integer, Float, TIMESTAMP, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Integer, Float, TIMESTAMP, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.session import Base
 import uuid
@@ -36,6 +36,7 @@ class CarDriver(Base):
     licence_verification_source = Column(String, nullable=True)
     # Optional - added later so existing drivers are unaffected
     licence_back_img = Column(String, nullable=True, unique=True)
+    document_notes = Column(Text, nullable=True)  # JSON {doc: why it is INVALID / waiting} - see crud/document_notes.py
     licence_back_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
     # Expiry date for the daily document-expiry reminder sweep (see
     # crud/document_expiry.py). Nullable - not every existing driver has

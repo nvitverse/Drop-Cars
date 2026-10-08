@@ -11,6 +11,7 @@ import { WalletProvider } from '@/contexts/WalletContext';
 import * as Notifications from 'expo-notifications';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import OtaUpdateGate from '@/components/OtaUpdateGate';
+import ForceUpdateGate from '@/components/ForceUpdateGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
 
 import { ServiceModeProvider } from '@/contexts/ServiceModeContext';
@@ -133,6 +134,7 @@ export default function RootLayout() {
                   <StatusBar style="auto" />
                   <WebAlertHost />
                   <OtaUpdateGate />
+                  <ForceUpdateGate app="customer" />
                 </CarPoolProvider>
               </TaxiFlowProvider>
             </ServiceModeProvider>

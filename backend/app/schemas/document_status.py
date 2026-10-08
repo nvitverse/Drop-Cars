@@ -13,6 +13,10 @@ class DocumentStatusResponse(BaseModel):
     # Expiry (licence, RC, insurance): the app opens re-upload once a document is within 15 days of expiring or expired
     expiry_date: Optional[str] = None
     days_left: Optional[int] = None
+    # Why the document is INVALID / waiting for a person, in plain words (what the owner must fix)
+    reason: Optional[str] = None
+    date_label: Optional[str] = None  # 'Registration date' for an RC, else 'Expiry date'
+    registration_date: Optional[str] = None
 
 
 class DocumentStatusListResponse(BaseModel):
@@ -39,3 +43,4 @@ class DocumentUpdateResponse(BaseModel):
     document_type: str
     new_image_url: str
     new_status: str
+    reason: Optional[str] = None  # why the new upload is INVALID / waiting, in plain words

@@ -29,11 +29,9 @@ export default function OtaUpdateGate() {
         if (!fetched.isNew) return;
         Alert.alert(
           'Update ready',
-          'A new version of Drop Cars has been downloaded with fixes and improvements. Restart now to use it?',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Restart now', onPress: () => { Updates.reloadAsync().catch(() => {}); } },
-          ]
+          'A new version of Drop Cars has been downloaded with fixes and improvements. Please restart to use it.',
+          [{ text: 'Restart now', onPress: () => { Updates.reloadAsync().catch(() => {}); } }],
+          { cancelable: false }
         );
       } catch {
         // no internet / server busy - try again next time
