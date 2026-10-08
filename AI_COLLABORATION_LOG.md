@@ -4,6 +4,10 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Document models - 'Take this as a model' (Claude, 2026-10-09)
+- Staff approve a document by hand, then tap 'Take this as a model' (Admin App, car + account documents) and name it (Karnataka RC, Kerala Permit...). utils/doc_model.py stores a fingerprint (colour histogram + layout hash + aspect) in document_models; many models per kind. In get_auto_verification, a photo the check could not judge (NEEDS_REVIEW / unsure INVALID) that looks like a saved model (similarity >= setting doc_model_match_threshold, default 0.85) is VERIFIED automatically; anything the check is SURE about (expired, date mismatch, another document) is never promoted. Endpoints: POST /api/admin/document-models/from-document, GET, PATCH ?active=, DELETE. Models can be removed in the same popup.
+- Active vs Verified reminder: typed dates drive Active; only originals (checked by a person or matched to a model) drive Verified.
+
 ### False INVALID removed, compact photo rows (Claude, 2026-10-09)
 - The automatic check now says INVALID only when SURE (expired, typed date does not match a readable date, readable photo clearly another document). A photo it merely could not read / judge (blurry, 'photocopy', unrecognised) goes to NEEDS_REVIEW ('Drop Cars will check this') - never a rejection of a correctly uploaded original. One-time startup repair (crud/one_time_fixes.py, flag fix_false_invalid_documents_2026_10_09) turns old reason-less INVALID rows into NEEDS_REVIEW.
 - Driver App upload popup: one compact row per side (tap -> Take Photo / Choose from Gallery); a car document is a single photo (the RC back is its own tile) - the popup used to demand a back photo that was never sent.
@@ -117,7 +121,7 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
    - Presets updated to `5h / 50km` and `8h / 80km`.
    - Added `Custom / Manual` duration option with real-time 10 km/hr auto calculation.
-   - Default hourly tariffs aligned (Driver: â‚¹250, Vendor Extra: â‚¹50, Addon KM: â‚¹25, Vendor Extra Addon KM: â‚¹5).
+   - Default hourly tariffs aligned (Driver: Ã¢â€šÂ¹250, Vendor Extra: Ã¢â€šÂ¹50, Addon KM: Ã¢â€šÂ¹25, Vendor Extra Addon KM: Ã¢â€šÂ¹5).
 
 2. **Booking Cards Direct Cancellation** (`(tabs)/orders.tsx`):
    - Added direct `[ Cancel ]` button on Live / Unassigned / Assigned / Running booking cards.

@@ -665,6 +665,18 @@ def get_auto_verification(
         )
         status_str = result.get("status")
         reason = result.get("reason")
+        # A document the check could not judge, but that looks like a model staff already approved (e.g. a Karnataka RC), is
+        # verified like that one. Never for what the check is SURE about (expired / date mismatch / another document).
+        if status_str == "NEEDS_REVIEW" or (status_str == "INVALID" and not result.get("confident")):
+            try:
+                from app.utils.doc_model import match_saved_model
+                _kind = _profile_for(document_type)[0]
+                _hit = match_saved_model(image_bytes, _kind) if _kind else None
+                if _hit:
+                    logger.info(f"Document matched saved model '{_hit[0]}' (score {_hit[1]}) - verified automatically")
+                    return DocumentStatusEnum.VERIFIED, None
+            except Exception as _e:
+                logger.error(f"Model matching failed (continuing with the normal result): {_e}")
         if status_str == "VERIFIED":
             return DocumentStatusEnum.VERIFIED, None
         elif status_str == "INVALID":

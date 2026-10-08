@@ -20,6 +20,7 @@ import { ArrowLeft, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, File
 import { apiService } from '@/services/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import AccountActivityBar from '@/components/AccountActivityBar';
+import UseAsModelButton from '@/components/UseAsModelButton';
 import ErrorMessage from '@/components/ErrorMessage';
 import ZoomableImage from '@/components/ZoomableImage';
 import Toast, { useToast } from '@/components/Toast';
@@ -545,6 +546,10 @@ export default function CarDocumentsScreen() {
                         </Text>
                       </View>
                     </View>
+
+                    {isVerified && ['rc_front', 'rc_back', 'insurance', 'fc', 'permit'].includes(String(doc.document_type)) && (
+                      <UseAsModelButton documentId={doc.document_id} accountId={vehicleOwnerId} accountType="vehicle_owner" documentName={doc.document_name} />
+                    )}
 
                     {/* Compact Side-by-Side Content Row (Thumbnail + Details) */}
                     <View style={styles.compactRow}>

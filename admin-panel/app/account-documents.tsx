@@ -21,6 +21,7 @@ import { ArrowLeft, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, File
 import { apiService } from '@/services/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import AccountActivityBar from '@/components/AccountActivityBar';
+import UseAsModelButton from '@/components/UseAsModelButton';
 import ErrorMessage from '@/components/ErrorMessage';
 import ZoomableImage from '@/components/ZoomableImage';
 import Toast, { useToast } from '@/components/Toast';
@@ -708,6 +709,10 @@ export default function AccountDocumentsScreen() {
                       </Text>
                     </View>
                   </View>
+
+                  {isVerified && ['licence', 'licence_back', 'police', 'aadhar', 'aadhar_back', 'pan'].includes(String(doc.document_type)) && (
+                    <UseAsModelButton documentId={doc.document_id} accountId={String(params.accountId)} accountType={String(params.accountType)} documentName={doc.document_name} />
+                  )}
 
                   {/* Compact Side-by-Side Content Row (Thumbnail + Expiry Date Field) */}
                   <View style={styles.compactRow}>

@@ -2889,6 +2889,19 @@ class ApiService {
     });
   }
 
+  // Document models: save an approved document as the reference for its kind (state / format); look-alike uploads verify automatically
+  async saveDocumentModel(body: { document_id: string; account_id?: string; account_type?: string; label: string }): Promise<any> {
+    return this.makeRequest('/admin/document-models/from-document', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async listDocumentModels(): Promise<any[]> {
+    return this.makeRequest('/admin/document-models');
+  }
+
+  async deleteDocumentModel(id: string): Promise<any> {
+    return this.makeRequest(`/admin/document-models/${id}`, { method: 'DELETE' });
+  }
+
   // Active / Inactive (+ reasons) and Verified for a car / driver / partner / vendor; staff can switch an account off with a reason
   async getAccountActivity(kind: string, id: string): Promise<any> {
     return this.makeRequest(`/admin/accounts/${kind}/${id}/activity`);
