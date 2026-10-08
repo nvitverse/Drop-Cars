@@ -89,3 +89,29 @@ def test_verifier_messages_tell_the_owner_what_to_do():
     # a flat photo is not a readable document: INVALID with a reason that says how to fix it
     st, why = dv.get_auto_verification(data, "insurance", expected_expiry_date=(d.today().replace(year=d.today().year + 1)).isoformat())
     assert why is None or isinstance(why, str)
+
+
+def test_a_photo_the_check_cannot_judge_is_waiting_for_a_person_never_rejected():
+    from app.utils import document_verifier as dv
+    import io
+    from PIL import Image
+    grey = Image.new("L", (900, 600), 128).convert("RGB")             # black-and-white looking photo: the check cannot tell a photocopy from a bad photo
+    buf = io.BytesIO(); grey.save(buf, "JPEG")
+    st, why = dv.get_auto_verification(buf.getvalue(), "insurance")
+    assert st == S.NEEDS_REVIEW and "Drop Cars will check" in why
+
+
+def test_expired_document_is_still_rejected_for_sure():
+    from app.utils import document_verifier as dv
+    import io
+    from PIL import Image
+    import random
+    rnd = random.Random(1)
+    img = Image.new("RGB", (900, 600))
+    img.putdata([(rnd.randint(0, 255), rnd.randint(0, 255), rnd.randint(0, 255)) for _ in range(900 * 600)])
+    buf = io.BytesIO(); img.save(buf, "JPEG", quality=95)
+    st, why = dv.get_auto_verification(buf.getvalue(), "insurance", expected_expiry_date="2020-01-01")
+    # either the photo was judged unreadable (-> a person checks it) or the typed date was recognised as expired (-> INVALID with the date)
+    assert st in (S.NEEDS_REVIEW, S.INVALID)
+    if st == S.INVALID:
+        assert "expired" in why

@@ -1478,6 +1478,10 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_expiry_date DATE'))
         db.commit()
+        from app.crud.one_time_fixes import reset_false_invalid_documents
+        _fixed = reset_false_invalid_documents(db)
+        if not _fixed.get("skipped"):
+            print(f"One-time repair of false INVALID documents: {_fixed}")
     except Exception as e:
         db.rollback()
         print(f"order_assignments.cancel_reason migration failed (continuing): {e}")

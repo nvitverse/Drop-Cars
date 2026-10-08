@@ -556,7 +556,7 @@ def verify_uploaded_document(
     if wrong_type:
         lab = DOC_PROFILES.get(detected_kind, {}).get("label", "another document")
         return _result("INVALID", f"You uploaded a {lab} here, but this slot needs the {profile['label']}. Upload the {profile['label']}.", base, 0.85,
-                       extracted_expiry_date=None, detected_document_type=detected_kind)
+                       extracted_expiry_date=None, detected_document_type=detected_kind, confident=bool(ai))
 
     # 3. numbers
     aadhaar_found = None
@@ -594,12 +594,12 @@ def verify_uploaded_document(
     for label_date in (exp_typed, detected_expiry if expiry_trusted else None):
         if label_date and label_date < today:
             _lab = profile["label"] if profile else "document"
-            return _result("INVALID", f"Your {_lab} expired on {label_date.strftime('%d %b %Y')}. Upload the renewed {_lab} and enter its new expiry date.", base, 0.93,
+            return _result("INVALID", f"Your {_lab} expired on {label_date.strftime('%d %b %Y')}. Upload the renewed {_lab} and enter its new expiry date.", base, 0.93, confident=True,
                            extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
         return _result("INVALID",
                        f"The date you entered ({exp_typed.strftime('%d %b %Y')}) does not match the date on the {profile['label'] if profile else 'document'} ({detected_expiry.strftime('%d %b %Y')}). Enter the date printed on the document, or upload the correct document.",
-                       base, 0.75, extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True)
+                       base, 0.75, extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True, confident=True)
 
     # 5. typed values vs photo
     entered_aadhaar = re.sub(r'\D', '', expected_aadhaar_number) if expected_aadhaar_number else None
@@ -668,8 +668,13 @@ def get_auto_verification(
         if status_str == "VERIFIED":
             return DocumentStatusEnum.VERIFIED, None
         elif status_str == "INVALID":
-            # INVALID = wrong / non-original / unreadable / expired / date does not match. Different from "not verified yet".
-            return DocumentStatusEnum.INVALID, reason
+            # INVALID is only for what the check is SURE about: the document is expired, the typed date does not match the readable
+            # date, or a readable photo is clearly another document. A photo it merely could not read / judge (blurry, "looks like
+            # a photocopy", not recognised) is the check's own limit, not the owner's mistake: it goes to a person (NEEDS_REVIEW)
+            # and the owner is told it is being checked - never "rejected" for an original that was uploaded correctly.
+            if result.get("confident"):
+                return DocumentStatusEnum.INVALID, reason
+            return DocumentStatusEnum.NEEDS_REVIEW, ("Drop Cars will check this document. Nothing is wrong on your side unless we contact you." + (f" (Tip: {reason})" if reason else ""))
         elif status_str == "NEEDS_REVIEW":
             return DocumentStatusEnum.NEEDS_REVIEW, reason
     except Exception as e:

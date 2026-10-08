@@ -129,7 +129,9 @@ export default function DocumentUpdateModal({
 
   // Determine which side(s) to show based on targetSide
   const showFront = targetSide ? targetSide === 'front' : true;
-  const showBack = targetSide
+  const showBack = entityType === 'car' || isPoliceDoc
+    ? false   // a car document is one photo (the RC back is its own tile); the police certificate is one photo
+    : targetSide
     ? targetSide === 'back'
     : isAadhaarDoc || ['rc', 'licence', 'dl', 'aadhaar', 'permit'].some((d) => docLower.includes(d));
 
@@ -478,81 +480,37 @@ export default function DocumentUpdateModal({
               </View>
             )}
 
-            {/* Front Photo Card (Only shown if showFront is true) */}
-            {showFront && (
-              <View style={{ marginTop: isDriverDoc ? 16 : 4 }}>
-                <Text style={styles.sideLabel}>
-                  {showBack ? '1. FRONT SIDE PHOTO' : 'FRONT SIDE PHOTO'} <Text style={{ color: '#EF4444' }}>*</Text>
-                </Text>
-                {frontImage ? (
-                  <View style={styles.previewBox}>
-                    <Image source={{ uri: frontImage }} style={styles.previewImg} />
-                    <TouchableOpacity style={styles.retakeBtn} onPress={() => chooseSource('front')}>
-                      <RefreshCw size={14} color="#FFFFFF" />
-                      <Text style={styles.retakeText}>Retake Front</Text>
-                    </TouchableOpacity>
-                  </View>
+            {/* One compact row per side. Tap it: "Take Photo" or "Upload from gallery" (no big empty grids) */}
+            {([
+              showFront ? { side: 'front' as const, label: showBack ? '1. FRONT SIDE PHOTO' : 'PHOTO OF THE DOCUMENT', uri: frontImage } : null,
+              showBack ? { side: 'back' as const, label: showFront ? '2. BACK SIDE PHOTO' : 'BACK SIDE PHOTO', uri: backImage } : null,
+            ].filter(Boolean) as { side: 'front' | 'back'; label: string; uri: string | null }[]).map((row, i) => (
+              <TouchableOpacity
+                key={row.side}
+                activeOpacity={0.8}
+                onPress={() => chooseSource(row.side)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 10, padding: 10,
+                  marginTop: i === 0 ? (isDriverDoc ? 16 : 4) : 10,
+                  borderColor: row.uri ? '#86EFAC' : '#BFDBFE', backgroundColor: row.uri ? '#F0FDF4' : '#EFF6FF',
+                }}
+              >
+                {row.uri ? (
+                  <Image source={{ uri: row.uri }} style={{ width: 54, height: 40, borderRadius: 6 }} />
                 ) : (
-                  <View style={styles.uploadRow}>
-                    <TouchableOpacity
-                      style={styles.captureCard}
-                      onPress={() => capturePhoto('front', 'camera')}
-                      activeOpacity={0.8}
-                    >
-                      <Camera size={22} color="#3B82F6" />
-                      <Text style={styles.captureText}>Take Photo</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.captureCard, styles.galleryCard]}
-                      onPress={() => capturePhoto('front', 'gallery')}
-                      activeOpacity={0.8}
-                    >
-                      <Upload size={22} color="#64748B" />
-                      <Text style={[styles.captureText, { color: '#334155' }]}>Gallery</Text>
-                    </TouchableOpacity>
+                  <View style={{ width: 54, height: 40, borderRadius: 6, backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center' }}>
+                    <Camera size={20} color="#3B82F6" />
                   </View>
                 )}
-              </View>
-            )}
-
-            {/* Back Photo Card (Only shown if showBack is true) */}
-            {showBack && (
-              <View style={{ marginTop: 16 }}>
-                <Text style={styles.sideLabel}>
-                  {showFront ? '2. BACK SIDE PHOTO' : 'BACK SIDE PHOTO'} <Text style={{ color: '#EF4444' }}>*</Text>
-                </Text>
-                {backImage ? (
-                  <View style={styles.previewBox}>
-                    <Image source={{ uri: backImage }} style={styles.previewImg} />
-                    <TouchableOpacity style={styles.retakeBtn} onPress={() => chooseSource('back')}>
-                      <RefreshCw size={14} color="#FFFFFF" />
-                      <Text style={styles.retakeText}>Retake Back</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.uploadRow}>
-                    <TouchableOpacity
-                      style={styles.captureCard}
-                      onPress={() => capturePhoto('back', 'camera')}
-                      activeOpacity={0.8}
-                    >
-                      <Camera size={22} color="#3B82F6" />
-                      <Text style={styles.captureText}>Take Back Photo</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.captureCard, styles.galleryCard]}
-                      onPress={() => capturePhoto('back', 'gallery')}
-                      activeOpacity={0.8}
-                    >
-                      <Upload size={22} color="#64748B" />
-                      <Text style={[styles.captureText, { color: '#334155' }]}>Gallery</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sideLabel}>{row.label} <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                  <Text style={{ fontSize: 12, color: row.uri ? '#15803D' : '#1D4ED8', fontFamily: 'Inter-SemiBold' }}>
+                    {row.uri ? 'Added - tap to change' : 'Tap to take a photo or upload'}
+                  </Text>
+                </View>
+                {row.uri ? <RefreshCw size={16} color="#15803D" /> : <Upload size={16} color="#1D4ED8" />}
+              </TouchableOpacity>
+            ))}
 
             {/* Registration date - the RC has no expiry date */}
             {isRcFront && (

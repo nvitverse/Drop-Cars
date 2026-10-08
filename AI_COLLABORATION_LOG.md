@@ -4,6 +4,10 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### False INVALID removed, compact photo rows (Claude, 2026-10-09)
+- The automatic check now says INVALID only when SURE (expired, typed date does not match a readable date, readable photo clearly another document). A photo it merely could not read / judge (blurry, 'photocopy', unrecognised) goes to NEEDS_REVIEW ('Drop Cars will check this') - never a rejection of a correctly uploaded original. One-time startup repair (crud/one_time_fixes.py, flag fix_false_invalid_documents_2026_10_09) turns old reason-less INVALID rows into NEEDS_REVIEW.
+- Driver App upload popup: one compact row per side (tap -> Take Photo / Choose from Gallery); a car document is a single photo (the RC back is its own tile) - the popup used to demand a back photo that was never sent.
+
 ### LIVE 2026-10-09: backend rev `drop-cars-api-00308` (commit `ad9272a`); Admin OTA preview `a6bc1a45`, production `daeadbca`; Driver OTA published from Drop-Cars-Full-Repo (runtime 1.0.0). Earlier today: rev 00306 (`7755ba8`), 00307 (`2147702`). Customer / Vendor APKs not built.
 
 ### Active/Inactive vs Verified, document to-do popup, manual trip close, police verification, verified-only bookings, payout floor setting (Claude, 2026-10-09)
@@ -113,7 +117,7 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
    - Presets updated to `5h / 50km` and `8h / 80km`.
    - Added `Custom / Manual` duration option with real-time 10 km/hr auto calculation.
-   - Default hourly tariffs aligned (Driver: ₹250, Vendor Extra: ₹50, Addon KM: ₹25, Vendor Extra Addon KM: ₹5).
+   - Default hourly tariffs aligned (Driver: â‚¹250, Vendor Extra: â‚¹50, Addon KM: â‚¹25, Vendor Extra Addon KM: â‚¹5).
 
 2. **Booking Cards Direct Cancellation** (`(tabs)/orders.tsx`):
    - Added direct `[ Cancel ]` button on Live / Unassigned / Assigned / Running booking cards.
