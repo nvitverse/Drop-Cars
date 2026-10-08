@@ -36,6 +36,11 @@ class CarDriver(Base):
     licence_verification_source = Column(String, nullable=True)
     # Optional - added later so existing drivers are unaffected
     licence_back_img = Column(String, nullable=True, unique=True)
+    manual_inactive_reason = Column(Text, nullable=True)   # a person switched this driver off (reason shown to the owner)
+    auto_inactive_reason = Column(Text, nullable=True)     # low customer rating (daily sweep)
+    # Police Verification Certificate: what makes a DRIVER "Verified" (together with the licence)
+    police_verification_img = Column(String, nullable=True)
+    police_verification_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
     document_notes = Column(Text, nullable=True)  # JSON {doc: why it is INVALID / waiting} - see crud/document_notes.py
     licence_back_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)
     # Expiry date for the daily document-expiry reminder sweep (see

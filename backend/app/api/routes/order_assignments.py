@@ -598,6 +598,9 @@ async def assign_car_driver(
         # blocks a normal owner-driven assign.
         from app.models.orders import Order
         order_for_assignment = db.query(Order).filter(Order.id == assignment.order_id).first()
+        _needs_verified = __import__("app.crud.verification", fromlist=["x"]).verified_car_block_reason(db, order_for_assignment, car_to_assign)
+        if _needs_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_needs_verified)
         # car_to_assign.car_type (car_details.CarTypeEnum) and
         # order_for_assignment.car_type (new_orders.CarTypeEnum) are
         # different Python classes despite identical members/values -

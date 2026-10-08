@@ -67,6 +67,10 @@ class CarDetails(Base):
     # has these entered yet; the reminder simply skips rows with no date set.
     rc_expiry_date = Column(Date, nullable=True)   # NOT USED: an RC card has no expiry date (kept only so old rows load)
     document_notes = Column(Text, nullable=True)  # JSON {doc: why it is INVALID / waiting} - see crud/document_notes.py
+    # Active / Inactive (separate from "Verified"): a car is Inactive while a document is expired / invalid, or a person switched it off
+    # (manual_inactive_reason), or its customer rating is too low (auto_inactive_reason, set by the daily sweep). See crud/account_activity.py
+    manual_inactive_reason = Column(Text, nullable=True)
+    auto_inactive_reason = Column(Text, nullable=True)
     registration_date = Column(Date, nullable=True)  # the date printed on the RC; a new vehicle needs no FC for 2 years after it
     insurance_expiry_date = Column(Date, nullable=True)
     fc_expiry_date = Column(Date, nullable=True)

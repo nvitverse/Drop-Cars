@@ -70,6 +70,7 @@ export default function DocumentUpdateModal({
 
   // Driver details editable fields
   const isDriverDoc = entityType === 'driver';
+  const isPoliceDoc = isDriverDoc && (documentType || '').toLowerCase().startsWith('police');   // Police Verification Certificate
   const isAadhaarDoc =
     isDriverDoc && ((documentType || '').toLowerCase().startsWith('aadhar') || (documentName || '').toLowerCase().includes('aadhaar'));
   const [driverName, setDriverName] = useState('');
@@ -226,7 +227,7 @@ export default function DocumentUpdateModal({
       Alert.alert('Aadhaar Number Required', 'Please enter the 12-digit Aadhaar number.');
       return;
     }
-    if (isDriverDoc && !isAadhaarDoc && (!dlStateCode.trim() || !dlYear.trim() || !dlSerial.trim())) {
+    if (isDriverDoc && !isAadhaarDoc && !isPoliceDoc && (!dlStateCode.trim() || !dlYear.trim() || !dlSerial.trim())) {
       Alert.alert('Licence Number Required', 'Please complete the driving licence number (State+RTO, Year, Serial).');
       return;
     }
@@ -249,6 +250,12 @@ export default function DocumentUpdateModal({
           await appendFileToFormData(formData, 'file', file.uri, file.name, file.type);
         }
         await axiosInstance.post('/api/users/vehicle-owner/update-document', formData);
+      } else if (isPoliceDoc) {
+        formData.append('document_type', 'police');
+        if (frontImage) {
+          await appendFileToFormData(formData, 'police_image', frontImage, `police_verification_${Date.now()}.jpg`, 'image/jpeg');
+        }
+        outcome = (await axiosInstance.post(`/api/users/cardriver/${entityId}/update-document`, formData))?.data;
       } else if (isAadhaarDoc) {
         formData.append('document_type', 'aadhar');
         formData.append('aadhar_number', aadharNumber.replace(/\D/g, ''));
@@ -356,7 +363,7 @@ export default function DocumentUpdateModal({
     (requiresExpiryDate && !expiryDate) ||
     (isRcFront && !registrationDate) ||
     (isAadhaarDoc && aadharNumber.replace(/\D/g, '').length !== 12) ||
-    (isDriverDoc && !isAadhaarDoc && (!dlStateCode.trim() || !dlYear.trim() || !dlSerial.trim()));
+    (isDriverDoc && !isAadhaarDoc && !isPoliceDoc && (!dlStateCode.trim() || !dlYear.trim() || !dlSerial.trim()));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>

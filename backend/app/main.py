@@ -278,6 +278,11 @@ app.include_router(own_fleet_router.router, prefix="/api", tags=["Own Fleet"])
 
 from app.api.routes import quality as quality_router
 app.include_router(quality_router.router, prefix="/api", tags=["Ratings & Quality"])
+from app.api.routes import account_activity_routes as _activity_routes
+app.include_router(_activity_routes.admin_router, prefix="/api", tags=["Active / Inactive"])
+app.include_router(_activity_routes.owner_router, prefix="/api/users", tags=["Active / Inactive"])
+from app.api.routes import admin_trip_close as _trip_close
+app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])
 
 from app.api.routes import driver_ops as driver_ops_router
 app.include_router(driver_ops_router.router, prefix="/api", tags=["Driver Lookup"])
@@ -1354,6 +1359,10 @@ async def _run_document_expiry_sweep() -> None:
         result = send_expiry_reminders(db)
         if any(result.values()):
             print(f"Document expiry sweep: {result}")
+        from app.crud.account_activity import refresh_auto_inactive
+        _act = refresh_auto_inactive(db)          # switch cars / drivers off (or on) by customer rating
+        if any(_act.values()):
+            print(f"Rating-based active/inactive refresh: {_act}")
     except Exception as e:
         db.rollback()
         print(f"Document expiry sweep failed (continuing): {e}")
@@ -1456,6 +1465,14 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS registration_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS document_notes TEXT'))
         db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS document_notes TEXT'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
+        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS auto_inactive_reason TEXT'))
+        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
+        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS auto_inactive_reason TEXT'))
+        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS police_verification_img VARCHAR'))
+        db.execute(text("ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS police_verification_status document_status_enum DEFAULT 'PENDING'"))
+        db.execute(text('ALTER TABLE vendor_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
+        db.execute(text('ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS insurance_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS fc_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))

@@ -2889,6 +2889,22 @@ class ApiService {
     });
   }
 
+  // Active / Inactive (+ reasons) and Verified for a car / driver / partner / vendor; staff can switch an account off with a reason
+  async getAccountActivity(kind: string, id: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${id}/activity`);
+  }
+
+  async setAccountActive(kind: string, id: string, active: boolean, reason?: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, reason }) });
+  }
+
+  // Close a trip by hand when the driver cannot (same fare / commission / wallet settlement as the Driver App close)
+  async manualCloseTrip(orderId: number | string, body: {
+    end_km: number; start_km?: number; reason: string; cash_collection?: number; updated_toll_charges?: number; waiting_minutes?: number;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/orders/${orderId}/manual-close`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
   async cancelBooking(orderId: number | string, reason: string): Promise<any> {
     return this.makeRequest(`/admin/orders/${orderId}/cancel`, {
       method: 'PATCH',

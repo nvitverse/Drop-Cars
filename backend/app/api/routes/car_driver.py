@@ -836,11 +836,19 @@ def get_driver_document_status(
         }
     
     _add_aadhar_docs(driver, documents)
+    if driver.police_verification_img:
+        documents["police"] = {
+            "document_type": "police", "status": driver.police_verification_status.value if driver.police_verification_status else "Pending",
+            "image_url": driver.police_verification_img, "updated_at": None,
+            "reason": reason_for(driver, "police", driver.police_verification_status),
+        }
 
+    from app.crud.account_activity import driver_activity
     return DocumentStatusListResponse(
         entity_id=driver.id,
         entity_type="driver",
-        documents=documents
+        documents=documents,
+        activity=driver_activity(driver),
     )
 
 
@@ -889,6 +897,7 @@ def update_driver_document(
     licence_back_image: Optional[UploadFile] = File(None),
     aadhar_image: Optional[UploadFile] = File(None),
     aadhar_back_image: Optional[UploadFile] = File(None),
+    police_image: Optional[UploadFile] = File(None),
     aadhar_number: Optional[str] = Form(None),
     side: Optional[str] = Form(None),
     document_number: Optional[str] = Form(None),
@@ -914,13 +923,13 @@ def update_driver_document(
     if driver.vehicle_owner_id != current_user.vehicle_owner_id:
         raise HTTPException(status_code=403, detail="Access denied. You can only update your own drivers.")
     
-    if document_type not in ["licence", "licence_back", "aadhar", "aadhar_back"]:
+    if document_type not in ["licence", "licence_back", "aadhar", "aadhar_back", "police"]:
         raise HTTPException(
             status_code=400,
             detail="Invalid document type for driver"
         )
     
-    if all(f is None for f in (licence_image, licence_back_image, aadhar_image, aadhar_back_image)):
+    if all(f is None for f in (licence_image, licence_back_image, aadhar_image, aadhar_back_image, police_image)):
         raise HTTPException(
             status_code=400,
             detail="Please upload at least one document image file"
@@ -1029,6 +1038,23 @@ def update_driver_document(
             if not new_image_url:
                 new_image_url = url
                 new_status = st
+        # Police Verification Certificate: what makes a DRIVER "Verified" (with the licence). A person checks it; the automatic
+        # check only rejects an unreadable / photocopied photo.
+        if police_image is not None:
+            if not police_image.content_type or not police_image.content_type.startswith('image/'):
+                raise HTTPException(status_code=400, detail="Invalid file type for the police verification certificate. Please upload an image.")
+            if police_image.size and police_image.size > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Police verification image is too large (max 5MB).")
+            p_bytes = police_image.file.read()
+            police_image.file.seek(0)
+            p_url = upload_image_to_gcs(police_image, f"car_driver/{driver.id}/police_verification")
+            p_st, p_why = get_auto_verification(p_bytes, "police", previous_status=driver.police_verification_status)
+            driver.police_verification_img = p_url
+            driver.police_verification_status = p_st
+            set_note(driver, "police", p_st, p_why)
+            if not new_image_url:
+                new_image_url = p_url
+                new_status = p_st
         if aadhar_number:
             digits = "".join(ch for ch in aadhar_number if ch.isdigit())
             if len(digits) == 12:
@@ -1042,8 +1068,9 @@ def update_driver_document(
             document_type="licence",
             new_image_url=new_image_url or "",
             new_status=new_status.value.capitalize() if new_status else "Pending",
-            reason=(__import__("app.crud.document_notes", fromlist=["x"]).get_notes(driver).get("licence")
-                    or __import__("app.crud.document_notes", fromlist=["x"]).get_notes(driver).get("aadhar")) if new_status and new_status.value in ("INVALID", "NEEDS_REVIEW") else None
+            reason=(__import__("app.crud.document_notes", fromlist=["x"]).get_notes(driver).get(
+                {"police": "police"}.get(document_type, "licence" if document_type.startswith("licence") else "aadhar"))
+            ) if new_status and new_status.value in ("INVALID", "NEEDS_REVIEW") else None
         )
 
     except HTTPException as he:
@@ -1084,14 +1111,19 @@ def get_all_drivers_document_status(
         
         _add_aadhar_docs(driver, documents)
         from app.crud.document_notes import reason_for
+        if driver.police_verification_img:
+            documents["police"] = {"document_type": "police", "status": driver.police_verification_status.value if driver.police_verification_status else "Pending",
+                                   "image_url": driver.police_verification_img, "updated_at": None}
         _attr = {"licence": "licence_front_status", "licence_back": "licence_back_status",
-                 "aadhar": "aadhar_front_status", "aadhar_back": "aadhar_back_status"}
+                 "aadhar": "aadhar_front_status", "aadhar_back": "aadhar_back_status", "police": "police_verification_status"}
         for _k, _doc in documents.items():
             _doc["reason"] = reason_for(driver, _k, getattr(driver, _attr.get(_k, ""), None))
+        from app.crud.account_activity import driver_activity
         driver_statuses.append(DocumentStatusListResponse(
             entity_id=driver.id,
             entity_type="driver",
-            documents=documents
+            documents=documents,
+            activity=driver_activity(driver),
         ))
     
     return driver_statuses

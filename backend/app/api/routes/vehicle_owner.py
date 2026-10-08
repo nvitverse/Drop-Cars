@@ -645,83 +645,16 @@ def get_all_document_statuses(
             documents=owner_documents
         ))
     
-    # 2. Get all cars' document statuses
-    cars = get_all_cars(db, str(vehicle_owner_id))
-    for car in cars:
-        car_documents = {}
-        if car.rc_front_img_url:
-            car_documents["rc_front"] = {
-                "document_type": "rc_front",
-                "status": car.rc_front_status.value if car.rc_front_status else "Pending",
-                "image_url": car.rc_front_img_url,
-                "updated_at": None
-            }
-        if car.rc_back_img_url:
-            car_documents["rc_back"] = {
-                "document_type": "rc_back",
-                "status": car.rc_back_status.value if car.rc_back_status else "Pending",
-                "image_url": car.rc_back_img_url,
-                "updated_at": None
-            }
-        if car.insurance_img_url:
-            car_documents["insurance"] = {
-                "document_type": "insurance",
-                "status": car.insurance_status.value if car.insurance_status else "Pending",
-                "image_url": car.insurance_img_url,
-                "updated_at": None
-            }
-        if car.fc_img_url:
-            car_documents["fc"] = {
-                "document_type": "fc",
-                "status": car.fc_status.value if car.fc_status else "Pending",
-                "image_url": car.fc_img_url,
-                "updated_at": None
-            }
-        if car.car_img_url:
-            car_documents["car_img"] = {
-                "document_type": "car_img",
-                "status": car.car_img_status.value if car.car_img_status else "Pending",
-                "image_url": car.car_img_url,
-                "updated_at": None
-            }
-        if car.permit_img_url:
-            car_documents["permit"] = {
-                "document_type": "permit",
-                "status": car.permit_status.value if car.permit_status else "Pending",
-                "image_url": car.permit_img_url,
-                "updated_at": None
-            }
+    # 2. + 3. cars and drivers: documents with status / dates / reasons, plus Active-Inactive and Verified
+    from app.crud.document_status_builder import build_car_documents, build_driver_documents
+    from app.crud.account_activity import car_activity, driver_activity
+    for car in get_all_cars(db, str(vehicle_owner_id)):
         all_statuses.append(DocumentStatusListResponse(
-            entity_id=car.id,
-            entity_type="car",
-            documents=car_documents
-        ))
-    
-    # 3. Get all drivers' document statuses
-    drivers = get_drivers_by_vehicleOwner_id(db, str(vehicle_owner_id))
-    for driver in drivers:
-        driver_documents = {}
-        if driver.licence_front_img:
-            driver_documents["licence"] = {
-                "document_type": "licence",
-                "status": driver.licence_front_status.value if driver.licence_front_status else "Pending",
-                "image_url": driver.licence_front_img,
-                "updated_at": None
-            }
-        if driver.licence_back_img:
-            driver_documents["licence_back"] = {
-                "document_type": "licence_back",
-                "status": driver.licence_back_status.value if driver.licence_back_status else "Pending",
-                "image_url": driver.licence_back_img,
-                "updated_at": None
-            }
+            entity_id=car.id, entity_type="car", documents=build_car_documents(car), activity=car_activity(car)))
+    for driver in get_drivers_by_vehicleOwner_id(db, str(vehicle_owner_id)):
+        all_statuses.append(DocumentStatusListResponse(
+            entity_id=driver.id, entity_type="driver", documents=build_driver_documents(driver), activity=driver_activity(driver)))
 
-        all_statuses.append(DocumentStatusListResponse(
-            entity_id=driver.id,
-            entity_type="driver",
-            documents=driver_documents
-        ))
-    
     return all_statuses
 
 # --- Vacant City feature ---

@@ -17,6 +17,8 @@ export interface DocumentStatusResponse {
   entity_id: string;
   entity_type: 'vehicle_owner' | 'car' | 'driver';
   documents: Record<string, DocumentStatus>;
+  // Active / Inactive (+ why) and Verified (originals checked) - two different things
+  activity?: { active: boolean; inactive_reasons: string[]; verified: boolean; not_verified: string[] } | null;
 }
 
 export interface UpdateDocumentRequest {

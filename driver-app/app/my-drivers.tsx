@@ -355,9 +355,11 @@ export default function MyDriversScreen() {
               Boolean((driver as any).is_self_driver) ||
               (Boolean(ownerPhone) && ownerPhone === driverPhone);
 
-            const isDriverVerified = isSelfDriver
-              ? isApprovedDoc(frontStatus) && isApprovedDoc(backStatus) && (driver.driver_status || '').toUpperCase() !== 'PROCESSING'
-              : isApprovedDoc(frontStatus) && isApprovedDoc(backStatus) && isApprovedDoc(aadharStatus) && (driver.driver_status || '').toUpperCase() !== 'PROCESSING';
+            // Verified = licence AND the police verification certificate checked (decided by the server); Active / Inactive is separate
+            const activity = (documentStatuses.find((x: any) => x.entity_type === 'driver' && x.entity_id === driver.id) as any)?.activity as
+              { active: boolean; inactive_reasons: string[]; verified: boolean; not_verified: string[] } | undefined;
+            const isDriverVerified = !!activity?.verified;
+            const policeStatus = getDocumentStatus(driver.id, 'police');
 
             const renewNote = licenceRenewNote(driver.id);
             const canEditName =
@@ -408,6 +410,14 @@ export default function MyDriversScreen() {
                         </View>
                       )}
                     </View>
+
+                    {!!activity && (
+                      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
+                        <View style={{ backgroundColor: activity.active ? '#DCFCE7' : '#FEE2E2', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: activity.active ? '#166534' : '#B91C1C' }}>{activity.active ? 'ACTIVE' : 'INACTIVE'}</Text>
+                        </View>
+                      </View>
+                    )}
 
                     {/* Status Pill */}
                     <View style={styles.statusPillsRow}>
@@ -469,6 +479,18 @@ export default function MyDriversScreen() {
                         </Text>
                       </View>
                     </View>
+
+                    {!!activity && !activity.active && activity.inactive_reasons.map((r) => (
+                      <View key={`inactive-${r}`} style={styles.expiryWarningBox}>
+                        <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={styles.expiryWarningText}>Inactive: {r}</Text>
+                      </View>
+                    ))}
+                    {!!activity && activity.active && !activity.verified && (
+                      <Text style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                        Active - can take trips. Not verified yet: {activity.not_verified.join(', ')}. Upload the police verification certificate to get the Verified badge.
+                      </Text>
+                    )}
 
                     {/* Expiry Warning if Applicable */}
                     {!!renewNote && (
@@ -546,6 +568,23 @@ export default function MyDriversScreen() {
                             <Text style={styles.docUploadText}>
                               {backStatus === 'VERIFIED' ? 'Update Back' : 'Upload Back'}
                             </Text>
+                          </View>
+                        </TouchableOpacity>
+
+                        {/* Police Verification Certificate - needed for the Verified badge */}
+                        <TouchableOpacity
+                          style={styles.docUploadCard}
+                          activeOpacity={0.8}
+                          onPress={() => handleDocumentUpdate(driver.id, 'police', 'Police Verification', undefined, undefined, driver.full_name)}
+                        >
+                          <View style={styles.docTopRow}>
+                            <ShieldCheck size={18} color="#0EA5E9" />
+                            <DocumentStatusIcon status={policeStatus} size={3} />
+                          </View>
+                          <Text style={styles.docCardTitle}>Police Verification</Text>
+                          <View style={styles.docUploadAction}>
+                            <Upload size={12} color="#4F46E5" />
+                            <Text style={styles.docUploadText}>{policeStatus === 'VERIFIED' ? 'Update Certificate' : 'Upload Certificate'}</Text>
                           </View>
                         </TouchableOpacity>
 

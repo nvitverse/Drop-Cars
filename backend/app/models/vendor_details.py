@@ -1,5 +1,5 @@
 # models/vendor_details.py
-from sqlalchemy import Column, String, TIMESTAMP, Integer, func, Boolean, Enum as SqlEnum, ForeignKey
+from sqlalchemy import Column, String, Text, TIMESTAMP, Integer, func, Boolean, Enum as SqlEnum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
@@ -17,6 +17,7 @@ class VendorDetails(Base):
     # everywhere vendor_name is populated (see crud/order_details.py,
     # crud/order_assignments.py).
     business_name = Column(String, nullable=True)
+    manual_inactive_reason = Column(Text, nullable=True)   # a person switched this vendor off
     primary_number = Column(String, unique=True, nullable=False)
     secondary_number = Column(String, unique=True, nullable=True)
     wallet_balance = Column(Integer, nullable=False, default=0)

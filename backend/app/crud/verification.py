@@ -110,11 +110,21 @@ def invalid_driver_documents(driver: CarDriver) -> list:
 
 def car_document_problems(car: CarDetails, today=None) -> list:
     """Plain-language reasons a car cannot take a booking: "Insurance has expired", "Permit is not valid - upload it again"."""
-    return [f"{n} has expired" for n in expired_car_documents(car, today)] +            [f"{n} is not valid - upload the correct original again" for n in invalid_car_documents(car, today)]
+    out = [f"{n} has expired" for n in expired_car_documents(car, today)] +           [f"{n} is not valid - upload the correct original again" for n in invalid_car_documents(car, today)]
+    if getattr(car, "manual_inactive_reason", None):
+        out.append(f"Switched off by Drop Cars: {car.manual_inactive_reason}")
+    if getattr(car, "auto_inactive_reason", None):
+        out.append(car.auto_inactive_reason)
+    return out
 
 
 def driver_document_problems(driver: CarDriver, today=None) -> list:
-    return [f"{n} has expired" for n in expired_driver_documents(driver, today)] +            [f"{n} is not valid - upload the correct original again" for n in invalid_driver_documents(driver)]
+    out = [f"{n} has expired" for n in expired_driver_documents(driver, today)] +           [f"{n} is not valid - upload the correct original again" for n in invalid_driver_documents(driver)]
+    if getattr(driver, "manual_inactive_reason", None):
+        out.append(f"Switched off by Drop Cars: {driver.manual_inactive_reason}")
+    if getattr(driver, "auto_inactive_reason", None):
+        out.append(driver.auto_inactive_reason)
+    return out
 
 
 def is_car_verified(car: CarDetails) -> bool:
@@ -130,3 +140,32 @@ def is_driver_verified(driver: CarDriver) -> bool:
     if driver is None:
         return False
     return not driver_document_problems(driver)
+
+
+def booking_kinds(order) -> set:
+    """Kinds a booking belongs to, for the "needs a VERIFIED car" setting: ALL_INCLUSIVE, WEBSITE (posted by the platform: website /
+    admin, no vendor and no partner poster), VENDOR, PARTNER (posted by a fleet owner) and the fare_type name (e.g. CORPORATE, DROP_BID)."""
+    kinds = set()
+    ft = getattr(getattr(order, "fare_type", None), "name", None) or str(getattr(order, "fare_type", "") or "")
+    if ft:
+        kinds.add(ft.upper())
+    if getattr(order, "vendor_id", None):
+        kinds.add("VENDOR")
+    elif getattr(order, "posted_by_vehicle_owner_id", None):
+        kinds.add("PARTNER")
+    else:
+        kinds.add("WEBSITE")
+    return kinds
+
+
+def verified_car_block_reason(db, order, car) -> str:
+    """"" when this car may take this booking; else the reason. Some bookings (Admin App > Settings: verified_car_required_for) are only for
+    cars whose documents are all VERIFIED (originals checked) - everything else only needs the documents to be current."""
+    from app.crud.account_activity import car_verified_status, _setting
+    required = {x.strip().upper() for x in _setting(db, "verified_car_required_for", "").split(",") if x.strip()}
+    if not required or not (required & booking_kinds(order)):
+        return ""
+    v = car_verified_status(car)
+    if v["verified"]:
+        return ""
+    return "This booking is only for VERIFIED cars (original documents checked by Drop Cars). Not verified yet: " + ", ".join(v["missing"]) + "."

@@ -316,10 +316,12 @@ def get_all_cars_document_status(
                 _doc["date_label"] = "Registration date"
                 _doc["registration_date"] = car.registration_date.isoformat() if car.registration_date else None
 
+        from app.crud.account_activity import car_activity
         car_statuses.append(DocumentStatusListResponse(
             entity_id=car.id,
             entity_type="car",
-            documents=documents
+            documents=documents,
+            activity=car_activity(car),
         ))
 
     return car_statuses

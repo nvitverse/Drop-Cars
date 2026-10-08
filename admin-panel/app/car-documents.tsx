@@ -19,6 +19,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, ExternalLink, X } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import AccountActivityBar from '@/components/AccountActivityBar';
 import ErrorMessage from '@/components/ErrorMessage';
 import ZoomableImage from '@/components/ZoomableImage';
 import Toast, { useToast } from '@/components/Toast';
@@ -465,16 +466,19 @@ export default function CarDocumentsScreen() {
             </View>
           </View>
 
+          {/* Active / Inactive (may work or not) - separate from Verified (originals checked) */}
+          <AccountActivityBar kind="car" entityId={carId} />
+
           {/* Car Verification Master Toggle Switch Bar */}
           <View style={styles.summaryToggleRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <CheckCircle size={18} color={pendingCount === 0 && carDocuments.length > 0 ? '#059669' : '#64748B'} />
               <View>
                 <Text style={styles.summaryToggleTitle}>
-                  CAR VERIFIED STATUS
+                  CAR VERIFIED (ORIGINALS CHECKED)
                 </Text>
                 <Text style={styles.summaryToggleSubtitle}>
-                  {pendingCount === 0 && carDocuments.length > 0 ? '✓ All car documents verified - Car Active' : 'Auto toggles ON when all car docs are approved'}
+                  {pendingCount === 0 && carDocuments.length > 0 ? '✓ All car documents verified' : 'Turns ON when all car documents are approved (Active / Inactive is separate, above)'}
                 </Text>
               </View>
             </View>

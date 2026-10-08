@@ -1,5 +1,5 @@
 # models/vehicle_owner.py
-from sqlalchemy import Column, String, TIMESTAMP, Integer, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON, Numeric
+from sqlalchemy import Column, String, Text, TIMESTAMP, Integer, Date, func, Boolean, Enum as SqlEnum, ForeignKey, JSON, Numeric
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from datetime import date as _date
 import uuid
@@ -16,6 +16,7 @@ class VehicleOwnerDetails(Base):
     primary_number = Column(String, unique=True, nullable=False)
     secondary_number = Column(String, unique=True, nullable=True)
     wallet_balance = Column(Integer, nullable=False, default=0)
+    manual_inactive_reason = Column(Text, nullable=True)   # a person switched this partner off
     aadhar_number = Column(String, unique=True, nullable=False)
     aadhar_front_img = Column(String, unique=True, nullable=True)
     aadhar_status = Column(SqlEnum(DocumentStatusEnum, name="document_status_enum"), nullable=True, default=DocumentStatusEnum.PENDING)

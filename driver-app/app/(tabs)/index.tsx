@@ -34,6 +34,7 @@ import DrawerNavigation from '@/components/DrawerNavigation';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import VacantCityPicker from '@/components/VacantCityPicker';
 import AnnouncementModal from '@/components/AnnouncementModal';
+import DocumentTodoPrompt from '@/components/DocumentTodoPrompt';
 import EmptyState from '@/components/EmptyState';
 import DashboardSkeleton from '@/components/DashboardSkeleton';
 import KycPendingModal from '@/components/KycPendingModal';
@@ -2954,6 +2955,7 @@ export default function DashboardScreen() {
               </Modal>
 
               <AnnouncementModal />
+              <DocumentTodoPrompt />
 
 
               {/* Vacant City modal */}

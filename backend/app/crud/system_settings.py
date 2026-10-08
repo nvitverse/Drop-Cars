@@ -53,6 +53,11 @@ SYSTEM_SETTING_DEFAULTS = {
     "unaccepted_short_notice_percent": "50",    # ... rings once this % of the time between posting and pickup has passed
     "multicity_waiting_rate_per_hour": "60",    # Rs billed per hour of waiting on a multi-city trip (60 = the old Rs 1 per minute)
     "multicity_waiting_free_minutes": "0",      # waiting minutes that are never billed (waiting hours included in the booking are free too)
+    "payout_min_retained_balance": "500",       # a payout request must leave at least this much in the wallet
+    "min_car_rating": "0",                      # a car rated below this (once it has enough ratings) becomes Inactive; 0 = off
+    "min_driver_rating": "0",                   # same for a driver
+    "min_rating_count": "5",                    # customer ratings needed before the two limits above apply
+    "verified_car_required_for": "",            # booking kinds that need a fully VERIFIED car, comma separated: CORPORATE, DROP_BID, ALL_INCLUSIVE, WEBSITE (empty = none)
     "min_app_build_driver": "0",                # an installed Driver App with a build number below this must update (0 = off)
     "min_app_build_customer": "0",              # same for the Customer App
     "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only

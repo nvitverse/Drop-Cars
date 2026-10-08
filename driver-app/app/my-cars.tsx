@@ -584,6 +584,8 @@ export default function MyCarsScreen() {
             const verifiedDocs = docs.filter((d) => getDocumentStatus(car.id, d.key) === 'VERIFIED');
             const verifiedCount = verifiedDocs.length;
             const notes = expiryNotes(car.id);
+            const activity = (documentStatuses.find((x: any) => x.entity_type === 'car' && x.entity_id === car.id) as any)?.activity as
+              { active: boolean; inactive_reasons: string[]; verified: boolean; not_verified: string[] } | undefined;
             const problems = docs
               .map((d) => ({ d, reason: getDocumentReason(car.id, d.key), status: getDocumentStatus(car.id, d.key) }))
               .filter((x) => !!x.reason && (x.status as string) === 'INVALID');
@@ -628,6 +630,20 @@ export default function MyCarsScreen() {
                           <Text style={dynamicStyles.carTypeBadgeText}>{formatCarType(car.car_type)}</Text>
                         </View>
                       </View>
+                      {!!activity && (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                          <View style={{ backgroundColor: activity.active ? '#DCFCE7' : '#FEE2E2', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10.5, fontFamily: 'Inter-Bold', color: activity.active ? '#166534' : '#B91C1C' }}>
+                              {activity.active ? 'ACTIVE' : 'INACTIVE'}
+                            </Text>
+                          </View>
+                          <View style={{ backgroundColor: activity.verified ? '#DBEAFE' : '#F1F5F9', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10.5, fontFamily: 'Inter-Bold', color: activity.verified ? '#1D4ED8' : '#64748B' }}>
+                              {activity.verified ? 'VERIFIED' : 'NOT VERIFIED YET'}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -665,8 +681,8 @@ export default function MyCarsScreen() {
                       ]}
                     >
                       {isAllVerified
-                        ? '6/6 Fleet Documents Active'
-                        : `${verifiedCount}/6 Documents Active · Tap to update`}
+                        ? `${docs.length}/${docs.length} documents verified`
+                        : `${verifiedCount}/${docs.length} documents verified · Tap to update`}
                     </Text>
                   </View>
                   <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', color: colors.textSecondary }}>
@@ -704,6 +720,21 @@ export default function MyCarsScreen() {
                         <Text style={dynamicStyles.expiryWarningText}>⚠️ {note}</Text>
                       </View>
                     ))}
+
+                    {/* Why this car is Inactive */}
+                    {!!activity && !activity.active && activity.inactive_reasons.map((r) => (
+                      <View key={`inactive-${r}`} style={[dynamicStyles.expiryWarningBox, { alignItems: 'flex-start' }]}>
+                        <AlertTriangle size={15} color="#DC2626" />
+                        <Text style={dynamicStyles.expiryWarningText}>Inactive: {r}</Text>
+                      </View>
+                    ))}
+                    {!!activity && activity.active && !activity.verified && (
+                      <View style={[dynamicStyles.expiryWarningBox, { alignItems: 'flex-start', backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
+                        <Text style={[dynamicStyles.expiryWarningText, { color: '#475569' }]}>
+                          Active - you can take bookings. Not verified yet: {activity.not_verified.join(', ')} (checked by Drop Cars). Some bookings are only for verified cars.
+                        </Text>
+                      </View>
+                    )}
 
                     {/* Why a document was not accepted and what to do */}
                     {problems.map(({ d, reason }) => (

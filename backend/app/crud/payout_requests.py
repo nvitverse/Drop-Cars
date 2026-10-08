@@ -11,7 +11,15 @@ from app.models.vendor_details import VendorDetails
 from app.crud.wallet import get_owner_balance, debit_wallet, credit_wallet
 from app.crud.vendor_wallet import get_vendor_wallet_balance, debit_vendor_wallet, credit_vendor_wallet
 
-MIN_RETAINED_BALANCE = 500  # owner's stated rule: wallet must keep at least this after a payout
+DEFAULT_MIN_RETAINED_BALANCE = 500  # owner's rule: wallet must keep at least this after a payout - the live value is the setting payout_min_retained_balance
+
+
+def min_retained_balance(db) -> int:
+    from app.crud.customer_booking_request import get_platform_setting_value
+    try:
+        return max(0, int(float(get_platform_setting_value(db, "payout_min_retained_balance", str(DEFAULT_MIN_RETAINED_BALANCE)) or DEFAULT_MIN_RETAINED_BALANCE)))
+    except (TypeError, ValueError):
+        return DEFAULT_MIN_RETAINED_BALANCE
 
 
 def _balance_for(db: Session, *, vehicle_owner_id: Optional[str], vendor_id: Optional[str]) -> int:
@@ -33,11 +41,12 @@ def create_payout_request(
         raise HTTPException(status_code=400, detail="Payout amount must be greater than zero")
 
     balance = _balance_for(db, vehicle_owner_id=vehicle_owner_id, vendor_id=vendor_id)
-    max_redeemable = balance - MIN_RETAINED_BALANCE
+    keep = min_retained_balance(db)
+    max_redeemable = balance - keep
     if amount > max_redeemable:
         raise HTTPException(
             status_code=400,
-            detail=f"You can redeem up to ₹{max(max_redeemable, 0)} - a minimum of ₹{MIN_RETAINED_BALANCE} must stay in your wallet."
+            detail=f"You can redeem up to ₹{max(max_redeemable, 0)} - a minimum of ₹{keep} must stay in your wallet."
         )
 
     # Only one payout request in flight at a time - avoids the same balance

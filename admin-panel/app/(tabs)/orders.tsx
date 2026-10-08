@@ -39,6 +39,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import CancelReasonModal from '@/components/CancelReasonModal';
 import PermanentDeleteBookingModal from '@/components/PermanentDeleteBookingModal';
 import WhatsAppActionModal from '@/components/WhatsAppActionModal';
+import ManualCloseTripModal from '@/components/ManualCloseTripModal';
 import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import { WhatsAppTemplateData, TemplateType } from '@/utils/whatsappTemplates';
 import { InvoiceData } from '@/utils/invoiceGenerator';
@@ -916,6 +917,7 @@ export default function OrdersScreen() {
   }, []);
 
   const [cancellingOrder, setCancellingOrder] = useState(false);
+  const [manualCloseOrder, setManualCloseOrder] = useState<Order | null>(null);   // close a trip by hand when the driver cannot
   const [cancelReasonOrder, setCancelReasonOrder] = useState<Order | null>(null);
 
   const handleCancelOrder = (order: Order, e?: any) => {
@@ -2602,6 +2604,21 @@ export default function OrdersScreen() {
                   💬 Send WhatsApp Update with Live Links
                 </Text>
               </TouchableOpacity>
+
+              {/* Close the trip by hand when the driver cannot (same settlement as the driver closing it) */}
+              {isAuthorizedForCancel
+                && !['COMPLETED', 'CANCELLED', 'CANCELLED_BY_CUSTOMER'].includes((selectedOrder.trip_status || '').toUpperCase())
+                && (selectedOrder.assignments || []).some((a) => (a.assignment_status || '').toUpperCase() !== 'CANCELLED') && (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? 'rgba(13,71,161,0.2)' : '#EFF6FF',
+                    borderWidth: 1, borderColor: '#0D47A1', paddingVertical: 12, borderRadius: 6, gap: 8,
+                  }}
+                  onPress={() => setManualCloseOrder(selectedOrder)}
+                >
+                  <Text style={{ color: '#0D47A1', fontWeight: '800', fontSize: 14 }}>Close Trip Manually (driver cannot)</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Cancel Booking Action (Staff & Owner) */}
               {isAuthorizedForCancel && (selectedOrder.trip_status || '').toUpperCase() !== 'CANCELLED' && (
@@ -4907,6 +4924,24 @@ export default function OrdersScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <ManualCloseTripModal
+        visible={!!manualCloseOrder}
+        orderId={manualCloseOrder?.id ?? null}
+        needsStartKm={!!manualCloseOrder && !isOrderStarted(manualCloseOrder)}
+        tollMustBeEntered={!!manualCloseOrder?.toll_charge_update}
+        isMultiCity={/multi/i.test(String(manualCloseOrder?.trip_type || ''))}
+        isDark={isDark}
+        onClose={() => setManualCloseOrder(null)}
+        onDone={(res) => {
+          const id = manualCloseOrder?.id;
+          setManualCloseOrder(null);
+          setShowDetailsModal(false);
+          showToast(`Booking #${id} closed and settled`, 'success');
+          fetchOrders(true);
+          fetchSnapshotData();
+        }}
+      />
 
       <CancelReasonModal
         visible={!!cancelReasonOrder}

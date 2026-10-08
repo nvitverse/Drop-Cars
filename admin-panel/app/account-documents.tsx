@@ -20,6 +20,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, ExternalLink, PartyPopper, X } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import AccountActivityBar from '@/components/AccountActivityBar';
 import ErrorMessage from '@/components/ErrorMessage';
 import ZoomableImage from '@/components/ZoomableImage';
 import Toast, { useToast } from '@/components/Toast';
@@ -479,6 +480,14 @@ export default function AccountDocumentsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Active / Inactive for this whole account (a person can switch it off with a reason) */}
+        {!!params.accountId && (
+          <AccountActivityBar
+            kind={params.accountType === 'vehicle_owner' ? 'partner' : params.accountType === 'vendor' ? 'vendor' : 'driver'}
+            entityId={String(params.accountId)}
+          />
+        )}
+
         {/* Separate Category Sub-Tabs Bar */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', gap: 8 }}>

@@ -24,6 +24,7 @@ class DocumentStatusListResponse(BaseModel):
     entity_id: UUID
     entity_type: str  # "vendor", "driver", "vehicle_owner", "car"
     documents: Dict[str, DocumentStatusResponse]
+    activity: Optional[Dict[str, Any]] = None   # Active / Inactive + reasons + Verified (crud/account_activity.py)
 
 
 class UpdateDocumentStatusRequest(BaseModel):
