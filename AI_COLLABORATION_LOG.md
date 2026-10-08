@@ -4,6 +4,8 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### LIVE 2026-10-09: backend rev `drop-cars-api-00308` (commit `ad9272a`); Admin OTA preview `a6bc1a45`, production `daeadbca`; Driver OTA published from Drop-Cars-Full-Repo (runtime 1.0.0). Earlier today: rev 00306 (`7755ba8`), 00307 (`2147702`). Customer / Vendor APKs not built.
+
 ### Active/Inactive vs Verified, document to-do popup, manual trip close, police verification, verified-only bookings, payout floor setting (Claude, 2026-10-09)
 - **Active vs Verified are different** (`crud/account_activity.py`): ACTIVE = may work (no expired / INVALID document, not switched off by staff, rating not below the limit); VERIFIED = originals really checked (car: RC, Insurance, Permit, FC when needed all VERIFIED; driver: licence AND police verification certificate). Not-verified-yet never switches anyone off. Tags exist for car, driver, partner, vendor. New columns: `manual_inactive_reason` (car_details, car_driver, vehicle_owner_details, vendor_details), `auto_inactive_reason` (car, driver; set by the daily sweep from `min_car_rating` / `min_driver_rating` / `min_rating_count`), `police_verification_img/status` (car_driver).
 - Admin App: `AccountActivityBar` on the car documents screen and the account documents screen (Active/Inactive + Verified chips, reasons, Switch OFF with a reason / Switch ON) via `PATCH /api/admin/accounts/{kind}/{id}/active`, `GET .../activity`.
