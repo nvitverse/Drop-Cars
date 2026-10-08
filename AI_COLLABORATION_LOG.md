@@ -4,7 +4,7 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
-### Merged Antigravity `feat/missing-screens` (Claude, 2026-10-08) - commit `157180b`, NOT yet deployed / OTA'd
+### Merged Antigravity `feat/missing-screens` (Claude, 2026-10-08) - commit `157180b`; backend LIVE as revision `drop-cars-api-00304` (label `e8d54f9`); Admin OTA published 2026-10-08 (preview `a93a1ed1`, production `e2ce35ef`); Driver OTA `00cc8f2f`. The website settings PHP is NOT uploaded
 Merged with corrections: extra-km billing now pays the driver and updates the split (`all_inclusive_extra_km` + tests); the all-inclusive bill no longer double-counts the markup; the website settings PHP uses the real `api/config.php` keys and backs up / verifies before replacing (NOT uploaded to the live site - test on a copy first) and the Admin screen calls it through `services/siteSettingsApi.ts` (it used to report a fake success); GST reports, driver settlements (two new routes), credit note and tours endpoints aligned to the real backend. Details and the rules for next time: `ANTIGRAVITY_PROMPT_2_Round2_UIUX.md` section 1b. 237 backend tests pass; admin and driver apps type-check.
 
 ### Trip-code leak + multi-city billing fixes (Claude, 2026-10-07) - branch `deploy/merged-2026-10-06`, NOT yet deployed / OTA'd
