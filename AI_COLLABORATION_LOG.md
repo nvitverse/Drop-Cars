@@ -4,6 +4,13 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Documents gate, IST times, duplicate pushes (Claude, 2026-10-08) - branch `deploy/merged-2026-10-06`, NOT yet deployed
+- A car may take bookings unless a required document (RC / Insurance / Permit) has EXPIRED; a driver unless the licence expired (`crud/verification.py`). The automatic document check never blocks any more and never writes INVALID (it goes to NEEDS_REVIEW for a person): owners were locked out of bookings because it marked real documents INVALID ("Verify Your Car First").
+- Driver App My Cars: the status word was drawn at size 20 and overflowed the tiles (`components/DocumentStatusIcon.tsx`); tiles now show a dot + a short plain label.
+- Times printed without the IST conversion (5 h 30 min early): booking chat suggestions, the "booking accepted" e-mail, the priority-cutoff alert, Drop Bid pickup time, owner review dates. `utils/timezone.py to_ist`.
+- Same phone, three notifications, one sound: the same device token registered on several accounts got one copy per account. `crud/notification.py dedupe_push_payloads` (same token + title + body = once).
+- Website settings PHP (`website/api/admin-app-site-settings.php`) was uploaded for a test and REMOVED again: Hostinger answered 302 for it (and for any not-yet-known file in /api), so it is not live. The 3 files created were deleted; nothing pre-existing was touched. Live `api/config.php` was only read (local backup `C:\gtmptp_backup3`).
+
 ### Merged Antigravity `feat/missing-screens` (Claude, 2026-10-08) - commit `157180b`; backend LIVE as revision `drop-cars-api-00304` (label `e8d54f9`); Admin OTA published 2026-10-08 (preview `a93a1ed1`, production `e2ce35ef`); Driver OTA `00cc8f2f`. The website settings PHP is NOT uploaded
 Merged with corrections: extra-km billing now pays the driver and updates the split (`all_inclusive_extra_km` + tests); the all-inclusive bill no longer double-counts the markup; the website settings PHP uses the real `api/config.php` keys and backs up / verifies before replacing (NOT uploaded to the live site - test on a copy first) and the Admin screen calls it through `services/siteSettingsApi.ts` (it used to report a fake success); GST reports, driver settlements (two new routes), credit note and tours endpoints aligned to the real backend. Details and the rules for next time: `ANTIGRAVITY_PROMPT_2_Round2_UIUX.md` section 1b. 237 backend tests pass; admin and driver apps type-check.
 

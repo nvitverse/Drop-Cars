@@ -165,7 +165,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
               {step === 'sent'
                 ? 'Request Sent to Vendor'
                 : reason === 'UNVERIFIED'
-                  ? 'Verify Your Car First'
+                  ? 'A Car Document Has Expired'
                   : `Needs a ${formatCarType(requiredCarType)} (${requiredSeats} Seats)`}
             </Text>
             <TouchableOpacity onPress={close}>
@@ -176,7 +176,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
           {step === 'intro' && reason === 'UNVERIFIED' && (
             <View style={{ gap: 14 }}>
               <Text style={[styles.body, { color: colors.textSecondary }]}>
-                You have a car that fits this {formatCarType(requiredCarType)} booking, but its documents aren't fully verified yet. Once it's verified you can accept this booking.
+                You have a car that fits this {formatCarType(requiredCarType)} booking, but one of its documents (RC, Insurance or Permit) has expired. Renew it and update the new date in My Fleet, then you can accept this booking.
               </Text>
               <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={addCarNow}>
                 <CarIcon size={18} color="#FFFFFF" />

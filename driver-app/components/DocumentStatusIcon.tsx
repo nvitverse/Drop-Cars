@@ -43,7 +43,7 @@ export default function DocumentStatusIcon({ status, size = 22 }: DocumentStatus
 
   return (
     <Text style={{
-      fontSize: size + 6,
+      fontSize: Math.max(9, size - 4),   // it was size + 6: the status word came out huge and overflowed the document tiles
       color,
       fontWeight: 'bold',
       textTransform: 'uppercase',

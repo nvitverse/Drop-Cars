@@ -316,7 +316,7 @@ def submit_drop_bid_offer(
     if not car:
         raise HTTPException(status_code=404, detail="That car isn't in your fleet.")
     if not is_car_verified(car):
-        raise HTTPException(status_code=403, detail="This car's documents must be verified before it can be offered on a trip.")
+        raise HTTPException(status_code=403, detail="One of this car's documents (RC, Insurance or Permit) has expired. Renew it before offering this car on a trip.")
 
     # One live offer per driver per request - update in place if they
     # already have a PENDING one, rather than stacking duplicates.
@@ -837,7 +837,7 @@ def get_admin_emergency_bids(
             "customerPhone": req.customer.phone if getattr(req, "customer", None) else "",
             "pickup": req.pickup_location,
             "dropLocation": req.drop_location,
-            "pickupTime": req.start_date_time.strftime("%Y-%m-%d %H:%M") if req.start_date_time else "Immediate",
+            "pickupTime": (__import__("app.utils.timezone", fromlist=["to_ist"]).to_ist(req.start_date_time) or req.start_date_time).strftime("%Y-%m-%d %H:%M") if req.start_date_time else "Immediate",
             "baseEstimate": req.customer_target_price,
             "liveBidsCount": len(offers),
             "topBidAmount": top_offer.offer_price if top_offer else req.customer_target_price,

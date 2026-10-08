@@ -873,7 +873,8 @@ def update_order_priority_endpoint(
     cutoff_str = ""
     if order.priority_cutoff_at:
         try:
-            cutoff_str = order.priority_cutoff_at.strftime("%d %b, %I:%M %p")
+            from app.utils.timezone import to_ist
+            cutoff_str = to_ist(order.priority_cutoff_at).strftime("%d %b, %I:%M %p")
         except Exception:
             cutoff_str = str(order.priority_cutoff_at)
 

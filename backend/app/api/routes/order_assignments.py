@@ -217,7 +217,7 @@ async def accept_order(
                     log_mismatch_attempt(db, order.id, vehicle_owner_id, order.car_type)
                     message = f"This booking needs a verified {type_label}. Add one to your fleet to accept it, or request to fulfil it with a different car of yours."
                 else:
-                    message = f"You have a car that fits this {type_label} booking, but its documents aren't fully verified yet. Get it verified to accept this booking."
+                    message = f"You have a car that fits this {type_label} booking, but one of its documents (RC, Insurance or Permit) has expired. Renew and update it to accept this booking."
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={
@@ -580,13 +580,13 @@ async def assign_car_driver(
         if not is_car_verified(car_to_assign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This car's documents (RC, Insurance, Permit) must be verified before it can be assigned to a trip."
+                detail="This car cannot be assigned: its " + " / ".join(__import__("app.crud.verification", fromlist=["x"]).expired_car_documents(car_to_assign) or ["document"]) + " has expired. Renew it and update the date in My Fleet."
             )
         driver_to_assign = db.query(CarDriver).filter(CarDriver.id == str(payload.driver_id)).first()
         if not is_driver_verified(driver_to_assign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This driver's license must be verified before they can be assigned to a trip."
+                detail="This driver's licence has expired. Update the new expiry date before assigning them to a trip."
             )
 
         # Vehicle-type gate, defense in depth - accept_order already

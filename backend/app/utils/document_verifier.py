@@ -661,7 +661,9 @@ def get_auto_verified_status(
         if status_str == "VERIFIED":
             return DocumentStatusEnum.VERIFIED
         elif status_str == "INVALID":
-            return DocumentStatusEnum.INVALID
+            # The automatic check is not reliable enough to REJECT a document (it marked real RC / insurance INVALID); a doubtful
+            # one goes to a person in the Admin App review queue. Only a person sets INVALID.
+            return DocumentStatusEnum.NEEDS_REVIEW
         elif status_str == "NEEDS_REVIEW":
             return DocumentStatusEnum.NEEDS_REVIEW
     except Exception as e:

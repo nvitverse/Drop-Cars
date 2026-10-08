@@ -3,6 +3,16 @@ from typing import Union, Optional
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
+def to_ist(dt_val):
+    """A datetime (naive = UTC, as the database stores it) as an aware IST datetime; None stays None. Use this - never a bare
+    strftime() on a stored time: a stored time is UTC, so printing it directly shows a time 5 h 30 min EARLIER than the real one."""
+    if not isinstance(dt_val, datetime):
+        return None
+    if dt_val.tzinfo is None:
+        dt_val = dt_val.replace(tzinfo=timezone.utc)
+    return dt_val.astimezone(IST)
+
+
 def format_pickup_time_ist(dt_val: Optional[Union[datetime, str]]) -> str:
     """
     Converts naive or UTC datetime / ISO string to Indian Standard Time (IST, UTC+5:30)

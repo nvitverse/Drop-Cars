@@ -40,23 +40,36 @@ def is_owner_kyc_verified(owner: VehicleOwnerDetails) -> bool:
     return True
 
 
+def expired_car_documents(car: CarDetails, today=None) -> list:
+    """Names of the car's required documents whose saved expiry date has passed. A document with no expiry date saved is not blocked."""
+    from datetime import date
+    today = today or date.today()
+    out = []
+    for label, field in (("RC", "rc_expiry_date"), ("Insurance", "insurance_expiry_date"), ("Permit", "permit_expiry_date")):
+        d = getattr(car, field, None)
+        if d is not None and d < today:
+            out.append(label)
+    return out
+
+
+def expired_driver_documents(driver: CarDriver, today=None) -> list:
+    from datetime import date
+    today = today or date.today()
+    d = getattr(driver, "licence_expiry_date", None)
+    return ["Driving licence"] if (d is not None and d < today) else []
+
+
 def is_car_verified(car: CarDetails) -> bool:
+    """A car may take bookings unless a required document has EXPIRED (owner rule 2026-10-09). The automatic document check
+    (INVALID / NEEDS_REVIEW / PENDING) no longer blocks anything: it was marking real documents INVALID and locking owners out of
+    bookings. Staff can still reject a document in the Admin App; what blocks is the date on it."""
     if car is None:
         return False
-    # Allow assignment as long as none of the required documents are explicitly INVALID
-    return (
-        car.rc_front_status != DocumentStatusEnum.INVALID
-        and car.rc_back_status != DocumentStatusEnum.INVALID
-        and car.insurance_status != DocumentStatusEnum.INVALID
-        and car.permit_status != DocumentStatusEnum.INVALID
-    )
+    return not expired_car_documents(car)
 
 
 def is_driver_verified(driver: CarDriver) -> bool:
+    """Same rule for the driver: only an expired licence blocks assignment."""
     if driver is None:
         return False
-    # Allow assignment as long as none of the required documents are explicitly INVALID
-    return (
-        driver.licence_front_status != DocumentStatusEnum.INVALID
-        and driver.licence_back_status != DocumentStatusEnum.INVALID
-    )
+    return not expired_driver_documents(driver)

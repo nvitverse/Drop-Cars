@@ -1319,7 +1319,7 @@ def get_vehicle_owner_feedbacks(
             "rating": rating_val,
             "tags": tags,
             "comment": r.comment or "Great service!",
-            "date": r.created_at.strftime("%d %b, %I:%M %p") if r.created_at else "Recently",
+            "date": (__import__("app.utils.timezone", fromlist=["to_ist"]).to_ist(r.created_at) or r.created_at).strftime("%d %b, %I:%M %p") if r.created_at else "Recently",
             "incentiveAmount": incentive,
         })
 
@@ -1336,7 +1336,7 @@ def get_vehicle_owner_feedbacks(
             "rating": stars,
             "tags": [],
             "comment": tr.feedback or "",
-            "date": tr.created_at.strftime("%d %b, %I:%M %p") if tr.created_at else "Recently",
+            "date": (__import__("app.utils.timezone", fromlist=["to_ist"]).to_ist(tr.created_at) or tr.created_at).strftime("%d %b, %I:%M %p") if tr.created_at else "Recently",
             "incentiveAmount": int(tr.bonus_amount) if tr.bonus_paid_at else expected,
             "incentivePaid": bool(tr.bonus_paid_at),
         })

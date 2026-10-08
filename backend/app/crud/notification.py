@@ -89,6 +89,7 @@ def _post_expo_payloads_sync(payloads: list) -> dict:
     paths that run synchronously right after booking creation. Chunks are
     fired concurrently via a thread pool for the same "everyone at once"
     reason as the async version above."""
+    payloads = dedupe_push_payloads(payloads)
     from app.utils.notification_settings import apply_device_sound_channels
     payloads = apply_device_sound_channels(payloads)
     if not payloads:
@@ -170,6 +171,21 @@ def _get_tasks_client():
     return _tasks_client
 
 
+def dedupe_push_payloads(payloads: list) -> list:
+    """One phone, one notification. The same device token can be registered on several accounts (a fleet owner and his drivers on one
+    phone, or an old install that was never cleaned), and every account used to get its own copy: three identical notifications at
+    once, with ONE sound because Android silences alerts that arrive within a moment of each other. Same token + same title + same
+    body = send once."""
+    seen, out = set(), []
+    for p in payloads or []:
+        key = (str(p.get("to")), str(p.get("title")), str(p.get("body")))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
 def _enqueue_expo_push(db: Session, payloads: list) -> None:
     """Queues the actual Expo push send instead of doing it inline. Falls
     back to sending synchronously (the old, always-correct behavior) if
@@ -178,6 +194,7 @@ def _enqueue_expo_push(db: Session, payloads: list) -> None:
     notification. Token-cleanup (_handle_expo_response) runs wherever the
     send actually happens: inside /api/internal/dispatch-expo-push when
     queued, or right here on the synchronous fallback."""
+    payloads = dedupe_push_payloads(payloads)
     if not payloads:
         return
     if not _INTERNAL_TASK_SECRET:

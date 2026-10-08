@@ -151,7 +151,7 @@ def create_substitution_request(db: Session, order_id: int, vehicle_owner_id: st
     if not driver:
         raise ValueError("That driver isn't in your fleet")
     if not is_car_verified(car):
-        raise ValueError("This car's documents must be verified before it can be offered")
+        raise ValueError("One of this car's documents (RC, Insurance or Permit) has expired. Renew it before offering this car")
 
     # Seating capacity validation: offered car must have at least as many passenger seats as required
     car_info = _TYPE_INFO.get(_type_value(car.car_type))

@@ -72,8 +72,10 @@ def driver_menu(assignment_status: Optional[str]) -> List[dict]:
 
 
 def _fmt_dt(dt) -> str:
+    # Stored times are UTC: show the Indian time (the chat used to print the UTC clock, 5 h 30 min early)
+    from app.utils.timezone import format_pickup_time_ist
     try:
-        return dt.strftime("%d %b %Y, %I:%M %p")
+        return format_pickup_time_ist(dt)
     except Exception:
         return str(dt or "")
 

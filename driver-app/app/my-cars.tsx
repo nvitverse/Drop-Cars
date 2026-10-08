@@ -727,7 +727,8 @@ export default function MyCarsScreen() {
                                   size={16}
                                   color={isVerified ? '#10B981' : isExpiring ? '#EF4444' : colors.primary}
                                 />
-                                <DocumentStatusIcon status={status as any} size={14} />
+                                {/* a small coloured dot - the word itself is in the badge below */}
+                                <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: isVerified ? '#10B981' : status === 'INVALID' ? '#EF4444' : String(status) === 'NEEDS_REVIEW' ? '#8B5CF6' : '#F59E0B' }} />
                               </View>
                               <Text
                                 style={[dynamicStyles.docTileTitle, { color: colors.text }]}
@@ -761,7 +762,7 @@ export default function MyCarsScreen() {
                                 >
                                   {isExpiring
                                     ? (days !== null && days < 0 ? 'Expired' : `${days}d left`)
-                                    : status}
+                                    : ({ VERIFIED: 'Verified', PENDING: 'Checking', NEEDS_REVIEW: 'With support', INVALID: 'Please re-upload' } as Record<string, string>)[String(status)] || String(status)}
                                 </Text>
                               </View>
                             </TouchableOpacity>

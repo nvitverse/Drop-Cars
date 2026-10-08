@@ -46,7 +46,7 @@ def send_trip_accepted_email(db: Session, vehicle_owner_id, order) -> None:
         f"Customer: {order.customer_name} ({order.customer_number})\n"
         f"Pickup: {pickup}\n"
         f"Drop: {drop}\n"
-        f"Start: {order.start_date_time}\n\n"
+        f"Start: {__import__('app.utils.timezone', fromlist=['format_pickup_time_ist']).format_pickup_time_ist(order.start_date_time)} (IST)\n\n"
         f"Total booking amount: Rs.{order.vendor_price or 0}\n"
         f"Advance received: Rs.{order.advance_received or 0}\n\n"
         f"You can review full trip and payment details anytime in the app."
