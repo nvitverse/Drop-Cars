@@ -54,7 +54,8 @@ class CarDetailsForm(BaseModel):
     # all optional so an existing caller that doesn't send them still works.
     # OCR can suggest these (see /cardetails/extract-expiry) but the driver
     # can always type/change them before submitting.
-    rc_expiry_date: Optional[str] = Field(None, description="RC expiry date (YYYY-MM-DD)")
+    rc_expiry_date: Optional[str] = Field(None, description="Ignored: an RC has no expiry date (send registration_date)")
+    registration_date: Optional[str] = Field(None, description="RC registration date (YYYY-MM-DD)")
     insurance_expiry_date: Optional[str] = Field(None, description="Insurance expiry date (YYYY-MM-DD)")
     fc_expiry_date: Optional[str] = Field(None, description="FC expiry date (YYYY-MM-DD)")
     permit_expiry_date: Optional[str] = Field(None, description="Permit expiry date (YYYY-MM-DD)")
@@ -75,7 +76,8 @@ class CarDetailsForm(BaseModel):
         car_type: CarTypeEnum = Form(..., description="Car type: SEDAN, SUV, or INNOVA"),
         car_number: str = Form(..., description="Car registration number"),
         year_of_the_car: Optional[str] = Form(None, description="Year of the car"),
-        rc_expiry_date: Optional[str] = Form(None, description="RC expiry date (YYYY-MM-DD)"),
+        rc_expiry_date: Optional[str] = Form(None, description="Ignored: an RC has no expiry date"),
+        registration_date: Optional[str] = Form(None, description="RC registration date (YYYY-MM-DD)"),
         insurance_expiry_date: Optional[str] = Form(None, description="Insurance expiry date (YYYY-MM-DD)"),
         fc_expiry_date: Optional[str] = Form(None, description="FC expiry date (YYYY-MM-DD)"),
         permit_expiry_date: Optional[str] = Form(None, description="Permit expiry date (YYYY-MM-DD)"),
@@ -87,7 +89,8 @@ class CarDetailsForm(BaseModel):
             car_type=car_type,
             car_number=car_number,
             year_of_the_car=year_of_the_car,
-            rc_expiry_date=rc_expiry_date or None,
+            rc_expiry_date=None,
+            registration_date=registration_date or None,
             insurance_expiry_date=insurance_expiry_date or None,
             fc_expiry_date=fc_expiry_date or None,
             permit_expiry_date=permit_expiry_date or None,
@@ -109,6 +112,7 @@ class CarDetailsOut(BaseModel):
     permit_img_url: Optional[str]
     pollution_img_url: Optional[str] = None
     rc_expiry_date: Optional[str] = None
+    registration_date: Optional[str] = None
     insurance_expiry_date: Optional[str] = None
     fc_expiry_date: Optional[str] = None
     permit_expiry_date: Optional[str] = None

@@ -65,7 +65,8 @@ class CarDetails(Base):
     # Expiry dates for the daily document-expiry reminder sweep (see
     # crud/document_expiry.py). Nullable/optional - not every existing car
     # has these entered yet; the reminder simply skips rows with no date set.
-    rc_expiry_date = Column(Date, nullable=True)
+    rc_expiry_date = Column(Date, nullable=True)   # NOT USED: an RC card has no expiry date (kept only so old rows load)
+    registration_date = Column(Date, nullable=True)  # the date printed on the RC; a new vehicle needs no FC for 2 years after it
     insurance_expiry_date = Column(Date, nullable=True)
     fc_expiry_date = Column(Date, nullable=True)
     permit_expiry_date = Column(Date, nullable=True)

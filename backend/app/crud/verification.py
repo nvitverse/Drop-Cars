@@ -40,15 +40,42 @@ def is_owner_kyc_verified(owner: VehicleOwnerDetails) -> bool:
     return True
 
 
+def _add_years(d, years: int):
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:                      # 29 Feb
+        return d.replace(year=d.year + years, day=28)
+
+
+def fc_status_for_car(car, today=None) -> dict:
+    """Does this vehicle need a Fitness Certificate? A NEW vehicle gets none for its first two years - no RTO issues one - so nothing is
+    asked and nothing can expire until two years after the registration date printed on the RC. Returns
+    {required: bool, free_until: date|None}. The registration date is what counts; the model year is only a fallback for older records."""
+    from datetime import date
+    today = today or date.today()
+    reg = getattr(car, "registration_date", None)
+    if reg is not None:
+        free_until = _add_years(reg, 2)
+        return {"required": today >= free_until, "free_until": free_until}
+    year_text = str(getattr(car, "year_of_the_car", "") or "").strip()
+    if year_text.isdigit() and len(year_text) == 4:
+        return {"required": today.year - int(year_text) >= 2, "free_until": None}
+    return {"required": bool(getattr(car, "fc_img_url", None) or getattr(car, "fc_expiry_date", None)), "free_until": None}
+
+
 def expired_car_documents(car: CarDetails, today=None) -> list:
-    """Names of the car's required documents whose saved expiry date has passed. A document with no expiry date saved is not blocked."""
+    """Names of the car's documents whose saved expiry date has passed. The RC has NO expiry date (only a registration date), so it never
+    appears here. The FC counts only when the vehicle needs one (older than two years). A document with no date saved is not blocked."""
     from datetime import date
     today = today or date.today()
     out = []
-    for label, field in (("RC", "rc_expiry_date"), ("Insurance", "insurance_expiry_date"), ("Permit", "permit_expiry_date")):
+    for label, field in (("Insurance", "insurance_expiry_date"), ("Permit", "permit_expiry_date")):
         d = getattr(car, field, None)
         if d is not None and d < today:
             out.append(label)
+    fc_date = getattr(car, "fc_expiry_date", None)
+    if fc_date is not None and fc_date < today and fc_status_for_car(car, today)["required"]:
+        out.append("FC")
     return out
 
 
@@ -59,17 +86,47 @@ def expired_driver_documents(driver: CarDriver, today=None) -> list:
     return ["Driving licence"] if (d is not None and d < today) else []
 
 
+def invalid_car_documents(car: CarDetails, today=None) -> list:
+    """Documents marked INVALID: the wrong document (an Aadhaar in the RC slot...), not an original, unreadable, or a date that
+    does not match / is already expired. INVALID is NOT the same as "not verified yet" (PENDING / NEEDS_REVIEW) - those never block."""
+    out = []
+    for label, field in (("RC front", "rc_front_status"), ("RC back", "rc_back_status"),
+                         ("Insurance", "insurance_status"), ("Permit", "permit_status")):
+        if getattr(car, field, None) == DocumentStatusEnum.INVALID:
+            out.append(label)
+    if getattr(car, "fc_status", None) == DocumentStatusEnum.INVALID and fc_status_for_car(car, today)["required"]:
+        out.append("FC")
+    return out
+
+
+def invalid_driver_documents(driver: CarDriver) -> list:
+    out = []
+    if getattr(driver, "licence_front_status", None) == DocumentStatusEnum.INVALID:
+        out.append("Driving licence front")
+    if getattr(driver, "licence_back_status", None) == DocumentStatusEnum.INVALID:
+        out.append("Driving licence back")
+    return out
+
+
+def car_document_problems(car: CarDetails, today=None) -> list:
+    """Plain-language reasons a car cannot take a booking: "Insurance has expired", "Permit is not valid - upload it again"."""
+    return [f"{n} has expired" for n in expired_car_documents(car, today)] +            [f"{n} is not valid - upload the correct original again" for n in invalid_car_documents(car, today)]
+
+
+def driver_document_problems(driver: CarDriver, today=None) -> list:
+    return [f"{n} has expired" for n in expired_driver_documents(driver, today)] +            [f"{n} is not valid - upload the correct original again" for n in invalid_driver_documents(driver)]
+
+
 def is_car_verified(car: CarDetails) -> bool:
-    """A car may take bookings unless a required document has EXPIRED (owner rule 2026-10-09). The automatic document check
-    (INVALID / NEEDS_REVIEW / PENDING) no longer blocks anything: it was marking real documents INVALID and locking owners out of
-    bookings. Staff can still reject a document in the Admin App; what blocks is the date on it."""
+    """A car may take bookings unless a document is EXPIRED or INVALID (wrong document / date mismatch). "Not verified yet"
+    (PENDING / NEEDS_REVIEW) does NOT block (owner rule). The RC has no expiry date; the FC only counts for a vehicle that needs one."""
     if car is None:
         return False
-    return not expired_car_documents(car)
+    return not car_document_problems(car)
 
 
 def is_driver_verified(driver: CarDriver) -> bool:
-    """Same rule for the driver: only an expired licence blocks assignment."""
+    """Same rule for the driver: an expired or INVALID licence blocks assignment; unverified does not."""
     if driver is None:
         return False
-    return not expired_driver_documents(driver)
+    return not driver_document_problems(driver)

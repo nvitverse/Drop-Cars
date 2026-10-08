@@ -31,18 +31,26 @@ def send_expiry_reminders(db: Session) -> dict:
     from app.utils.trip_emails import send_document_expiry_email
 
     today = date.today()
-    sent = {"rc": 0, "insurance": 0, "licence": 0}
+    sent = {"insurance": 0, "permit": 0, "fc": 0, "licence": 0}
 
+    from app.crud.verification import fc_status_for_car
     cars = db.query(CarDetails).filter(
-        (CarDetails.rc_expiry_date.isnot(None)) | (CarDetails.insurance_expiry_date.isnot(None))
+        (CarDetails.insurance_expiry_date.isnot(None)) | (CarDetails.permit_expiry_date.isnot(None)) | (CarDetails.fc_expiry_date.isnot(None))
     ).all()
     for car in cars:
-        if car.rc_expiry_date and _should_remind(car.rc_expiry_date, today):
+        # (an RC has no expiry date - nothing to remind; an FC only matters once the vehicle is old enough to need one)
+        if car.permit_expiry_date and _should_remind(car.permit_expiry_date, today):
             try:
-                send_document_expiry_email(db, car.vehicle_owner_id, "RC", car.car_name, car.rc_expiry_date)
-                sent["rc"] += 1
+                send_document_expiry_email(db, car.vehicle_owner_id, "Permit", car.car_name, car.permit_expiry_date)
+                sent["permit"] += 1
             except Exception as e:
-                print(f"RC expiry reminder failed for car {car.id} (continuing): {e}")
+                print(f"Permit expiry reminder failed for car {car.id} (continuing): {e}")
+        if car.fc_expiry_date and fc_status_for_car(car, today)["required"] and _should_remind(car.fc_expiry_date, today):
+            try:
+                send_document_expiry_email(db, car.vehicle_owner_id, "FC", car.car_name, car.fc_expiry_date)
+                sent["fc"] += 1
+            except Exception as e:
+                print(f"FC expiry reminder failed for car {car.id} (continuing): {e}")
         if car.insurance_expiry_date and _should_remind(car.insurance_expiry_date, today):
             try:
                 send_document_expiry_email(db, car.vehicle_owner_id, "Insurance", car.car_name, car.insurance_expiry_date)

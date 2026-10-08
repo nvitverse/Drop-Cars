@@ -542,11 +542,11 @@ export interface CarDetailsData {
   rc_front_img: any; // File object for FormData
   rc_back_img: any; // File object for FormData
   insurance_img: any; // File object for FormData
-  fc_img: any; // File object for FormData
+  fc_img?: any; // File object for FormData (not needed for a vehicle within 2 years of registration)
   permit_img?: any; // File object for FormData
   car_img: any; // File object for FormData
   pollution_img?: any; // File object for FormData
-  rc_expiry_date?: string; // YYYY-MM-DD
+  registration_date?: string; // YYYY-MM-DD, the date on the RC (an RC has no expiry date)
   insurance_expiry_date?: string; // YYYY-MM-DD
   fc_expiry_date?: string; // YYYY-MM-DD
   permit_expiry_date?: string; // YYYY-MM-DD
@@ -700,7 +700,7 @@ export const addCarDetails = async (carData: CarDetailsData, onUploadProgress?: 
     formData.append('car_number', carData.car_number || '');
     formData.append('vehicle_owner_id', carData.vehicle_owner_id || '');
     formData.append('year_of_the_car', carData.year_of_the_car?.toString() || '');
-    if (carData.rc_expiry_date) formData.append('rc_expiry_date', carData.rc_expiry_date);
+    if (carData.registration_date) formData.append('registration_date', carData.registration_date);
     if (carData.insurance_expiry_date) formData.append('insurance_expiry_date', carData.insurance_expiry_date);
     if (carData.fc_expiry_date) formData.append('fc_expiry_date', carData.fc_expiry_date);
     if (carData.permit_expiry_date) formData.append('permit_expiry_date', carData.permit_expiry_date);

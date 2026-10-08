@@ -58,7 +58,7 @@ export default function AddCarScreen() {
   // Pollution. Auto-filled from OCR right after crop (see
   // extractExpiryForField), but always stay editable - OCR is best-effort.
   const [carExpiry, setCarExpiry] = useState({
-    rcFront: '',
+    registration: '', // RC: registration date (an RC card has NO expiry date)
     insurance: '',
     fc: '',
     permit: '',
@@ -93,11 +93,23 @@ export default function AddCarScreen() {
   // Document management if ever needed - that's a separate, later flow,
   // not part of creating the car. (Owner explicitly asked for this
   // 2026-09-29 - the old rcFront expiryKey was confusing.)
+  //
+  // A NEW vehicle has no Fitness Certificate for its first two years (no RTO issues one), so FC is neither asked nor required until
+  // two years after the registration date printed on the RC. Before the registration date is entered, the make year decides.
+  const fcApplies = (() => {
+    const reg = carExpiry.registration ? new Date(carExpiry.registration) : null;
+    if (reg && !isNaN(reg.getTime())) {
+      const freeUntil = new Date(reg); freeUntil.setFullYear(freeUntil.getFullYear() + 2);
+      return new Date() >= freeUntil;
+    }
+    const y = parseInt(carData.year);
+    return !isNaN(y) && new Date().getFullYear() - y >= 2;
+  })();
   const IMAGE_FIELDS: { key: keyof typeof carImages; title: string; docType?: string; expiryKey?: keyof typeof carExpiry }[] = [
     { key: 'rcFront', title: t('addCar.imgRcFront') },
     { key: 'rcBack', title: t('addCar.imgRcBack') },
     { key: 'insurance', title: t('addCar.imgInsurance'), docType: 'insurance', expiryKey: 'insurance' },
-    { key: 'fc', title: t('addCar.imgFc'), docType: 'fc', expiryKey: 'fc' },
+    ...(fcApplies ? [{ key: 'fc' as const, title: t('addCar.imgFc'), docType: 'fc', expiryKey: 'fc' as const }] : []),
     { key: 'permit', title: t('addCar.imgPermit'), docType: 'permit', expiryKey: 'permit' },
     { key: 'pollution', title: 'Pollution Certificate (PUC)', docType: 'pollution', expiryKey: 'pollution' },
     { key: 'carImage', title: 'Car Front Photo' },
@@ -123,6 +135,10 @@ export default function AddCarScreen() {
     const missing = IMAGE_FIELDS.filter((f) => !carImages[f.key]).map((f) => f.title);
     if (missing.length > 0) {
       setErrors({ documents: t('addCar.docsNeedUpload', { fields: missing.join(', '), verb: missing.length > 1 ? t('addCar.verbNeed') : t('addCar.verbNeeds') }) });
+      return false;
+    }
+    if (!carExpiry.registration) {
+      setErrors({ documents: 'Please select the registration date shown on the RC' });
       return false;
     }
     // Expiry date is what verification actually checks - required for every
@@ -416,7 +432,7 @@ export default function AddCarScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.expiryDateText, !expiryValue && styles.expiryDatePlaceholder]} numberOfLines={1}>
-                  {expiryValue || 'Select expiry date'}
+                  {expiryValue || (expiryKey === 'registration' ? 'Select registration date' : 'Select expiry date')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -446,15 +462,15 @@ export default function AddCarScreen() {
         rc_front_img: carImages.rcFront,
         rc_back_img: carImages.rcBack,
         insurance_img: carImages.insurance,
-        fc_img: carImages.fc,
+        fc_img: fcApplies ? carImages.fc : undefined,
       permit_img: carImages.permit,
         car_img: carImages.carImage,
         pollution_img: carImages.pollution,
         model: carData.model || carData.name, // Add model field
         year_of_the_car: carData.year, // Convert to number - backend expects this field name
-        rc_expiry_date: carExpiry.rcFront || undefined,
+        registration_date: carExpiry.registration || undefined,
         insurance_expiry_date: carExpiry.insurance || undefined,
-        fc_expiry_date: carExpiry.fc || undefined,
+        fc_expiry_date: fcApplies ? (carExpiry.fc || undefined) : undefined,
         permit_expiry_date: carExpiry.permit || undefined,
         pollution_expiry_date: carExpiry.pollution || undefined,
       };
@@ -684,7 +700,7 @@ export default function AddCarScreen() {
               description={t('addCar.rcFrontDesc')}
               imageKey="rcFront"
               isRequired={true}
-              expiryKey="rcFront"
+              expiryKey="registration"
             />
 
             <ImageUploadField
@@ -702,13 +718,22 @@ export default function AddCarScreen() {
               expiryKey="insurance"
             />
 
-            <ImageUploadField
-              title={t('addCar.imgFc')}
-              description={t('addCar.fcDesc')}
-              imageKey="fc"
-              isRequired={true}
-              expiryKey="fc"
-            />
+            {fcApplies ? (
+              <ImageUploadField
+                title={t('addCar.imgFc')}
+                description={t('addCar.fcDesc')}
+                imageKey="fc"
+                isRequired={true}
+                expiryKey="fc"
+              />
+            ) : (
+              <View style={[styles.gridCard, { justifyContent: 'center' }]}>
+                <Text style={[styles.gridCardTitle, { color: colors.text }]}>{t('addCar.imgFc')}</Text>
+                <Text style={styles.gridEmptySubtitle}>
+                  Not needed - a new vehicle has no FC for its first 2 years{carExpiry.registration ? ' (after the registration date)' : ''}.
+                </Text>
+              </View>
+            )}
 
             <ImageUploadField
               title={t('addCar.imgPermit')}
@@ -762,9 +787,11 @@ export default function AddCarScreen() {
                 <CheckCircle color={carImages[f.key] ? '#10B981' : '#D1D5DB'} size={18} />
                 <Text style={{ flexShrink: 1, color: colors.text, fontSize: 13 }}>{f.title}</Text>
               </View>
-              {f.expiryKey && (
+              {(f.expiryKey || f.key === 'rcFront') && (
                 <Text style={{ flexShrink: 1, textAlign: 'right', color: colors.textSecondary, fontSize: 12 }}>
-                  {carExpiry[f.expiryKey] ? `Expires ${carExpiry[f.expiryKey]}` : 'No expiry set'}
+                  {f.key === 'rcFront'
+                    ? (carExpiry.registration ? `Registered ${carExpiry.registration}` : 'No registration date')
+                    : (f.expiryKey && carExpiry[f.expiryKey] ? `Expires ${carExpiry[f.expiryKey]}` : 'No expiry set')}
                 </Text>
               )}
             </View>
@@ -840,12 +867,14 @@ export default function AddCarScreen() {
       {datePickerField && Platform.OS === 'web' && (
         <View style={styles.webDateOverlay}>
           <View style={[styles.webDateCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.webDateTitle, { color: colors.text }]}>Set Expiry Date</Text>
+            <Text style={[styles.webDateTitle, { color: colors.text }]}>{datePickerField === 'registration' ? 'Set Registration Date' : 'Set Expiry Date'}</Text>
             <input
               type="date"
               value={carExpiry[datePickerField] || ''}
               onChange={(e: any) => setCarExpiry((prev) => ({ ...prev, [datePickerField]: e.target.value }))}
-              min={new Date().toISOString().split('T')[0]}
+              {...(datePickerField === 'registration'
+                ? { max: new Date().toISOString().split('T')[0] }
+                : { min: new Date().toISOString().split('T')[0] })}
               style={{
                 border: '1px solid #E2E8F0',
                 borderRadius: 6,
@@ -871,7 +900,7 @@ export default function AddCarScreen() {
           value={carExpiry[datePickerField] ? new Date(carExpiry[datePickerField]) : new Date()}
           mode="date"
           display="default"
-          minimumDate={new Date()}
+          {...(datePickerField === 'registration' ? { maximumDate: new Date() } : { minimumDate: new Date() })}
           onChange={(_: any, date?: Date) => {
             setShowNativeDatePicker(false);
             if (date) {

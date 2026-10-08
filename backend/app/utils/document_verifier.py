@@ -596,8 +596,8 @@ def verify_uploaded_document(
             return _result("INVALID", "Document has expired - please upload a valid, renewed document.", base, 0.93,
                            extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
-        return _result("NEEDS_REVIEW",
-                       f"Entered expiry ({exp_typed.isoformat()}) doesn't match the date found on the document ({detected_expiry.isoformat()}) - please double-check.",
+        return _result("INVALID",
+                       f"Entered expiry ({exp_typed.isoformat()}) doesn't match the date found on the document ({detected_expiry.isoformat()}) - please upload the document and enter its correct date.",
                        base, 0.75, extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True)
 
     # 5. typed values vs photo
@@ -661,9 +661,8 @@ def get_auto_verified_status(
         if status_str == "VERIFIED":
             return DocumentStatusEnum.VERIFIED
         elif status_str == "INVALID":
-            # The automatic check is not reliable enough to REJECT a document (it marked real RC / insurance INVALID); a doubtful
-            # one goes to a person in the Admin App review queue. Only a person sets INVALID.
-            return DocumentStatusEnum.NEEDS_REVIEW
+            # INVALID = wrong / non-original / unreadable / expired / date does not match. Different from "not verified yet".
+            return DocumentStatusEnum.INVALID
         elif status_str == "NEEDS_REVIEW":
             return DocumentStatusEnum.NEEDS_REVIEW
     except Exception as e:

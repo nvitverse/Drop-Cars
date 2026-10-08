@@ -73,7 +73,7 @@ export default function AdminAddCarModal({
   const [carType, setCarType] = useState('SEDAN_4_PLUS_1');
   const [carNumber, setCarNumber] = useState('');
   const [carYear, setCarYear] = useState('');
-  const [rcExpiry, setRcExpiry] = useState('');
+  const [registrationDate, setRegistrationDate] = useState(''); // RC has no expiry date, only a registration date
   const [insuranceExpiry, setInsuranceExpiry] = useState('');
   const [fcExpiry, setFcExpiry] = useState('');
 
@@ -82,6 +82,16 @@ export default function AdminAddCarModal({
   const [rcBack, setRcBack] = useState<DocState>({ url: null, name: null, loading: false });
   const [insuranceDoc, setInsuranceDoc] = useState<DocState>({ url: null, name: null, loading: false });
   const [fcDoc, setFcDoc] = useState<DocState>({ url: null, name: null, loading: false });
+  // A new vehicle (registered under 2 years ago) has no FC. Registration date decides; the make year is the fallback.
+  const fcApplies = (() => {
+    const reg = registrationDate.trim() ? new Date(registrationDate.trim()) : null;
+    if (reg && !isNaN(reg.getTime())) {
+      const freeUntil = new Date(reg); freeUntil.setFullYear(freeUntil.getFullYear() + 2);
+      return new Date() >= freeUntil;
+    }
+    const y = parseInt(carYear);
+    return !isNaN(y) && new Date().getFullYear() - y >= 2;
+  })();
   const [carPhoto, setCarPhoto] = useState<DocState>({ url: null, name: null, loading: false });
   const [permitDoc, setPermitDoc] = useState<DocState>({ url: null, name: null, loading: false });
 
@@ -125,7 +135,7 @@ export default function AdminAddCarModal({
     setCarType('SEDAN_4_PLUS_1');
     setCarNumber('');
     setCarYear('');
-    setRcExpiry('');
+    setRegistrationDate('');
     setInsuranceExpiry('');
     setFcExpiry('');
     setRcFront({ url: null, name: null, loading: false });
@@ -298,13 +308,13 @@ export default function AdminAddCarModal({
         car_number: carNumber.trim().toUpperCase().replace(/\s/g, ''),
         car_type: carType,
         year_of_the_car: carYear.trim() || undefined,
-        rc_expiry_date: rcExpiry.trim() || undefined,
+        registration_date: registrationDate.trim() || undefined,
         insurance_expiry_date: insuranceExpiry.trim() || undefined,
-        fc_expiry_date: fcExpiry.trim() || undefined,
+        fc_expiry_date: fcApplies ? (fcExpiry.trim() || undefined) : undefined,
         rc_front_img_url: rcFront.url || undefined,
         rc_back_img_url: rcBack.url || undefined,
         insurance_img_url: insuranceDoc.url || undefined,
-        fc_img_url: fcDoc.url || undefined,
+        fc_img_url: fcApplies ? (fcDoc.url || undefined) : undefined,
         car_img_url: carPhoto.url || undefined,
         permit_img_url: permitDoc.url || undefined,
       });
@@ -513,12 +523,41 @@ export default function AdminAddCarModal({
               </View>
             </View>
 
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: themeColors.text }]}>RC Registration Date</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', color: themeColors.text }]}
+                placeholder="YYYY-MM-DD (as printed on the RC)"
+                placeholderTextColor="#64748B"
+                value={registrationDate}
+                onChangeText={setRegistrationDate}
+              />
+            </View>
+
+            {fcApplies && (
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: themeColors.text }]}>FC Expiry</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', color: themeColors.text }]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#64748B"
+                  value={fcExpiry}
+                  onChangeText={setFcExpiry}
+                />
+              </View>
+            )}
+
             {/* Document Scans */}
             <Text style={styles.subSectionTitle}>Mandatory Vehicle Document Scans</Text>
             {renderDocUploadCard('RC Book (Front Side)', 'rc_front', rcFront, setRcFront, 'Registration Certificate Front with Owner & Engine No')}
             {renderDocUploadCard('RC Book (Back Side)', 'rc_back', rcBack, setRcBack, 'Registration Certificate Back with Tax & Hypothecation')}
             {renderDocUploadCard('Insurance Certificate', 'insurance', insuranceDoc, setInsuranceDoc, 'Valid Commercial / Comprehensive Insurance')}
-            {renderDocUploadCard('Fitness Certificate (FC)', 'fc_doc', fcDoc, setFcDoc, 'Commercial Transport Fitness Certificate')}
+            {fcApplies && renderDocUploadCard('Fitness Certificate (FC)', 'fc_doc', fcDoc, setFcDoc, 'Commercial Transport Fitness Certificate')}
+            {!fcApplies && (
+              <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 8 }}>
+                FC not needed - a new vehicle has no Fitness Certificate for its first 2 years after the registration date.
+              </Text>
+            )}
             {renderDocUploadCard('Car Exterior Photo', 'car_photo', carPhoto, setCarPhoto, 'Clear front 45° angle photo of vehicle with plate')}
           </ScrollView>
 

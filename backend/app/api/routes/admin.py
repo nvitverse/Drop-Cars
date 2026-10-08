@@ -7722,9 +7722,11 @@ class AdminAddCarToFleetPayload(BaseModel):
     car_type: str
     car_number: str
     year_of_the_car: Optional[str] = None
-    rc_expiry_date: Optional[str] = None
+    rc_expiry_date: Optional[str] = None      # ignored: an RC has no expiry date
+    registration_date: Optional[str] = None
     insurance_expiry_date: Optional[str] = None
     fc_expiry_date: Optional[str] = None
+    permit_expiry_date: Optional[str] = None
     car_status: Optional[str] = "ACTIVE"
     rc_front_img_url: Optional[str] = None
     rc_back_img_url: Optional[str] = None
@@ -7754,9 +7756,10 @@ def admin_add_car_to_fleet(
         car_type=payload.car_type.strip(),
         car_number=clean_car_num,
         year_of_the_car=payload.year_of_the_car or None,
-        rc_expiry_date=payload.rc_expiry_date or None,
+        registration_date=payload.registration_date or None,
         insurance_expiry_date=payload.insurance_expiry_date or None,
         fc_expiry_date=payload.fc_expiry_date or None,
+        permit_expiry_date=payload.permit_expiry_date or None,
         rc_front_img_url=payload.rc_front_img_url or None,
         rc_front_status=CarDocStatus.VERIFIED if payload.rc_front_img_url else CarDocStatus.PENDING,
         rc_back_img_url=payload.rc_back_img_url or None,

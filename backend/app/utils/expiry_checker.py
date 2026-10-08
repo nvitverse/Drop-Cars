@@ -48,14 +48,23 @@ def check_expiring_documents(db: Session, days_ahead: int = 15) -> Dict[str, Lis
                     "expiry_date": str(c.insurance_expiry_date),
                     "days_remaining": (c.insurance_expiry_date - today).days
                 })
-            # Check RC
-            if c.rc_expiry_date and today <= c.rc_expiry_date <= target_date:
+            # Permit (an RC has no expiry date; an FC only counts once the vehicle is old enough to need one)
+            if c.permit_expiry_date and today <= c.permit_expiry_date <= target_date:
                 expiring_cars.append({
                     "car_id": str(c.id),
                     "car_number": c.car_number,
-                    "document_type": "RC",
-                    "expiry_date": str(c.rc_expiry_date),
-                    "days_remaining": (c.rc_expiry_date - today).days
+                    "document_type": "Permit",
+                    "expiry_date": str(c.permit_expiry_date),
+                    "days_remaining": (c.permit_expiry_date - today).days
+                })
+            from app.crud.verification import fc_status_for_car
+            if c.fc_expiry_date and today <= c.fc_expiry_date <= target_date and fc_status_for_car(c, today)["required"]:
+                expiring_cars.append({
+                    "car_id": str(c.id),
+                    "car_number": c.car_number,
+                    "document_type": "FC",
+                    "expiry_date": str(c.fc_expiry_date),
+                    "days_remaining": (c.fc_expiry_date - today).days
                 })
     except Exception as e:
         print(f"Error querying car document expiries: {e}")

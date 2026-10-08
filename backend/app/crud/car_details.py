@@ -88,7 +88,7 @@ def create_car_details(db: Session, car_data: CarDetailsForm) -> CarDetails:
         car_img_url=None,       # Will be updated after GCS upload
         permit_img_url=None,    # Will be updated after GCS upload
         pollution_img_url=None, # Will be updated after GCS upload
-        rc_expiry_date=_parse_date(car_data.rc_expiry_date),
+        registration_date=_parse_date(getattr(car_data, 'registration_date', None)),
         insurance_expiry_date=_parse_date(car_data.insurance_expiry_date),
         fc_expiry_date=_parse_date(car_data.fc_expiry_date),
         permit_expiry_date=_parse_date(car_data.permit_expiry_date),

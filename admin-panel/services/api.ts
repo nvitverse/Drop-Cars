@@ -3190,7 +3190,7 @@ class ApiService {
     car_type: string;
     car_number: string;
     year_of_the_car?: string;
-    rc_expiry_date?: string;
+    registration_date?: string;
     insurance_expiry_date?: string;
     fc_expiry_date?: string;
     car_status?: string;

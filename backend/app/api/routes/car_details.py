@@ -37,7 +37,7 @@ def signup_car_details(
     rc_front_img: UploadFile = File(..., description="RC Front image file"),
     rc_back_img: UploadFile = File(..., description="RC Back image file"),
     insurance_img: UploadFile = File(..., description="Insurance image file"),
-    fc_img: UploadFile = File(..., description="FC image file"),
+    fc_img: Optional[UploadFile] = File(None, description="FC image file (not needed for a vehicle within 2 years of registration)"),
     car_img: UploadFile = File(..., description="Car front photo"),
     permit_img: UploadFile = File(..., description="Permit image file"),
     pollution_img: UploadFile = File(..., description="Pollution (PUC) certificate image file"),
@@ -61,6 +61,7 @@ def signup_car_details(
     }
     print("Car is going to checck")
     
+    image_files = {k: v for k, v in image_files.items() if v is not None}
     for field_name, image_file in image_files.items():
         if not image_file.content_type or not image_file.content_type.startswith('image/'):
             raise HTTPException(
@@ -249,7 +250,7 @@ def get_all_cars_document_status(
                 "status": car.rc_front_status.value if car.rc_front_status else "Pending",
                 "image_url": car.rc_front_img_url,
                 "updated_at": None,
-                **_expiry_fields(car.rc_expiry_date),
+                **_expiry_fields(None),   # an RC card has no expiry date
             }
         if car.rc_back_img_url:
             documents["rc_back"] = {
@@ -257,7 +258,7 @@ def get_all_cars_document_status(
                 "status": car.rc_back_status.value if car.rc_back_status else "Pending",
                 "image_url": car.rc_back_img_url,
                 "updated_at": None,
-                **_expiry_fields(car.rc_expiry_date),
+                **_expiry_fields(None),   # an RC card has no expiry date
             }
         if car.insurance_img_url:
             documents["insurance"] = {
@@ -543,10 +544,13 @@ def update_car_document(
         setattr(car, f"{document_type}_img_url", new_image_url)
         from app.crud.document_expiry import parse_expiry
         _exp = parse_expiry(expiry_date)
-        if _exp and document_type in ("rc_front", "rc_back"):
-            car.rc_expiry_date = _exp
-        elif _exp and document_type == "insurance":
+        # RC: no expiry date (its registration date is set separately); Insurance / FC / Permit each carry their own
+        if _exp and document_type == "insurance":
             car.insurance_expiry_date = _exp
+        elif _exp and document_type == "fc":
+            car.fc_expiry_date = _exp
+        elif _exp and document_type == "permit":
+            car.permit_expiry_date = _exp
         setattr(car, f"{document_type}_status", new_status) if document_type != "car" else setattr(car, f"{document_type}_img_status", new_status)
         db.commit()
         db.refresh(car)

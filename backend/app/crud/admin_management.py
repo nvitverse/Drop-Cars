@@ -1000,11 +1000,13 @@ def get_all_account_documents(db: Session, account_id: str, account_type: str) -
                 
                 for doc_type, doc_name, img_url, doc_status in car_doc_types:
                     if img_url:
-                        expiry = None
-                        if doc_type == "rc_front":
-                            expiry = car.rc_expiry_date
-                        elif doc_type == "insurance":
+                        expiry = None          # the RC has no expiry date
+                        if doc_type == "insurance":
                             expiry = car.insurance_expiry_date
+                        elif doc_type == "fc":
+                            expiry = car.fc_expiry_date
+                        elif doc_type == "permit":
+                            expiry = car.permit_expiry_date
                         car_documents.append({
                             "document_id": f"car_{car.id}_{doc_type}",
                             "document_type": doc_type,
@@ -1420,12 +1422,16 @@ def update_document_expiry_date(db: Session, document_id: str, expiry_date) -> d
         if not car:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Car not found with ID {car_id}")
 
-        if doc_type == "rc_front":
-            car.rc_expiry_date = expiry_date
+        if doc_type in ("rc_front", "rc_back"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An RC has no expiry date. Set the car's registration date instead.")
         elif doc_type == "insurance":
             car.insurance_expiry_date = expiry_date
+        elif doc_type == "fc":
+            car.fc_expiry_date = expiry_date
+        elif doc_type == "permit":
+            car.permit_expiry_date = expiry_date
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expiry date only applies to rc_front or insurance documents")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expiry date applies to insurance, fc or permit documents")
 
         db.commit()
         return {"document_id": document_id, "expiry_date": expiry_date.isoformat() if expiry_date else None}
