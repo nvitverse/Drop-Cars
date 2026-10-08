@@ -4,6 +4,13 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### RC registration date, FC only for vehicles 2+ years old, INVALID vs not-verified (Claude, 2026-10-09) - commit `0c9cce5`, NOT yet deployed (live is `f103d1f`, rev 00305)
+- The RC card has NO expiry date: `car_details.registration_date` (new column + startup ALTER) replaces `rc_expiry_date` everywhere (add-car in Driver + Admin, reminders, document list, expiry editor). `rc_expiry_date` stays in the table only so old rows load; nothing reads it.
+- A new vehicle has no FC for its first 2 years: `crud/verification.fc_status_for_car` (registration date + 2 years; model-year fallback). `fc_img` is optional on `POST /cardetails`; Driver/Admin add-car hide FC until it applies; an FC date/INVALID FC never blocks a vehicle that does not need one.
+- Status meaning (owner): VERIFIED = original, data matches, checked. INVALID = wrong/non-original/unreadable document, the typed date does not match the document, or it is expired. PENDING / NEEDS_REVIEW = "not verified yet". The gate blocks ONLY on expired or INVALID (never on not-verified): `is_car_verified`, `is_driver_verified`, messages name the exact problem (`car_document_problems`). The auto-verifier writes INVALID again (my 10-08 change that turned INVALID into NEEDS_REVIEW was wrong and is reverted) and a date mismatch is INVALID, not NEEDS_REVIEW.
+- Deploy the backend BEFORE publishing the Driver/Admin OTA: the old backend still requires `fc_img` and would reject a new vehicle's add-car.
+- Files: backend `models/car_details.py main.py schemas/car_details.py crud/{car_details,verification,document_expiry,admin_management}.py utils/{expiry_checker,document_verifier}.py api/routes/{car_details,admin,order_assignments}.py`, `tests/test_document_gate.py` (247 pass); driver-app `app/add-car.tsx services/auth/signupService.ts`; admin-panel `components/AdminAddCarModal.tsx services/api.ts`.
+
 ### Documents gate, IST times, duplicate pushes (Claude, 2026-10-08) - branch `deploy/merged-2026-10-06`, NOT yet deployed
 - A car may take bookings unless a required document (RC / Insurance / Permit) has EXPIRED; a driver unless the licence expired (`crud/verification.py`). The automatic document check never blocks any more and never writes INVALID (it goes to NEEDS_REVIEW for a person): owners were locked out of bookings because it marked real documents INVALID ("Verify Your Car First").
 - Driver App My Cars: the status word was drawn at size 20 and overflowed the tiles (`components/DocumentStatusIcon.tsx`); tiles now show a dot + a short plain label.
