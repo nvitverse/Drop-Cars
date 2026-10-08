@@ -113,6 +113,12 @@ interface Order {
   waiting_time?: number;
   toll_charge_update?: boolean;
   updated_toll_charges?: number;
+  toll_charges?: number;
+  include_toll?: boolean;
+  include_gst?: boolean;
+  gst_amount?: number;
+  total_booking_amount?: number;
+  end_date_time?: string;
   cost_per_km?: number;
   extra_cost_per_km?: number;
   driver_allowance?: number;
