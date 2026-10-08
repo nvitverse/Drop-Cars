@@ -4,7 +4,11 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
-### Document reasons, compulsory update popup, RC date in Admin documents (Claude, 2026-10-09) - NOT yet deployed (needs backend deploy, then Driver + Admin OTA)
+### Wallet mismatch on the Subscription screen + yearly subscribers missing from Trusted list (Claude, 2026-10-09)
+- Owner driving his own car (`CarDriver.is_owner_driver`): `/subscriptions/driver/status` and `/driver/subscribe` read the separate, always-empty driver wallet, so the Subscription screen said Rs 0 / "Insufficient" while the Wallet tab showed Rs 890. They now read and charge the OWNER wallet (`_owner_of_driver`) and buy the plan with `crud/billing.activate_plan_from_payment`; fees come from billing settings, not constants. Employee drivers keep the old driver-wallet path.
+- Admin App Fleet Accounts list: `is_trusted` was only staff override / driver Pro, so everyone who had paid the yearly fee earlier was not shown as Trusted. It now uses `VehicleOwnerDetails.tier == "PREFERRED"` (the one rule the posting gate and the tier filter use) and returns `trusted_via` (ADMIN / DRIVER_PRO / YEARLY / MONTHLY); badge shows it. `tests/test_trusted_list.py`.
+
+### Document reasons, compulsory update popup, RC date in Admin documents (Claude, 2026-10-09) - backend LIVE rev 00306 (7755ba8), Driver + Admin OTA follow
 - Every INVALID / waiting document now carries a plain-words reason + what to do (`crud/document_notes.py`, new `document_notes` TEXT column on car_details and car_driver, startup ALTER). `utils/document_verifier.get_auto_verification` returns (status, reason); the typed expiry date is now actually passed to the checker on add-car and on re-upload (it was never passed before, so "date does not match / expired" could not fire). Reasons are returned by `/cardetails/all-document-status`, the driver document-status routes and the update-document responses.
 - Driver App: My Cars shows a red box per rejected document ("Insurance: The date you entered ... does not match the date on the insurance (..). Enter the date printed on the document ..."), the upload popup shows the last reason at the top, an RC front upload asks the registration date, the date field has a hint and the popup scroll area is taller; after an upload the answer (accepted / why not) is shown straight away. FC tile only exists when an FC was uploaded.
 - Admin documents list: RC rows show/save the REGISTRATION date (label from `date_label`), no +1/+2 year chips for RC.

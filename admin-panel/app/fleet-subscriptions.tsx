@@ -470,7 +470,7 @@ export default function FleetSubscriptionsScreen() {
 
                     {fleet.is_trusted && (
                       <View style={[styles.badge, { backgroundColor: isDark ? '#312E8140' : '#EEF2FF', borderColor: isDark ? '#6366F170' : '#6366F1', marginTop: 4 }]}>
-                        <Text style={[styles.badgeText, { color: isDark ? '#C7D2FE' : '#4338CA' }]}>⭐ TRUSTED PARTNER</Text>
+                        <Text style={[styles.badgeText, { color: isDark ? '#C7D2FE' : '#4338CA' }]}>⭐ TRUSTED PARTNER{(fleet as any).trusted_via === 'YEARLY' ? ' · YEARLY' : (fleet as any).trusted_via === 'MONTHLY' ? ' · MONTHLY' : (fleet as any).trusted_via === 'ADMIN' ? ' · BY STAFF' : ''}</Text>
                       </View>
                     )}
                   </View>

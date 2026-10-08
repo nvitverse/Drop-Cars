@@ -187,6 +187,24 @@ def get_customer_subscription_status(db: Session = Depends(get_db), current_cust
     }
 
 
+def _owner_plan_prices(db: Session) -> dict:
+    """Fees of the owner's Trusted Partner plans - from the billing settings (Admin App), never hardcoded."""
+    from app.crud.billing import get_billing_settings
+    s = get_billing_settings(db)
+    base = get_driver_prices()
+    return {"MONTHLY": int(s["monthly_fee"]), "YEARLY": int(s["yearly_fee"]),
+            "yearly_offer_active": base["yearly_offer_active"], "yearly_offer_until": base["yearly_offer_until"]}
+
+
+def _owner_of_driver(db: Session, d):
+    """The owner account that holds the wallet when this driver login IS the owner driving his own car (is_owner_driver).
+    The Wallet tab shows THAT wallet, so the subscription must read and charge it too - before, this screen looked at the
+    separate (always empty) driver wallet and said "Insufficient wallet balance" to an owner holding Rs 890."""
+    if not getattr(d, "is_owner_driver", False):
+        return None
+    return db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == d.vehicle_owner_id).first()
+
+
 @router.post("/driver/subscribe")
 def subscribe_driver(payload: SubscribeRequest, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
     plan = payload.plan_type.upper()
@@ -199,6 +217,30 @@ def subscribe_driver(payload: SubscribeRequest, db: Session = Depends(get_db), c
     d = db.query(CarDriver).filter(CarDriver.id == current_driver.id).first()
     if not d:
         raise HTTPException(status_code=404, detail="Driver account not found")
+
+    owner = _owner_of_driver(db, d)
+    if owner is not None:
+        from app.crud.billing import activate_plan_from_payment
+        fee = _owner_plan_prices(db)[plan]
+        balance = owner.wallet_balance or 0
+        if balance < fee:
+            raise HTTPException(status_code=400, detail=f"Insufficient wallet balance. Plan requires ₹{fee}, current balance ₹{balance}")
+        if activate_plan_from_payment(db, d.vehicle_owner_id, plan) is None:
+            raise HTTPException(status_code=400, detail=f"You are already on the {plan.title()} plan")
+        db.refresh(owner)
+        return {
+            "success": True,
+            "message": f"Upgraded to the {plan} Trusted Partner plan!",
+            "tier": plan,
+            "expires_at": owner.billing_next_date.isoformat() if owner.billing_next_date else None,
+            "remaining_wallet_balance": owner.wallet_balance or 0,
+            "perks": [
+                "Priority Visibility on High-Value Outstation Trips",
+                "Subscriber-Only Deep Earnings Analytics",
+                "Empty-Return Route Priority Matching",
+                "Customizable Alert Notification Toggles",
+            ],
+        }
 
     price = driver_prices[plan]
     if (d.wallet_balance or 0) < price:
@@ -257,6 +299,19 @@ def get_driver_subscription_status(db: Session = Depends(get_db), current_driver
             "wallet_balance": 0,
             "expires_at": None,
             "pricing": pricing,
+        }
+
+    owner = _owner_of_driver(db, d)
+    if owner is not None:
+        # owner driving his own car: wallet + plan are the OWNER's (same numbers as the Wallet tab and the Admin App list)
+        active = owner.tier == "PREFERRED"
+        return {
+            "tier": (owner.subscription_type or "YEARLY") if active else "FREE",
+            "is_active": active,
+            "wallet_balance": owner.wallet_balance or 0,
+            "expires_at": owner.billing_next_date.isoformat() if (active and owner.billing_next_date) else None,
+            "auto_renew": owner.auto_renew_from_wallet,
+            "pricing": _owner_plan_prices(db),
         }
 
     now = datetime.now(timezone.utc)

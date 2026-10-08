@@ -130,7 +130,15 @@ def get_fleet_subscriptions(
             sub_status = "UNPAID"
             overdue_count += 1
 
-        is_trusted = bool(details.admin_trusted_override) or (details.driver_pro_trusted_until and details.driver_pro_trusted_until > now_utc)
+        # Trusted = the PREFERRED tier, the same single rule the posting gate and the Fleet Accounts filter use (VehicleOwnerDetails.tier):
+        # staff override, a live driver Pro plan, OR an ordinary paid subscription (yearly / monthly). The list used to count only the first
+        # two, so everyone who had paid the yearly fee before Trusted Partner existed was missing from it.
+        is_trusted = details.tier == "PREFERRED"
+        trusted_via = (
+            "ADMIN" if details.admin_trusted_override
+            else "DRIVER_PRO" if (details.driver_pro_trusted_until and details.driver_pro_trusted_until > now_utc)
+            else (details.subscription_type or "YEARLY") if is_trusted else None
+        )
         if is_trusted:
             trusted_count += 1
 
@@ -159,6 +167,7 @@ def get_fleet_subscriptions(
             "subscription_status": sub_status,
             "is_paid": sub_status == "PAID",
             "is_trusted": is_trusted,
+            "trusted_via": trusted_via,
             "admin_trusted_override": details.admin_trusted_override,
             "trusted_override_by": details.trusted_override_by,
             "trusted_override_reason": details.trusted_override_reason,
