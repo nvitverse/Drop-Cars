@@ -40,6 +40,7 @@ import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import DatePickButton from '@/components/DatePickButton';
 import Toast, { useToast } from '@/components/Toast';
 
 // The first one takes the money from the partner's own wallet (the server debits it in the same step). All others mean the money
@@ -94,6 +95,8 @@ export default function FleetSubscriptionsScreen() {
   const [payAmount, setPayAmount] = useState('199');
   const [payPlan, setPayPlan] = useState<'MONTHLY' | 'YEARLY' | 'CUSTOM'>('MONTHLY');
   const [payDurationDays, setPayDurationDays] = useState('30');
+  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const [payStartDate, setPayStartDate] = useState<string>(todayIso());   // the day the partner subscribed
   const [markTrusted, setMarkTrusted] = useState(true);
   const [payNotes, setPayNotes] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
@@ -154,6 +157,7 @@ export default function FleetSubscriptionsScreen() {
     setPayAmount(planFee > 0 ? String(planFee) : '');
     setPayPlan(fleet.subscription_type === 'YEARLY' ? 'YEARLY' : 'MONTHLY');
     setPayDurationDays(fleet.subscription_type === 'YEARLY' ? '365' : '30');
+    setPayStartDate(todayIso());
     setMarkTrusted(true);
     setPayNotes('');
     setPayModalVisible(true);
@@ -224,6 +228,10 @@ export default function FleetSubscriptionsScreen() {
       Alert.alert('Payment Channel Required', 'Please specify where the payment was received.');
       return;
     }
+    if (payChannel === WALLET_CHANNEL && payStartDate && payStartDate < todayIso()) {
+      Alert.alert('Already paid earlier', 'This subscription started on an earlier day, so it was already paid. Choose how it was paid (UPI / bank / cash) - the wallet is not charged again.');
+      return;
+    }
     if (payChannel === WALLET_CHANNEL && Number(selectedFleet.wallet_balance || 0) < amountNum) {
       Alert.alert('Wallet is short', `Wallet has ₹${selectedFleet.wallet_balance || 0}, this needs ₹${amountNum}. Ask the partner to add money, or choose UPI / bank / cash if they paid outside.`);
       return;
@@ -236,7 +244,8 @@ export default function FleetSubscriptionsScreen() {
         payment_ref: payRef || undefined,
         amount: amountNum,
         plan_type: payPlan,
-        duration_days: parseInt(payDurationDays, 10) || (payPlan === 'YEARLY' ? 365 : 30),
+        duration_days: payPlan === 'YEARLY' ? 365 : 30,
+        start_date: payStartDate && payStartDate !== todayIso() ? payStartDate : undefined,
         mark_as_trusted: markTrusted,
         notes: payNotes || undefined,
       });
@@ -665,12 +674,11 @@ export default function FleetSubscriptionsScreen() {
               />
 
               {/* Plan Type */}
-              <Text style={[styles.fieldLabel, { color: textCol }]}>Subscription Plan Duration</Text>
+              <Text style={[styles.fieldLabel, { color: textCol }]}>Plan</Text>
               <View style={styles.planBtnRow}>
                 {[
-                  { plan: 'MONTHLY', days: '30', label: '1 Month (30d)' },
-                  { plan: 'YEARLY', days: '365', label: '1 Year (365d)' },
-                  { plan: 'CUSTOM', days: payDurationDays, label: 'Custom' },
+                  { plan: 'MONTHLY', days: '30', label: 'Monthly' },
+                  { plan: 'YEARLY', days: '365', label: 'Yearly' },
                 ].map((p) => {
                   const isSel = payPlan === p.plan;
                   return (
@@ -698,16 +706,28 @@ export default function FleetSubscriptionsScreen() {
                 })}
               </View>
 
-              {payPlan === 'CUSTOM' && (
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC', borderColor: borderCol, color: textCol, marginTop: 4 }]}
-                  placeholder="Number of days to extend"
-                  placeholderTextColor={subText}
-                  keyboardType="numeric"
-                  value={payDurationDays}
-                  onChangeText={setPayDurationDays}
-                />
-              )}
+              {/* The day the partner subscribed - the valid-until date is worked out from it (no "days left" to type) */}
+              <Text style={[styles.fieldLabel, { color: textCol, marginTop: 8 }]}>Subscribed on</Text>
+              <DatePickButton
+                value={payStartDate}
+                onChange={(d) => setPayStartDate(d > todayIso() ? todayIso() : d)}
+                title="Subscribed on"
+                style={[styles.input, { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC', borderColor: borderCol, justifyContent: 'center' }]}
+                textStyle={{ color: textCol, fontSize: 14 }}
+                placeholderColor={subText}
+              />
+              {(() => {
+                const days = payPlan === 'YEARLY' ? 365 : 30;
+                const base = payStartDate && payStartDate !== todayIso() ? new Date(`${payStartDate}T00:00:00`)
+                  : (selectedFleet?.billing_next_date && selectedFleet.days_remaining > 0 ? new Date(`${selectedFleet.billing_next_date}T00:00:00`) : new Date());
+                const until = new Date(base.getTime() + days * 86400000);
+                const lapsed = until.getTime() < Date.now();
+                return (
+                  <Text style={{ fontSize: 12, fontWeight: '700', marginBottom: 10, color: lapsed ? '#B91C1C' : '#047857' }}>
+                    Valid until {until.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}{lapsed ? '  (already over - the partner would need to renew)' : ''}
+                  </Text>
+                );
+              })()}
 
               {/* Mark as Trusted Partner */}
               <TouchableOpacity

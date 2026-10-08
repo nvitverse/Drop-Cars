@@ -65,14 +65,17 @@ def get_options(db: Session) -> dict:
 
 def apply_subscription_payment(db: Session, details: VehicleOwnerDetails, vehicle_owner_id, plan: str, amount: float,
                                channel: str, ref: Optional[str], notes: Optional[str], duration: Optional[int],
-                               mark_trusted: bool, admin_id, admin_username: str, admin_role: str = "Owner"):
+                               mark_trusted: bool, admin_id, admin_username: str, admin_role: str = "Owner", start_date=None):
     """Make the partner's plan paid and (optionally) Trusted, write the history row and the audit log. Does NOT commit.
     Returns the new end date."""
     from app.crud.admin_activity_log import log_admin_action
     today = date.today()
     now_utc = datetime.now(timezone.utc)
     duration = duration or PLAN_DAYS.get(plan, 30)
-    if details.billing_next_date and details.billing_next_date > today:
+    if start_date:
+        # an explicit "subscribed on" day: valid until = that day + the plan's period (no "days left" to work out by hand)
+        end_date = start_date + timedelta(days=duration)
+    elif details.billing_next_date and details.billing_next_date > today:
         end_date = details.billing_next_date + timedelta(days=duration)     # paid early: extend from the current end
     else:
         end_date = today + timedelta(days=duration)
@@ -92,7 +95,8 @@ def apply_subscription_payment(db: Session, details: VehicleOwnerDetails, vehicl
     details.billing_suspended_at = None
     details.billing_suspended_by = None
     details.billing_suspended_reason = None
-    if mark_trusted:
+    # a past 'subscribed on' day only RECORDS an existing plan: Trusted then follows the plan's dates (tier), not a permanent staff override
+    if mark_trusted and not (start_date and start_date < today):
         details.admin_trusted_override = True
         details.trusted_override_by = admin_username
         details.trusted_override_reason = f"Verified subscription payment via {clean_channel} (Ref: {clean_ref or 'Direct'})"
@@ -100,7 +104,7 @@ def apply_subscription_payment(db: Session, details: VehicleOwnerDetails, vehicl
 
     db.add(FleetSubscriptionHistory(
         id=uuid.uuid4(), vehicle_owner_id=vehicle_owner_id, event_type="MANUAL_PAYMENT", payment_channel=clean_channel,
-        payment_ref=clean_ref, amount=amount, plan_type=plan, duration_days=duration, period_start=today, period_end=end_date,
+        payment_ref=clean_ref, amount=amount, plan_type=plan, duration_days=duration, period_start=start_date or today, period_end=end_date,
         is_trusted=mark_trusted, reason=clean_notes, admin_id=admin_id, admin_username=admin_username, created_at=now_utc,
     ))
     log_admin_action(

@@ -26,6 +26,7 @@ class ManualPaymentRequest(BaseModel):
     duration_days: Optional[int] = Field(None, description="Days to extend: default 30 for MONTHLY, 365 for YEARLY")
     mark_as_trusted: bool = Field(True, description="Whether to grant/maintain Trusted Partner status")
     notes: Optional[str] = Field(None, description="Admin notes or remarks")
+    start_date: Optional[date] = Field(None, description="The day the partner subscribed (past date = record an existing subscription). The valid-until date is worked out from it and the plan - nobody types 'days left'. Blank = today / extend the current plan.")
 
 
 class PauseSubscriptionRequest(BaseModel):
@@ -275,11 +276,15 @@ def record_manual_subscription_payment(
     duration = payload.duration_days
     if not duration:
         duration = 365 if plan == "YEARLY" else 30
+    if payload.start_date and payload.start_date > today:
+        raise HTTPException(status_code=400, detail="The subscription start date cannot be in the future")
 
     # Paying from the partner's own WALLET: the amount is taken from the wallet in the same step (one ledger entry, one history row),
     # so "paid" and "Trusted" can never be set without the money really moving. Any other channel (UPI / bank / cash) means the money
     # arrived outside the app and staff only record it.
     from_wallet = payload.payment_channel.strip().lower().startswith("wallet")
+    if from_wallet and payload.start_date and payload.start_date < today:
+        raise HTTPException(status_code=400, detail="An earlier subscription was already paid for - choose how it was paid (UPI / bank / cash) instead of the wallet, so no money is taken again.")
     if from_wallet:
         from app.crud.wallet import debit_wallet, get_owner_balance
         amount_int = int(round(payload.amount))
@@ -294,6 +299,7 @@ def record_manual_subscription_payment(
     end_date = apply_subscription_payment(
         db, details, vehicle_owner_id, plan, payload.amount, payload.payment_channel, payload.payment_ref,
         payload.notes, duration, payload.mark_as_trusted, current_admin.id, admin_name, current_admin.role,
+        start_date=payload.start_date,
     )
     clean_channel = payload.payment_channel.strip()
     clean_ref = (payload.payment_ref or "").strip() or None

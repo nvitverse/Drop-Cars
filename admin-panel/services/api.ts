@@ -1561,6 +1561,7 @@ class ApiService {
     duration_days?: number;
     mark_as_trusted?: boolean;
     notes?: string;
+    start_date?: string;
   }): Promise<any> {
     return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/manual-payment`, {
       method: 'POST',
