@@ -54,17 +54,28 @@ def seed_default_brands(db: Session) -> int:
     n = 0
     for code, name, domain, tagline, color, prefix, default in DEFAULT_BRANDS:
         pol = billing_policies.defaults_for(code)
+        look = billing_policies.look_for(code)
         if code in have:
             b = have[code]                                   # a brand still holding the first short seeded text has never been edited: give it the full policy text
             for k, v in pol.items():
                 if billing_policies.is_old_seed(getattr(b, k) or "") or not (getattr(b, k) or "").strip():
                     setattr(b, k, v)
                     n += 1
+            # the first tagline / slogan were placeholders; swap them only while they are still exactly what was seeded (anything the Owner typed stays)
+            if (b.tagline or "") in billing_policies.OLD_TAGLINES.get(code, ()) or not (b.tagline or "").strip():
+                b.tagline = look["tagline"]
+                n += 1
+            if (b.footer_note or "") in billing_policies.OLD_SLOGANS or not (b.footer_note or "").strip():
+                b.footer_note = look["slogan"]
+                n += 1
+            if not (b.highlights or "").strip():
+                b.highlights = look["highlights"]
+                n += 1
             continue
         db.add(BillingBrand(
-            code=code, name=name, legal_name=name, tagline=tagline, domain=domain, phone="9043990439", whatsapp="919043990439",
+            code=code, name=name, legal_name=name, domain=domain, phone="9043990439", whatsapp="919043990439",
             email=f"support@{domain}", primary_color=color, invoice_prefix=prefix, estimate_prefix=f"{prefix}-EST",
-            footer_note="Thank you for travelling with us.", signatory="Authorised signatory", is_default=default, **pol,
+            tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], signatory="Authorised signatory", is_default=default, **pol,
         ))
         n += 1
     if n:
@@ -122,7 +133,7 @@ def estimate_lines(db: Session, p: Dict[str, Any]) -> Dict[str, Any]:
 def brand_dict(b: BillingBrand) -> Dict[str, Any]:
     cols = ["id", "code", "name", "legal_name", "tagline", "domain", "phone", "whatsapp", "email", "address", "state", "state_code", "gstin",
             "pan", "sac_code", "gst_rate", "gst_applies_to", "invoice_prefix", "estimate_prefix", "bank_account_name", "bank_name",
-            "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note",
+            "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights",
             "signatory", "primary_color", "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
     out = {c: getattr(b, c) for c in cols}
     out["id"] = str(b.id)

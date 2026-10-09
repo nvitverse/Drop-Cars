@@ -171,3 +171,25 @@ def test_legacy_manual_issue_endpoint_now_issues_through_the_new_engine(pg_sessi
     assert out["invoice_number"].count("/") == 2
     assert out["total_amount"] == 5400 + 270 + 400 + 300      # 5% GST on the km fare only
     assert out["balance_due"] == out["total_amount"] - 1000
+
+
+def test_brand_look_name_is_exact_tagline_slogan_and_qr(pg_session):
+    db = pg_session
+    svc.seed_default_brands(db)
+    arun = db.query(BillingBrand).filter(BillingBrand.code == "arunachala").first()
+    assert arun.name == "Arunachala Travels" and arun.tagline == "Dedicated to Spiritual Journeys" and "Girivalam" in arun.highlights
+    dc = db.query(BillingBrand).filter(BillingBrand.code == "dropcars").first()
+    assert dc.tagline == "Your Trusted One-Way Drop Taxi Service"
+    dc.tagline = "Typed by the owner"          # an edited tagline survives a re-seed
+    dc.upi_id = "dropcars@upi"
+    db.flush()
+    svc.seed_default_brands(db)
+    assert dc.tagline == "Typed by the owner"
+    est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(dc.id), "customer": {"name": "Ravi"}, "lines": LINES, "advance_requested": 1500,
+                                   "trip": {"pickup": "Chennai", "drop": "Madurai"}, "issue": True}, "Anitha", "9000011111")
+    s = svc.serialize(est, db)
+    html = render_document_html(s, public=True)
+    assert "Typed by the owner" in html and ">Drop Cars<" in html and "Tours &amp; Travels" not in html
+    assert "<svg" in html and "Scan to pay" in html                      # UPI QR present because the brand has a UPI id
+    assert dc.footer_note in html and "Prepared by" in html
+    assert render_document_pdf(s).startswith(b"%PDF")

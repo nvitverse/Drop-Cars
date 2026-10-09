@@ -44,7 +44,8 @@ class BillingBrand(Base):
     terms_invoice = Column(Text, nullable=True)
     terms_estimate = Column(Text, nullable=True)
     rules_text = Column(Text, nullable=True)                                # rules and regulations: cancellation, waiting, night, hill ...
-    footer_note = Column(String, nullable=True)
+    footer_note = Column(String, nullable=True)                             # the slogan printed at the bottom of every document
+    highlights = Column(Text, nullable=True)                                # short selling points for the header strip, one per line
     signatory = Column(String, nullable=True)
     primary_color = Column(String, nullable=True, server_default="#0EA5E9")
     estimate_valid_days = Column(Integer, nullable=False, server_default="7")

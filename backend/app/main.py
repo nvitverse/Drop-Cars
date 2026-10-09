@@ -1503,6 +1503,7 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_expiry_date DATE'))
         db.execute(text('ALTER TABLE IF EXISTS billing_documents ADD COLUMN IF NOT EXISTS created_by_phone VARCHAR'))
+        db.execute(text('ALTER TABLE IF EXISTS billing_brands ADD COLUMN IF NOT EXISTS highlights TEXT'))
         db.commit()
         from app.crud.billing_docs import seed_default_brands
         _seeded = seed_default_brands(db)

@@ -148,3 +148,34 @@ def arunachala_packages() -> List[Dict[str, Any]]:
          "params": {"amount": 0, "days": 2, "itinerary": ["Pickup", "Pondicherry beach and Auroville", "Night stay (not included)", "Mahabalipuram shore temple", "Drop"],
                     "includes": ["AC vehicle", "driver bata", "toll", "parking", "fuel"], "excludes": ["Hotel", "food", "entry tickets"]}},
     ]
+
+
+# ---------------------------------------------------------------- the look of each brand: tagline under the name, header highlights, bottom slogan
+# Only the STARTING text. The Owner edits all of it in the Admin App (Invoices > Brands > Details) and it prints exactly as typed.
+LOOK = {
+    "dropcars": ("Your Trusted One-Way Drop Taxi Service", "Safe journeys. Honest fares. Every single time.",
+                 "Verified drivers\nTransparent fares\n24x7 support\nClean, well-maintained cabs"),
+    "24droptaxi": ("One-Way & Outstation Cabs, Made Easy", "Book once. Reach on time.",
+                   "Pay only for the distance\nVerified drivers\n24x7 support"),
+    "tatataxi": ("Your Reliable Outstation Cab Partner", "Travel far. Travel with confidence.",
+                 "Experienced drivers\nWell-kept fleet\nClear, upfront pricing"),
+    "tatacalltaxi": ("City & Outstation Cabs, One Call Away", "One call. One cab. Right on time.",
+                     "Quick pickups\nVerified drivers\n24x7 support"),
+    "mukiltravels": ("Tour & Travel Packages, Planned with Care", "Good places are better with good company.",
+                     "Customised tour packages\nFamily-friendly vehicles\nExperienced drivers"),
+    "yellowboard": ("Commercial Fleet Cabs You Can Count On", "Dependable rides. Every day.",
+                    "Commercial permit vehicles\nProfessional drivers\nOn-time service"),
+    "arunachala": ("Dedicated to Spiritual Journeys", "Your journey to the sacred begins here.",
+                   "Temple tours & Girivalam trips\nTempo Traveller & Force Urbania specialists\nExperienced local drivers\nComfortable family travel"),
+}
+OLD_TAGLINES = {
+    "dropcars": ("Standard & Premium Taxis",), "24droptaxi": ("One Way & Outstation Cabs",), "tatataxi": ("Reliable Outstation Fleet",),
+    "tatacalltaxi": ("City & Outstation Cabs",), "mukiltravels": ("Versatile Tour & Travel Packages",), "yellowboard": ("Commercial Fleet Cabs",),
+    "arunachala": ("Tempo Traveller & Force Urbania Specialist",),
+}
+OLD_SLOGANS = ("Thank you for travelling with us.",)
+
+
+def look_for(code: str) -> Dict[str, str]:
+    t, s, h = LOOK.get((code or "").lower(), ("", "Thank you for travelling with us.", ""))
+    return {"tagline": t, "slogan": s, "highlights": h}

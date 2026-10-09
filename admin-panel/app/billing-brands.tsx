@@ -207,10 +207,15 @@ export default function BillingBrands() {
 
         {tab === 'details' && (
           <View style={card}>
+            <View style={s.hint}><Text style={{ color: c.textSecondary, fontSize: 11.5 }}>
+              The top of every estimate and invoice prints exactly what you type here: the NAME (nothing is added to it), the line under it, the highlights, and the slogan at the bottom. Change any of it whenever you like.
+            </Text></View>
             {field('name', 'Name printed on the document (big)')}
+            {field('tagline', 'Line under the name (e.g. Dedicated to Spiritual Journeys)')}
+            {field('highlights', 'Highlights strip - one short point per line', { multiline: true })}
+            {field('footer_note', 'Slogan at the bottom of the document')}
             {!sel.id && field('code', 'Short code (letters only, cannot change later)', { placeholder: 'e.g. dropcars' })}
             {field('legal_name', 'Registered business name (owner of the GSTIN)')}
-            {field('tagline', 'Tagline')}
             {field('domain', 'Website')}
             {field('phone', 'Phone', { keyboard: 'phone-pad' })}
             {field('whatsapp', 'WhatsApp number (with 91)', { keyboard: 'phone-pad' })}
@@ -222,7 +227,6 @@ export default function BillingBrands() {
             </View>
             {field('primary_color', 'Colour code (#RRGGBB)', { caps: true })}
             {field('signatory', 'Signatory text')}
-            {field('footer_note', 'Footer line')}
             <View style={s.switchRow}><Text style={{ color: c.text }}>Default brand</Text><Switch value={!!sel.is_default} onValueChange={(v) => set('is_default', v)} /></View>
             <View style={s.switchRow}><Text style={{ color: c.text }}>Active (shown when making documents)</Text><Switch value={sel.is_active !== false} onValueChange={(v) => set('is_active', v)} /></View>
           </View>
@@ -420,6 +424,7 @@ const s = StyleSheet.create({
   tab: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
   saveBtn: { borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, minWidth: 64, alignItems: 'center' },
   warn: { backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10 },
+  hint: { backgroundColor: '#E0F2FE33', borderRadius: 8, padding: 8, marginBottom: 8 },
   swatch: { width: 30, height: 30, borderRadius: 15 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, paddingVertical: 11, paddingHorizontal: 16 },
