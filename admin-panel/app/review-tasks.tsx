@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -85,8 +86,8 @@ export default function ReviewTasksScreen() {
       `உங்கள் நல் ஆதரவுக்கு மிக்க நன்றி!\n- Drop Cars Customer Care`
     );
     const waUrl = `https://wa.me/${phoneWithCountry}?text=${msg}`;
-    Linking.openURL(waUrl).catch(() => {
-      Alert.alert('Error', 'Unable to open WhatsApp on this device');
+    openWaUrl(waUrl).then((ok) => {
+      if (!ok) Alert.alert('Error', 'Unable to open WhatsApp on this device');
     });
   };
 

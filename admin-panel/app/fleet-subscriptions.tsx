@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -175,7 +176,7 @@ export default function FleetSubscriptionsScreen() {
       const res = await apiService.createFleetPaymentLink(selectedFleet.id, { plan_type: payPlan, amount: amountNum > 0 ? amountNum : undefined });
       setLinkInfo(res);
       if (res.whatsapp_url) {
-        Linking.openURL(res.whatsapp_url).catch(() => Share.share({ message: res.message }));
+        openWaUrl(res.whatsapp_url).then((ok) => { if (!ok) Share.share({ message: res.message }); });
       } else {
         await Share.share({ message: res.message });
       }
@@ -759,7 +760,7 @@ export default function FleetSubscriptionsScreen() {
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#047857' }}>Link created: ₹{linkInfo.amount} {String(linkInfo.plan).toLowerCase()} plan</Text>
                   <Text selectable style={{ fontSize: 12, color: textCol, marginVertical: 6 }}>{linkInfo.short_url}</Text>
                   <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
-                    <TouchableOpacity onPress={() => (linkInfo.whatsapp_url ? Linking.openURL(linkInfo.whatsapp_url) : Share.share({ message: linkInfo.message }))} style={[styles.planBtn, { flex: 1.3, backgroundColor: '#25D366', borderColor: '#25D366', paddingVertical: 10 }]}>
+                    <TouchableOpacity onPress={() => (linkInfo.whatsapp_url ? openWaUrl(linkInfo.whatsapp_url) : Share.share({ message: linkInfo.message }))} style={[styles.planBtn, { flex: 1.3, backgroundColor: '#25D366', borderColor: '#25D366', paddingVertical: 10 }]}>
                       <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' }}>Send on WhatsApp</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => Share.share({ message: linkInfo.message })} style={[styles.planBtn, { flex: 0.7, backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: borderCol, paddingVertical: 10 }]}>

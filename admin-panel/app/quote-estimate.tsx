@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -685,6 +686,13 @@ ${calculationBreakdown.tollEstimate > 0 ? `• Standard Toll Allowance: ₹${cal
 • 20% Booking Advance: ₹${calculationBreakdown.advanceAmount.toLocaleString('en-IN')}
 • Balance on Trip Completion: ₹${calculationBreakdown.balancePayable.toLocaleString('en-IN')}
 
+📏 *Km Limit:* This fare covers ${calculationBreakdown.billableKm} KM. Extra KM beyond this is charged at ₹${calculationBreakdown.ratePerKm} per KM.
+
+✅ *Included:* Fuel & vehicle maintenance · Verified driver · Driver allowance (bata)${calculationBreakdown.tollEstimate > 0 ? ' · Toll allowance' : ''}
+❌ *Not included (paid on actuals):* Parking · Waiting charges after the free waiting time · Night driving allowance (10 PM – 5 AM)${calculationBreakdown.tollEstimate > 0 ? ' · State permit (if any)' : ' · Toll & state permit'}
+
+ℹ️ This estimate is valid for 7 days. The final fare is on the actual km driven; a route change or extra stops can change it.
+
 🔗 *Instant Online Booking & Confirmation:*
 ${confirmationUrl}
 
@@ -701,11 +709,8 @@ Website: https://${selectedBrand.domain}`;
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 
     try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen || Platform.OS === 'web') {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('WhatsApp Error', 'WhatsApp is not installed on this device.');
+      if (!(await openWaUrl(url))) {
+        Alert.alert('WhatsApp Error', 'Could not open WhatsApp on this device.');
       }
     } catch {
       if (Platform.OS === 'web') {

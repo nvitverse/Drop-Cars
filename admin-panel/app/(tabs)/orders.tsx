@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import { useRememberedCounts } from '@/hooks/useRememberedCounts';
 import React, { useState, useEffect } from 'react';
 import {
@@ -2278,7 +2279,7 @@ export default function OrdersScreen() {
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>Call</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => Linking.openURL(`https://wa.me/${selectedOrder.customer_number.replace(/\D/g, '')}`)}
+                      onPress={() => openWaUrl(`https://wa.me/${selectedOrder.customer_number.replace(/\D/g, '')}`)}
                       style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
                       <MessageSquare size={12} color="#059669" />
@@ -2329,7 +2330,7 @@ export default function OrdersScreen() {
                               <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#2563EB' }}>Call</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                              onPress={() => Linking.openURL(`https://wa.me/${(selectedOrder.assigned_driver?.primary_number || '').replace(/\D/g, '')}`)}
+                              onPress={() => openWaUrl(`https://wa.me/${(selectedOrder.assigned_driver?.primary_number || '').replace(/\D/g, '')}`)}
                               style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                             >
                               <MessageSquare size={11} color="#059669" />
@@ -4469,7 +4470,7 @@ export default function OrdersScreen() {
                     style={{ flex: 1, backgroundColor: '#25D366', paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                     onPress={() => {
                       const msg = `*Drop Cars Trip OTP*\nBooking #${activeOrder?.id}\nRoute: ${getLocationString(activeOrder?.pickup_drop_location)}\n🔑 *Start OTP*: ${startOtp}\n🔑 *End OTP*: ${endOtp}`;
-                      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+                      openWaUrl(`https://wa.me/?text=${encodeURIComponent(msg)}`);
                     }}
                   >
                     <Share2 size={16} color="#FFFFFF" />
@@ -4627,7 +4628,7 @@ export default function OrdersScreen() {
               style={{ backgroundColor: '#25D366', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14 }}
               onPress={() => {
                 const msg = `*Drop Cars - External Booking Move*\nBooking #${moveModalOrder?.id}\nCustomer: ${getCustomerDisplayName(moveModalOrder!)}\nPhone: ${moveModalOrder?.customer_number || 'N/A'}\nRoute: ${getLocationString(moveModalOrder?.pickup_drop_location)}\nCar: ${moveModalOrder?.car_type || 'Sedan'}\nFare: ₹${moveModalOrder?.vendor_price || moveModalOrder?.estimated_price || 0}\nMoved To Platform: ${movePlatform}\n\nDispatch details & confirmation: https://dropcars.in`;
-                Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+                openWaUrl(`https://wa.me/?text=${encodeURIComponent(msg)}`);
               }}
             >
               <Share2 size={16} color="#FFFFFF" />

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -139,7 +140,7 @@ export default function FindDriverScreen() {
   };
 
   const call = (p?: string) => p && Linking.openURL(`tel:${p}`);
-  const whatsapp = (p?: string) => p && Linking.openURL(`https://wa.me/91${String(p).replace(/\D/g, '').slice(-10)}`);
+  const whatsapp = (p?: string) => p && openWaUrl(`https://wa.me/91${String(p).replace(/\D/g, '').slice(-10)}`);
   const openGps = (lat: number, lng: number) => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
 
   const renderDetail = () => {

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -1575,7 +1576,7 @@ export default function CreateBookingScreen() {
         distanceKm: Number(minKm) || Number(fare?.total_km) || undefined,
       });
 
-      Linking.openURL(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
+      openWaUrl(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
     };
 
     return (

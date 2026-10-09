@@ -9,7 +9,7 @@ export interface BillingBrand {
   whatsapp?: string | null; email?: string | null; address?: string | null; state?: string | null; state_code?: string | null; gstin?: string | null;
   pan?: string | null; sac_code?: string | null; gst_rate: number; gst_applies_to: 'KM_FARE' | 'ALL'; invoice_prefix: string; estimate_prefix: string;
   bank_account_name?: string | null; bank_name?: string | null; bank_account_number?: string | null; bank_ifsc?: string | null; bank_branch?: string | null;
-  upi_id?: string | null; terms_invoice?: string | null; terms_estimate?: string | null; rules_text?: string | null; footer_note?: string | null; highlights?: string | null; secondary_color?: string | null; font_style?: 'SANS' | 'SERIF' | null;
+  upi_id?: string | null; terms_invoice?: string | null; terms_estimate?: string | null; rules_text?: string | null; footer_note?: string | null; highlights?: string | null; includes_text?: string | null; excludes_text?: string | null; secondary_color?: string | null; font_style?: 'SANS' | 'SERIF' | null;
   signatory?: string | null; primary_color?: string | null; estimate_valid_days: number; advance_percent: number; payment_links_enabled: boolean;
   is_default: boolean; is_active: boolean;
 }
@@ -63,7 +63,7 @@ export const billingApi = {
   options: (): Promise<any> => apiService.makeRequest('/admin/billing/options'),
   prefill: (ref: string, brandId?: string): Promise<any> =>
     apiService.makeRequest(`/admin/billing/prefill?ref=${encodeURIComponent(ref)}${brandId ? `&brand_id=${brandId}` : ''}`),
-  fareLines: (b: { trip_type: string; km: number; rate_per_km: number; extra_rate_per_km?: number; bata_per_day?: number; days?: number; adjust?: Record<string, number> }): Promise<{ lines: BillingLine[]; notes?: string[] }> =>
+  fareLines: (b: { trip_type: string; km: number; rate_per_km: number; extra_rate_per_km?: number; bata_per_day?: number; days?: number; adjust?: Record<string, number> }): Promise<{ lines: BillingLine[]; notes?: string[]; meta?: Record<string, any> }> =>
     apiService.makeRequest('/admin/billing/fare-lines', j(b)),
   calc: (b: any): Promise<BillingTotals> => apiService.makeRequest('/admin/billing/calc', j(b)),
   rateCards: (brandId?: string, includeInactive = false): Promise<RateCard[]> =>

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import RefreshFab from '@/components/RefreshFab';
 import FreshRefreshControl from '@/components/FreshRefreshControl';
 import React, { useState, useEffect } from 'react';
@@ -223,7 +224,7 @@ export default function MyDriversScreen() {
     if (!phone) return;
     const clean = phone.replace(/[^0-9]/g, '');
     const num = clean.startsWith('91') ? clean : `91${clean}`;
-    Linking.openURL(`https://wa.me/${num}`);
+    openWaUrl(`https://wa.me/${num}`);
   };
 
   const getStatusColor = (status: string) => {

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -548,7 +549,7 @@ export default function FleetOwnerDetailScreen() {
       `\n_Generated on ${new Date().toLocaleDateString('en-IN')}_ - Drop Cars Head Office`;
 
     const phone = owner.primary_number.replace(/\D/g, '').slice(-10);
-    Linking.openURL(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`);
+    openWaUrl(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`);
   };
 
   const openDocuments = () => {
@@ -717,7 +718,7 @@ export default function FleetOwnerDetailScreen() {
                 if (owner.primary_number) {
                   const cleanPhone = owner.primary_number.replace(/[^\d]/g, '');
                   const fullPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-                  Linking.openURL(`https://wa.me/${fullPhone}`);
+                  openWaUrl(`https://wa.me/${fullPhone}`);
                 }
               }}
             >

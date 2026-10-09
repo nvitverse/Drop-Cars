@@ -62,14 +62,20 @@ def seed_default_brands(db: Session) -> int:
                     setattr(b, k, v)
                     n += 1
             # the first tagline / slogan were placeholders; swap them only while they are still exactly what was seeded (anything the Owner typed stays)
-            if (b.tagline or "") in billing_policies.OLD_TAGLINES.get(code, ()) or not (b.tagline or "").strip():
+            if (b.tagline or "") in billing_policies.OLD_TAGLINES.get(code, ()) or b.tagline is None:
                 b.tagline = look["tagline"]
                 n += 1
-            if (b.footer_note or "") in billing_policies.OLD_SLOGANS or not (b.footer_note or "").strip():
+            if (b.footer_note or "") in billing_policies.OLD_SLOGANS or b.footer_note is None:
                 b.footer_note = look["slogan"]
                 n += 1
-            if not (b.highlights or "").strip() or (b.highlights or "").strip() in billing_policies.OLD_HIGHLIGHTS:
+            if b.highlights is None or (b.highlights or "").strip() in billing_policies.OLD_HIGHLIGHTS:
                 b.highlights = look["highlights"]
+                n += 1
+            if b.includes_text is None:                      # NULL = never set; an empty string means the Owner cleared it on purpose, so that stays
+                b.includes_text = billing_policies.STD_INCLUDES
+                n += 1
+            if b.excludes_text is None:
+                b.excludes_text = billing_policies.STD_EXCLUDES
                 n += 1
             style = billing_policies.STYLE.get(code)
             if style:                                        # the brand's own website colours / type - only over the colours first seeded
@@ -91,7 +97,8 @@ def seed_default_brands(db: Session) -> int:
         db.add(BillingBrand(
             code=code, name=name, legal_name=name, domain=domain, phone="9043990439", whatsapp="919043990439",
             email=f"support@{domain}", primary_color=color, invoice_prefix=prefix, estimate_prefix=f"{prefix}-EST",
-            tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], **(billing_policies.STYLE.get(code) and
+            tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], includes_text=billing_policies.STD_INCLUDES,
+            excludes_text=billing_policies.STD_EXCLUDES, **(billing_policies.STYLE.get(code) and
             {"primary_color": billing_policies.STYLE[code]["primary"], "secondary_color": billing_policies.STYLE[code]["secondary"], "font_style": billing_policies.STYLE[code]["font"]} or {}), signatory="Authorised signatory", is_default=default, **pol,
         ))
         n += 1
@@ -158,7 +165,7 @@ def estimate_lines(db: Session, p: Dict[str, Any]) -> Dict[str, Any]:
 def brand_dict(b: BillingBrand) -> Dict[str, Any]:
     cols = ["id", "code", "name", "legal_name", "tagline", "domain", "phone", "whatsapp", "email", "address", "state", "state_code", "gstin",
             "pan", "sac_code", "gst_rate", "gst_applies_to", "invoice_prefix", "estimate_prefix", "bank_account_name", "bank_name",
-            "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights",
+            "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights", "includes_text", "excludes_text",
             "signatory", "primary_color", "secondary_color", "font_style", "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
     out = {c: getattr(b, c) for c in cols}
     out["id"] = str(b.id)
@@ -320,10 +327,18 @@ def prefill_from_booking(db: Session, ref: str, brand: Optional[BillingBrand] = 
             d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
             c = db.query(CarDetails).filter(CarDetails.id == a.car_id).first() if a.car_id else None
             out["trip"]["driver_name"] = d.full_name if d else None
+            out["trip"]["driver_phone"] = (getattr(d, "primary_number", None) or getattr(d, "phone", None)) if d else None
             out["trip"]["vehicle_number"] = c.car_number if c else None
+            out["trip"]["vehicle_name"] = c.car_name if c else None
         if getattr(order, "gst_included", False) and int(order.gst_amount or 0) > 0:
             out["gst"] = {"mode": "INCLUDED", "override": int(order.gst_amount)}      # the booking's price already contains this GST
         out["status_hint"] = str(getattr(order.trip_status, "value", order.trip_status) or "")
+        import re as _re
+        for l in out["lines"]:                                  # "Distance (296 km x Rs 15)" -> the km the fare covers and the rate beyond it
+            m = _re.match(r"^Distance \((\d+(?:\.\d+)?) km x Rs ([\d.]+)\)", str(l.get("label") or ""))
+            if m:
+                out["trip"]["km_limit"], out["trip"]["extra_km_rate"] = m.group(1), m.group(2)
+                break
     else:
         from app.models.customer_booking_request import CustomerBookingRequest as R
         pick = lambda f: (getattr(cb, "admin_" + f, None) if getattr(cb, "admin_" + f, None) is not None else getattr(cb, "quoted_" + f, 0)) or 0
@@ -338,7 +353,7 @@ def prefill_from_booking(db: Session, ref: str, brand: Optional[BillingBrand] = 
         loc = cb.pickup_drop_location or {}
         keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0) if isinstance(loc, dict) else []
         out["trip"] = {"pickup": loc.get(keys[0]) if keys else None, "drop": loc.get(keys[-1]) if len(keys) > 1 else None, "trip_type": cb.trip_type,
-                       "vehicle": str(cb.car_type or "").replace("_", " ").title(), "km": km,
+                       "vehicle": str(cb.car_type or "").replace("_", " ").title(), "km": km, "km_limit": km or None, "extra_km_rate": rate or None,
                        "start_at": cb.start_date_time.astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%d %b %Y, %I:%M %p") if cb.start_date_time else None}
         out["customer"] = {"name": cb.customer_name, "phone": cb.customer_number, "email": getattr(cb, "customer_email", None)}
         adv = int(getattr(cb, "advance_paid", 0) or getattr(cb, "advance_amount", 0) or 0)

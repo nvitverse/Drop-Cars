@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -98,11 +99,7 @@ export default function EmergencyBidsScreen() {
 _Please reply with Driver Name & Vehicle Number to confirm this trip immediately._`;
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     try {
-      if (Platform.OS === 'web') {
-        window.open(url, '_blank');
-      } else {
-        await Linking.openURL(url);
-      }
+      await openWaUrl(url);
     } catch {
       Alert.alert('Error', 'Unable to launch WhatsApp.');
     }

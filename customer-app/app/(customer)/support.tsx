@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -108,11 +109,11 @@ export default function SupportScreen() {
   ]);
 
   const makeCall = () => {
-    Linking.openURL('tel:9876543210');
+    Linking.openURL('tel:7200217986');
   };
 
   const openWhatsApp = () => {
-    Linking.openURL('https://wa.me/919876543210?text=Hello%20Drop%20Cars%20Support,%20I%20need%20assistance%20with%20my%20taxi%20booking.');
+    openWaUrl('https://wa.me/917200217986?text=Hello%20Drop%20Cars%20Support,%20I%20need%20assistance%20with%20my%20taxi%20booking.');
   };
 
   const handleRequestCallback = () => {

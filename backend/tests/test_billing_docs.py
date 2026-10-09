@@ -153,7 +153,7 @@ def test_package_details_print_on_the_document(pg_session):
     r = svc.estimate_lines(db, {"method": "PACKAGE", "params": {"itinerary": ["Pickup", "Temple"], "includes": ["AC vehicle"], "excludes": ["Hotel"], "days": 2}, "amount": 9000, "name": "Girivalam"})
     est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(b.id), "lines": r["lines"], "trip": {"package": r["meta"]["package"]}, "issue": True}, "t")
     s = svc.serialize(est, db)
-    assert "Itinerary" in render_document_html(s) and "Hotel" in render_document_html(s)
+    assert "Plan - Girivalam" in render_document_html(s) and "Hotel" in render_document_html(s) and "AC vehicle" in render_document_html(s)
     assert render_document_pdf(s).startswith(b"%PDF")
 
 
@@ -206,8 +206,50 @@ def test_estimate_follows_the_website_model_and_arunachala_uses_its_own_style(pg
                                              {"label": "Toll", "amount": 0, "included": False}, {"label": "Parking", "amount": 0, "included": False}],
                                    "advance_requested": 800, "trip": {"pickup": "Chennai", "drop": "Madurai"}, "issue": True}, "Anitha")
     html = render_document_html(svc.serialize(est, db), public=True)
-    assert "Grand Total (incl. GST)" in html and "Advance Required (" in html and "Includes" in html and "Excludes" in html
+    assert "Grand Total (incl. GST)" in html and "Advance Required (" in html and "What's included" in html and "Not included / extra" in html
     assert "Driver allowance" in html and "Toll" in html
     assert "Cormorant Garamond" in html and "#C24A1E" in html and "--g:#C8A45A" in html           # the website's ember + gold + serif
     assert "temple" not in html.lower()
     assert render_document_pdf(svc.serialize(est, db)).startswith(b"%PDF")
+
+
+def test_document_has_links_km_limit_extra_km_and_standard_lists(pg_session):
+    db = pg_session
+    _brand(db)
+    dc = db.query(BillingBrand).filter(BillingBrand.code == "dropcars").first()
+    dc.whatsapp = "919043990439"
+    dc.domain = "dropcars.in"
+    db.flush()
+    est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(dc.id), "customer": {"name": "Ravi", "phone": "9876543210", "email": "r@x.in"},
+                                   "lines": [{"label": "Km fare (296 km x Rs 15)", "amount": 4440, "kind": "FARE"}, {"label": "Driver allowance", "amount": 400, "kind": "CHARGE"},
+                                             {"label": "Toll", "amount": 376, "kind": "CHARGE"}],
+                                   "trip": {"pickup": "Chennai Airport", "drop": "Dharmapuri", "km": 296, "km_limit": 296, "extra_km_rate": 15, "trip_type": "One Way"},
+                                   "advance_requested": 1000, "issue": True}, "Anitha", "9000011111")
+    s = svc.serialize(est, db)
+    html = render_document_html(s, public=True, links={"pdf": "tok/pdf"})
+    assert "Up to 296 km" in html and "Extra km" in html and "15 per km beyond 296 km" in html            # km limit + extra km rate never missing
+    assert "Parking charges" in html and "Waiting charges" in html                                       # the brand's standard exclusions
+    assert "Toll &amp; state permit" not in html                                                          # hidden: toll is already in the bill
+    assert "tel:+919876543210" in html and "mailto:r@x.in" in html and "google.com/maps/dir" in html and "wa.me/919043990439?text=" in html
+    assert "Confirm on WhatsApp" in html and "tok/pdf" in html and "Customer acknowledgement" in html
+    assert "Km fare" in html and "296 km × ₹15" in html                                                   # item and details split like the website's quote
+    inv = svc.convert_estimate(db, est, "Meena")
+    h2 = render_document_html(svc.serialize(inv, db))
+    assert ">Qty<" in h2 and ">296 km<" in h2 and "₹15" in h2                                            # invoice keeps the # / Qty / Rate / Amount layout
+    assert render_document_pdf(svc.serialize(est, db)).startswith(b"%PDF") and render_document_pdf(svc.serialize(inv, db)).startswith(b"%PDF")
+
+
+def test_share_message_carries_km_limit_included_and_excluded(pg_session):
+    from types import SimpleNamespace
+    from app.api.routes import billing_docs as routes
+    db = pg_session
+    _brand(db)
+    dc = db.query(BillingBrand).filter(BillingBrand.code == "dropcars").first()
+    est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(dc.id), "customer": {"name": "Ravi", "phone": "9876543210"},
+                                   "lines": [{"label": "Km fare (300 km x Rs 12)", "amount": 3600, "kind": "FARE"}, {"label": "Driver bata", "amount": 300, "kind": "CHARGE"}],
+                                   "trip": {"pickup": "Chennai", "drop": "Madurai", "km": 300, "km_limit": 300, "extra_km_rate": 12}, "advance_requested": 800, "issue": True}, "Anitha")
+    req = SimpleNamespace(base_url="http://localhost:8000/")
+    out = routes.share_info(str(est.id), req, db=db, admin=SimpleNamespace(username="Anitha"))
+    m = out["message"]
+    assert "Km limit: up to 300 km; extra km at Rs 12 per km" in m and "Included:" in m and "Not included (paid on actuals):" in m
+    assert "Parking charges" in m and "Advance to confirm: Rs 800" in m and "Valid until" in m and "/api/billing/public/" in m

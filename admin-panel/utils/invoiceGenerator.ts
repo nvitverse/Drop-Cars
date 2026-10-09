@@ -1,3 +1,4 @@
+import { openWaUrl } from './whatsapp';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Linking, Alert } from 'react-native';
 import { formatPhoneForWhatsApp, sendWhatsAppMessage } from './whatsappTemplates';
@@ -359,6 +360,8 @@ export function generateQuotationText(data: InvoiceData): string {
   if (toll === 0) exclusions.push('Highway Tolls (Fastag as per actuals)');
   if (stateTax === 0 && data.isInterstate) exclusions.push('Inter-State Permit (as per border checkpost receipt)');
   if (parking === 0) exclusions.push('Parking / Airport Entry (as per actual receipt)');
+  exclusions.push('Waiting charges after the free waiting time');
+  exclusions.push('Night driving allowance (10 PM - 5 AM)');
 
   return `🚗 *${brand.toUpperCase()} · OFFICIAL TRIP ESTIMATE & QUOTATION*
 📋 *Quotation Ref:* EST-${data.invoiceNumber}
@@ -372,7 +375,7 @@ export function generateQuotationText(data: InvoiceData): string {
 • Route: *${data.pickup}* ➔ *${data.dropLocation}*
 • Trip Type: ${data.tripType || 'One Way Outstation'}
 • Vehicle: *${data.vehicleType || 'Sedan (Dzire / Etios)'}*
-${data.distanceKm ? `• Estimated Distance: ~${data.distanceKm} KM\n` : ''}
+${data.distanceKm ? `• Estimated Distance: ~${data.distanceKm} KM\n• Km Limit: fare covers ~${data.distanceKm} KM${data.ratePerKm ? `; extra KM at ₹${data.ratePerKm} per KM` : ''}\n` : ''}
 💰 *Fare & Charges Breakdown:*
 ${breakdownLines.join('\n')}
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -384,7 +387,8 @@ ${breakdownLines.join('\n')}
 ✅ *Included in Package:*
 ${inclusions.map(i => `  ✓ ${i}`).join('\n')}
 ${exclusions.length > 0 ? `\nℹ️ *Exclusions (As per actuals):*\n${exclusions.map(e => `  • ${e}`).join('\n')}\n` : ''}
-${data.notes ? `📝 *Driver / Route Notes:* ${data.notes}\n` : ''}
+${data.notes ? `📝 *Driver / Route Notes:* ${data.notes}\n` : ''}ℹ️ _This estimate is valid for 7 days. Final fare is on the actual km driven; a route change or extra stops can change it._
+
 ⚡ *1-Click Instant Booking Confirmation:*
 👉 https://dropcars.in/book-confirm?ref=EST-${data.invoiceNumber}&amt=${advance}
 
@@ -405,11 +409,8 @@ export async function shareQuotationViaWhatsApp(data: InvoiceData) {
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 
   try {
-    const supported = await Linking.canOpenURL(url);
-    if (supported || Platform.OS === 'web') {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('WhatsApp Error', 'WhatsApp app is not installed on this device.');
+    if (!(await openWaUrl(url))) {
+      Alert.alert('WhatsApp Error', 'Could not open WhatsApp on this device.');
     }
   } catch (e) {
     if (Platform.OS === 'web') {

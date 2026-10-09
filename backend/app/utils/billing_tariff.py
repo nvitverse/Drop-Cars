@@ -43,9 +43,12 @@ def _rate(v: float) -> str:
 def km_bata(*, km: float, rate_per_km: float, extra_rate_per_km: float = 0, bata_per_day: float = 0, days: int = 1, trip_type: str = "oneway",
             min_km_oneway: int = 130, min_km_per_day_round: int = 250, min_km_per_day_multicity: int = 250) -> Dict[str, Any]:
     from app.utils.billing_calc import fare_lines
+    from app.utils.billing_calc import billed_km
     lines = fare_lines(trip_type=trip_type, km=km, rate_per_km=rate_per_km, bata_per_day=bata_per_day, days=days, min_km_oneway=min_km_oneway,
                        min_km_per_day_round=min_km_per_day_round, min_km_per_day_multicity=min_km_per_day_multicity, extra_rate_per_km=extra_rate_per_km)
-    return {"lines": lines, "notes": ["Toll, parking and state permit are charged extra (add them below as included or not included)."], "meta": {}}
+    billed = billed_km(trip_type, km, days, min_km_oneway, min_km_per_day_round, min_km_per_day_multicity)
+    return {"lines": lines, "notes": ["Toll, parking and state permit are charged extra (add them below as included or not included)."],
+            "meta": {"km_included": round(billed), "extra_km_rate": round(float(rate_per_km or 0) + float(extra_rate_per_km or 0), 2)}}
 
 
 def slab_drop(p: Dict[str, Any], one_way_km: float, double: bool = True) -> Dict[str, Any]:
@@ -69,7 +72,7 @@ def slab_drop(p: Dict[str, Any], one_way_km: float, double: bool = True) -> Dict
     if billable > 0 and rate > 0:
         lines.append(_line(f"Distance {int(round(billable))} km x Rs {_rate(rate)}", billable * rate))
     notes = [f"Priced on {int(round(effective))} km ({'to and fro' if double else 'one way'}); the per-km rate rises by Rs {_rate(inc_by)} for every {int(inc_every)} km of distance."]
-    return {"lines": lines, "notes": notes, "meta": {"effective_km": effective, "billable_km": billable, "per_km_rate": rate}}
+    return {"lines": lines, "notes": notes, "meta": {"effective_km": effective, "billable_km": billable, "per_km_rate": rate, "km_included": round(effective), "extra_km_rate": rate}}
 
 
 def slab_round(p: Dict[str, Any], one_way_km: float, days: int) -> Dict[str, Any]:
@@ -89,7 +92,7 @@ def slab_round(p: Dict[str, Any], one_way_km: float, days: int) -> Dict[str, Any
         lines.append(_line(f"Distance {int(round(billable))} km x Rs {_rate(rate)}", billable * rate))
     if allow > 0:
         lines.append(_line(f"Driver allowance ({days} day{'s' if days > 1 else ''} x Rs {_rate(allow)})", allow * days, "CHARGE"))
-    return {"lines": lines, "notes": [f"Minimum {int(min_per_day)} km per day is billed."], "meta": {"billable_km": billable}}
+    return {"lines": lines, "notes": [f"Minimum {int(min_per_day)} km per day is billed."], "meta": {"billable_km": billable, "km_included": round(billable), "extra_km_rate": rate}}
 
 
 def local_package(p: Dict[str, Any], hours: str) -> Dict[str, Any]:
@@ -101,7 +104,7 @@ def local_package(p: Dict[str, Any], hours: str) -> Dict[str, Any]:
         raise ValueError(f"No {hours} package. Available: {', '.join(packages) or 'none'}")
     km_limit = p.get("km_limit_by_package", {}).get(key)
     return {"lines": [_line(f"Local rental package - {key.replace('hrs', ' hours')}", _n(packages[key]))],
-            "notes": ([f"Includes up to {int(km_limit)} km."] if km_limit else []), "meta": {"package": key}}
+            "notes": ([f"Includes up to {int(km_limit)} km."] if km_limit else []), "meta": {"package": key, **({"km_included": int(km_limit)} if km_limit else {})}}
 
 
 def day_rent(p: Dict[str, Any], km: float, days: int) -> Dict[str, Any]:
@@ -119,7 +122,8 @@ def day_rent(p: Dict[str, Any], km: float, days: int) -> Dict[str, Any]:
     fuel_km = float(km) if fuel_on == "ALL" else extra_km
     if fuel > 0 and fuel_km > 0:
         lines.append(_line(f"Fuel charge {int(round(fuel_km))} km x Rs {_rate(fuel)}", fuel_km * fuel, "CHARGE"))
-    return {"lines": lines, "notes": [f"{int(limit)} km per day is included in the rent." if limit else "Rent is per day."], "meta": {"extra_km": extra_km}}
+    return {"lines": lines, "notes": [f"{int(limit)} km per day is included in the rent." if limit else "Rent is per day."],
+            "meta": {"extra_km": extra_km, **({"km_included": round(allowed), "extra_km_rate": extra_rate} if limit else {})}}
 
 
 def package(p: Dict[str, Any], amount: Optional[float] = None, name: Optional[str] = None) -> Dict[str, Any]:

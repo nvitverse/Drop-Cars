@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import { useRememberedCounts } from '@/hooks/useRememberedCounts';
 import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -211,7 +212,7 @@ export default function VehicleOwnersScreen() {
     const clean = phone.replace(/\D/g, '');
     const target = clean.length === 10 ? `91${clean}` : clean;
     const text = encodeURIComponent(`Hello ${name}, regarding your Drop Cars Fleet Partner account:`);
-    Linking.openURL(`https://api.whatsapp.com/send?phone=${target}&text=${text}`);
+    openWaUrl(`https://api.whatsapp.com/send?phone=${target}&text=${text}`);
   };
 
   const formatCurrency = (amount: number) => {

@@ -109,6 +109,20 @@ def compute_totals(lines: List[dict], *, gst_mode: str = "NONE", gst_rate: float
     }
 
 
+def billed_km(trip_type: str, km: float, days: int = 1, min_km_oneway: int = 130, min_km_per_day_round: int = 250, min_km_per_day_multicity: int = 250) -> float:
+    """The km a trip is billed for: never below the minimum coverage (one way: min km; round / multi-city: min km x days)."""
+    t = (trip_type or "").lower().replace(" ", "").replace("_", "")
+    days = max(1, int(days or 1))
+    billed = float(km or 0)
+    if t in ("oneway",):
+        billed = max(billed, float(min_km_oneway))
+    elif t in ("roundtrip",):
+        billed = max(billed, float(min_km_per_day_round) * days)
+    elif t in ("multicity", "multycity"):
+        billed = max(billed, float(min_km_per_day_multicity) * days)
+    return billed
+
+
 def fare_lines(*, trip_type: str, km: float, rate_per_km: float, bata_per_day: float = 0, days: int = 1,
                min_km_oneway: int = 130, min_km_per_day_round: int = 250, min_km_per_day_multicity: int = 250,
                extra_rate_per_km: float = 0) -> List[dict]:

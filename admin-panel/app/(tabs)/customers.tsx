@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import { useRememberedCounts } from '@/hooks/useRememberedCounts';
 import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -161,7 +162,7 @@ export default function CustomersScreen() {
   };
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
-  const whatsappCustomer = (phone: string) => Linking.openURL(`https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}`);
+  const whatsappCustomer = (phone: string) => openWaUrl(`https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}`);
   const createBookingForCustomer = (item: Customer) => {
     router.push({
       pathname: '/create-booking',

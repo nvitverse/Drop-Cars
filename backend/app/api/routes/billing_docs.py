@@ -49,7 +49,7 @@ def _doc(db: Session, doc_id: str) -> BillingDocument:
 # ------------------------------------------------------------------ brands
 BRAND_FIELDS = ["name", "legal_name", "tagline", "domain", "phone", "whatsapp", "email", "address", "state", "state_code", "gstin", "pan", "sac_code",
                 "gst_rate", "gst_applies_to", "invoice_prefix", "estimate_prefix", "bank_account_name", "bank_name", "bank_account_number", "bank_ifsc",
-                "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights", "signatory", "primary_color", "secondary_color", "font_style",
+                "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights", "includes_text", "excludes_text", "signatory", "primary_color", "secondary_color", "font_style",
                 "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
 
 
@@ -83,6 +83,8 @@ class BrandIn(BaseModel):
     rules_text: Optional[str] = None
     footer_note: Optional[str] = None
     highlights: Optional[str] = None
+    includes_text: Optional[str] = None
+    excludes_text: Optional[str] = None
     signatory: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
@@ -188,7 +190,7 @@ def fare_lines(body: FareLinesIn, admin=Depends(get_current_admin)):
     from app.utils import billing_tariff
     res = billing_tariff.compute("KM_BATA", {"rate_per_km": body.rate_per_km, "extra_rate_per_km": body.extra_rate_per_km, "bata_per_day": body.bata_per_day},
                                  km=body.km, days=body.days, trip_type=body.trip_type, rules=get_fare_rules(), adjust=body.adjust)
-    return {"lines": res["lines"], "notes": res["notes"]}
+    return {"lines": res["lines"], "notes": res["notes"], "meta": res.get("meta", {})}
 
 
 class CalcIn(BaseModel):
@@ -503,10 +505,27 @@ def share_info(doc_id: str, request: Request, db: Session = Depends(get_db), adm
     brand, t = s["brand"], s["totals"]
     kind = "estimate" if d.doc_type == "ESTIMATE" else "invoice"
     amount = t["total_amount"] if d.doc_type == "ESTIMATE" else (t["balance_due"] or t["total_amount"])
-    prep = s.get("prepared_by") or {}
-    msg = (f"Hello {d.customer_name or ''}, your {brand.get('name')} {kind} {d.number} is ready.\n"
-           f"{'Estimate total' if d.doc_type == 'ESTIMATE' else 'Balance due'}: Rs {amount:,}\n"
-           f"View / download: {url}\n- {_admin_name(admin)}, {brand.get('name')} {brand.get('phone') or ''}").strip()
+    from app.utils.billing_render import _inc_exc
+    trip = s.get("trip") or {}
+    parts = [f"Hello {d.customer_name or ''}, your {brand.get('name')} {kind} {d.number} is ready."]
+    if trip.get("pickup") and trip.get("drop"):
+        parts.append(f"Route: {trip['pickup']} to {trip['drop']}" + (f" (about {trip['km']} km)" if trip.get("km") else ""))
+    parts.append(f"{'Estimate total' if d.doc_type == 'ESTIMATE' else 'Balance due'}: Rs {amount:,}" + (" (incl. GST)" if s["gst"]["mode"] != "NONE" and s["gst"]["collection"] == "COLLECT" and d.doc_type == "ESTIMATE" else ""))
+    if trip.get("km_limit"):
+        parts.append(f"Km limit: up to {int(float(trip['km_limit']))} km" + (f"; extra km at Rs {trip['extra_km_rate']} per km" if trip.get("extra_km_rate") else ""))
+    inc_l, exc_l = _inc_exc(s)
+    if inc_l:
+        parts.append("Included: " + ", ".join(t for t, _ in inc_l))
+    if exc_l:
+        parts.append("Not included (paid on actuals): " + ", ".join(t for t, _ in exc_l))
+    if d.doc_type == "ESTIMATE":
+        if s.get("advance_requested"):
+            parts.append(f"Advance to confirm: Rs {int(s['advance_requested']):,}")
+        if s.get("valid_until"):
+            parts.append(f"Valid until {s['valid_until']}")
+    parts.append(f"View / download: {url}")
+    parts.append(f"- {_admin_name(admin)}, {brand.get('name')} {brand.get('phone') or ''}")
+    msg = "\n".join(parts).strip()
     phone = "".join(ch for ch in str(d.customer_phone or "") if ch.isdigit())[-10:]
     svc.log_shared(db, d, _admin_name(admin), "link shared")
     return {"public_url": url, "pdf_url": url + "/pdf", "message": msg, "phone": f"91{phone}" if len(phone) == 10 else None,
@@ -543,7 +562,7 @@ def public_view(token: str, db: Session = Depends(get_db)):
             db.refresh(d)
         except Exception:
             db.rollback()
-    return HTMLResponse(render_document_html(svc.serialize(d, db), public=True))
+    return HTMLResponse(render_document_html(svc.serialize(d, db), public=True, links={"pdf": f"{token}/pdf"}))
 
 
 @public_router.get("/{token}/pdf")

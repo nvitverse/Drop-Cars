@@ -276,3 +276,41 @@ if (document.readyState === "loading") {
 } else {
   ensureWhatsAppWidget();
 }
+
+/* ---- WhatsApp OR WhatsApp Business -------------------------------------------------------------------------------------------------
+   An https wa.me / api.whatsapp.com link is claimed by the regular WhatsApp on Android, so a phone with WhatsApp Business never opened it.
+   On Android we turn those links into an intent://send?... link (scheme whatsapp, no package pinned): Chrome then lets the phone's own
+   "Open with" chooser pick WhatsApp or WhatsApp Business, and falls back to the https link when neither is installed. Desktop / iOS unchanged. */
+(function () {
+  if (window.__dcWaChooser) return;
+  window.__dcWaChooser = true;
+  if (!/Android/i.test(navigator.userAgent || "")) return;
+  var RE = /^https?:\/\/(?:wa\.me\/(\d*)|api\.whatsapp\.com\/send)(?:\?(.*))?$/i;
+  function toIntent(url) {
+    var m = String(url || "").match(RE);
+    if (!m) return null;
+    var q = m[2] || "";
+    var phone = m[1] || ((q.match(/(?:^|&)phone=(\d+)/) || [])[1] || "");
+    var text = (q.match(/(?:^|&)text=([^&]*)/) || [])[1];
+    var qs = (phone ? "phone=" + phone : "") + (phone && text ? "&" : "") + (text ? "text=" + text : "");
+    return "intent://send?" + qs + "#Intent;scheme=whatsapp;S.browser_fallback_url=" + encodeURIComponent(url) + ";end";
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+    if (!a) return;
+    var intent = toIntent(a.getAttribute("href"));
+    if (intent) {
+      e.preventDefault();
+      window.location.href = intent;
+    }
+  }, true);
+  var nativeOpen = window.open;
+  window.open = function (url) {
+    var intent = typeof url === "string" ? toIntent(url) : null;
+    if (intent) {
+      window.location.href = intent;
+      return null;
+    }
+    return nativeOpen.apply(window, arguments);
+  };
+})();

@@ -1,3 +1,4 @@
+import { openWaUrl } from './whatsapp';
 import { Linking, Platform, Alert } from 'react-native';
 
 export interface WhatsAppTemplateData {
@@ -345,12 +346,10 @@ export async function sendWhatsAppMessage(
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 
   try {
-    const supported = await Linking.canOpenURL(url);
-    if (supported || Platform.OS === 'web') {
-      await Linking.openURL(url);
+    if (await openWaUrl(url)) {
       return true;
     } else {
-      Alert.alert('WhatsApp Not Installed', 'Could not open WhatsApp on this device.');
+      Alert.alert('WhatsApp Error', 'Could not open WhatsApp on this device.');
       return false;
     }
   } catch (e: any) {

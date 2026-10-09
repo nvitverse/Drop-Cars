@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -520,7 +521,7 @@ export default function EnquiriesScreen({ isTab = false, hideHeader = false, ini
       const msg = encodeURIComponent(
         `Hello ${enquiry.name || 'Valued Customer'}, greetings from ${enquiry.website || 'Drop Cars'}! Regarding your trip quote from ${enquiry.pickup || 'Pickup'} to ${enquiry.drop_location || 'Drop'}: total quoted fare is ₹${enquiry.fare_estimate || 0}. Please let us know if you have any questions!`
       );
-      Linking.openURL(`https://wa.me/${fullPhone}?text=${msg}`);
+      openWaUrl(`https://wa.me/${fullPhone}?text=${msg}`);
 
       const createdMs = parseIstTimestamp(enquiry.created_at);
       const responseSeconds = createdMs > 0 ? Math.max(0, Math.floor((Date.now() - createdMs) / 1000)) : 60;

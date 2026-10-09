@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Modal from '@/components/KeyboardSafe';
@@ -247,6 +248,8 @@ export default function BillingEditor() {
       const nextTrip: Record<string, any> = { ...trip };
       if (pkg) nextTrip.package = pkg; else delete nextTrip.package;
       if (km && !nextTrip.km) nextTrip.km = km;
+      if (res.meta?.km_included) nextTrip.km_limit = String(res.meta.km_included);
+      if (res.meta?.extra_km_rate) nextTrip.extra_km_rate = String(res.meta.extra_km_rate);
       setTrip(nextTrip);
     } catch (e: any) { Alert.alert('Could not calculate', e?.message || 'Try again'); }
   };
@@ -278,7 +281,7 @@ export default function BillingEditor() {
     if (!docId) return;
     try {
       const s = await billingApi.share(docId);
-      if (s.whatsapp_url && Platform.OS !== 'web') await Linking.openURL(s.whatsapp_url).catch(() => Share.share({ message: s.message }));
+      if (s.whatsapp_url && Platform.OS !== 'web') await openWaUrl(s.whatsapp_url).then((ok) => { if (!ok) return Share.share({ message: s.message }); });
       else await Share.share({ message: s.message });
     } catch (e: any) { Alert.alert('Could not share', e?.message || 'Try again'); }
   };
@@ -304,7 +307,7 @@ export default function BillingEditor() {
       setShowLink(false);
       const msg = `Hello ${cust.name}, please pay ${inr(r.link.amount)} (${purpose.toLowerCase()}) for ${number}: ${r.link.url}`;
       const phone = cust.phone.replace(/\D/g, '').slice(-10);
-      if (phone.length === 10 && Platform.OS !== 'web') await Linking.openURL(`https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`).catch(() => Share.share({ message: msg }));
+      if (phone.length === 10 && Platform.OS !== 'web') await openWaUrl(`https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`).catch(() => Share.share({ message: msg }));
       else await Share.share({ message: msg });
     } catch (e: any) { Alert.alert('Could not create the link', e?.message || 'Try again'); }
     finally { setBusy(false); }
@@ -424,8 +427,11 @@ export default function BillingEditor() {
         {/* 3. trip */}
         <View style={card}>
           <Text style={[s.title, { color: c.text }]}>Trip</Text>
-          {[['pickup', 'From'], ['drop', 'To'], ['vehicle', 'Vehicle'], ['start_at', 'Pickup date & time'], ['driver_name', 'Driver'], ['vehicle_number', 'Vehicle number']].map(([k, label]) => (
-            <TextInput key={k} style={inp} value={String(trip[k] ?? '')} onChangeText={(v) => setTrip({ ...trip, [k]: v })} placeholder={label} placeholderTextColor={c.textMuted} />
+          {[['pickup', 'From'], ['drop', 'To'], ['vehicle', 'Vehicle type (e.g. Sedan 4+1)'], ['vehicle_name', 'Vehicle model (e.g. Maruti Swift Dzire)'], ['start_at', 'Pickup date & time'],
+            ['driver_name', 'Driver'], ['driver_phone', 'Driver phone'], ['vehicle_number', 'Vehicle number'], ['passenger_name', 'Passenger name (if different from customer)'],
+            ['passenger_phone', 'Passenger phone'], ['km_limit', 'Km included in the fare'], ['extra_km_rate', 'Extra km rate ₹ (beyond the km included)'], ['duration', 'Est. duration (blank = automatic)']].map(([k, label]) => (
+            <TextInput key={k} style={inp} value={String(trip[k] ?? '')} onChangeText={(v) => setTrip({ ...trip, [k]: ['km_limit', 'extra_km_rate'].includes(k) ? v.replace(/[^0-9.]/g, '') : v })} placeholder={label}
+              keyboardType={['km_limit', 'extra_km_rate', 'driver_phone', 'passenger_phone'].includes(k) ? 'numeric' : 'default'} placeholderTextColor={c.textMuted} />
           ))}
           <Seg items={TRIP_TYPES.map((x) => ({ key: x, label: x }))} value={String(trip.trip_type || '')} onChange={(v) => setTrip({ ...trip, trip_type: v })} />
         </View>

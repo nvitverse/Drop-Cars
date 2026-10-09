@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -474,18 +475,9 @@ export default function TeamHubScreen() {
   const handleSendWhatsAppSlip = (phone: string, text: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const fullPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const url = `whatsapp://send?phone=${fullPhone}&text=${encodeURIComponent(text)}`;
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Linking.openURL(`https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(text)}`);
-        }
-      })
-      .catch(() => {
-        Alert.alert('WhatsApp Error', 'Could not open WhatsApp app.');
-      });
+    openWaUrl(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`).then((ok) => {
+      if (!ok) Alert.alert('WhatsApp Error', 'Could not open WhatsApp app.');
+    });
   };
 
   // --- Own Fleet Return Trip Matcher ---

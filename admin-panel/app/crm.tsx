@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -199,7 +200,7 @@ export default function CRMMarketingScreen() {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const numWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     const msg = `Hello ${name || 'Customer'}, thank you for contacting Drop Taxi 24! How can we assist with your trip?`;
-    Linking.openURL(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
+    openWaUrl(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
   };
 
   if (loading) {
@@ -553,7 +554,7 @@ export default function CRMMarketingScreen() {
                           const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
                           const numWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
                           const msg = `Hi ${lead.name || 'Customer'}, this is Drop Taxi 24 following up on your ride request (${lead.pickup_location || 'Pickup'} to ${lead.drop_location || 'Drop'}). Would you like us to confirm the cab for you today?`;
-                          Linking.openURL(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
+                          openWaUrl(`https://wa.me/${numWithCountry}?text=${encodeURIComponent(msg)}`);
                         }}>
                         <Send size={14} color="#FFF" />
                         <Text style={styles.actionBtnText}>WA Reminder</Text>

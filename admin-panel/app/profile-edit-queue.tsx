@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -164,8 +165,8 @@ export default function ProfileEditQueueScreen() {
     const text = `Hello ${item.user_name || 'Partner'},\n\nWe received your request on Drop Cars to update:\n📌 Field: *${item.field_name.replace(/_/g, ' ').toUpperCase()}*\n🔴 Current: ${item.old_value || 'None'}\n🟢 Proposed: *${item.proposed_value}*${docPrompt}\n\nDrop Cars Admin Support`;
     
     const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Error', 'Unable to open WhatsApp on this device.');
+    openWaUrl(url).then((ok) => {
+      if (!ok) Alert.alert('Error', 'Unable to open WhatsApp on this device.');
     });
   };
 

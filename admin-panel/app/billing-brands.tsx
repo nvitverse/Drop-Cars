@@ -273,6 +273,11 @@ export default function BillingBrands() {
             {field('terms_estimate', 'Terms on ESTIMATES', { multiline: true })}
             {field('terms_invoice', 'Terms on INVOICES', { multiline: true })}
             {field('rules_text', 'Rules, policies & regulations (cancellation, refund, belongings, safety, liability ...)', { multiline: true })}
+            <View style={s.hint}><Text style={{ color: c.textSecondary, fontSize: 11.5 }}>
+              "What's included" and "Not included / extra" on every estimate are built from the bill itself (included charges, the km limit, the extra km rate) plus these standard lines. One per line as: Title | note | words that hide it. A line is hidden when the bill already has a charge with one of those words (for example "toll").
+            </Text></View>
+            {field('includes_text', "Standard 'What's included' lines", { multiline: true })}
+            {field('excludes_text', "Standard 'Not included / extra' lines", { multiline: true })}
           </View>
         )}
 

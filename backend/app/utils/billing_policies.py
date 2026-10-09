@@ -174,6 +174,19 @@ OLD_TAGLINES = {
     "arunachala": ("Tempo Traveller & Force Urbania Specialist",),
 }
 OLD_SLOGANS = ("Thank you for travelling with us.",)
+
+# the standard "what's included / not included" lines every estimate shows (Title | note | keywords that hide the item when the bill already has such a charge)
+STD_INCLUDES = "\n".join([
+    "Fuel & vehicle maintenance",
+    "Verified, professional driver",
+    "Clean, well-maintained vehicle",
+])
+STD_EXCLUDES = "\n".join([
+    "Parking charges | Actuals, paid at the venue | parking",
+    "Waiting charges | Extra after the free waiting time | waiting",
+    "Night driving allowance | 10 PM to 5 AM, unless shown above | night",
+    "Toll & state permit | Paid on actuals unless shown above | toll,permit",
+])
 OLD_HIGHLIGHTS = ("Temple tours & Girivalam trips\nTempo Traveller & Force Urbania specialists\nExperienced local drivers\nComfortable family travel",)
 
 # the brand's own look, taken from its website's design system (arunachalatravels.com): ember orange, gold, warm cream, serif display type

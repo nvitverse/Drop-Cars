@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -82,7 +83,7 @@ export default function LiveFleetMapScreen() {
 
   const openWhatsApp = (phone: string) => {
     const clean = phone.replace(/\D/g, '').slice(-10);
-    Linking.openURL(`https://wa.me/91${clean}`);
+    openWaUrl(`https://wa.me/91${clean}`);
   };
 
   const goToUnassignedOrders = () => {

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -160,7 +161,7 @@ export default function CouponsScreen() {
       (c.expiry_date ? `⏰ *Valid till:* ${new Date(c.expiry_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n` : '') +
       `\n👉 https://dropcars.in/?coupon=${c.code}\n\n` +
       `Tap the link to auto-apply the coupon and get an instant fare estimate!`;
-    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`).catch(() => {
+    openWaUrl(`https://wa.me/?text=${encodeURIComponent(message)}`).catch(() => {
       Alert.alert('Error', 'Could not open WhatsApp.');
     });
   };
