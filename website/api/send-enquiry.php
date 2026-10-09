@@ -341,22 +341,31 @@ $airportSubtype = (string) ($data['airportSubtype'] ?? '');
 $isHourlyCheck = (strpos($tripType, 'hourly') !== false);
 $isAirportLocalCheck = ($tripType === 'airport_transfer' && $airportSubtype === 'local');
 
-$extraKmRateStr = '?';
+$extraKmRateStr = '';
+$rateVehicleKey = $selectedVehicle;
+if ($rateVehicleKey === '') {
+    // the enquiry form sends the vehicle as free text ("Sedan", "Innova Crysta" ...) when no estimate card was chosen
+    $rvRaw = strtoupper(trim((string)($data['vehicleType'] ?? '')));
+    $rateVehicleKey = (strpos($rvRaw, 'CRYSTA') !== false) ? 'CRYSTA'
+        : ((strpos($rvRaw, 'INNOVA') !== false) ? 'INNOVA'
+        : ((strpos($rvRaw, 'SUV') !== false || strpos($rvRaw, 'ERTIGA') !== false) ? 'SUV' : 'SEDAN'));
+}
 $tariffsPath = __DIR__ . '/../data/tariffs.json';
 if (file_exists($tariffsPath)) {
     $tariffs = json_decode(file_get_contents($tariffsPath), true);
     if (is_array($tariffs)) {
         foreach ($tariffs as $t) {
-            if (strtoupper($t['vehicle_type']) === strtoupper($selectedVehicle) &&
+            if (strtoupper($t['vehicle_type']) === strtoupper($rateVehicleKey) &&
                 (((strpos($tripType, 'round') !== false || $isAirportLocalCheck) && $t['trip_type'] === 'round') ||
                  ((strpos($tripType, 'round') === false && !$isAirportLocalCheck) && $t['trip_type'] === 'oneway'))) {
-                $extraKmRateStr = '₹' . $t['per_km_rate'];
+                $extraKmRateStr = "\u{20B9}" . $t['per_km_rate'];
                 break;
             }
         }
     }
 }
 $isRoundTripCheck = (strpos($tripType, 'round') !== false || $isHourlyCheck || $isAirportLocalCheck);
+$extraKmPhrase = ($extraKmRateStr !== '') ? ('Extra ' . $extraKmRateStr . '/KM') : 'Extra KM at the per-KM rate of your quote';
 $garageText = $isRoundTripCheck ? ' - calculated garage-to-garage/until return to pickup point' : '';
 
 // Hourly Rental & airport "Local" drop use the hourly/per-km tariff for
@@ -445,7 +454,7 @@ if (!$includeTaxes) {
 } else {
     $exclusions .= "State border tax (if crossing border & not explicitly shown above), ";
 }
-$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "Extra {$extraKmRateStr}/KM (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
+$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "{$extraKmPhrase} (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
 
 if ($selectedVehicle !== '') {
     $breakdownHtml = dropcars_fare_breakdown_html($fareBreakdown, $selectedVehicle);
@@ -561,66 +570,80 @@ if (!empty($tariffsPath) && file_exists($tariffsPath)) {
 // Calculate minimum billable KM & included KM limit
 $calculatedMinKm = ($tripType === 'round_trip') ? max(250, (int)$distance * 2) : max(130, (int)$distance);
 
-// Share Customer — enquiry quote message (all emoji as real UTF-8 characters)
+// Share Customer - the enquiry quote the staff send on WhatsApp. Customer-facing wording; every emoji is a \u{...} escape so a file
+// saved or uploaded in the wrong encoding can never turn them into "?" or a replacement character.
+$E = [
+    'star' => "\u{1F31F}", 'pray' => "\u{1F64F}", 'pin' => "\u{1F4CC}", 'from' => "\u{1F4CD}", 'flag' => "\u{1F3C1}", 'car' => "\u{1F697}", 'brief' => "\u{1F4BC}",
+    'cal' => "\u{1F4C5}", 'clock' => "\u{23F0}", 'road' => "\u{1F6E3}\u{FE0F}", 'ruler' => "\u{1F4CF}", 'money' => "\u{1F4B0}", 'cash' => "\u{1F4B5}",
+    'card' => "\u{1F4B3}", 'ok' => "\u{2705}", 'no' => "\u{274C}", 'bolt' => "\u{26A1}", 'link' => "\u{1F449}", 'phone' => "\u{1F4DE}", 'globe' => "\u{1F310}",
+    'info' => "\u{2139}\u{FE0F}", 'map' => "\u{1F5FA}\u{FE0F}", 'gift' => "\u{1F381}", 'doc' => "\u{1F4C4}", 'hour' => "\u{23F3}", 'dot' => "\u{1F538}", 'tick' => "\u{1F7E2}",
+];
+$bar = str_repeat("\u{2501}", 19);
 $waVehicleDisplay = $waVehicle !== '' ? $waVehicle : 'Sedan';
-$waCustomerMsg  = "🌟 *DROP CARS — TRIP QUOTE & SUMMARY* 🌟\n";
-$waCustomerMsg .= "_Your Trusted Outstation & Intercity Cab Partner_\n\n";
+$kmLimitTxt   = number_format($calculatedMinKm);
+$extraKmTxt   = ($extraKmRateStr !== '') ? ($extraKmRateStr . '/KM') : '';
+$fareNoteTxt  = ($fareTypeRaw === 'inclusive') ? 'all-inclusive fare' : 'toll & state tax extra';
+$waCustomerMsg  = "{$E['star']} *DROP CARS* {$E['star']}\n_Your Trusted One-Way Drop Taxi Service_\n\n";
 $waCustomerMsg .= "Dear *" . strip_tags($customerName) . "*,\n\n";
-$waCustomerMsg .= "Thank you for choosing *Drop Cars*! Here is your complete trip itinerary & fare estimate for reference:\n\n";
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🗺️ *YOUR TRIP AT A GLANCE*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "📌 *Enquiry Reference:* *#" . $waBookingId . "*\n";
-$waCustomerMsg .= "📍 *From (Pickup):* " . strip_tags($pickup) . "\n";
-$waCustomerMsg .= "🏁 *To (Drop):* " . strip_tags($drop) . "\n";
-$waCustomerMsg .= "🚗 *Vehicle Choice:* " . $waVehicleDisplay . "\n";
-$waCustomerMsg .= "💼 *Trip Type:* " . $tripLabel . "\n";
-if ($waGroupDate) $waCustomerMsg .= "📅 *Travel Date:* " . $waGroupDate . "\n";
-if ($travelTime)  $waCustomerMsg .= "⏰ *Pickup Time:* " . $travelTime . "\n";
+$waCustomerMsg .= "Thank you for your enquiry with *Drop Cars*! {$E['pray']} We would be glad to take you on this trip. Below is your fare estimate with everything that is included and what is paid separately, so there are no surprises on the day.\n\n";
+$waCustomerMsg .= "{$E['pin']} *Enquiry Reference:* *#" . $waBookingId . "*\n\n";
+$waCustomerMsg .= "{$bar}\n{$E['map']} *YOUR TRIP*\n{$bar}\n";
+$waCustomerMsg .= "{$E['from']} *Pickup:* " . strip_tags($pickup) . "\n";
+$waCustomerMsg .= "{$E['flag']} *Drop:* " . strip_tags($drop) . "\n";
+$waCustomerMsg .= "{$E['car']} *Vehicle:* " . $waVehicleDisplay . "\n";
+$waCustomerMsg .= "{$E['brief']} *Trip Type:* " . $tripLabel . "\n";
+if ($waGroupDate) $waCustomerMsg .= "{$E['cal']} *Travel Date:* " . $waGroupDate . "\n";
+if ($travelTime)  $waCustomerMsg .= "{$E['clock']} *Pickup Time:* " . $travelTime . "\n";
 if ($isRoundTripCheck && !empty($data['returnDate'])) {
-    $waCustomerMsg .= "📅 *Return Date:* " . date('d M Y', strtotime($data['returnDate'])) . "\n";
+    $waCustomerMsg .= "{$E['cal']} *Return Date:* " . date('d M Y', strtotime($data['returnDate'])) . "\n";
 }
 if ($distance > 0) {
-    $waCustomerMsg .= "🛣️ *Approx Route Distance:* ~" . number_format($distance) . " KM\n";
-    $waCustomerMsg .= "📏 *Included KM Limit:* " . number_format($calculatedMinKm) . " KM\n";
+    $waCustomerMsg .= "{$E['road']} *Approx. Route Distance:* ~" . number_format($distance) . " KM\n";
+    $waCustomerMsg .= "{$E['ruler']} *KM Limit in this fare:* " . $kmLimitTxt . " KM\n";
 }
 if ($fareEstimate > 0) {
-    $waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n💰 *FARE DETAILS*\n━━━━━━━━━━━━━━━━━━━\n";
-    $waCustomerMsg .= "💵 *Estimated Fare:* *₹" . number_format($fareEstimate) . "* _(" . ($fareTypeRaw === 'inclusive' ? 'All-Inclusive Fare' : 'Excl. toll & state tax') . ")_\n";
-    $waCustomerMsg .= "💳 *Payment:* Payable to driver via Cash / UPI at trip end\n";
+    $waCustomerMsg .= "\n{$bar}\n{$E['money']} *YOUR FARE*\n{$bar}\n";
+    $waCustomerMsg .= "{$E['cash']} *Estimated Fare:* *\u{20B9}" . number_format($fareEstimate) . "* _(" . $fareNoteTxt . ")_\n";
+    $waCustomerMsg .= "{$E['card']} *Payment:* Pay the driver directly by Cash / UPI at the end of the trip\n";
 }
-$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n✅ *WHAT'S INCLUDED*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "🟢 AC Cab, fuel charges & driver allowance (bata)\n";
-$waCustomerMsg .= "🟢 24x7 Customer assistance & real-time dispatch\n";
-if ($includeTolls) $waCustomerMsg .= "🟢 Highway toll charges included\n";
-if ($includeTaxes) $waCustomerMsg .= "🟢 State border permit / tax included (if crossing state border)\n";
-$waCustomerMsg .= "\n⚠️ *WHAT'S EXTRA / EXCLUDED*\n";
-$waCustomerMsg .= "🔸 Parking and entry fees (if any, paid as actuals)\n";
-if (!$includeTolls) $waCustomerMsg .= "🔸 Highway toll charges (paid as actuals)\n";
+$waCustomerMsg .= "\n{$bar}\n{$E['ok']} *WHAT'S INCLUDED*\n{$bar}\n";
+$waCustomerMsg .= "{$E['tick']} AC cab with fuel & vehicle maintenance\n";
+$waCustomerMsg .= "{$E['tick']} Driver allowance (bata) and a verified, professional driver\n";
+if ($distance > 0) $waCustomerMsg .= "{$E['tick']} Up to " . $kmLimitTxt . " KM of travel\n";
+$waCustomerMsg .= "{$E['tick']} 24x7 customer assistance & live dispatch support\n";
+if ($includeTolls) $waCustomerMsg .= "{$E['tick']} Highway toll charges\n";
+if ($includeTaxes) $waCustomerMsg .= "{$E['tick']} State border permit / tax (if the trip crosses a state border)\n";
+$waCustomerMsg .= "\n{$bar}\n{$E['no']} *NOT INCLUDED / EXTRA*\n{$bar}\n";
+if (!$isHourlyCheck) {
+    $waCustomerMsg .= "{$E['dot']} *Extra KM* beyond " . $kmLimitTxt . " KM: " . ($extraKmTxt !== '' ? "*" . $extraKmTxt . "*" : "charged at the per-KM rate of your quote") . $garageText . "\n";
+}
+$waCustomerMsg .= "{$E['dot']} Parking and entry fees, if any (paid as per actual receipts)\n";
+if (!$includeTolls) $waCustomerMsg .= "{$E['dot']} Highway toll charges (paid as per actuals)\n";
 if (!$includeTaxes) {
     if (!empty($fareBreakdown['borderTransitions'])) {
-        $taxAmtStr = ($selectedVehicle === 'INNOVA' || $selectedVehicle === 'CRYSTA') ? '₹1,500' : (($selectedVehicle === 'SUV') ? '₹1,000' : '₹500');
-        $waCustomerMsg .= "🔸 State permit / border tax: {$taxAmtStr} (crossing state border, paid to driver)\n";
+        $taxAmtStr = ($selectedVehicle === 'INNOVA' || $selectedVehicle === 'CRYSTA') ? "\u{20B9}1,500" : (($selectedVehicle === 'SUV') ? "\u{20B9}1,000" : "\u{20B9}500");
+        $waCustomerMsg .= "{$E['dot']} State permit / border tax: {$taxAmtStr} (crossing a state border, paid to the driver)\n";
     } else {
-        $waCustomerMsg .= "🔸 State border tax (applicable only if crossing state border)\n";
+        $waCustomerMsg .= "{$E['dot']} State border tax (only if the trip crosses a state border)\n";
     }
 }
-if (!$isHourlyCheck) $waCustomerMsg .= "🔸 Extra KM beyond " . number_format($calculatedMinKm) . " KM at " . $extraKmRateStr . "/KM" . $garageText . "\n";
+$waCustomerMsg .= "{$E['dot']} Waiting or additional stop charges, if availed\n";
+$waCustomerMsg .= "\n{$E['info']} _This estimate is valid for 7 days. The final fare is based on the actual kilometres travelled; a change of route or extra stops can change it, and we will always tell you before the trip._\n";
 
-$waCustomerMsg .= "\n━━━━━━━━━━━━━━━━━━━\n⚡ *CONFIRM YOUR TRIP*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "To verify and confirm your booking instantly:\n";
-$waCustomerMsg .= "👉 https://dropcars.in/track-booking/" . $bookingId . "\n";
-$waCustomerMsg .= "_Or reply *CONFIRM* directly to this WhatsApp message!_\n\n";
+$waCustomerMsg .= "\n{$bar}\n{$E['bolt']} *CONFIRM YOUR TRIP*\n{$bar}\n";
+$waCustomerMsg .= "To confirm your booking, simply reply *CONFIRM* to this message, or tap here:\n";
+$waCustomerMsg .= "{$E['link']} https://dropcars.in/track-booking/" . $bookingId . "\n\n";
 
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n🎁 *SAVE SEARCH & EARN ₹100*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "Log in with your email at https://dropcars.in/login to save your trip searches, earn ₹100 wallet credits, and unlock exclusive promo codes!\n\n";
+$waCustomerMsg .= "{$E['gift']} *Tip:* log in with your email at https://dropcars.in/customer-login to save your searches, earn \u{20B9}100 wallet credit and unlock exclusive promo codes.\n\n";
 
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n📄 *POLICIES & SIGHTSEEING*\n━━━━━━━━━━━━━━━━━━━\n";
-$waCustomerMsg .= "• Explore Route Details: " . get_route_explore_url($pickup, $drop) . "\n";
-$waCustomerMsg .= "• Terms & Policies: https://dropcars.in/terms\n\n";
+$waCustomerMsg .= "{$E['doc']} *More information*\n";
+$waCustomerMsg .= "\u{2022} Route details & sightseeing: " . get_route_explore_url($pickup, $drop) . "\n";
+$waCustomerMsg .= "\u{2022} Terms & policies: https://dropcars.in/terms\n\n";
 
-$waCustomerMsg .= "━━━━━━━━━━━━━━━━━━━\n_Need help? We are available 24x7:_\n";
-$waCustomerMsg .= "📞 *" . ($config['supportPhone'] ?? '+91 7200217986') . "*\n";
-$waCustomerMsg .= "🌐 https://dropcars.in\n\n";
-$waCustomerMsg .= "_Have a safe and pleasant journey!_\n*— Drop Cars Team* 🙏";
+$waCustomerMsg .= "{$bar}\n_Need any help? We are here 24x7:_\n";
+$waCustomerMsg .= "{$E['phone']} *" . ($config['supportPhone'] ?? '+91 7200217986') . "*\n";
+$waCustomerMsg .= "{$E['globe']} https://dropcars.in\n\n";
+$waCustomerMsg .= "Warm regards,\n*Drop Cars Team* {$E['pray']}\n_Wishing you a safe and pleasant journey!_";
 $waCustomerUrl  = ($waPhone !== '' && $waPhone !== '91') ? 'https://wa.me/' . $waPhone . '?text=' . rawurlencode($waCustomerMsg) : '#';
 
 // Share Group — broadcast announcement style
@@ -844,7 +867,7 @@ $bodyHtml .= $breakdownHtml
                 <div style='font-weight:700; color:#d97706; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;'>⚠️ What's Excluded</div>
                 <ul style='list-style: none; padding-left: 0; margin: 0; font-size: 13px; color: #64748b;'>
                     <li style='margin-bottom: 6px;'>🔴 Parking and entry fees, (if any)</li>" . ($includeTolls ? "" : "<li style='margin-bottom: 6px;'>🔴 Toll charges, as applicable</li>") . ($includeTaxes ? "" : ($totalTaxCalculated > 0 ? "<li style='margin-bottom: 6px; font-weight: 700; color: #c2410c;'>🔴 State border tax: ₹" . number_format($totalTaxCalculated) . " (crossing state border, payable extra)</li>" : "<li style='margin-bottom: 6px;'>🔴 State border tax (applicable only if crossing state border)</li>")) . "
-                    " . ($isHourlyCheck ? "" : "<li style='margin-bottom: 6px;'>🔴 Extra " . $extraKmRateStr . "/KM (if exceeded the KMs calculated" . $garageText . ")</li>") . "
+                    " . ($isHourlyCheck ? "" : "<li style='margin-bottom: 6px;'>🔴 " . $extraKmPhrase . " (if exceeded the KMs calculated" . $garageText . ")</li>") . "
                     <li style='margin-bottom: 6px;'>🔴 " . $waitingChargeText . "</li>
                 </ul>
             </div>
@@ -908,7 +931,7 @@ if (!$includeTaxes) {
 } else {
     $exclusions .= "State border tax (if crossing border & not explicitly shown above), ";
 }
-$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "Extra {$extraKmRateStr}/KM (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
+$exclusions .= "Parking and entry fees, (if any), " . ($isHourlyCheck ? "" : "{$extraKmPhrase} (if exceeded the KMs calculated{$garageText}), ") . $waitingChargeText;
 $bodyPlain .= "Inclusions: {$inclusions}\n";
 $bodyPlain .= "Exclusions: {$exclusions}\n";
 $bodyPlain .= "\n--- Source & Lead Intelligence ---\n";

@@ -4495,8 +4495,27 @@ document.addEventListener('DOMContentLoaded', function() {
             exclusionsList.push(`Extra KM Charge (Rs. ${Math.round(perKmRate)}/km beyond ${Math.round(billableKm)} km)`);
         }
         exclusionsList.push('Parking Charges (Paid at venue)');
-        exclusionsList.push('Waiting Charges (Extra after 30-min grace period)');
+        exclusionsList.push('Waiting Charges (Rs. 150 per hour after the first 30 mins free)');
         const exclusionsText = exclusionsList.map(item => `- ${item}`).join('\n');
+
+        // Built once, used by quote / confirm / updates / customer_share: the customer is always told the km limit, the extra-km rate and what is
+        // included and what is paid on actuals (the quote and the trip summary used to leave all of this out).
+        const limitsBlock = (billableKm > 0)
+            ? `━━━━━━━━━━━━━━━━━━━\n` +
+              `🛣️ *TRIP LIMITS & CHARGES*\n` +
+              `━━━━━━━━━━━━━━━━━━━\n` +
+              `🛣️ *KM Allowance:* ${Math.round(billableKm)} km\n` +
+              (perKmRate > 0 ? `🪙 *Extra KM Rate:* ₹${perKmRate}/km beyond the limit\n` : '') +
+              `⏱️ *Waiting Charges:* ₹150 per hour after the first 30 mins free\n\n`
+            : '';
+        const incExcBlock = `━━━━━━━━━━━━━━━━━━━\n` +
+                            `✅ *WHAT'S INCLUDED*\n` +
+                            `━━━━━━━━━━━━━━━━━━━\n` +
+                            `${inclusionsText}\n\n` +
+                            `━━━━━━━━━━━━━━━━━━━\n` +
+                            `❌ *NOT INCLUDED / EXTRA*\n` +
+                            `━━━━━━━━━━━━━━━━━━━\n` +
+                            `${exclusionsText}\n\n`;
 
         const custName = basePayload.customerName || 'Customer';
         const routeUrl = getRouteUrl(basePayload.pickup, basePayload.drop);
@@ -4528,7 +4547,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 text += `Our team is currently verifying vehicle availability and will share the best fare details with you shortly.\n`;
             }
             
-            text += `\n━━━━━━━━━━━━━━━━━━━\n` +
+            text += `\n` + limitsBlock + incExcBlock +
+                    `━━━━━━━━━━━━━━━━━━━\n` +
                     `🎁 *CUSTOMER PRIVILEGES*\n` +
                     `━━━━━━━━━━━━━━━━━━━\n` +
                     `Log in to your customer dashboard to claim exclusive discounts and earn reward points on your booking:\n` +
@@ -4577,7 +4597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         `━━━━━━━━━━━━━━━━━━━\n` +
                         `🛣️ *KM Allowance:* ${Math.round(billableKm)} km\n` +
                         `🪙 *Extra KM Rate:* ₹${perKmRate}/km beyond the limit\n` +
-                        `⏱️ *Waiting Charges:* ₹150 per hour applies (after 45 mins grace period)\n\n`;
+                        `⏱️ *Waiting Charges:* ₹150 per hour after the first 30 mins free\n\n`;
             }
             
             text += `━━━━━━━━━━━━━━━━━━━\n` +
@@ -4649,7 +4669,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         `━━━━━━━━━━━━━━━━━━━\n` +
                         `🛣️ *KM Allowance:* ${Math.round(billableKm)} km\n` +
                         `🪙 *Extra KM Rate:* ₹${perKmRate}/km beyond the limit\n` +
-                        `⏱️ *Waiting Charges:* ₹150 per hour applies (after 45 mins grace period)\n\n`;
+                        `⏱️ *Waiting Charges:* ₹150 per hour after the first 30 mins free\n\n`;
             }
             
             text += `━━━━━━━━━━━━━━━━━━━\n` +
@@ -4742,8 +4762,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         `💵 *Total Fare:* *${formattedFare}* _(${fareTypeLabel})_\n` +
                         `💳 *Payment:* Payable to driver at pickup/trip end\n`;
             }
+            text += `\n` + limitsBlock + incExcBlock;
             if (trackingUrl) {
-                text += `\n━━━━━━━━━━━━━━━━━━━\n` +
+                text += `━━━━━━━━━━━━━━━━━━━\n` +
                         `📱 *TRACK YOUR TRIP*\n` +
                         `━━━━━━━━━━━━━━━━━━━\n` +
                         `👉 ${trackingUrl}\n`;

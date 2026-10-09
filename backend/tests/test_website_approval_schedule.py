@@ -111,3 +111,29 @@ def test_the_repair_never_touches_an_edited_or_posted_booking(pg_session):
     assert not apply_quote_to_request(done, q)
     crazy = _request(pg_session, quoted_cost_per_km=14, quoted_driver_allowance=300, quoted_total_amount=2540)
     assert not apply_quote_to_request(crazy, {**q, "total_fare": 90000})                             # nonsense numbers are ignored
+
+
+def test_customize_full_edits_details_and_fare_but_not_the_booking_identity(pg_session):
+    r = _request(pg_session)
+    before = (r.id, r.status, r.source)
+    body = wbs.CustomizeFullBody(customer_name="  Ravi Kumar ", customer_number="9876543210", pickup="Tambaram", drop="Madurai", trip_type="round trip", car_type="innova",
+                                 trip_distance=420, cost_per_km=14, driver_allowance=300, hill_charges=300, toll_charges=250, advance_amount=800)
+    out = wbs.customize_full(r.id, body, db=pg_session, current_admin=type("A", (), {"id": uuid.uuid4(), "username": "t", "role": "Owner"})())
+    assert (r.id, r.status, r.source) == before
+    assert r.customer_name == "Ravi Kumar" and r.customer_number == "9876543210" and r.trip_type == "Round Trip" and r.car_type == "INNOVA"
+    assert r.pickup_drop_location == {"0": "Tambaram", "1": "Madurai"} and r.quoted_trip_distance == 420 and r.advance_amount == 800
+    assert r.admin_hill_charges == 300 and r.admin_toll_charges == 250 and r.admin_cost_per_km == 14 and r.custom_driver_fare is True
+    # fixing the customer total by hand wins over the computed one
+    out = wbs.customize_full(r.id, wbs.CustomizeFullBody(customer_total=7777), db=pg_session, current_admin=type("A", (), {"id": uuid.uuid4(), "username": "t", "role": "Owner"})())
+    assert out["customer_total"] == 7777
+    with pytest.raises(HTTPException):
+        wbs.customize_full(r.id, wbs.CustomizeFullBody(car_type="SPACESHIP"), db=pg_session, current_admin=type("A", (), {"id": uuid.uuid4(), "username": "t", "role": "Owner"})())
+    with pytest.raises(HTTPException):
+        wbs.customize_full(r.id, wbs.CustomizeFullBody(trip_type="teleport"), db=pg_session, current_admin=type("A", (), {"id": uuid.uuid4(), "username": "t", "role": "Owner"})())
+
+
+def test_customize_full_time_change_alone_does_not_freeze_the_driver_tariff(pg_session):
+    r = _request(pg_session)
+    new_time = datetime.now(timezone.utc) + timedelta(hours=200)
+    wbs.customize_full(r.id, wbs.CustomizeFullBody(start_date_time=new_time), db=pg_session, current_admin=type("A", (), {"id": uuid.uuid4(), "username": "t", "role": "Owner"})())
+    assert r.start_date_time == new_time and r.custom_driver_fare is False and r.admin_cost_per_km is None

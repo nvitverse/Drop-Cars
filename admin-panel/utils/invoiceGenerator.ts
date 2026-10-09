@@ -389,8 +389,7 @@ ${inclusions.map(i => `  ✓ ${i}`).join('\n')}
 ${exclusions.length > 0 ? `\nℹ️ *Exclusions (As per actuals):*\n${exclusions.map(e => `  • ${e}`).join('\n')}\n` : ''}
 ${data.notes ? `📝 *Driver / Route Notes:* ${data.notes}\n` : ''}ℹ️ _This estimate is valid for 7 days. Final fare is on the actual km driven; a route change or extra stops can change it._
 
-⚡ *1-Click Instant Booking Confirmation:*
-👉 https://dropcars.in/book-confirm?ref=EST-${data.invoiceNumber}&amt=${advance}
+⚡ *To confirm your booking:* reply *CONFIRM* to this message and pay the advance of ₹${advance.toLocaleString('en-IN')} using the UPI details below.
 
 📲 *UPI Advance Payment:*
 • UPI ID: ${data.upiId || '7200217986-1@okbizaxis'}

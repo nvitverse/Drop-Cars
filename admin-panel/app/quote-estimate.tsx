@@ -644,7 +644,6 @@ export default function QuoteEstimateScreen() {
   };
 
   // Direct Online Confirmation Link
-  const confirmationUrl = `https://${selectedBrand.domain}/confirm?ref=${generatedRefId}&phone=${encodeURIComponent(customerPhone)}`;
 
   // Formatted WhatsApp Message
   const getWhatsAppMessage = () => {
@@ -693,8 +692,7 @@ ${calculationBreakdown.tollEstimate > 0 ? `• Standard Toll Allowance: ₹${cal
 
 ℹ️ This estimate is valid for 7 days. The final fare is on the actual km driven; a route change or extra stops can change it.
 
-🔗 *Instant Online Booking & Confirmation:*
-${confirmationUrl}
+✅ *To confirm your booking:* just reply *CONFIRM* to this message and we will block the vehicle for you.
 
 📞 For 24x7 bookings & support: *${selectedBrand.phone}*
 Website: https://${selectedBrand.domain}`;

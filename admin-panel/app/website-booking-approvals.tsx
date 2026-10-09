@@ -23,6 +23,7 @@ import Toast, { useToast } from '@/components/Toast';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Card, StatusPill, EmptyState } from '@/components/ui';
+import FullCustomizeModal, { EMPTY_FULL_VALUES, FullCustomizeValues } from '@/components/FullCustomizeModal';
 
 // Website Approvals: every confirmed website booking that is waiting to be posted to drivers.
 // Each card shows when it was confirmed, the PICKUP, when it will post by itself (exact date/time and why), and the driver | extra
@@ -56,6 +57,7 @@ interface PendingBookingRow {
   custom_driver_fare?: boolean;
   post_preview?: Preview | null;
   trip_distance?: number | null;
+  hill_charges?: number | null; toll_charges?: number | null; night_charges?: number | null; advance_amount?: number | null;
 }
 
 const IST = 'Asia/Kolkata';
@@ -110,6 +112,26 @@ export default function WebsiteBookingApprovalsScreen() {
   const [rejectNotes, setRejectNotes] = useState('');
   const [scheduleTarget, setScheduleTarget] = useState<PendingBookingRow | null>(null);
   const [customizeTarget, setCustomizeTarget] = useState<PendingBookingRow | null>(null);
+  const [savingCustomize, setSavingCustomize] = useState(false);
+  const fullInitial = (it: PendingBookingRow | null): FullCustomizeValues => {
+    if (!it) return EMPTY_FULL_VALUES;
+    const p: any = it.post_preview || {};
+    const ist = it.start_date_time ? new Date(new Date(it.start_date_time).getTime() + 5.5 * 3600000) : null;
+    const iso = ist ? ist.toISOString() : '';
+    const loc: any = it.pickup_drop_location || {};
+    const keys = loc.pickup || loc.drop ? [] : Object.keys(loc).sort((a, b) => Number(a) - Number(b));
+    const place = (v: any) => (v && typeof v === 'object' ? (v.address || v.city || '') : (v || ''));
+    const pickup = loc.pickup || loc.drop ? place(loc.pickup) : place(loc[keys[0]]);
+    const drop = loc.pickup || loc.drop ? place(loc.drop) : place(loc[keys[keys.length - 1]]);
+    const n = (v: any) => (v === null || v === undefined ? '' : String(v));
+    return {
+      customer_name: it.customer_name || '', customer_number: it.customer_number || '', pickup, drop, date: iso.slice(0, 10), time: iso.slice(11, 16),
+      trip_type: it.trip_type || '', car_type: it.car_type || '', trip_distance: n(it.trip_distance),
+      cost_per_km: n(p.cost_per_km), extra_cost_per_km: n(p.extra_cost_per_km), driver_allowance: n(p.driver_allowance), extra_driver_allowance: n(p.extra_driver_allowance),
+      permit_charges: n(p.permit_charges), extra_permit_charges: n(p.extra_permit_charges), hill_charges: n(it.hill_charges), toll_charges: n(it.toll_charges),
+      night_charges: n(it.night_charges), customer_total: '', advance: n(it.advance_amount),
+    };
+  };
 
   const load = useCallback(async () => {
     try {
@@ -401,17 +423,46 @@ export default function WebsiteBookingApprovalsScreen() {
           }
         }} />
 
-      <CustomizeModal item={customizeTarget} c={c} isDark={isDark} onClose={() => setCustomizeTarget(null)}
-        onSave={async (body) => {
+      <FullCustomizeModal
+        visible={!!customizeTarget}
+        title="Customize booking"
+        subtitle={customizeTarget ? `${customizeTarget.customer_name} · pickup ${fmtDay(customizeTarget.start_date_time)}` : undefined}
+        initial={fullInitial(customizeTarget)}
+        saving={savingCustomize}
+        editableTripAndVehicle
+        showCustomerTotal
+        showAdvance
+        customerTotalNow={customizeTarget ? (customizeTarget.customer_total ?? customizeTarget.quoted_total_amount ?? null) : null}
+        onClose={() => setCustomizeTarget(null)}
+        onReset={customizeTarget?.custom_driver_fare ? (async () => {
           if (!customizeTarget) return;
+          try { await call(`/admin/website-bookings/${customizeTarget.id}/customize`, 'PUT', { reset: true }); showToast('Back to the driver tariff.', 'success'); setCustomizeTarget(null); load(); }
+          catch (e: any) { Alert.alert('Could not reset', e?.message || 'Try again'); }
+        }) : undefined}
+        onSave={async (_v, changed) => {
+          if (!customizeTarget) return;
+          const num = (k: keyof FullCustomizeValues) => Number((changed as any)[k]);
+          const body: Record<string, any> = {};
+          (['cost_per_km', 'extra_cost_per_km', 'driver_allowance', 'extra_driver_allowance', 'permit_charges', 'extra_permit_charges', 'hill_charges', 'toll_charges', 'night_charges', 'trip_distance'] as const)
+            .forEach((k) => { if ((changed as any)[k] !== undefined) body[k] = num(k) || 0; });
+          if (changed.customer_total !== undefined && changed.customer_total !== '') body.customer_total = num('customer_total');
+          if (changed.advance !== undefined) body.advance_amount = num('advance') || 0;
+          (['customer_name', 'customer_number', 'pickup', 'drop', 'trip_type', 'car_type'] as const).forEach((k) => { if ((changed as any)[k] !== undefined) body[k] = String((changed as any)[k]).trim(); });
+          if (changed.date !== undefined || changed.time !== undefined) {
+            const d = (changed.date ?? fullInitial(customizeTarget).date).trim(); const tm = (changed.time ?? fullInitial(customizeTarget).time).trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{1,2}:\d{2}$/.test(tm)) { Alert.alert('Date / time', 'Use the date as YYYY-MM-DD and the time as HH:MM.'); return; }
+            body.start_date_time = `${d}T${tm.padStart(5, '0')}:00+05:30`;
+          }
+          if (Object.keys(body).length === 0) { setCustomizeTarget(null); return; }
+          setSavingCustomize(true);
           try {
-            await call(`/admin/website-bookings/${customizeTarget.id}/customize`, 'PUT', body);
-            showToast(body.reset ? 'Back to the driver tariff.' : 'Driver fare saved.', 'success');
+            await call(`/admin/website-bookings/${customizeTarget.id}/customize-full`, 'PUT', body);
+            showToast('Booking updated.', 'success');
             setCustomizeTarget(null);
             load();
           } catch (e: any) {
             Alert.alert('Could not save', e?.message || 'Try again');
-          }
+          } finally { setSavingCustomize(false); }
         }} />
 
       <Modal visible={!!rejectTarget} transparent animationType="fade" onRequestClose={() => setRejectTarget(null)}>

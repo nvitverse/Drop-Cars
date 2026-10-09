@@ -36,6 +36,7 @@ import Toast, { useToast } from '@/components/Toast';
 import { colors, shadows, radii } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { Section, Row, Stat, Btn, KpiStrip, PriorityGrid, ActionDock } from '@/components/ui';
+import FullCustomizeModal, { FullCustomizeValues, setRoute } from '@/components/FullCustomizeModal';
 import { LABELS } from '@/constants/labels';
 import ThemeToggle from '@/components/ThemeToggle';
 import CancelReasonModal from '@/components/CancelReasonModal';
@@ -417,6 +418,8 @@ export default function OrdersScreen() {
   const EXECUTED_PLATFORM_PRESETS = ['Drop Cars App', 'MMT', 'Savaari Referral', 'Phone / Manual', 'Other'];
   const [canEditFare, setCanEditFare] = useState(false);
   const [showEditFareModal, setShowEditFareModal] = useState(false);
+  const [fullTarget, setFullTarget] = useState<Order | null>(null);
+  const [savingFull, setSavingFull] = useState(false);
   const [editFareValues, setEditFareValues] = useState<Record<string, string>>({});
   const [savingFare, setSavingFare] = useState(false);
   const { toast, showToast } = useToast();
@@ -1048,6 +1051,70 @@ export default function OrdersScreen() {
     }
   };
 
+  // ---- one full Customize / Edit screen for a posted booking (replaces the fare-only "Edit Fare" box)
+  const fullInitialFor = (o: Order | null): FullCustomizeValues => {
+    const E: FullCustomizeValues = { customer_name: '', customer_number: '', pickup: '', drop: '', date: '', time: '', trip_type: '', car_type: '', trip_distance: '', cost_per_km: '', extra_cost_per_km: '',
+      driver_allowance: '', extra_driver_allowance: '', permit_charges: '', extra_permit_charges: '', hill_charges: '', toll_charges: '', night_charges: '', customer_total: '', advance: '' };
+    if (!o) return E;
+    const a: any = o;
+    const loc: any = a.pickup_drop_location || {};
+    const place = (v: any) => (v && typeof v === 'object' ? (v.address || v.city || '') : (v || ''));
+    const keys = loc.pickup || loc.drop ? [] : Object.keys(loc).sort((x, y) => Number(x) - Number(y));
+    const pickup = loc.pickup || loc.drop ? place(loc.pickup) : place(loc[keys[0]]);
+    const drop = loc.pickup || loc.drop ? place(loc.drop) : place(loc[keys[keys.length - 1]]);
+    const ist = a.start_date_time ? new Date(new Date(a.start_date_time).getTime() + 5.5 * 3600000).toISOString() : '';
+    const n = (v: any) => (v === null || v === undefined ? '' : String(v));
+    return { ...E, customer_name: a.customer_name || '', customer_number: a.customer_number || '', pickup, drop, date: ist.slice(0, 10), time: ist.slice(11, 16),
+      trip_type: String(a.trip_type || ''), car_type: String(a.car_type || ''), trip_distance: n(a.trip_distance), cost_per_km: n(a.cost_per_km), extra_cost_per_km: n(a.extra_cost_per_km),
+      driver_allowance: n(a.driver_allowance), extra_driver_allowance: n(a.extra_driver_allowance), permit_charges: n(a.permit_charges), extra_permit_charges: n(a.extra_permit_charges),
+      hill_charges: n(a.hill_charges), toll_charges: n(a.quoted_toll_charges ?? a.toll_charges), night_charges: n(a.night_charges), advance: n(a.advance_received) };
+  };
+
+  const openFullCustomize = (o: Order) => { setSelectedOrder(null); setFullTarget(o); };
+
+  const saveFullCustomize = async (_v: FullCustomizeValues, changed: Partial<FullCustomizeValues>) => {
+    const o: any = fullTarget;
+    if (!o) return;
+    const init = fullInitialFor(fullTarget);
+    const master: Record<string, any> = {};
+    const fare: Record<string, number> = {};
+    if (changed.customer_name !== undefined && changed.customer_name.trim()) master.customer_name = changed.customer_name.trim();
+    if (changed.customer_number !== undefined && changed.customer_number.trim()) master.customer_number = changed.customer_number.trim();
+    if (changed.trip_distance !== undefined && changed.trip_distance !== '') master.trip_distance = parseInt(changed.trip_distance, 10) || 0;
+    if (changed.advance !== undefined && changed.advance !== '') master.advance_received = parseInt(changed.advance, 10) || 0;
+    if (changed.pickup !== undefined || changed.drop !== undefined) {
+      master.pickup_drop_location = setRoute(o.pickup_drop_location, (changed.pickup ?? '').trim(), (changed.drop ?? '').trim());
+    }
+    if (changed.date !== undefined || changed.time !== undefined) {
+      const d = (changed.date ?? init.date).trim();
+      const tm = (changed.time ?? init.time).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{1,2}:\d{2}$/.test(tm)) { Alert.alert('Date / time', 'Use the date as YYYY-MM-DD and the time as HH:MM.'); return; }
+      master.start_date_time = `${d}T${tm.padStart(5, '0')}:00+05:30`;
+    }
+    (['cost_per_km', 'extra_cost_per_km', 'driver_allowance', 'extra_driver_allowance', 'permit_charges', 'extra_permit_charges', 'hill_charges', 'toll_charges', 'night_charges'] as const).forEach((k) => {
+      const raw = (changed as any)[k];
+      if (raw !== undefined && raw !== '') fare[k] = parseInt(raw, 10) || 0;
+    });
+    if (Object.keys(master).length === 0 && Object.keys(fare).length === 0) { setFullTarget(null); return; }
+    setSavingFull(true);
+    try {
+      let patch: any = {};
+      if (Object.keys(master).length) { await apiService.masterEditOrder(o.id, master); patch = { ...patch, ...master }; }
+      if (Object.keys(fare).length) {
+        const res = await apiService.adminEditOrderFare(o.id, fare);
+        patch = { ...patch, ...fare, estimated_price: res.estimated_price, vendor_price: res.vendor_price };
+      }
+      if (master.start_date_time) patch.start_date_time = master.start_date_time;
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, ...patch } : x)));
+      setFullTarget(null);
+      showToast(Object.keys(fare).length && patch.vendor_price ? `Booking updated - new total ₹${Number(patch.vendor_price).toLocaleString('en-IN')}.` : 'Booking updated.', 'success');
+    } catch (error: any) {
+      Alert.alert('Could not save', error?.message || 'Try again');
+    } finally {
+      setSavingFull(false);
+    }
+  };
+
   // Helper function to get location string from pickup_drop_location
   const getLocationString = (location: PickupDropLocation | undefined): string => {
     if (!location) return '';
@@ -1560,7 +1627,7 @@ export default function OrdersScreen() {
 
                     <TouchableOpacity
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderWidth: 1, borderColor: themeColors.border }}
-                      onPress={(e) => { e.stopPropagation(); setSelectedOrder(item); openEditFareModal(); }}
+                      onPress={(e) => { e.stopPropagation(); openFullCustomize(item); }}
                       activeOpacity={0.8}
                     >
                       <Edit3 size={12} color={themeColors.text} />
@@ -1774,21 +1841,12 @@ export default function OrdersScreen() {
                 <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fare Breakdown</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                   <TouchableOpacity
-                    onPress={() => handleEditFullBooking(selectedOrder)}
+                    onPress={() => openFullCustomize(selectedOrder)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#312E81' : '#EEF2FF', borderRadius: 6 }}
                   >
                     <SlidersHorizontal size={13} color={colors.primary} />
                     <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Customize Booking</Text>
                   </TouchableOpacity>
-                  {canEditFare && isOrderEditable(selectedOrder) && selectedOrder.cost_per_km != null && (
-                    <TouchableOpacity
-                      onPress={openEditFareModal}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderRadius: 6 }}
-                    >
-                      <Edit3 size={13} color={colors.primary} />
-                      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Edit Fare</Text>
-                    </TouchableOpacity>
-                  )}
                   {isOrderEditable(selectedOrder) && (
                     <TouchableOpacity
                       onPress={() => handleOpenEditAdvance(selectedOrder)}
@@ -4243,56 +4301,17 @@ export default function OrdersScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={showEditFareModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowEditFareModal(false)}
-      >
-        <View style={styles.epModalOverlay}>
-          <View style={styles.epModalCard}>
-            <Text style={styles.epModalTitle}>Edit Fare</Text>
-            <Text style={styles.epModalSubtitle}>
-              Change any rate below and Save - the total recalculates automatically. Leave a
-              field blank to keep its current value.
-            </Text>
-            <View style={styles.editFareGrid}>
-              {EDIT_FARE_FIELDS.map((field) => (
-                <View key={field.key} style={styles.editFareCell}>
-                  <Text style={styles.editFareLabel}>{field.label}</Text>
-                  <TextInput
-                    style={styles.editFareInput}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#9CA3AF"
-                    value={editFareValues[field.key] ?? ''}
-                    onChangeText={(v) => setEditFareValues((prev) => ({ ...prev, [field.key]: v }))}
-                  />
-                </View>
-              ))}
-            </View>
-            <View style={styles.epModalButtonsRow}>
-              <TouchableOpacity
-                style={[styles.epModalButton, styles.epModalCancelButton]}
-                onPress={() => setShowEditFareModal(false)}
-              >
-                <Text style={styles.epModalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.epModalButton, styles.epModalSaveButton, savingFare && { opacity: 0.6 }]}
-                onPress={handleSaveFare}
-                disabled={savingFare}
-              >
-                {savingFare ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.epModalSaveButtonText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <FullCustomizeModal
+        visible={!!fullTarget}
+        title={fullTarget ? `Customize booking #${fullTarget.id}` : 'Customize booking'}
+        subtitle="Everything about this booking in one place. A field you do not change stays as it is."
+        initial={fullInitialFor(fullTarget)}
+        saving={savingFull}
+        editableTripAndVehicle={false}
+        showAdvance
+        onClose={() => setFullTarget(null)}
+        onSave={saveFullCustomize}
+      />
 
       <Modal
         visible={showEditAdvanceModal}

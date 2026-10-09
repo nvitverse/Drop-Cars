@@ -61,6 +61,12 @@ def list_pending_website_bookings(db) -> list:
             "custom_driver_fare": bool(r.custom_driver_fare),
             "post_preview": preview_for(db, r, tariff_cfg),
             "trip_distance": r.quoted_trip_distance,
+            # for the full Customize screen
+            "customer_email": getattr(r, "customer_email", None),
+            "hill_charges": r.admin_hill_charges if r.admin_hill_charges is not None else r.quoted_hill_charges,
+            "toll_charges": r.admin_toll_charges if r.admin_toll_charges is not None else r.quoted_toll_charges,
+            "night_charges": r.admin_night_charges if r.admin_night_charges is not None else r.quoted_night_charges,
+            "advance_amount": r.advance_amount,
         })
     return out
 

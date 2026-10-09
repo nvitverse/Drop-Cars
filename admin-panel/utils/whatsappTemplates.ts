@@ -2,6 +2,7 @@ import { openWaUrl } from './whatsapp';
 import { Linking, Platform, Alert } from 'react-native';
 
 export interface WhatsAppTemplateData {
+  invoiceUrl?: string;
   bookingId?: string | number;
   customerName?: string;
   customerPhone?: string;
@@ -112,13 +113,13 @@ export function buildWhatsAppMessage(type: TemplateType, data: WhatsAppTemplateD
   const time = data.pickupTime || 'Scheduled Time';
   const vehicle = data.vehicleType || 'Sedan';
   const tripType = data.tripType || 'One Way';
-  const trackingUrl = `https://dropcars.in/track/${bid}`;
-  const sosUrl = `https://dropcars.in/sos?ref=${bid}`;
-  const driverClaimUrl = `https://driver.dropcars.in/trip/${bid}`;
+  const trackingUrl = `https://dropcars.in/track-booking/${bid}`;
+  const sosUrl = `Call us any time on +91 ${brandPhone}`;
+  const driverClaimUrl = `Open the Drop Cars Driver App and accept booking #${bid}`;
   const reviewToken = data.reviewToken || bid;
-  const reviewUrl = `https://dropcars.in/review/${reviewToken}`;
-  const invoiceUrl = `https://dropcars.in/invoice/${bid}`;
-  const advancePayUrl = `https://dropcars.in/pay-advance/${bid}`;
+  const reviewUrl = String(reviewToken).length >= 16 ? `https://dropcars.in/review/${reviewToken}` : `https://dropcars.in/track-booking/${bid}`;
+  const invoiceUrl = data.invoiceUrl || '';
+  const advancePayUrl = `https://dropcars.in/thank-you/${bid}`;
   // Only a real trip code is ever sent to a customer. It used to fall back to the last digits of the booking number, a code nobody could
   // use (the trip would not start) that looked real.
   const startOtp = data.startOtp || '';
@@ -224,7 +225,7 @@ Booking Ref: *#${bid}*
 📅 *Date & Time:* ${date} at ${time}
 🚗 *Vehicle Type:* ${vehicle} (${tripType})
 ${data.distanceKm ? `📏 *Distance Limit:* ~${data.distanceKm} KM\n` : ''}${fareBreakdown ? `${fareBreakdown}\n` : ''}
-⚡ *1-Click Web Claim (No App Required):*
+⚡ *Claim this trip:*
 👉 ${driverClaimUrl}
 
 📞 *Or Claim via Helpline:* tel:${brandPhone}
@@ -247,7 +248,7 @@ To confirm your booking for *${pickup} ➔ ${drop}* on *${date} at ${time}*, ple
 • *Advance Required (${advPercent}%): ₹${advance.toLocaleString('en-IN')}*
 • Balance on Trip Completion: ₹${balance.toLocaleString('en-IN')}
 
-🔗 *Pay Advance Online (UPI / Card / NetBanking):*
+🔗 *Pay the advance by UPI and upload the receipt here:*
 ${advancePayUrl}
 
 After payment, driver and vehicle details will be assigned immediately.
@@ -282,7 +283,7 @@ ${bata > 0 ? `• Driver Bata / Allowance: ₹${bata.toLocaleString('en-IN')}\n`
 ℹ️ *Excluded:* Highway Tolls (actual Fastag log), Parking & Airport Entry, State Permits (if applicable).
 🏔️ *Hill Section:* ₹300 (One-Way) / ₹500 (Round Trip) applies for ghat/hill station routes.
 
-🔗 *Confirm & Pay ${advPercent}% Advance Online:*
+🔗 *Pay the ${advPercent}% advance by UPI and upload the receipt here:*
 ${advancePayUrl}
 
 Helpline: ${brandPhone} | ${brand} Mobility`;
@@ -306,10 +307,7 @@ ${data.extraCharges ? `• Extra KM / Time Charges: ₹${data.extraCharges.toLoc
 ${advance > 0 ? `• Less: Advance Paid: -₹${advance.toLocaleString('en-IN')}\n` : ''}• Balance Settled: ₹${balance.toLocaleString('en-IN')} (Paid in Full)
 ----------------------------------------
 
-📄 *Download Official GST Tax Invoice (PDF):*
-${invoiceUrl}
-
-⭐ *Rate Your Experience with Us:*
+${invoiceUrl ? `📄 *Download your invoice (PDF):*\n${invoiceUrl}\n\n` : ''}⭐ *Rate Your Experience with Us:*
 ${reviewUrl}
 
 Thank you for travelling with ${brand}!`;
@@ -327,8 +325,6 @@ Your feedback helps us maintain premium safety and quality. Please take 10 secon
 ⭐ *1-Tap Instant Review Link:*
 ${reviewUrl}
 
-🌟 *Or Review Us on Google:*
-https://g.page/r/dropcars/review
 
 Helpline: ${brandPhone} | ${brand} Management`;
     }

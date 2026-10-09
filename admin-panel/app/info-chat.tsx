@@ -65,7 +65,7 @@ const TOPICS: Topic[] = [
   {
     id: 'editfare', title: 'Posted booking-oda fare maatrunadhu',
     words: ['edit fare', 'edit', 'fare maatru', 'posted booking'],
-    answer: 'Post aana booking-ku: Operations > Bookings > card > Edit (Edit Fare). Post aagaadha booking-ku: Website Approvals > Customize. Customer total, driver paguthi + extra ellaam serndhu thaan.',
+    answer: 'Post aana booking-ku: Operations > Bookings > card > Edit (the full Customize screen). Post aagaadha booking-ku: Website Approvals > Customize. Customer total, driver paguthi + extra ellaam serndhu thaan.',
   },
 ];
 
