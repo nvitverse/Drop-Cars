@@ -42,6 +42,7 @@ import {
   ChevronRight,
   Sparkles,
   FileText,
+  AlertTriangle,
   Map,
   X,
   CheckCircle2,
@@ -1478,6 +1479,13 @@ export default function DashboardScreen() {
                   icon: Receipt,
                   color: '#8B5CF6',
                   route: '/billing-editor?type=INVOICE',
+                },
+                {
+                  label: 'Unaccepted Bookings',
+                  sub: 'Posted but nobody accepted - snooze, share, hand to a vendor, or cancel',
+                  icon: AlertTriangle,
+                  color: '#DC2626',
+                  route: '/unaccepted-desk',
                 },
                 {
                   label: 'All Invoices & Estimates',

@@ -19,6 +19,7 @@ import app.models.worker_management
 import app.models.document_model  # document_models table must be known before create_all()
 import app.models.chat_trash  # chat_trash table must be known before create_all()
 import app.models.billing  # billing_brands / billing_documents tables
+import app.models.unaccepted_case  # unaccepted_cases table
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
@@ -288,6 +289,8 @@ from app.api.routes import admin_trip_close as _trip_close
 from app.api.routes import billing_docs as _billing_docs
 app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estimates"])
 app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
+from app.api.routes import unaccepted_desk as _unaccepted_desk
+app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
 from app.api.routes import document_models as _doc_models
 app.include_router(_doc_models.router, prefix="/api", tags=["Document Models"])
 app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])
@@ -1089,6 +1092,11 @@ async def _run_assignment_sweep() -> dict:
         urgent_notified = await send_urgent_booking_reminders(db)
         if urgent_notified:
             print(f"Sent {urgent_notified} urgent-reminder push(es) for bookings nearing their deadline")
+        try:
+            from app.crud.unaccepted_desk import push_due_alarms
+            await push_due_alarms(db)
+        except Exception as _ud:        # noqa: BLE001
+            print(f"unaccepted desk push failed (sweep continues): {_ud}")
         expired = await cancel_expired_unaccepted_orders(db)
         if expired:
             print(f"Cancelled {expired} unaccepted booking(s) past their deadline")

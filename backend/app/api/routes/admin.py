@@ -6372,13 +6372,14 @@ def get_urgent_unassigned_alarm_bookings(
             .all()
         )
         seen = {i["order_id"] for i in items}
+        from app.crud import unaccepted_desk as _desk
+        _cfg = _desk.get_cfg(db)
         for order in open_orders:
             if order.id in seen or not order.created_at:
                 continue
             pickup, posted = order.start_date_time, order.created_at
-            from app.crud.order_assignments import unaccepted_alarm_fire_at
-            fire_at = unaccepted_alarm_fire_at(posted, pickup, before_min, short_hours, short_pct)
-            if now < fire_at:
+            _case = _desk.get_or_create_case(db, order, _cfg)
+            if not _desk.is_due(_case, now, _cfg):
                 continue
             try:
                 origin, destination = _origin_and_destination_from_index_map(order.pickup_drop_location or {})
@@ -6404,8 +6405,11 @@ def get_urgent_unassigned_alarm_bookings(
                 "mins_to_pickup": mins_to_pickup,
                 "alarm_reason": "NOBODY_ACCEPTED",
                 "alarm_title": "NOBODY HAS ACCEPTED THIS BOOKING",
-                "alarm_subtitle": f"Pickup in {mins_to_pickup} mins - posted but no driver has accepted yet",
+                "alarm_subtitle": f"Pickup in {mins_to_pickup} mins - posted but no driver has accepted yet" + (f" (reminder {_case.alarms_fired + 1})" if _case.alarms_fired else ""),
+                "desk": True,
+                "alarm_no": _case.alarms_fired + 1,
             })
+        db.commit()
     except Exception as _e:
         print(f"unaccepted booking alarm check failed (continuing): {_e}")
     return items

@@ -46,6 +46,11 @@ def auto_remove_unassigned_bookings(db: Session, custom_timeout_mins: int = None
         warned = await send_assignment_deadline_warnings(db)
         removed = await cancel_timed_out_pending_assignments(db)
         reminded = await send_urgent_booking_reminders(db)
+        try:
+            from app.crud.unaccepted_desk import push_due_alarms
+            await push_due_alarms(db)
+        except Exception as e:      # noqa: BLE001
+            print(f"unaccepted desk push failed (sweep continues): {e}")
         expired = await cancel_expired_unaccepted_orders(db)
         return warned, removed, reminded, expired
 

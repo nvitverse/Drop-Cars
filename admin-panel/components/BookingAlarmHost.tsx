@@ -47,6 +47,8 @@ type BookingAlarmItem = {
   auto_post_at?: string | null;
   auto_post_reason?: string | null;
   is_held?: boolean;
+  desk?: boolean;
+  alarm_no?: number;
 };
 
 function locationLabel(loc: any, routeStr?: string): string {
@@ -167,7 +169,9 @@ export default function BookingAlarmHost() {
         });
 
         // Fresh unassigned bookings (<1h to pickup)
-        const freshUrgentUnassigned = (urgentUnassignedList || []).filter((b) => {
+        const freshUrgentUnassigned = (urgentUnassignedList || []).filter((b: any) => {
+          // a desk alarm is scheduled by the server (it rings again after half of the time left): only a short local pause after we acted on it
+          if (b.desk) { const t = snoozedUntil[b.id]; return !(t && now < t); }
           if (dismissedRef.current.has(b.id)) return false;
           const snoozeExpiry = snoozedUntil[b.id];
           if (snoozeExpiry && now < snoozeExpiry) return false;
@@ -230,8 +234,25 @@ export default function BookingAlarmHost() {
     };
   }, [activeBooking?.id, pulseAnim]);
 
+  const deskCall = async (path: string, body?: any) => {
+    if (!activeBooking) return;
+    const orderId = activeBooking.order_id ?? activeBooking.id;
+    setSnoozedUntil((prev) => ({ ...prev, [activeBooking.id]: Date.now() + 120000 }));      // quiet for 2 min while the server records it
+    try { await apiService.makeRequest(`/admin/unaccepted-desk/${orderId}/${path}`, { method: 'POST', body: JSON.stringify(body || {}) }); }
+    catch (e: any) { Alert.alert('Could not save', e?.message || 'Try again'); }
+  };
+
   const handleReview = () => {
     if (!activeBooking) return;
+    if (activeBooking.desk) {
+      deskCall('seen');                                    // acknowledged: the next alarm is scheduled at half of the time left
+      const left = queue.filter((b) => b.id !== activeBooking.id);
+      setQueue(left);
+      setCurrentIndex(0);
+      if (left.length === 0) forceStopAlarmSound();
+      router.push('/unaccepted-desk' as any);
+      return;
+    }
     dismissedRef.current.add(activeBooking.id);
     const remaining = queue.filter((b) => b.id !== activeBooking.id);
     setQueue(remaining);
@@ -276,6 +297,14 @@ export default function BookingAlarmHost() {
 
   const handleSnooze = () => {
     if (!activeBooking) return;
+    if (activeBooking.desk) {
+      deskCall('snooze', { minutes: 15 });
+      const left = queue.filter((b) => b.id !== activeBooking.id);
+      setQueue(left);
+      setCurrentIndex(0);
+      if (left.length === 0) forceStopAlarmSound();
+      return;
+    }
     setSnoozedUntil((prev) => ({ ...prev, [activeBooking.id]: Date.now() + 300000 }));
     const remaining = queue.filter((b) => b.id !== activeBooking.id);
     setQueue(remaining);
@@ -421,7 +450,7 @@ export default function BookingAlarmHost() {
               onPress={isUnassignedAlert ? handleSnooze : handleAcknowledge}
             >
               <Clock size={18} color={themeColors.text} />
-              <Text style={[styles.snoozeText, { color: themeColors.text }]}>{isUnassignedAlert ? 'SNOOZE (5m)' : 'ACKNOWLEDGE'}</Text>
+              <Text style={[styles.snoozeText, { color: themeColors.text }]}>{isUnassignedAlert ? (activeBooking.desk ? 'SNOOZE (15m)' : 'SNOOZE (5m)') : 'ACKNOWLEDGE'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -430,7 +459,7 @@ export default function BookingAlarmHost() {
             >
               <ArrowRight size={20} color="#FFFFFF" />
               <Text style={styles.reviewButtonText}>
-                {isUnassignedAlert ? '🚨 HANDLE THIS NOW' : 'REVIEW NOW'}
+                {isUnassignedAlert ? (activeBooking.desk ? '🚨 OPEN THE DESK' : '🚨 HANDLE THIS NOW') : 'REVIEW NOW'}
               </Text>
             </TouchableOpacity>
           </View>

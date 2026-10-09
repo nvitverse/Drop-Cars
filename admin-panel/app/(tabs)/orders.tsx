@@ -227,7 +227,7 @@ export default function OrdersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 12);
-  const params = useLocalSearchParams<{ tab?: string; segment?: string; section?: string }>();
+  const params = useLocalSearchParams<{ tab?: string; segment?: string; section?: string; allocate?: string }>();
   const paramTab = params.tab;
   const { isDark, themeColors } = useTheme();
   const { isOnDuty } = useStaffDuty();
@@ -419,6 +419,17 @@ export default function OrdersScreen() {
   const [canEditFare, setCanEditFare] = useState(false);
   const [showEditFareModal, setShowEditFareModal] = useState(false);
   const [fullTarget, setFullTarget] = useState<Order | null>(null);
+  // arriving from the Unaccepted desk with ?allocate=<id>: open the manual-allocation sheet for that booking
+  const paramAllocate = params.allocate;
+  useEffect(() => {
+    if (!paramAllocate) return;
+    const o = orders.find((x) => String(x.id) === String(paramAllocate));
+    if (o) {
+      setAllocateModalOrder(o);
+      setAllocateQuery(''); setAllocateResults([]); setAllocateTarget(null); setAllocateError(null); setAllocateLowBalance(null);
+      router.setParams({ allocate: '' } as any);
+    }
+  }, [paramAllocate, orders]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [savingFull, setSavingFull] = useState(false);
   const [editFareValues, setEditFareValues] = useState<Record<string, string>>({});
   const [savingFare, setSavingFare] = useState(false);

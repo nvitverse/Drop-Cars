@@ -596,6 +596,22 @@ async def cancel_expired_unaccepted_orders(db: Session) -> int:
                 await notify_unaccepted_expired_booking(db, order)
             except Exception as e:
                 print(f"Expired-booking alarm notification failed for order {order.id}: {e}")
+            try:        # the customer is told, in detail, that no vehicle could be arranged (and what happens to the advance)
+                from app.crud import unaccepted_desk as _desk
+                _case = _desk.get_or_create_case(db, order)
+                if _case.status in _desk.ACTIVE:
+                    _mail = _desk.email_customer_cancelled(db, order, "no vehicle could be arranged before your pickup time")
+                    _case.status = "CANCELLED"
+                    _case.cancel_reason = "Nobody accepted it before pickup (auto-cancelled)"
+                    _case.customer_emailed = bool(_mail.get("sent"))
+                    _case.customer_email_to = _mail.get("to")
+                    _desk._log(_case, "system", "AUTO_CANCELLED", f"e-mail: {_mail.get('to') if _mail.get('sent') else _mail.get('why')}")
+                    db.commit()
+                from app.utils.website_status_webhook import notify_website_of_status
+                notify_website_of_status(db, order.id, "CANCELLED")
+            except Exception as e:
+                db.rollback()
+                print(f"Customer cancellation notice failed for order {order.id}: {e}")
         except Exception as e:
             db.rollback()
             print(f"Unaccepted-expiry failed for order {order.id}: {e}")
