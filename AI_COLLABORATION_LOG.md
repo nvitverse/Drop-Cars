@@ -4,6 +4,29 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Master Prompt 4 Batch 4: Help Telemetry Events, Admin Help Insights Dashboard, Offline Banner & Document Coach (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps.
+- **Workstream C8 & E1–E4: Telemetry Analytics, Offline Resilience & Upload Coach:**
+  - **Backend Telemetry Route (`backend/app/api/routes/help_events.py`):**
+    - Purely additive router storing anonymous interactions `{app, code, screen, build, action, lang}` in `help_telemetry_events` table with automatic index creation.
+    - `POST /api/help/events`: Records user events without sensitive or personal identifiers.
+    - `GET /api/help/insights`: Computes top 10 doubt/error codes, detail open rate, and call conversion percentage over 7, 14, or 30 days.
+    - Tested with `backend/tests/test_help_events.py` -> 100% green.
+  - **Admin Help Insights Screen (`admin-panel/app/help-insights.tsx`):**
+    - Full telemetry console showing total issues, detail reads, call escalations, WhatsApp chats, and top 10 ranked doubtful screens.
+  - **Offline Banner (`driver-app/components/OfflineBanner.tsx`):**
+    - Listens to NetInfo and shows a non-intrusive red bar "No internet — showing last saved data" with live retry.
+  - **Document Upload Coach (`driver-app/components/DocumentCoachModal.tsx`):**
+    - Visual guide card highlighting Dos (flat, 4 corners, bright lighting) and Don'ts (no glare, no cropping, no blur) before launching camera.
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **327 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+
+---
+
 ### Master Prompt 4 Batch 3: Customer App Language System, Vendor App Telugu/Kannada Support & Expanded Catalogs (Antigravity, 2026-10-09)
 - **Branch:** `feat/brand-language-help-round4`.
 - **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
