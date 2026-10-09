@@ -106,7 +106,7 @@ export default function CommandCenterModal() {
   return (
     <Modal visible={isOpen} transparent animationType="slide" onRequestClose={closeCommandCenter} statusBarTranslucent>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         style={styles.modalOverlay}
       >

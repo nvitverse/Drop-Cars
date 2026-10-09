@@ -9,10 +9,10 @@ import {
   TextInput,
   Switch,
   Alert,
-  Modal,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Building2, Car, UserCircle, FileText, Info, Power, Trash2, CheckSquare, Square, ListChecks, X, ChevronRight as ChevronRightIcon, ShieldCheck as ShieldCheckIcon, ShieldAlert as ShieldAlertIcon, Users, ArrowUpDown } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';

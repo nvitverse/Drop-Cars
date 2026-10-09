@@ -10,10 +10,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Alert,
   Linking,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter, useLocalSearchParams } from 'expo-router';

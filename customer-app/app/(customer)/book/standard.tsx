@@ -914,7 +914,7 @@ export default function StandardBookingScreen() {
         <Text style={s.progressLabel}>Step {sectionIndex + 1} of {SECTION_ORDER.length} · {SECTION_LABEL[section]}</Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollInner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.webCenterWrap}>
           {section === 'TRIP' && (

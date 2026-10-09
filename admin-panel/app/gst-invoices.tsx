@@ -7,12 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Alert,
   Platform,
   Switch,
   FlatList,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {

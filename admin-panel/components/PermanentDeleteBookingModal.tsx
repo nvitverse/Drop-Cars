@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { Trash2, AlertTriangle, X, ShieldAlert } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';

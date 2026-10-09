@@ -119,7 +119,7 @@ export default function InfoChatScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <FlatList
@@ -134,7 +134,7 @@ export default function InfoChatScreen() {
             </View>
           )}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flexGrow: 0, backgroundColor: c.surface }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, gap: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flexGrow: 0, flexShrink: 0, height: 50, backgroundColor: c.surface }} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' }}>
           {chips.map((t) => (
             <TouchableOpacity key={t.id} onPress={() => ask(t.title)} style={[s.chip, { borderColor: c.border, backgroundColor: c.background }]} activeOpacity={0.7}>
               <Text style={{ color: c.primary, fontSize: 12, fontWeight: '600' }}>{t.title}</Text>

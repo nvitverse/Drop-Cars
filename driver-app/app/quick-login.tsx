@@ -158,7 +158,7 @@ export default function QuickLoginScreen() {
     <LinearGradient colors={['#3B82F6', '#1E40AF']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.keyboardView}
       >
         <View style={styles.content}>

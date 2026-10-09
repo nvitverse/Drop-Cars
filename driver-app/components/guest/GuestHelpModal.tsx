@@ -173,7 +173,7 @@ export default function GuestHelpModal({
       >
         <KeyboardAvoidingView
           style={styles.keyboardView}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
         >
           {/* Header */}

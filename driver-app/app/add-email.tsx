@@ -90,7 +90,7 @@ export default function AddEmailScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View style={styles.container}>
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
             <View style={[styles.iconCircle, { backgroundColor: colors.primary + '22' }]}>

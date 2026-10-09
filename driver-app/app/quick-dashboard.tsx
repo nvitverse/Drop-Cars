@@ -10,11 +10,11 @@ import {
   RefreshControl,
   ActivityIndicator,
   Animated,
-  Modal,
   BackHandler,
   Switch,
   TextInput,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';

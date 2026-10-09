@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   TextInput,
   Alert,
   Platform,
@@ -15,6 +14,7 @@ import {
   UIManager,
   StatusBar as RNStatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';

@@ -9,10 +9,10 @@ import {
   TextInput,
   Switch,
   Alert,
-  Modal,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Search, Car, Info, FileText, Trash2, Star, ChevronRight, X } from 'lucide-react-native';

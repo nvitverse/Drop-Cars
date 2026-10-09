@@ -143,6 +143,7 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          tabBarHideOnKeyboard: true,   // the bar must not ride up above the keyboard now that the screen lifts for it
           tabBarStyle: {
             backgroundColor: colors.surface,
             borderTopWidth: 1,

@@ -6,10 +6,10 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Modal,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   MapPin,

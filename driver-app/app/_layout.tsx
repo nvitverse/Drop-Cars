@@ -22,6 +22,7 @@ import { setupNotificationListeners } from '@/services/notifications/notificatio
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import OtaUpdateGate from '@/components/OtaUpdateGate';
 import ForceUpdateGate from '@/components/ForceUpdateGate';
+import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import { installUiTranslation } from '@/utils/uiTranslate';
 
 installUiTranslation(); // every on-screen English text goes through the language dictionary
@@ -105,6 +106,7 @@ export default function RootLayout() {
                   <BubbleProvider>
                   <CarDriverProvider>
                   <GlobalSessionListener />
+                  <KeyboardSafeView>
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="login" />
@@ -115,6 +117,7 @@ export default function RootLayout() {
                     <Stack.Screen name="bubble-tap" />
                     <Stack.Screen name="+not-found" />
                   </Stack>
+                  </KeyboardSafeView>
                   <StatusBar style="auto" />
                   <WebAlertHost />
                   <OtaUpdateGate />

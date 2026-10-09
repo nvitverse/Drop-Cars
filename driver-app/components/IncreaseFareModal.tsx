@@ -92,7 +92,7 @@ export const IncreaseFareModal: React.FC<IncreaseFareModalProps> = ({
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             style={styles.modalContainer}
           >
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>

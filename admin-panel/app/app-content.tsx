@@ -150,7 +150,7 @@ export default function AppContentScreen() {
         </View>
       </View>
       {loading ? <ActivityIndicator style={{ marginTop: 60 }} color="#6366F1" /> : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
             <Tabs />
 

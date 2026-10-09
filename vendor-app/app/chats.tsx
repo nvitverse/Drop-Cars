@@ -497,7 +497,7 @@ export default function ChatsScreen() {
           />
 
           {/* INPUT BAR */}
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior="padding">
             <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
@@ -581,7 +581,7 @@ export default function ChatsScreen() {
             />
           )}
 
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior="padding">
             <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}

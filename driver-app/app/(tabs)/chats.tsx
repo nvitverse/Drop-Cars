@@ -1546,7 +1546,7 @@ export default function ChatsTabScreen() {
         <SafeAreaView style={[styles.chatViewContainer, { backgroundColor: isDarkMode ? '#080C14' : colors.background }]}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
           >
             {/* Chat AppBar */}
             {selectedConversation?.type === 'AI_BOT' ? (

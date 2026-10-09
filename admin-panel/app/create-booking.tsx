@@ -9,11 +9,11 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
-  Modal,
   useWindowDimensions,
   Linking,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -2759,7 +2759,7 @@ export default function CreateBookingScreen() {
                     <View style={styles.priceCell}>
                       <TouchableOpacity
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}
-                        onPress={() => setIncludeToll(!includeToll)}
+                        onPress={() => { if (includeToll) setTollChargeUpdate(false); setIncludeToll(!includeToll); }}
                       >
                         <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: includeToll ? colors.primary : '#94A3B8', backgroundColor: includeToll ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                           {includeToll && <Check size={11} color="#FFFFFF" />}
@@ -2767,6 +2767,27 @@ export default function CreateBookingScreen() {
                         <Text style={styles.priceLabel}>Toll charges {!includeToll ? '(Excluded)' : (Number(tollCharges) || 0) > 0 ? '(Included)' : ''}</Text>
                       </TouchableOpacity>
                       <TextInput style={[styles.priceInput, !includeToll && { opacity: 0.5 }]} value={tollCharges} onChangeText={setTollCharges} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} editable={includeToll} />
+                      {includeToll ? (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 }}>
+                            <Text style={{ flex: 1, fontSize: 11, color: themeColors.textSecondary, lineHeight: 15 }}>
+                              Driver enters the actual toll when closing the trip (replaces this estimate)
+                            </Text>
+                            <Switch value={tollChargeUpdate} onValueChange={setTollChargeUpdate} trackColor={{ false: colors.border, true: colors.success }} />
+                          </View>
+                          <Text style={{ fontSize: 11, marginTop: 2, color: (Number(tollCharges) || 0) > 0 || tollChargeUpdate ? '#047857' : '#B45309' }}>
+                            {(Number(tollCharges) || 0) > 0
+                              ? `Included in the fare: ₹${Number(tollCharges)}${tollChargeUpdate ? ' - the real toll the driver enters at close is billed instead' : ''}`
+                              : tollChargeUpdate
+                              ? 'The toll is billed on actuals: the driver enters it at close'
+                              : 'Ticked with ₹0 = nothing. Enter the toll, or untick it so the customer pays it separately'}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={{ fontSize: 11, marginTop: 6, color: '#B45309', lineHeight: 15 }}>
+                          Excluded - the driver collects the toll from the customer and enters it when closing the trip.
+                        </Text>
+                      )}
                     </View>
 
                     {/* Row 5: Vendor Extra Margin & Advance received */}

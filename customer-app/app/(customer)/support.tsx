@@ -267,7 +267,7 @@ export default function SupportScreen() {
           </View>
 
           {/* INPUT BAR */}
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ marginTop: 16 }}>
+          <KeyboardAvoidingView behavior="padding" style={{ marginTop: 16 }}>
             <View style={themeStyles.inputBar}>
               <TextInput
                 style={themeStyles.textInput}

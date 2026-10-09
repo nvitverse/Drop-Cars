@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import EnquiryAlarmHost from '@/components/EnquiryAlarmHost';
+import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
@@ -65,9 +66,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <StaffDutyProvider>
             <CommandCenterProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="+not-found" />
-              </Stack>
+              <KeyboardSafeView>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+              </KeyboardSafeView>
               <StatusBar style="auto" />
               <WebAlertHost />
               {/* Alarms paused temporarily as requested to work freely in other sections */}

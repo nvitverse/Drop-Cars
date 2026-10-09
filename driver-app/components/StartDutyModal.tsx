@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   Image,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Camera, ShieldCheck, KeyRound, Gauge } from 'lucide-react-native';
 import SwipeSlider from './SwipeSlider';

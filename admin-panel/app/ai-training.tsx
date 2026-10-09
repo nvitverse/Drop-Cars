@@ -7,10 +7,10 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Modal,
   Alert,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {

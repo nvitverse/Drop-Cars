@@ -18,6 +18,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import ReplySuggestions, { ReplyTemplate } from '@/components/ReplySuggestions';
+import ChatCategories, { MainCategory } from '@/components/ChatCategories';
+import { PARTNER_TOPICS, VENDOR_TOPICS, CUSTOMER_TOPICS, TRIP_TOPICS, classifyTopic } from '@/utils/chatTopics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -237,14 +240,22 @@ const timeLabel = (iso?: string | null) => {
 const isMsgRead = (m: any) => Boolean(m?.read || m?.read_at || m?.is_read || m?.seen || m?.status === 'READ');
 
 // Ready replies for the Chats inbox (support threads and booking chats)
-const QUICK_REPLIES = [
-  { label: 'Checking', text: 'We are checking this now. We will update you here shortly.' },
-  { label: 'Need details', text: 'Please send your full name, vehicle number and registered mobile number so we can verify you.' },
-  { label: 'Send photo', text: 'Please send a clear photo of your DL / Aadhaar here (or a voice note if easier).' },
-  { label: 'Try OTP again', text: 'Please tap Forgot password once and use the code sent to your email. Check the Spam / Promotions folder too.' },
-  { label: 'Fixed', text: 'Your account is updated. Please log in again and tell us if you still face any problem.' },
-  { label: 'Call you', text: 'We will call you on your registered number shortly.' },
-  { label: 'Upcoming booking', text: 'Your upcoming booking details are in the app under My Trips. Tell us which booking you need help with.' },
+const QUICK_REPLIES: ReplyTemplate[] = [
+  { label: 'Checking', group: 'General', keywords: ['check', 'status', 'update', 'any news', 'sollunga', 'enna aachu'], text: 'We are checking this now. We will update you here shortly.' },
+  { label: 'Need details', group: 'Account', keywords: ['login', 'account', 'register', 'signup', 'sign up', 'password', 'number'], text: 'Please send your full name, vehicle number and registered mobile number so we can verify you.' },
+  { label: 'Send photo', group: 'Documents', keywords: ['document', 'licence', 'license', 'dl', 'aadhaar', 'aadhar', 'rc', 'insurance', 'permit', 'upload', 'invalid', 'verify', 'verified'], text: 'Please send a clear COLOUR photo of the ORIGINAL document here (or a voice note if easier). Make sure all four corners and the date are visible.' },
+  { label: 'Date not matching', group: 'Documents', keywords: ['date', 'expiry', 'expire', 'expired', 'invalid', 'reject'], text: 'The date you entered does not match the date printed on the document. Please open the document in My Cars, upload the original again and pick the date shown on it.' },
+  { label: 'Try OTP again', group: 'Account', keywords: ['otp', 'code', 'forgot', 'reset'], text: 'Please tap Forgot password once and use the code sent to your email. Check the Spam / Promotions folder too.' },
+  { label: 'Payment received?', group: 'Payment', keywords: ['payment', 'paid', 'pay', 'money', 'wallet', 'recharge', 'upi', 'gpay', 'phonepe', 'amount'], text: 'Please send the payment screenshot with the UTR / transaction ID. Once we see it in our account your wallet is credited and you get a message here.' },
+  { label: 'Payout steps', group: 'Payment', keywords: ['payout', 'withdraw', 'redeem', 'settlement', 'balance'], text: 'You can request a payout from Wallet > Request Payout. The minimum balance that must stay in your wallet is kept as a security hold; everything above it can be redeemed.' },
+  { label: 'Trip code', group: 'Trip', keywords: ['otp', 'start code', 'end code', 'trip code', 'start trip', 'end trip', 'customer code'], text: 'The start and end codes are with the customer / the person who posted the booking. Please ask the customer for the code - we cannot give it to the driver.' },
+  { label: 'Close trip', group: 'Trip', keywords: ['close', 'end trip', 'cannot end', "can't end", 'stuck', 'not closing', 'complete'], text: 'Please send the booking ID and the end km shown on the meter. If you cannot close it in the app we will close it from our side and settle it.' },
+  { label: 'Toll / extras', group: 'Trip', keywords: ['toll', 'parking', 'permit', 'tax', 'extra', 'bata', 'waiting'], text: 'Charges marked Excluded in the booking are collected from the customer directly - enter what you collected when you close the trip. Charges marked Included are already in the fare.' },
+  { label: 'Upcoming booking', group: 'Booking', keywords: ['booking', 'trip', 'ride', 'pickup', 'drop'], text: 'Your upcoming booking details are in the app under My Trips. Tell us which booking you need help with.' },
+  { label: 'Update app', group: 'App', keywords: ['crash', 'not working', "not opening", 'error', 'bug', 'hang', 'slow', 'old app', 'update'], text: 'Please close the app fully and open it again - a new update downloads automatically and asks you to restart. If it still fails, send us a screenshot.' },
+  { label: 'Fixed', group: 'General', keywords: ['fix', 'solved'], text: 'Your account is updated. Please log in again and tell us if you still face any problem.' },
+  { label: 'Call you', group: 'General', keywords: ['call', 'phone', 'talk'], text: 'We will call you on your registered number shortly.' },
+  { label: 'Thanks', group: 'General', keywords: ['thank', 'thanks', 'nandri', 'ok'], text: 'Thank you for contacting Drop Cars. Message us here any time if you need anything else.' },
 ];
 
 type TabType = 'ASSISTANTS' | 'SUPPORT' | 'TRIPS' | 'ALL';
@@ -255,7 +266,7 @@ export default function AdminChatsScreen() {
   const router = useRouter();
   const { openCommandCenter } = useCommandCenter();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['reply', 'help', 'driver']));
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['reply', 'main:driver']));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -516,22 +527,30 @@ export default function AdminChatsScreen() {
   const bookingUnread = rows.filter((r) => r.kind === 'BOOKING').reduce((acc, r) => acc + (r.unread || 0), 0);
 
   const needsReplyCount = rows.filter((r) => r.unread > 0).length;
-  const loginHelpCount = rows.filter((r) => r.kind === 'SUPPORT' && r.help).length;
+  const loginHelpCount = rows.filter((r) => r.kind === 'SUPPORT' && (r.help || classifyTopic(r, PARTNER_TOPICS) === 'login') && r.role !== 'CUSTOMER' && r.role !== 'VENDOR').length;
   const activeTripsCount = rows.filter((r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED').length;
 
-  const SUPPORT_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
+  // "Needs a reply" stays pinned on top; everything else is sorted  who > what it is about  (utils/chatTopics.ts)
+  const PINNED_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
     { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Unread messages awaiting staff response', match: (r) => r.unread > 0 },
-    { id: 'help', label: "Help requests (can't log in)", icon: KeyRound, color: '#F59E0B', hint: 'Forgot password, OTP & login assistance', match: (r) => r.kind === 'SUPPORT' && !!r.help },
-    { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', match: (r) => r.kind === 'SUPPORT' && !r.help && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
-    { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'DRIVER' },
-    { id: 'vendor', label: 'Vendors & B2B Partners', icon: Store, color: '#8B5CF6', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'VENDOR' },
-    { id: 'customer', label: 'Customers', icon: User, color: '#06B6D4', hint: 'Customer messages from Customer App', match: (r) => r.kind === 'SUPPORT' && !r.help && r.role === 'CUSTOMER' },
   ];
 
-  const TRIP_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
-    { id: 'live', label: 'Booking chats · Live & Upcoming', icon: Compass, color: '#10B981', hint: 'Ongoing and scheduled bookings', match: (r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED' },
-    { id: 'done', label: 'Booking chats · Completed', icon: CheckCheck, color: '#64748B', match: (r) => r.kind === 'BOOKING' && r.stage === 'COMPLETED' },
+  const SUPPORT_MAINS: MainCategory<Row>[] = [
+    { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', topics: PARTNER_TOPICS, hint: 'No chats from fleet owners right now', match: (r) => r.kind === 'SUPPORT' && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
+    { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', topics: PARTNER_TOPICS, hint: 'No chats from drivers right now', match: (r) => r.kind === 'SUPPORT' && r.role === 'DRIVER' },
+    { id: 'vendor', label: 'Vendors & B2B Partners', icon: Store, color: '#8B5CF6', topics: VENDOR_TOPICS, hint: 'No chats from vendors right now', match: (r) => r.kind === 'SUPPORT' && r.role === 'VENDOR' },
+    { id: 'customer', label: 'Customers', icon: User, color: '#06B6D4', topics: CUSTOMER_TOPICS, hint: 'Customer messages from the Customer App', match: (r) => r.kind === 'SUPPORT' && r.role === 'CUSTOMER' },
   ];
+
+  const TRIP_MAINS: MainCategory<Row>[] = [
+    { id: 'live', label: 'Booking chats - Live & Upcoming', icon: Compass, color: '#10B981', topics: TRIP_TOPICS, hint: 'No ongoing or scheduled booking chats', match: (r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED' },
+    { id: 'done', label: 'Booking chats - Completed', icon: CheckCheck, color: '#64748B', topics: TRIP_TOPICS, hint: 'No completed booking chats', match: (r) => r.kind === 'BOOKING' && r.stage === 'COMPLETED' },
+  ];
+
+  const chatColors = {
+    surface: themeColors.surface, surfaceAlt: themeColors.surfaceAlt, border: themeColors.border,
+    text: themeColors.text, textMuted: themeColors.textMuted, primary: themeColors.primary,
+  };
 
   const toggleGroup = (id: string) => setOpenGroups((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -910,7 +929,7 @@ export default function AdminChatsScreen() {
                       isPositive: loginHelpCount === 0,
                       onPress: () => {
                         setActiveTab('SUPPORT');
-                        setOpenGroups((prev) => new Set([...prev, 'help']));
+                        setOpenGroups((prev) => new Set([...prev, 'main:driver', 'sub:driver:login', 'main:owner', 'sub:owner:login']));
                       },
                     },
                     {
@@ -921,7 +940,7 @@ export default function AdminChatsScreen() {
                       isPositive: true,
                       onPress: () => {
                         setActiveTab('TRIPS');
-                        setOpenGroups((prev) => new Set([...prev, 'live']));
+                        setOpenGroups((prev) => new Set([...prev, 'main:live']));
                       },
                     },
                     {
@@ -980,7 +999,7 @@ export default function AdminChatsScreen() {
                         )}
                       </View>
 
-                      {SUPPORT_GROUPS.map((g) => {
+                      {PINNED_GROUPS.map((g) => {
                         const list = rows.filter(g.match);
                         const unread = list.reduce((n, r) => n + (r.unread || 0), 0);
                         const open = openGroups.has(g.id);
@@ -1033,6 +1052,15 @@ export default function AdminChatsScreen() {
                           </View>
                         );
                       })}
+
+                      <ChatCategories
+                        categories={SUPPORT_MAINS}
+                        rows={rows}
+                        open={openGroups}
+                        onToggle={toggleGroup}
+                        renderRow={renderRow}
+                        colors={chatColors}
+                      />
                     </View>
                   )}
 
@@ -1048,59 +1076,15 @@ export default function AdminChatsScreen() {
                         )}
                       </View>
 
-                      {TRIP_GROUPS.map((g) => {
-                        const list = rows.filter(g.match);
-                        const unread = list.reduce((n, r) => n + (r.unread || 0), 0);
-                        const open = openGroups.has(g.id);
-                        const IconComponent = g.icon;
-
-                        return (
-                          <View key={g.id} style={{ marginBottom: 4 }}>
-                            <TouchableOpacity
-                              activeOpacity={0.75}
-                              onPress={() => toggleGroup(g.id)}
-                              style={[
-                                styles.foldRow,
-                                {
-                                  borderColor: unread > 0 ? themeColors.primary + '55' : themeColors.border,
-                                  backgroundColor: themeColors.surface,
-                                },
-                              ]}
-                            >
-                              <View style={[styles.foldIconWrap, { backgroundColor: (g.color || themeColors.success) + '18' }]}>
-                                <IconComponent size={15} color={g.color || themeColors.success} />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 13 }}>
-                                  {g.label}
-                                </Text>
-                                <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
-                                  {list.length} {list.length === 1 ? 'trip chat' : 'trip chats'}
-                                </Text>
-                              </View>
-                              {unread > 0 && (
-                                <View style={[styles.unreadBadge, { backgroundColor: g.color || themeColors.primary }]}>
-                                  <Text style={styles.unreadText}>{unread}</Text>
-                                </View>
-                              )}
-                              {open ? <ChevronDown size={15} color={themeColors.textMuted} /> : <ChevronRight size={15} color={themeColors.textMuted} />}
-                            </TouchableOpacity>
-                            {open && (
-                              <View style={{ gap: 6, marginTop: 6, paddingLeft: 4 }}>
-                                {list.length === 0 ? (
-                                  <View style={[styles.emptyGroupHint, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border }]}>
-                                    <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
-                                      {g.hint || 'No bookings with chats currently in this state'}
-                                    </Text>
-                                  </View>
-                                ) : (
-                                  list.map((r) => <View key={r.key}>{renderRow(r)}</View>)
-                                )}
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
+                      <ChatCategories
+                        categories={TRIP_MAINS}
+                        rows={rows}
+                        open={openGroups}
+                        onToggle={toggleGroup}
+                        renderRow={renderRow}
+                        colors={chatColors}
+                        noun="trip chat"
+                      />
                     </View>
                   )}
                 </View>
@@ -1126,7 +1110,7 @@ export default function AdminChatsScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
           >
             <View style={[styles.chatHeader, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
               <TouchableOpacity onPress={() => setOpenRow(null)} style={{ padding: 6, marginRight: 6 }}>
@@ -1183,25 +1167,13 @@ export default function AdminChatsScreen() {
               )}
             />
 
-            {/* Quick replies */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              style={{ flexGrow: 0, backgroundColor: themeColors.surface }}
-              contentContainerStyle={styles.quickRow}
-            >
-              {QUICK_REPLIES.map((q) => (
-                <TouchableOpacity
-                  key={q.label}
-                  onPress={() => setInput(q.text)}
-                  activeOpacity={0.7}
-                  style={[styles.quickChip, { borderColor: themeColors.border, backgroundColor: themeColors.background }]}
-                >
-                  <Text style={{ fontSize: 12, color: themeColors.primary, fontWeight: '600' }}>{q.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {/* Suggested replies: fixed-height, never overlaps the list or the box; the last incoming message picks the best fits */}
+            <ReplySuggestions
+              templates={QUICK_REPLIES}
+              lastIncoming={[...messages].reverse().find((m: any) => !m.mine && m.text)?.text}
+              onPick={(text) => setInput(text)}
+              colors={{ surface: themeColors.surface, background: themeColors.background, border: themeColors.border, text: themeColors.text, textMuted: themeColors.textMuted, primary: themeColors.primary }}
+            />
 
             {/* Input Bar */}
             <View style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>

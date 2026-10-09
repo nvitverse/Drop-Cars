@@ -10,9 +10,9 @@ import {
   Linking,
   Alert,
   TextInput,
-  Modal,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter } from 'expo-router';
 import {
   AlertTriangle,

@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Modal,
   Image,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -107,6 +107,12 @@ export default function EndTripScreen() {
     }
   }, [params.charge_items]);
   
+  const drivenKm = endKm && !isNaN(parseInt(endKm, 10)) ? Math.max(0, parseInt(endKm, 10) - startKm) : null;
+  const includedTotal = includedChargeItems.reduce((n, i) => n + (Number(i.amount) || 0), 0);
+  const collectedTotal = extraChargeItems.reduce((n, i) => n + (parseInt(extraChargeAmounts[i.label] || '0', 10) || 0), 0);
+  const tollIncludedItem = includedChargeItems.find((i) => /toll/i.test(i.label));
+  const tollExcludedItem = extraChargeItems.find((i) => /toll/i.test(i.label));
+
   // Check if it's a multicity order (handles variations like "Multy City")
   const tripTypeLower = String(params.trip_type || '').toLowerCase();
   const isMulticity = params.is_multicity === 'true' ||
@@ -318,6 +324,45 @@ export default function EndTripScreen() {
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('tripEnd.subtitle')}</Text>
         </View>
 
+        {/* At a glance: what this bill is made of, before the driver fills anything */}
+        <View style={[styles.cardSection, { backgroundColor: colors.surface, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 8 }]}>This booking at a glance</Text>
+          {[
+            ['Start km', startKm ? String(startKm) : '-'],
+            ['End km', endKm || 'enter below'],
+            ['Km driven', drivenKm === null ? '-' : `${drivenKm} km`],
+          ].map(([k, v]) => (
+            <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{k}</Text>
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>{v}</Text>
+            </View>
+          ))}
+          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
+          <Text style={{ color: '#047857', fontSize: 12.5, fontFamily: 'Inter-Bold' }}>
+            Included in the fare: {includedChargeItems.length === 0 ? 'nothing extra' : `${includedChargeItems.length} item${includedChargeItems.length > 1 ? 's' : ''}${includedTotal > 0 ? ` (₹${includedTotal})` : ''}`}
+          </Text>
+          {includedChargeItems.map((i, idx) => (
+            <Text key={`g-in-${idx}`} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+              • {i.label}{Number(i.amount) > 0 ? ` - ₹${i.amount}` : ''}
+            </Text>
+          ))}
+          <Text style={{ color: '#B45309', fontSize: 12.5, fontFamily: 'Inter-Bold', marginTop: 8 }}>
+            Not in the fare (collect from the customer): {extraChargeItems.length === 0 && !tollChargeUpdate ? 'nothing' : ''}
+          </Text>
+          {extraChargeItems.map((i, idx) => (
+            <Text key={`g-ex-${idx}`} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>• {i.label}</Text>
+          ))}
+          {tollChargeUpdate && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>• Toll - on actuals, enter the real toll below</Text>
+          )}
+          {!tollChargeUpdate && tollIncludedItem && (
+            <Text style={{ color: '#047857', fontSize: 12, marginTop: 6 }}>Toll is already included (₹{tollIncludedItem.amount ?? 0}) - do not charge it again.</Text>
+          )}
+          {isMulticity && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 6 }}>Multi-city: enter the waiting minutes below; waiting hours covered by the booking are free.</Text>
+          )}
+        </View>
+
         {/* 1. Odometer Photo Viewfinder Card */}
         <View style={styles.cardSection}>
           <View style={styles.sectionHeaderRow}>
@@ -470,7 +515,7 @@ export default function EndTripScreen() {
               <View key={`incl-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : '#ECFDF5', marginBottom: 6 }}>
                 <Text style={{ flex: 1, marginRight: 8, fontSize: 13.5, fontFamily: 'Inter-Medium', color: colors.text }}>{item.label}</Text>
                 <View style={{ backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'Inter-Bold' }}>Included</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'Inter-Bold' }}>{Number(item.amount) > 0 ? `Included  ₹${item.amount}` : 'Included'}</Text>
                 </View>
               </View>
             ))}
@@ -482,7 +527,7 @@ export default function EndTripScreen() {
           <View style={styles.cardSection}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Not in the fare - enter what you collected</Text>
             <Text style={[styles.helperText, { color: colors.textSecondary, marginBottom: 8 }]}>
-              These are charged on actuals, on top of the trip fare. Enter the amount you collected from the customer for each one. Keep 0 if nothing was collected.
+              These {extraChargeItems.length} item{extraChargeItems.length > 1 ? 's are' : ' is'} NOT part of the fare. Collect the actual amount from the customer, keep it, and enter it here for the record. Keep 0 if nothing was collected.
             </Text>
             {extraChargeItems.map((item) => (
               <View key={item.label} style={{ marginBottom: 10 }}>
@@ -502,6 +547,10 @@ export default function EndTripScreen() {
                 </View>
               </View>
             ))}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Collected outside the fare</Text>
+              <Text style={{ color: colors.text, fontSize: 14, fontFamily: 'Inter-Bold' }}>₹{collectedTotal}</Text>
+            </View>
           </View>
         )}
 

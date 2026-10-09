@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   Switch,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   UserPlus,

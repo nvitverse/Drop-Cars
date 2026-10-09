@@ -5,9 +5,9 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   FlatList,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { ChevronDown, CreditCard } from 'lucide-react-native';
 
 const INDIAN_STATES = [

@@ -160,7 +160,7 @@ export default function SignupScreen() {
         )}
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.keyboardView}
         >
           <ScrollView

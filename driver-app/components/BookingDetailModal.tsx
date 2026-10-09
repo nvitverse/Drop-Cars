@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Modal,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   Image,
   Switch,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   MapPin,

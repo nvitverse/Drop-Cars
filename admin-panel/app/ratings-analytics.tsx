@@ -7,12 +7,12 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Modal,
   Switch,
   ActivityIndicator,
   RefreshControl,
   Linking,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Star, ShieldAlert, Award, Search, Phone, MessageSquare, X, Gavel } from 'lucide-react-native';

@@ -79,7 +79,7 @@ export default function MotionBottomSheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.keyboardContainer}
       >
         <TouchableWithoutFeedback onPress={enableBackdropDismiss ? onClose : undefined}>

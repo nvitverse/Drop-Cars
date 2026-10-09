@@ -283,7 +283,7 @@ export default function ChatScreen() {
           <Text style={{ color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 }}>{notOpenYet}</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <FlatList
             ref={listRef}
             data={rows}

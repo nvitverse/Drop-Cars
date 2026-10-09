@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -12,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   Printer,

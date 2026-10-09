@@ -42,7 +42,7 @@ export default function CancelReasonModal({ visible, title = 'Cancel this bookin
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={styles.overlay} behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>{title}</Text>

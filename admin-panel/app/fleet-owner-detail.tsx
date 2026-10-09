@@ -13,8 +13,8 @@ import {
   StatusBar as RNStatusBar,
   Switch,
   Linking,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

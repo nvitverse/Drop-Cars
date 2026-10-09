@@ -10,11 +10,11 @@ import {
   Alert,
   RefreshControl,
   TextInput,
-  Modal,
   ActivityIndicator,
   Image,
   AppState,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import * as SecureStore from '@/utils/secureStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';

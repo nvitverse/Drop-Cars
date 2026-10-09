@@ -5,10 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Modal,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, Check, Search, MapPin, Trash2, User, Car, ChevronDown, ChevronUp, Sparkles, Plus } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';

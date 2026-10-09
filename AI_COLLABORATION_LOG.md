@@ -4,6 +4,13 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Keyboard never covers the typing box; chat suggestions; chat categories; trip-close + posting charges (Claude, 2026-10-09)
+- **Keyboard (Admin + Driver apps, every screen):** on Android the app draws edge to edge so the keyboard no longer shrank the screen - chat reply box and form fields were hidden behind it. components/KeyboardSafe.tsx (KeyboardSafeView, drop-in Modal): KeyboardAvoidingView in padding mode (measures the overlap, so it does nothing when the system already resized). Root layouts wrap the Stack; 75 files' Modal now imports the keyboard-safe one; every existing ehavior={Platform.OS === 'ios' ? 'padding' : undefined|'height'} (all 4 apps) is now padding; tab bars hide while typing. Customer + Vendor apps got only the KeyboardAvoidingView fix (needs a build).
+- **Chat suggestions (Admin Chats):** components/ReplySuggestions.tsx: fixed-height row (the old horizontal ScrollView collapsed and drew over the input), the replies that fit the last message come first, 'All N' opens full cards with the whole text; 15 templates in groups (documents, payment, trip, app...). Helper chat chip row fixed the same way.
+- **Chats categorised (Admin):** Needs-a-reply pinned; then main category (fleet owners / drivers / vendors / customers; live / completed trip chats) > topic (login & OTP, documents, wallet & payments, subscription, trips, app problems...) > chats, each with a stacked bar and per-topic bar + unread counts (components/ChatCategories.tsx, topics from the latest message in utils/chatTopics.ts).
+- **Trip close (Driver 	rip/end.tsx):** 'This booking at a glance' (km driven, what is included with amounts, what is excluded / collected on the spot, toll rule, multi-city note), included lines show amounts, excluded section shows a running total. **Toll update at close** lives in: Admin Create Booking (now a switch under Toll when ticked, with a live explanation), Vendor create-order, Driver posting (automatic when toll is not ticked), Driver trip end (the field).
+- **Driver posting (create-booking.tsx):** charge items follow the one rule (ticked+amount = included with amount, ticked+0 = nothing, unticked = excluded); all-inclusive list has amount boxes and plain status lines; standard tariff sends real permit / hill / night / toll items instead of four default 'excluded' rows.
+
 ### Extra-charge rule: ticked + 0 = nothing (Claude, 2026-10-09)
 - One rule in crud/new_orders.normalize_charge_items (applies to every booking creator): included with amount 0 -> dropped (not listed as included or excluded, driver asked for nothing); included with 1+ -> included with its amount; unticked -> excluded, driver fills what he collected at trip end. Admin create-booking: a ticked custom extra with 0 is no longer sent as an included line, Toll label shows (Included) only when an amount is typed; Driver trip-end screen hides included lines with amount 0. A zero Toll line stays only when 'toll update at close' is on. 	ests/test_charge_items_rule.py.
 
@@ -127,7 +134,7 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
    - Presets updated to `5h / 50km` and `8h / 80km`.
    - Added `Custom / Manual` duration option with real-time 10 km/hr auto calculation.
-   - Default hourly tariffs aligned (Driver: ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹250, Vendor Extra: ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹50, Addon KM: ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹25, Vendor Extra Addon KM: ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹5).
+   - Default hourly tariffs aligned (Driver: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹250, Vendor Extra: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹50, Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹25, Vendor Extra Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹5).
 
 2. **Booking Cards Direct Cancellation** (`(tabs)/orders.tsx`):
    - Added direct `[ Cancel ]` button on Live / Unassigned / Assigned / Running booking cards.

@@ -8,8 +8,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, UserPlus, Shield, Trash2, Package, UserCheck, Users, Wallet, X, History, ChevronRight, ClipboardCheck, FileCheck, UserCog, ShieldCheck, MessageSquare, Target, Megaphone, Mic, Square, Send, Radio, Trash, Pencil } from 'lucide-react-native';

@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Modal,
   TextInput,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ShieldAlert, ShieldCheck, ToggleLeft, Wallet, UserPlus, Settings2, UserMinus, History, Trash2, Package, Receipt, Link, FileText, Check, Copy, Save, X, Info, XCircle, CheckCircle2, CalendarRange, ChevronRight } from 'lucide-react-native';

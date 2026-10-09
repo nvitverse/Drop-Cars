@@ -310,7 +310,7 @@ export default function AuthScreen() {
       <LinearGradient colors={['#0F172A', '#1E293B']} style={styles.gradient}>
         <KeyboardAvoidingView
           style={styles.flexOne}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
         >
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* App Brand Header */}

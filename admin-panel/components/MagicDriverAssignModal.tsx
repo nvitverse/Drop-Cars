@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -11,6 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   Sparkles,

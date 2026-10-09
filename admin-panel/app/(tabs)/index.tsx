@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   Platform,
   StatusBar as RNStatusBar,
-  Modal,
   TextInput,
   Alert,
   Animated,
   LayoutAnimation,
   UIManager,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -11,8 +11,8 @@ import {
   ActivityIndicator,
   Switch,
   Platform,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -423,11 +423,12 @@ export default function DriverCreateBookingScreen() {
   // Pricing Details - All Inclusive
   const [totalBookingAmount, setTotalBookingAmount] = useState('');
   const [extraAmount, setExtraAmount] = useState('0');
-  const [chargeItems, setChargeItems] = useState([
-    { label: 'Toll', included: false },
-    { label: 'State Permit', included: false },
-    { label: 'Parking', included: false },
-    { label: 'Waiting', included: false },
+  // included + an amount = part of the customer's fare; included with 0 = nothing; not included = the driver collects it on the spot
+  const [chargeItems, setChargeItems] = useState<{ label: string; included: boolean; amount: string }[]>([
+    { label: 'Toll', included: false, amount: '' },
+    { label: 'State Permit', included: false, amount: '' },
+    { label: 'Parking', included: false, amount: '' },
+    { label: 'Waiting', included: false, amount: '' },
   ]);
   const [waitingHoursIncluded, setWaitingHoursIncluded] = useState('2');
   const [advanceReceived, setAdvanceReceived] = useState('');
@@ -485,6 +486,38 @@ export default function DriverCreateBookingScreen() {
   const selectedTripType = tripTypes.find((tt) => tt.value === tripType) || tripTypes[0];
   const SelectedTripIcon = selectedTripType.icon;
 
+  // ONE rule for every extra charge (same as the Admin App and the server):
+  //   ticked + 1 rupee or more -> included in the fare, with that amount
+  //   ticked + 0               -> nothing at all (not included, not excluded, the driver is asked for nothing)
+  //   not ticked               -> excluded: the driver collects it from the customer and enters it when closing the trip
+  const buildChargeItems = () => {
+    const items: { label: string; included: boolean; amount?: number }[] = [];
+    if (fareType === 'ALL_INCLUSIVE') {
+      chargeItems.forEach((c) => {
+        const amt = parseFloat(c.amount) || 0;
+        if (!c.included) items.push({ label: c.label === 'Toll' ? 'Toll' : c.label, included: false });
+        else if (c.label === 'Waiting') items.push({ label: 'Waiting', included: true });      // hours are the allowance, not a rupee amount
+        else if (amt > 0) items.push({ label: c.label, included: true, amount: amt });
+      });
+      return items;
+    }
+    // Standard tariff: the toggles above already hold amounts
+    const row = (label: string, on: boolean, value: string) => {
+      const amt = parseFloat(value) || 0;
+      if (!on) items.push({ label, included: false });
+      else if (amt > 0) items.push({ label, included: true, amount: amt });
+    };
+    row('State Permit / Tax', includePermit, permitCharges);
+    row('Hill / Ghat Charges', includeHill, hillCharges);
+    row('Night Allowance', includeNight, nightCharges);
+    const tollAmt = parseFloat(tollCharges) || 0;
+    if (includeToll && tollAmt > 0) items.push({ label: 'Toll Charges', included: true, amount: tollAmt });   // not ticked = the real toll is entered at trip end (toll_charge_update)
+    items.push({ label: 'Parking', included: false });
+    if (includeWaiting) items.push({ label: 'Waiting', included: true });
+    else items.push({ label: 'Waiting', included: false });
+    return items;
+  };
+
   const buildPayload = () => {
     const fullPhone = `${customerCountryCode}${customerNumber.trim()}`;
     return {
@@ -528,7 +561,7 @@ export default function DriverCreateBookingScreen() {
         : includeWaiting
         ? (parseFloat(waitingHours) || 1)
         : undefined,
-      charge_items: chargeItems,
+      charge_items: buildChargeItems(),
       advance_received: advanceReceived ? parseInt(advanceReceived, 10) : undefined,
       car_make_year_requirement: requireMakeYear ? parseInt(makeYearRequirement, 10) : undefined,
       carrier_required: carrierRequired,
@@ -1033,25 +1066,54 @@ export default function DriverCreateBookingScreen() {
               </View>
 
               <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>{t('createBooking.bundledChargeItemsLabel')}</Text>
-              {chargeItems.map((item, idx) => (
-                <TouchableOpacity
-                  style={[styles.switchRow, { borderColor: colors.border }]}
-                  key={item.label}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    const updated = [...chargeItems];
-                    updated[idx].included = !updated[idx].included;
-                    setChargeItems(updated);
-                  }}
-                >
-                  <Text style={[styles.switchText, { color: colors.text }]}>{chargeItemLabelKeys[item.label] ? t(`createBooking.${chargeItemLabelKeys[item.label]}`) : item.label}</Text>
-                  {item.included ? (
-                    <CheckCircle size={22} color={accent} />
-                  ) : (
-                    <Square size={22} color={colors.textSecondary} />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {chargeItems.map((item, idx) => {
+                const amt = parseFloat(item.amount) || 0;
+                const isWaiting = item.label === 'Waiting';
+                return (
+                  <View key={item.label} style={{ marginBottom: 6 }}>
+                    <TouchableOpacity
+                      style={[styles.switchRow, { borderColor: item.included ? accent : colors.border, marginBottom: 0 }]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const updated = [...chargeItems];
+                        updated[idx] = { ...updated[idx], included: !updated[idx].included };
+                        setChargeItems(updated);
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.switchText, { color: colors.text }]}>{chargeItemLabelKeys[item.label] ? t(`createBooking.${chargeItemLabelKeys[item.label]}`) : item.label}</Text>
+                        <Text style={{ fontSize: 11.5, marginTop: 2, color: item.included ? (isWaiting || amt > 0 ? '#047857' : '#B45309') : '#B45309' }}>
+                          {!item.included
+                            ? 'Excluded - the driver collects it from the customer and enters it when closing the trip'
+                            : isWaiting
+                            ? 'Included - waiting hours are covered by the fare'
+                            : amt > 0
+                            ? `Included in the fare - ₹${amt}`
+                            : 'Ticked with ₹0 = nothing. Enter the amount, or untick if the customer pays it separately'}
+                        </Text>
+                      </View>
+                      {item.included ? <CheckCircle size={22} color={accent} /> : <Square size={22} color={colors.textSecondary} />}
+                    </TouchableOpacity>
+                    {item.included && !isWaiting && (
+                      <View style={[styles.inputBox, { borderColor: colors.border, backgroundColor: colors.background, marginTop: 6 }]}>
+                        <IndianRupee size={16} color={colors.textSecondary} />
+                        <TextInput
+                          style={[styles.input, { color: colors.text }]}
+                          placeholder="Amount included in the fare"
+                          placeholderTextColor={colors.textSecondary}
+                          value={item.amount}
+                          onChangeText={(v) => {
+                            const updated = [...chargeItems];
+                            updated[idx] = { ...updated[idx], amount: v.replace(/[^0-9]/g, '') };
+                            setChargeItems(updated);
+                          }}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
 
               {/* Only asked when Waiting is actually checked above - no
                   point pre-filling a "2 hours" default for a charge that

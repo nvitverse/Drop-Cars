@@ -8,11 +8,11 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
-  Modal,
   TextInput,
   ActivityIndicator,
   Switch,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';

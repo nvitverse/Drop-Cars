@@ -8,7 +8,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Modal,
   Dimensions,
   TextInput,
   ActivityIndicator,
@@ -18,6 +17,7 @@ import {
   StatusBar,
   RefreshControl,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';

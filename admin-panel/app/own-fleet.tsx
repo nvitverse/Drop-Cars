@@ -8,12 +8,12 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Modal,
   RefreshControl,
   Linking,
   Platform,
   StatusBar as RNStatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {

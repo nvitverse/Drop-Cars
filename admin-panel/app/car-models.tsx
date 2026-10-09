@@ -8,8 +8,8 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Car, Plus, Trash2, Save, ChevronDown, Search } from 'lucide-react-native';

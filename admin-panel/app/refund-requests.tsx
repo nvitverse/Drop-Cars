@@ -8,10 +8,10 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   TextInput,
   Switch,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Receipt, Check, X, Zap } from 'lucide-react-native';

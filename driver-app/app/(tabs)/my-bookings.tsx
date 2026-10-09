@@ -13,8 +13,8 @@ import {
   RefreshControl,
   Alert,
   TextInput,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Briefcase, MapPin, Calendar, IndianRupee, Plus, ChevronRight, Eye, Car, Send, Compass, Star, Wallet, Users, User, X } from 'lucide-react-native';

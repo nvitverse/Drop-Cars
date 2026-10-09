@@ -270,7 +270,7 @@ export default function CarDriverSignupScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={dynamicStyles.keyboardView}
       >
       <ScrollView

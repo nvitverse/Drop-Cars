@@ -8,11 +8,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Modal,
   TextInput,
   Platform,
   StatusBar as RNStatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

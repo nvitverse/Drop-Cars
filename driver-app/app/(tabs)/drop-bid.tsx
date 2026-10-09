@@ -8,13 +8,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Modal,
   Alert,
   ActivityIndicator,
   RefreshControl,
   Animated,
   Easing,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';

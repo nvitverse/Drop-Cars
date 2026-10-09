@@ -6,12 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
-  Modal,
   ActivityIndicator,
   Platform,
   Keyboard,
   StatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   MapPin,

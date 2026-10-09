@@ -1070,7 +1070,7 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       style={styles.keyboardView}
     >
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1933,7 +1933,7 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
         onRequestClose={() => setChatModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={styles.chatModalOverlay}
         >
           <View style={[styles.chatModalCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>

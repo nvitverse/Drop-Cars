@@ -5,10 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Modal,
   Alert,
   Dimensions,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, Check } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import axiosInstance from '@/app/api/axiosInstance';
