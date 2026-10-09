@@ -9,8 +9,8 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -88,7 +88,7 @@ export default function DriverSubscriptionScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [tier, setTier] = useState<'FREE' | 'MONTHLY' | 'YEARLY'>('FREE');
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -143,7 +143,7 @@ export default function DriverSubscriptionScreen() {
   }, [user]);
 
   const currentPlanPrice = selectedPlan === 'MONTHLY' ? pricing.MONTHLY : pricing.YEARLY;
-  const shortfall = Math.max(0, currentPlanPrice - walletBalance);
+  const shortfall = Math.max(0, currentPlanPrice - (walletBalance ?? 0));
 
   // Coming back from "Add money" with the plan the driver chose: buy it now. Before, the money landed in the wallet and the
   // driver had to find this screen and tap Subscribe again - many thought the payment had failed ("paid 199, no subscription").
@@ -342,7 +342,7 @@ export default function DriverSubscriptionScreen() {
               </Text>
             </View>
             <Text style={{ color: '#10B981', fontSize: 15, fontFamily: 'Inter-Bold' }}>
-              ₹{walletBalance}
+              {walletBalance !== null ? `₹${walletBalance}` : (initialLoading ? '—' : '₹0')}
             </Text>
           </View>
         </View>

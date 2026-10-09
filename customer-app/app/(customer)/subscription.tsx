@@ -46,7 +46,7 @@ export default function CustomerSubscriptionScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [tier, setTier] = useState<'FREE' | 'MONTHLY' | 'YEARLY'>('FREE');
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 

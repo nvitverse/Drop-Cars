@@ -121,7 +121,11 @@ export default function MasterCarPoolScreen() {
 
   const handleConfirmCreateCarPool = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const seatFare = parseInt(contributionInput, 10) || 300;
+    const seatFare = parseInt(contributionInput, 10);
+    if (!contributionInput || isNaN(seatFare) || seatFare <= 0) {
+      Alert.alert('Invalid Contribution', 'Please enter a valid seat contribution amount');
+      return;
+    }
     createListing({
       hostName: user?.name || 'You (Customer Host)',
       hostPhone: user?.phone || '',

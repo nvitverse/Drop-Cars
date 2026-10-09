@@ -10,12 +10,12 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Modal,
   Switch,
   Animated,
   Easing,
   Linking,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateRangeCalendarModal from '@/components/DateRangeCalendarModal';
 import DropMarketSwitcher from '@/components/DropMarketSwitcher';
@@ -442,6 +442,12 @@ export default function DropConnectScreen() {
       return;
     }
     setPublishing(true);
+    const parsedFare = parseInt(formData.pricePerSeat, 10);
+    if (!formData.pricePerSeat || isNaN(parsedFare) || parsedFare <= 0) {
+      Alert.alert(t('quickDashboard.errorTitle'), 'Please enter a valid seat fare amount');
+      return;
+    }
+
     try {
       await axiosDriver.post('/api/carpool/journeys', {
         pickup_city: formData.fromCity,
@@ -453,7 +459,7 @@ export default function DropConnectScreen() {
         car_category: selectedVehicle.category,
         total_seats: formData.offeredSeats,
         available_seats: formData.offeredSeats,
-        seat_fare: parseInt(formData.pricePerSeat, 10) || 400,
+        seat_fare: parsedFare,
         is_auto_accept: formData.isAutoAccept,
       });
       setActiveTab('MY_OFFERS');
