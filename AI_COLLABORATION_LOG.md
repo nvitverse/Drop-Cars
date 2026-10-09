@@ -190,3 +190,9 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 - Backend tests: 324 passed. Admin tsc clean.
 
 ### LIVE 2026-10-09 (Claude): backend rev `drop-cars-api-00317-msn` (commit 99a8db3: Invoices & Estimates + AG round 3 selective merge + shimmer/transitions). Admin OTA: preview group `3ff6a617-56ef-4984-af6c-9e447a452c55`, production group `1245c95e-cdc0-4a02-bf0d-e993b1cd9abd` (runtime 1.0.0). Driver App OTA NOT published (localizer not wired).
+
+## 2026-10-09 (Claude) - Zero-flash sweep, round 2 (Admin App)
+- New `hooks/useRememberedCounts.ts` (last real numbers restored from the phone, `markFresh()` after a real response, filtered responses never overwrite the overall numbers). Wired into Orders, Cars, Accounts, Vendors, Vehicle owners, Customers (header badges use `LiveNumber`).
+- Removed invented numbers: Orders CRM overview showed `3176` responded and `2` future when unknown; now real values (future from `enquiriesApi.getFutureLeadsCount()`), "missed" has no source so shows a dash. Failed requests no longer turn into 0 (bids / substitutions / website bookings). Trip detail fallback fare `4100` -> "Not set", odometer fallback `320 KM` -> "Not available", default drop "Bengaluru" -> "Not set".
+- Team hub attendance + cashbook boxes and Review tasks counts show a dash until loaded.
+- Rule for everyone: a number that is not loaded or not available is a dash / shimmer, never 0 and never a made-up figure.

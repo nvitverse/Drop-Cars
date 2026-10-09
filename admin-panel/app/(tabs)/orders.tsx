@@ -1,3 +1,4 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -231,7 +232,7 @@ export default function OrdersScreen() {
   const [mainSegment, setMainSegment] = useState<'crm' | 'bookings'>('crm');
   const [crmSection, setCrmSection] = useState<'overview' | 'leads'>('overview');
   const [crmSubTab, setCrmSubTab] = useState<'not_responded' | 'missed' | 'future' | 'responded'>('not_responded');
-  const [crmCounts, setCrmCounts] = useState({ not_responded: 0, future: 0, missed: 0, responded: 0 });
+  const [crmCounts, setCrmCounts] = useState<{ not_responded: number | null; future: number | null; missed: number | null; responded: number | null }>({ not_responded: null, future: null, missed: null, responded: null });
 
   const animateLayout = () => {
     try {
@@ -430,6 +431,10 @@ export default function OrdersScreen() {
   const [leadsCount, setLeadsCount] = useState<number>(0);
   const [websitePendingCount, setWebsitePendingCount] = useState<number>(0);
   const [substitutionCount, setSubstitutionCount] = useState<number>(0);
+  // last real numbers are put back at once, so the badges never flash 0 while the screen loads
+  const { ready: countsReady, markFresh: markCountsFresh } = useRememberedCounts('orders_counts_v1',
+    { totalCount, emergencyBidsCount, leadsCount, websitePendingCount, substitutionCount, crmCounts },
+    { totalCount: setTotalCount, emergencyBidsCount: setEmergencyBidsCount, leadsCount: setLeadsCount, websitePendingCount: setWebsitePendingCount, substitutionCount: setSubstitutionCount, crmCounts: setCrmCounts });
   const [showBrandMenu, setShowBrandMenu] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [appSourceFilter, setAppSourceFilter] = useState<'all' | 'vendor' | 'driver' | 'admin'>('all');
@@ -441,13 +446,14 @@ export default function OrdersScreen() {
 
   const fetchSnapshotData = async () => {
     try {
-      const [data, fh, bids, subs, webBookings, leadsRes] = await Promise.all([
+      const [data, fh, bids, subs, webBookings, leadsRes, futureCount] = await Promise.all([
         apiService.getBusinessSnapshot().catch(() => null),
         apiService.getFleetHubCounts().catch(() => null),
-        apiService.getEmergencyBids().catch(() => []),
-        apiService.getCarSubstitutionRequests().catch(() => ({ count: 0 })),
-        apiService.getPendingWebsiteBookings().catch(() => []),
+        apiService.getEmergencyBids().catch(() => null),
+        apiService.getCarSubstitutionRequests().catch(() => null),
+        apiService.getPendingWebsiteBookings().catch(() => null),
         enquiriesApi.list({ tab: 'not_responded', page: 1 }).catch(() => null),
+        enquiriesApi.getFutureLeadsCount().catch(() => null),
       ]);
       if (data) setSnapshot(data);
       if (fh?.reports?.drivers_online != null) setFleetOnline(fh.reports.drivers_online);
@@ -458,13 +464,14 @@ export default function OrdersScreen() {
         const nr = leadsRes?.counts?.not_responded ?? (Array.isArray(leadsRes?.enquiries) ? leadsRes.enquiries.length : 0);
         const resp = leadsRes?.counts?.responded ?? 0;
         setLeadsCount(nr);
-        setCrmCounts({
+        setCrmCounts((prev) => ({
           not_responded: nr,
-          future: 2,
-          missed: 0,
-          responded: resp,
-        });
+          future: typeof futureCount === 'number' ? futureCount : prev.future,
+          missed: null,   // no source for "missed" yet: shown as a dash, never as 0
+          responded: leadsRes?.counts?.responded != null ? resp : prev.responded,
+        }));
       }
+      markCountsFresh();
     } catch {}
   };
 
@@ -791,6 +798,7 @@ export default function OrdersScreen() {
       setOrders(prev => (reset ? data.orders : [...prev, ...data.orders]));
       setHasMore(data.orders.length === PAGE_SIZE);
       setTotalCount(data.total_count);
+      markCountsFresh();
     } catch (error: any) {
       console.error('Failed to fetch orders:', error);
       if (reset) {
@@ -2964,7 +2972,7 @@ export default function OrdersScreen() {
               },
               {
                 label: 'Future',
-                value: crmCounts.future || 2,
+                value: crmCounts.future ?? '–',
                 tone: '#F59E0B',
                 bgTint: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
                 delta: 'Follow-up',
@@ -2972,7 +2980,7 @@ export default function OrdersScreen() {
               },
               {
                 label: 'Responded',
-                value: crmCounts.responded || 3176,
+                value: crmCounts.responded ?? '–',
                 tone: '#10B981',
                 bgTint: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
                 delta: 'Done',
@@ -3080,7 +3088,7 @@ export default function OrdersScreen() {
                 title: 'Future Follow-ups',
                 subtitle: 'Advance trips (>2h) follow-up',
                 icon: Calendar,
-                count: crmCounts.future || 2,
+                count: crmCounts.future ?? undefined,
                 isUrgent: false,
                 onPress: () => {
                   animateLayout();
@@ -3101,7 +3109,7 @@ export default function OrdersScreen() {
                 title: 'Missed Leads',
                 subtitle: 'Unanswered leads from last 24h',
                 icon: Clock,
-                count: crmCounts.missed || 0,
+                count: crmCounts.missed ?? undefined,
                 isUrgent: (crmCounts.missed || 0) > 0,
                 onPress: () => {
                   animateLayout();
@@ -3145,7 +3153,7 @@ export default function OrdersScreen() {
                 title: 'Responded Archive',
                 subtitle: 'History of contacted leads',
                 icon: CheckCircle2,
-                count: crmCounts.responded || 3176,
+                count: crmCounts.responded ?? undefined,
                 onPress: () => {
                   animateLayout();
                   setCrmSubTab('responded');
@@ -4699,7 +4707,7 @@ export default function OrdersScreen() {
             <View style={{ backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border, marginBottom: 16, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary }}>TOTAL TRIP DISTANCE</Text>
               <Text style={{ fontSize: 22, fontWeight: '900', color: themeColors.text, marginTop: 2 }}>
-                {odoModalOrder?.trip_distance || 320} KM
+                {odoModalOrder?.trip_distance ? `${odoModalOrder.trip_distance} KM` : 'Not available'}
               </Text>
             </View>
 

@@ -545,11 +545,11 @@ export default function TripDetailScreen() {
     customerPhone: order.customer_number || '',
     customerEmail: order.customer_email || '',
     pickup: pickupLoc?.address || `${pickupLoc?.city || ''} ${pickupLoc?.state || ''}`.trim() || 'Veraiyur',
-    dropLocation: dropLoc?.address || `${dropLoc?.city || ''} ${dropLoc?.state || ''}`.trim() || 'Bengaluru',
+    dropLocation: dropLoc?.address || `${dropLoc?.city || ''} ${dropLoc?.state || ''}`.trim() || 'Not set',
     travelDate: formatDate(order.start_date_time),
     vehicleType: formatCarType(order.car_type || 'Sedan 4+1'),
     tripType: order.trip_type || 'Oneway',
-    baseFare: order.quoted_total_amount || order.estimated_price || 4100,
+    baseFare: order.quoted_total_amount || order.estimated_price || 0,
     extraCharges: 0,
     tollCharges: 0,
     advancePaid: order.advance_paid_amount || 0,
@@ -796,7 +796,7 @@ export default function TripDetailScreen() {
             <Text style={[styles.cardTitle, { color: themeColors.text }]}>Tariff Details</Text>
             <View style={{ flex: 1 }} />
             <Text style={[styles.headerPriceText, { color: '#10B981' }]}>
-              {formatCurrency(order.quoted_total_amount || order.estimated_price || 4100)}
+              {(order.quoted_total_amount || order.estimated_price) ? formatCurrency(order.quoted_total_amount || order.estimated_price) : 'Not set'}
             </Text>
           </View>
 
@@ -804,7 +804,7 @@ export default function TripDetailScreen() {
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: themeColors.textSecondary }]}>Quoted Total Fare:</Text>
               <Text style={[styles.infoValue, { color: '#10B981', fontWeight: '900', fontSize: 16 }]}>
-                {formatCurrency(order.quoted_total_amount || order.estimated_price || 4100)}
+                {(order.quoted_total_amount || order.estimated_price) ? formatCurrency(order.quoted_total_amount || order.estimated_price) : 'Not set'}
               </Text>
             </View>
 

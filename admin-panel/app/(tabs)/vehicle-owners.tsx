@@ -1,3 +1,5 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
+import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -103,6 +105,7 @@ export default function VehicleOwnersScreen() {
   const [statusTab, setStatusTab] = useState<StatusTabFilter>('all');
   const [tierTab, setTierTab] = useState<TierTabFilter>('all');
   const [totalCount, setTotalCount] = useState(0);
+  const { ready: countsReady, markFresh } = useRememberedCounts('owners_counts_v1', { totalCount }, { totalCount: setTotalCount });
 
   const [selectedOwner, setSelectedOwner] = useState<VehicleOwner | null>(null);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
@@ -133,6 +136,7 @@ export default function VehicleOwnersScreen() {
         setVehicleOwners((prev) => (reset ? newOwners : [...prev, ...newOwners]));
         setHasMore(newOwners.length === PAGE_SIZE);
         setTotalCount(typeof data?.total_count === 'number' ? data.total_count : (reset ? newOwners.length : ownersCountRef.current + newOwners.length));
+        markFresh(reset && !search && status === 'all' && tier === 'all');
       } catch (err) {
         if (reset) setError('Failed to load fleet partners. Pull to refresh.');
       } finally {
@@ -443,7 +447,7 @@ export default function VehicleOwnersScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.headerTitle}>Fleet Directory</Text>
                 <View style={styles.headerCountBadge}>
-                  <Text style={styles.headerCountText}>{totalCount}</Text>
+                  <LiveNumber ready={countsReady} width={24} height={14}><Text style={styles.headerCountText}>{totalCount}</Text></LiveNumber>
                 </View>
               </View>
               <Text style={styles.headerSubtitle}>

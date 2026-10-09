@@ -1,3 +1,5 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
+import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -138,6 +140,7 @@ export default function AccountsScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const { ready: countsReady, markFresh } = useRememberedCounts('accounts_counts_v1', { totalCount }, { totalCount: setTotalCount });
 
   const fetchAccounts = async (isFilterChange = false, loadMore = false) => {
     try {
@@ -161,6 +164,7 @@ export default function AccountsScreen() {
       setHasMore(data.accounts.length === PAGE_SIZE);
       setSkipCount(skip + data.accounts.length);
       setTotalCount(data.total_count);
+      markFresh(!loadMore && accountTypeFilter === 'all' && statusFilter === 'all' && !searchQuery.trim());
       // Mobile numbers now come directly in the list response (primary_number)
       // - the old per-account background fetches made the screen feel slow.
     } catch (error) {
@@ -1042,7 +1046,7 @@ export default function AccountsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1} ellipsizeMode="tail">Drivers & vendors</Text>
-            <Text style={[styles.subtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>{totalCount} registered accounts</Text>
+            <Text style={[styles.subtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>{countsReady ? `${totalCount} registered accounts` : 'Loading accounts…'}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <ThemeToggle size={20} />

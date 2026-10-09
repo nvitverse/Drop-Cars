@@ -95,7 +95,7 @@ export default function TeamHubScreen() {
   // Hajri / Attendance State
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [attendanceSummary, setAttendanceSummary] = useState<any>({ total: 0, present: 0, absent: 0, half_day: 0, overtime: 0 });
+  const [attendanceSummary, setAttendanceSummary] = useState<any>({ total: 0, present: 0, absent: 0, half_day: 0, overtime: 0, _pending: true });
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -139,7 +139,7 @@ export default function TeamHubScreen() {
   const [selectedPayrollData, setSelectedPayrollData] = useState<any>(null);
 
   // Cashbook State
-  const [cashbookData, setCashbookData] = useState<any>({ total_cash_in: 0, total_cash_out: 0, net_cash_balance: 0, entries: [] });
+  const [cashbookData, setCashbookData] = useState<any>({ total_cash_in: 0, total_cash_out: 0, net_cash_balance: 0, entries: [], _pending: true });
   const [addCashModalVisible, setAddCashModalVisible] = useState(false);
   const [cashType, setCashType] = useState<'IN' | 'OUT'>('OUT');
   const [cashAmount, setCashAmount] = useState('');
@@ -275,7 +275,7 @@ export default function TeamHubScreen() {
       else if (r.status === 'HD') hd++;
       else if (r.status === 'OT') ot++;
     });
-    setAttendanceSummary({ ...attendanceSummary, present: p, absent: a, half_day: hd, overtime: ot });
+    setAttendanceSummary({ ...attendanceSummary, present: p, absent: a, half_day: hd, overtime: ot, _pending: false });
 
     // Send single/bulk update or queue if offline
     try {
@@ -716,23 +716,23 @@ export default function TeamHubScreen() {
                 {/* Summary Badges Bar */}
                 <View style={styles.hajriSummaryRow}>
                   <View style={[styles.hajriStatBox, { backgroundColor: '#E0F2FE' }]}>
-                    <Text style={[styles.hajriStatNum, { color: '#0369A1' }]}>{attendanceSummary.total || 0}</Text>
+                    <Text style={[styles.hajriStatNum, { color: '#0369A1' }]}>{attendanceSummary._pending ? '–' : (attendanceSummary.total || 0)}</Text>
                     <Text style={[styles.hajriStatLabel, { color: '#0369A1' }]}>Total</Text>
                   </View>
                   <View style={[styles.hajriStatBox, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={[styles.hajriStatNum, { color: '#059669' }]}>{attendanceSummary.present || 0}</Text>
+                    <Text style={[styles.hajriStatNum, { color: '#059669' }]}>{attendanceSummary._pending ? '–' : (attendanceSummary.present || 0)}</Text>
                     <Text style={[styles.hajriStatLabel, { color: '#059669' }]}>Present</Text>
                   </View>
                   <View style={[styles.hajriStatBox, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={[styles.hajriStatNum, { color: '#DC2626' }]}>{attendanceSummary.absent || 0}</Text>
+                    <Text style={[styles.hajriStatNum, { color: '#DC2626' }]}>{attendanceSummary._pending ? '–' : (attendanceSummary.absent || 0)}</Text>
                     <Text style={[styles.hajriStatLabel, { color: '#DC2626' }]}>Absent</Text>
                   </View>
                   <View style={[styles.hajriStatBox, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={[styles.hajriStatNum, { color: '#D97706' }]}>{attendanceSummary.half_day || 0}</Text>
+                    <Text style={[styles.hajriStatNum, { color: '#D97706' }]}>{attendanceSummary._pending ? '–' : (attendanceSummary.half_day || 0)}</Text>
                     <Text style={[styles.hajriStatLabel, { color: '#D97706' }]}>Half-Day</Text>
                   </View>
                   <View style={[styles.hajriStatBox, { backgroundColor: '#EDE9FE' }]}>
-                    <Text style={[styles.hajriStatNum, { color: '#7C3AED' }]}>{attendanceSummary.overtime || 0}</Text>
+                    <Text style={[styles.hajriStatNum, { color: '#7C3AED' }]}>{attendanceSummary._pending ? '–' : (attendanceSummary.overtime || 0)}</Text>
                     <Text style={[styles.hajriStatLabel, { color: '#7C3AED' }]}>OT</Text>
                   </View>
                 </View>
@@ -1069,15 +1069,15 @@ export default function TeamHubScreen() {
               {/* Running Balance Cards */}
               <View style={styles.cashbookCardsRow}>
                 <View style={[styles.cashBox, { backgroundColor: '#D1FAE5' }]}>
-                  <Text style={[styles.cashBoxNum, { color: '#059669' }]}>₹{cashbookData.total_cash_in || 0}</Text>
+                  <Text style={[styles.cashBoxNum, { color: '#059669' }]}>{cashbookData._pending ? '–' : `₹${cashbookData.total_cash_in || 0}`}</Text>
                   <Text style={[styles.cashBoxLabel, { color: '#059669' }]}>Total In (+)</Text>
                 </View>
                 <View style={[styles.cashBox, { backgroundColor: '#FEE2E2' }]}>
-                  <Text style={[styles.cashBoxNum, { color: '#DC2626' }]}>₹{cashbookData.total_cash_out || 0}</Text>
+                  <Text style={[styles.cashBoxNum, { color: '#DC2626' }]}>{cashbookData._pending ? '–' : `₹${cashbookData.total_cash_out || 0}`}</Text>
                   <Text style={[styles.cashBoxLabel, { color: '#DC2626' }]}>Total Out (−)</Text>
                 </View>
                 <View style={[styles.cashBox, { backgroundColor: '#E0F2FE' }]}>
-                  <Text style={[styles.cashBoxNum, { color: '#0284C7' }]}>₹{cashbookData.net_cash_balance || 0}</Text>
+                  <Text style={[styles.cashBoxNum, { color: '#0284C7' }]}>{cashbookData._pending ? '–' : `₹${cashbookData.net_cash_balance || 0}`}</Text>
                   <Text style={[styles.cashBoxLabel, { color: '#0284C7' }]}>Cash in Hand</Text>
                 </View>
               </View>

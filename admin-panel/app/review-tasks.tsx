@@ -38,8 +38,8 @@ export default function ReviewTasksScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [queue, setQueue] = useState<any[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [completed5StarCount, setCompleted5StarCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [completed5StarCount, setCompleted5StarCount] = useState<number | null>(null);
   const [googleReviewUrl, setGoogleReviewUrl] = useState('https://g.page/r/dropcars/review');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'DONE'>('PENDING');
 
@@ -130,7 +130,7 @@ export default function ReviewTasksScreen() {
             <AlertCircle size={16} color="#EF4444" />
             <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: themeColors.textSecondary }}>Pending Review Follow-ups</Text>
           </View>
-          <Text style={{ fontSize: 26, fontFamily: 'Inter-Bold', color: '#EF4444', marginTop: 2 }}>{pendingCount}</Text>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter-Bold', color: '#EF4444', marginTop: 2 }}>{pendingCount ?? '–'}</Text>
           <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Must be approached by staff</Text>
         </View>
 
@@ -139,7 +139,7 @@ export default function ReviewTasksScreen() {
             <Star size={16} color="#F59E0B" fill="#F59E0B" />
             <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: themeColors.textSecondary }}>5-Star Reviews Verified</Text>
           </View>
-          <Text style={{ fontSize: 26, fontFamily: 'Inter-Bold', color: '#10B981', marginTop: 2 }}>{completed5StarCount}</Text>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter-Bold', color: '#10B981', marginTop: 2 }}>{completed5StarCount ?? '–'}</Text>
           <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginTop: 1 }}>Direct on Google Place</Text>
         </View>
       </View>
@@ -151,7 +151,7 @@ export default function ReviewTasksScreen() {
           onPress={() => setStatusFilter('PENDING')}
         >
           <Text style={[styles.filterChipText, statusFilter === 'PENDING' && { color: '#FFF' }]}>
-            Pending Action ({pendingCount})
+            Pending Action{pendingCount != null ? ` (${pendingCount})` : ''}
           </Text>
         </TouchableOpacity>
 

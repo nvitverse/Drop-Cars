@@ -1,3 +1,5 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
+import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -54,6 +56,7 @@ export default function CustomersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [segmentFilter, setSegmentFilter] = useState<'ALL' | 'INDIVIDUAL' | 'B2B' | 'CORPORATE'>('ALL');
   const [totalCount, setTotalCount] = useState(0);
+  const { ready: countsReady, markFresh } = useRememberedCounts('customers_counts_v1', { totalCount }, { totalCount: setTotalCount });
   const [newCustomersToday, setNewCustomersToday] = useState<number | null>(null);
 
   const fetchCustomers = async (reset = true, segment = segmentFilter) => {
@@ -65,6 +68,7 @@ export default function CustomersScreen() {
       const items = data.customers || [];
       setCustomers(prev => (reset ? items : [...prev, ...items]));
       setTotalCount(data.total_count || 0);
+      markFresh(reset && segment === 'ALL');
       setHasMore(items.length === PAGE_SIZE);
 
       if (reset) {
@@ -271,7 +275,7 @@ export default function CustomersScreen() {
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: themeColors.text }]}>Customers</Text>
           <View style={[styles.countBadge, { backgroundColor: themeColors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text>
+            <LiveNumber ready={countsReady} width={24} height={14}><Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text></LiveNumber>
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

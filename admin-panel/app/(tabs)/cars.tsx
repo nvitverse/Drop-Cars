@@ -1,3 +1,5 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
+import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -95,6 +97,7 @@ export default function CarsScreen() {
   const [blockedCount, setBlockedCount] = useState(0);
   const [processingCount, setProcessingCount] = useState(0);
   const [drivingCount, setDrivingCount] = useState(0);
+  const { ready: countsReady, markFresh } = useRememberedCounts('cars_counts_v1', { totalCount, onlineCount, blockedCount, processingCount, drivingCount }, { totalCount: setTotalCount, onlineCount: setOnlineCount, blockedCount: setBlockedCount, processingCount: setProcessingCount, drivingCount: setDrivingCount });
   const [selectedCar, setSelectedCar] = useState<CarItem | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [isOwner, setIsOwner] = useState(true);
@@ -132,6 +135,7 @@ export default function CarsScreen() {
       setBlockedCount(data.blocked_count);
       setProcessingCount(data.processing_count);
       setDrivingCount(data.driving_count);
+      markFresh(!loadMore && statusFilter === 'all' && !vehicleOwnerParam && !searchParam);
     } catch (error) {
       console.error('Failed to fetch cars:', error);
       if (!loadMore) setError('Failed to load cars. Please try again.');
@@ -345,7 +349,7 @@ export default function CarsScreen() {
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: themeColors.text }]}>Cars</Text>
           <View style={[styles.countBadge, { backgroundColor: themeColors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text>
+            <LiveNumber ready={countsReady} width={24} height={14}><Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text></LiveNumber>
           </View>
         </View>
       </View>

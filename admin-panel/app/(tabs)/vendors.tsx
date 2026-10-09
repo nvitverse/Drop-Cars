@@ -1,3 +1,5 @@
+import { useRememberedCounts } from '@/hooks/useRememberedCounts';
+import { LiveNumber } from '@/components/ui';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -45,6 +47,7 @@ export default function VendorsScreen() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const { ready: countsReady, markFresh } = useRememberedCounts('vendors_counts_v1', { totalCount }, { totalCount: setTotalCount });
 
   const fetchVendors = async (reset = true) => {
     try {
@@ -55,6 +58,7 @@ export default function VendorsScreen() {
       setVendors(prev => (reset ? data.vendors : [...prev, ...data.vendors]));
       setHasMore(data.vendors.length === PAGE_SIZE);
       setTotalCount(data.total_count);
+      markFresh(reset);
     } catch (error) {
       if (reset) setError('Failed to load vendors. Please try again.');
     } finally {
@@ -166,7 +170,7 @@ export default function VendorsScreen() {
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: themeColors.text }]}>Vendors</Text>
           <View style={[styles.countBadge, { backgroundColor: themeColors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text>
+            <LiveNumber ready={countsReady} width={24} height={14}><Text style={[styles.countText, { color: themeColors.textSecondary }]}>{totalCount}</Text></LiveNumber>
           </View>
         </View>
       </View>
