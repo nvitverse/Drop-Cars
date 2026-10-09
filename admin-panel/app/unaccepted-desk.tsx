@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, Share, 
 import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { AlertTriangle, ArrowLeft, Bell, Clock, Send, Share2, UserCheck, XCircle, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Bell, Clock, Send, Share2, UserCheck, XCircle, ChevronDown, ChevronUp, CheckCircle2, Link2, MapPin } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
 import { openWaUrl } from '@/utils/whatsapp';
@@ -40,6 +40,7 @@ export default function UnacceptedDesk() {
   const [form, setForm] = useState({ platform: '', by: '', driver_name: '', driver_phone: '', vehicle_number: '', note: '', commission: '' });
   const [reason, setReason] = useState('');
   const [mailCustomer, setMailCustomer] = useState(true);
+  const [portal, setPortal] = useState<Record<number, any>>({});          // the web link of a booking: status, link, OTP message, location
 
   const load = useCallback(async () => {
     try {
@@ -68,8 +69,66 @@ export default function UnacceptedDesk() {
   const share = async (cs: Case) => {
     const r = await call(cs.order_id, 'share');
     if (!r) return;
+    openPortal(cs.order_id, false);
     const opened = await openWaUrl(r.whatsapp_url);
     if (!opened) await Share.share({ message: r.message });
+  };
+
+  // Web execution link: someone outside the apps takes the booking, pays the commission and runs the trip from a phone browser
+  const openPortal = async (id: number, create: boolean) => {
+    setBusy(id);
+    try {
+      const r = await apiService.makeRequest(`/admin/portal/${id}${create ? '' : '?create=false'}`, create ? { method: 'POST', body: JSON.stringify({}) } : undefined);
+      setPortal((p) => ({ ...p, [id]: r }));
+    } catch (e: any) { Alert.alert('Could not open the web link', e?.message || 'Try again'); }
+    finally { setBusy(null); }
+  };
+  const confirmPay = async (id: number, received: boolean) => {
+    setBusy(id);
+    try {
+      const r = await apiService.makeRequest(`/admin/portal/${id}/confirm-payment`, { method: 'POST', body: JSON.stringify({ received }) });
+      setPortal((p) => ({ ...p, [id]: { ...r, customer_message: p[id]?.customer_message } }));
+      await load();
+    } catch (e: any) { Alert.alert('Could not update', e?.message || 'Try again'); }
+    finally { setBusy(null); }
+  };
+  const sendCustomer = async (id: number) => {
+    const m = portal[id]?.customer_message;
+    if (!m) return;
+    const opened = await openWaUrl(m.whatsapp_url);
+    if (!opened) await Share.share({ message: m.message });
+  };
+
+  const renderPortal = (x: Case) => {
+    const p = portal[x.order_id];
+    if (!p) return (
+      <TouchableOpacity disabled={busy === x.order_id} onPress={() => openPortal(x.order_id, true)} style={[s.act, { backgroundColor: '#0F766E', alignSelf: 'flex-start', marginTop: 8 }]}>
+        <Link2 size={14} color="#FFFFFF" /><Text style={s.actTxt}>Web link (no-app executor)</Text>
+      </TouchableOpacity>
+    );
+    const stateTxt: Record<string, string> = { OPEN: 'Waiting for someone to take it', TAKEN: 'Taken - not started', STARTED: 'Trip running', ENDED: 'Trip ended', CANCELLED: 'Cancelled' };
+    return (
+      <View style={{ marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: isDark ? '#0F172A' : '#F0FDFA', gap: 4 }}>
+        <Text style={{ color: c.text, fontWeight: '800', fontSize: 13 }}>Web link · {stateTxt[p.status] || p.status}</Text>
+        {!!p.executor && <Text style={{ color: c.textSecondary, fontSize: 12.5 }}>{p.executor.name} · {p.executor.phone} · {p.executor.vehicle_number}{p.executor.vehicle_model ? ` (${p.executor.vehicle_model})` : ''}</Text>}
+        <View style={s.wrap}>
+          <TouchableOpacity onPress={() => Share.share({ message: p.link })} style={[s.chip, { borderColor: c.border }]}><Text style={{ color: c.text, fontSize: 12, fontWeight: '700' }}>Share / copy link</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => openPortal(x.order_id, false)} style={[s.chip, { borderColor: c.border }]}><Text style={{ color: c.text, fontSize: 12, fontWeight: '700' }}>Refresh</Text></TouchableOpacity>
+        </View>
+        {!!p.executor && (
+          <View style={s.rowBetween}>
+            <Text style={{ color: c.text, fontSize: 12.5, flex: 1 }}>Commission {inr(p.commission_due)} · {p.commission_status === 'CONFIRMED' ? 'received' : p.commission_status === 'REPORTED' ? `UTR ${p.commission_utr || ''} - check your bank` : 'not paid yet'}</Text>
+            <TouchableOpacity disabled={busy === x.order_id} onPress={() => confirmPay(x.order_id, p.commission_status !== 'CONFIRMED')} style={[s.chip, { borderColor: p.commission_status === 'CONFIRMED' ? '#16A34A' : '#F59E0B' }]}>
+              <CheckCircle2 size={12} color={p.commission_status === 'CONFIRMED' ? '#16A34A' : '#F59E0B'} /><Text style={{ color: c.text, fontSize: 12, fontWeight: '700', marginLeft: 4 }}>{p.commission_status === 'CONFIRMED' ? 'Undo' : 'Money received'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {!!p.executor && <TouchableOpacity onPress={() => sendCustomer(x.order_id)} style={[s.act, { backgroundColor: '#25D366', alignSelf: 'flex-start' }]}><Send size={14} color="#FFFFFF" /><Text style={s.actTxt}>Send driver + OTPs to customer</Text></TouchableOpacity>}
+        {p.start_km != null && <Text style={{ color: c.textSecondary, fontSize: 12 }}>Start {p.start_km} km{p.end_km != null ? ` · End ${p.end_km} km (${p.end_km - p.start_km} km)` : ''}</Text>}
+        {!!p.location && <TouchableOpacity onPress={() => openWaUrl(p.location.map)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><MapPin size={13} color={c.primary} /><Text style={{ color: c.primary, fontSize: 12, fontWeight: '700' }}>Last location {clock(p.location.at)}</Text></TouchableOpacity>}
+        {p.rating != null && <Text style={{ color: p.rating <= 2 ? '#DC2626' : c.text, fontSize: 12.5, fontWeight: '700' }}>Customer rating {p.rating}/5{p.feedback ? ` - ${p.feedback}` : ''}</Text>}
+      </View>
+    );
   };
 
   const submitExec = async () => {
@@ -142,6 +201,8 @@ export default function UnacceptedDesk() {
             </View>
           </View>
         )}
+
+        {(live || x.status === 'EXECUTED_ELSEWHERE') && renderPortal(x)}
 
         {x.status === 'EXECUTED_ELSEWHERE' && (
           <View style={{ marginTop: 8, gap: 4 }}>

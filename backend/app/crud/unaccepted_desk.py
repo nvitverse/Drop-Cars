@@ -250,19 +250,27 @@ def group_message(order, brand: str = "DROP CARS", db: Optional[Session] = None)
     return "\n".join(lines)
 
 
-def share(db: Session, order_id: int, who: str) -> Dict[str, Any]:
+def share(db: Session, order_id: int, who: str, base_url: str = "") -> Dict[str, Any]:
     o = _order(db, order_id)
     case = get_or_create_case(db, o)
     if case.status not in ACTIVE:
         raise HTTPException(status_code=409, detail=f"This booking is already {case.status.replace('_', ' ').lower()}")
     msg = group_message(o, db=db)
+    link = None
+    if base_url:                                   # no app? the same booking can be taken from a mobile web page
+        try:
+            from app.crud.portal_trips import create_link
+            link = f"{base_url.rstrip('/')}/p/{create_link(db, o.id, who).token}"
+            msg += "\n\n\U0001F517 No app? Take this booking on your phone browser:\n" + link
+        except Exception as e:        # noqa: BLE001
+            logger.warning("web link for %s not made: %s", o.id, e)
     case.status = "SHARED"
     case.shared_count += 1
     case.last_shared_at = datetime.now(timezone.utc)
     case.last_shared_by = who
     _log(case, who, "SHARED", "group message built")
     db.commit()
-    return {"message": msg, "whatsapp_url": "https://wa.me/?text=" + urllib.parse.quote(msg), "shared_count": case.shared_count}
+    return {"message": msg, "whatsapp_url": "https://wa.me/?text=" + urllib.parse.quote(msg), "shared_count": case.shared_count, "web_link": link}
 
 
 # ---------------------------------------------------------------- executed elsewhere

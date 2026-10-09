@@ -23,6 +23,8 @@ def account(pg_session):
 @pytest.fixture(autouse=True)
 def _no_push(monkeypatch):
     monkeypatch.setattr(sup, "_notify_admins_of_support_message", lambda *a, **k: None)
+    from app.crud import portal_trips
+    monkeypatch.setattr(portal_trips, "notify_admins", lambda *a, **k: None)
 
 
 def _request(db, d, token=None):
@@ -156,3 +158,13 @@ def test_admin_thread_list_flags_help_requests_and_counts_unread(pg_session, acc
     assert mine["help_request"] is True and mine["thread_role"] == "OWNER"
     assert mine["unread"] == 2                                       # the request + "hello" are unread for Admin
     assert sum(1 for r in rows if r["thread_key"] == str(account.id)) == 1
+
+
+def test_admin_sees_what_the_bot_collected(pg_session, account):
+    tok = _request(pg_session, account)["help_token"]
+    _send(pg_session, tok, "1")
+    _send(pg_session, tok, "Ravi Kumar TN09AB1234 ravi@example.com")
+    _send(pg_session, tok, "aadhaar 1234 5678 9012")
+    out = sup.get_support_thread_for_admin(str(account.id), 0, pg_session, None)
+    h = out["help"]
+    assert h["complete"] is True and h["collected"]["vehicle"] == "TN09AB1234" and h["collected"]["id4"] == "XXXX XXXX 9012" and h["collected"]["email"] == "ravi@example.com"

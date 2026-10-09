@@ -285,6 +285,7 @@ export default function AdminChatsScreen() {
   const [sending, setSending] = useState(false);
   const [threadSummary, setThreadSummary] = useState<{ summary?: string; topic?: string; urgency?: string; mood?: string } | null>(null);
   const [draftingReply, setDraftingReply] = useState(false);
+  const [helpInfo, setHelpInfo] = useState<{ topic?: string | null; mobile?: string; collected: Record<string, string>; complete: boolean } | null>(null);   // what the help bot collected from a locked-out person
   const [suggestedAiDrafts, setSuggestedAiDrafts] = useState<string[]>([]);
   const listRef = useRef<FlatList>(null);
 
@@ -369,7 +370,8 @@ export default function AdminChatsScreen() {
     const interval = setInterval(async () => {
       try {
         if (openRow.kind === 'SUPPORT') {
-          const res = await supportApi.getSupportThread(openRow.key);
+          const res: any = await supportApi.getSupportThread(openRow.key);
+          setHelpInfo(res.help || null);
           const fresh = (res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}`, read: isMsgRead(m) }));
           setMessages((prev) => {
             const known = new Set(prev.map((p) => String(p.id)));
@@ -398,10 +400,12 @@ export default function AdminChatsScreen() {
     setOpenRow(row);
     setMessages([]);
     setThreadSummary(null);
+    setHelpInfo(null);
     setSuggestedAiDrafts([]);
     try {
       if (row.kind === 'SUPPORT') {
-        const res = await supportApi.getSupportThread(row.key);
+        const res: any = await supportApi.getSupportThread(row.key);
+        setHelpInfo(res.help || null);
         setMessages((res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}`, read: isMsgRead(m) })));
         supportApi.summarizeSupportThread(row.key).then(setThreadSummary).catch(() => {});
       } else if (row.order_id) {
@@ -1111,6 +1115,12 @@ export default function AdminChatsScreen() {
                 <Text style={[styles.rowSub, { color: themeColors.textSecondary }]}>
                   {openRow?.subtitle}{openRow?.trashed_at ? `  ·  in Trash, clears in ${openRow.trash_days_left ?? TRASH_DAYS} days` : ''}
                 </Text>
+                {!!helpInfo && Object.keys(helpInfo.collected || {}).length > 0 && (
+                  <Text numberOfLines={3} style={{ fontSize: 11, marginTop: 3, color: helpInfo.complete ? '#16A34A' : themeColors.textSecondary, fontWeight: '700' }}>
+                    {helpInfo.complete ? '✅ Details complete - verify and fix: ' : '📋 Collected so far: '}
+                    {Object.entries(helpInfo.collected).map(([k, v]) => `${({ name: 'Name', vehicle: 'Vehicle', email: 'E-mail', id4: 'ID', newmobile: 'New mobile' } as any)[k] || k} ${v}`).join(' · ')}
+                  </Text>
+                )}
                 {threadSummary?.summary && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                     <Sparkles size={11} color={themeColors.primary} />

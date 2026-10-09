@@ -64,6 +64,16 @@ PUBLIC_BY_DESIGN = {
     # Published app content: OTA manifest (checked before login), terms, cards, GST details.
     "GET /api/app-updates/{app}/manifest",
     "GET /api/app-updates/{app}/version-check",
+    # web execution portal: the link's secret token is the credential (the executor / customer has no login); OTPs are never returned
+    "GET /p/{token}",
+    "GET /p/{token}/feedback",
+    "GET /api/portal/{token}",
+    "POST /api/portal/{token}/take",
+    "POST /api/portal/{token}/pay",
+    "POST /api/portal/{token}/start",
+    "POST /api/portal/{token}/end",
+    "POST /api/portal/{token}/location",
+    "POST /api/portal/{token}/feedback",
     "GET /api/billing/public/{token}",
     "GET /api/billing/public/{token}/pdf",
     "GET /api/public/app-content/{key}",

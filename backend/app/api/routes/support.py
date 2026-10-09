@@ -590,9 +590,20 @@ def get_support_thread_for_admin(thread_key: str, after_id: int = 0, db: Session
     if changed:
         db.commit()
     msgs = [m for m in all_msgs if m.id > after_id]
+    help_info = None
+    try:                                  # a locked-out person's help chat: what the bot already collected (name, vehicle, e-mail, last 4 of the ID ...)
+        import json
+        from app.models.guest_help_token import GuestHelpToken
+        g = db.query(GuestHelpToken).filter(GuestHelpToken.thread_key == thread_key).order_by(GuestHelpToken.id.desc()).first()
+        if g is not None:
+            col = json.loads(g.collected) if g.collected else {}
+            help_info = {"topic": g.topic, "reason": g.reason, "mobile": g.primary_number, "language": g.language,
+                         "collected": {k: v for k, v in col.items() if not str(k).startswith("_")}, "complete": bool(col.get("_done"))}
+    except Exception:  # noqa: BLE001
+        help_info = None
     return {
         "thread_key": thread_key, "thread_name": all_msgs[-1].thread_name, "thread_role": all_msgs[-1].thread_role,
-        "messages": [_msg_out(m, "ADMIN") for m in msgs],
+        "messages": [_msg_out(m, "ADMIN") for m in msgs], "help": help_info,
     }
 
 

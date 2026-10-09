@@ -11,7 +11,7 @@
   GET/PUT /api/admin/unaccepted-desk/config                the alarm numbers (Owner edits)"""
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -96,8 +96,9 @@ def snooze(order_id: int, body: SnoozeIn, db: Session = Depends(get_db), admin=D
 
 
 @router.post("/{order_id}/share")
-def share(order_id: int, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-    out = desk.share(db, order_id, _who(admin))
+def share(order_id: int, request: Request, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    from app.api.routes.portal import _base
+    out = desk.share(db, order_id, _who(admin), _base(request))
     return {**out, "case": _view(db, order_id)}
 
 

@@ -20,6 +20,7 @@ import app.models.document_model  # document_models table must be known before c
 import app.models.chat_trash  # chat_trash table must be known before create_all()
 import app.models.billing  # billing_brands / billing_documents tables
 import app.models.unaccepted_case  # unaccepted_cases table
+import app.models.portal_trip  # portal_trips table (web execution portal)
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
@@ -291,6 +292,8 @@ app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estima
 app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
 from app.api.routes import unaccepted_desk as _unaccepted_desk
 app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
+from app.api.routes import portal as _portal
+app.include_router(_portal.router, tags=["Web execution portal"])
 from app.api.routes import document_models as _doc_models
 app.include_router(_doc_models.router, prefix="/api", tags=["Document Models"])
 app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])

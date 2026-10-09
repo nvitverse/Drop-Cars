@@ -419,6 +419,14 @@ def handle_details(db: Session, token, text: str, lang: Optional[str]) -> bool:
     have.update(changed)
     _save_collected(db, token, have)
     complete = all(k in have for k in req)
+    if complete and not have.get("_done"):
+        have["_done"] = 1
+        _save_collected(db, token, have)
+        try:                                             # staff hear about it once, with what was collected
+            from app.crud.portal_trips import notify_admins
+            notify_admins(db, "📋 Help details complete", f"+91 {token.primary_number}: " + ", ".join(f"{k} {v}" for k, v in have.items() if not k.startswith("_"))[:110])
+        except Exception:      # noqa: BLE001
+            pass
     if lang in T:
         _post(db, token, _checklist(lang, have, req, complete))
     else:
