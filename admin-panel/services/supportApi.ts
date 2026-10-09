@@ -20,3 +20,24 @@ export const replySupportThread = (threadKey: string, text?: string, voiceUrl?: 
     method: 'POST',
     body: JSON.stringify({ text, voice_url: voiceUrl }),
   });
+
+export const draftReplySupportThread = (threadKey: string): Promise<{ drafts: string[]; language: string; source: string; context_facts?: any }> =>
+  apiService.makeRequest(`/support/admin/threads/${encodeURIComponent(threadKey)}/draft-reply`, {
+    method: 'POST',
+  });
+
+export const summarizeSupportThread = (threadKey: string): Promise<{ summary: string; topic: string; urgency: string; mood: string; language: string; cached: boolean }> =>
+  apiService.makeRequest(`/support/admin/threads/${encodeURIComponent(threadKey)}/summary`, {
+    method: 'POST',
+  });
+
+export const draftReplyBookingThread = (orderId: number | string): Promise<{ drafts: string[]; language: string; source: string; context_facts?: any }> =>
+  apiService.makeRequest(`/support/admin/booking-threads/${encodeURIComponent(orderId)}/draft-reply`, {
+    method: 'POST',
+  });
+
+export const summarizeBookingThread = (orderId: number | string): Promise<{ summary: string; topic: string; urgency: string; mood: string; language: string; cached: boolean }> =>
+  apiService.makeRequest(`/support/admin/booking-threads/${encodeURIComponent(orderId)}/summary`, {
+    method: 'POST',
+  });
+

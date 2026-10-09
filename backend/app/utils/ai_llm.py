@@ -311,7 +311,435 @@ def answer(db: Session, request, message: str, history: Any = None) -> Optional[
         t0 = time.time()
         raw = _call_gemini(system, turns) if prov == "gemini" else _call_anthropic(system, turns)
         logger.info("ai bot (%s) answered in %.1fs", prov, time.time() - t0)
-        return _parse(raw or "")
+        res = _parse(raw or "")
+        if res:
+            _log_ai_call(
+                db, category="WHATSAPP_CHAT", action_type="AUTO_REPLIED",
+                entity_type=role.lower() if role else None,
+                entity_id=str(getattr(caller, "id", "")),
+                summary=f"Help bot reply: {res.get('reply', '')[:120]}",
+                details_json={"provider": prov, "duration_s": round(time.time() - t0, 2)},
+            )
+        return res
     except Exception as e:  # noqa: BLE001
         logger.warning("ai bot call failed: %s", e)
         return None
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Audit Logger for AI Operations
+# ----------------------------------------------------------------------------------------------------------------------
+def _log_ai_call(
+    db: Session,
+    category: str,
+    action_type: str,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    summary: str = "",
+    details_json: Optional[Dict[str, Any]] = None,
+    confidence_score: float = 1.0,
+):
+    try:
+        from app.models.ai_automation_log import AIAutomationLog
+        log_row = AIAutomationLog(
+            category=category,
+            action_type=action_type,
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id else None,
+            summary=summary[:450] if summary else f"{category} {action_type}",
+            confidence_score=confidence_score,
+            details_json=details_json or {},
+        )
+        db.add(log_row)
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("AIAutomationLog write skipped: %s", e)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Feature Limits Check
+# ----------------------------------------------------------------------------------------------------------------------
+_feature_usage: Dict[str, Tuple[str, int]] = {}
+
+
+def _within_feature_limit(db: Session, feature_key: str, default_limit: int = 300) -> bool:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    limit = int(float(_setting(db, f"ai_{feature_key}_daily_limit", str(default_limit))))
+    day, count = _feature_usage.get(feature_key, (today, 0))
+    if day != today:
+        count = 0
+    if count >= limit:
+        return False
+    _feature_usage[feature_key] = (today, count + 1)
+    return True
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# B1. Draft a reply for Admin > Chats
+# ----------------------------------------------------------------------------------------------------------------------
+DRAFT_REPLY_PROMPT = """You are a smart assistant helping Drop Cars taxi support staff draft polite, professional replies in Tamil Nadu, India.
+Given the recent chat messages and basic non-sensitive facts about the user, draft up to 3 distinct, helpful reply options.
+
+CRITICAL RULES:
+1. Return ONLY valid JSON in format: {{"drafts": ["<draft 1>", "<draft 2>", "<draft 3>"]}}
+2. Match the language the user wrote in:
+   - Tamil script -> Tamil
+   - Tanglish (Tamil in English letters) -> Tanglish
+   - English -> Simple English
+3. Keep each draft SHORT (1 to 2 sentences, under 35 words).
+4. NEVER promise money, refunds, or specific deadlines.
+5. If user is asking about rejected documents, politely guide them to upload the original document.
+6. Be warm, respectful, and calm.
+
+USER FACTS:
+{facts}
+
+RECENT MESSAGES (Newest last):
+{messages}
+"""
+
+
+def _detect_lang(text: str) -> str:
+    # Check for Tamil unicode range
+    if re.search(r"[\u0B80-\u0BFF]", text):
+        return "ta"
+    lower = text.lower()
+    tanglish_words = ["vanakkam", "nandri", "romba", "eppadi", "panrathu", "anna", "theriyala", "kudukanum", "illai", "irukku", "seri", "mudiyuma"]
+    if any(w in lower for w in tanglish_words):
+        return "tanglish"
+    return "en"
+
+
+def _rule_based_draft_replies(messages: List[Dict[str, str]], facts: Dict[str, Any]) -> List[str]:
+    last_text = (messages[-1].get("text") or "") if messages else ""
+    lang = _detect_lang(last_text)
+    lower = last_text.lower()
+
+    if "doc" in lower or "rc" in lower or "permit" in lower or "insurance" in lower or "reject" in lower or "invalid" in lower:
+        if lang == "ta":
+            return [
+                "வணக்கம், உங்கள் அசல் (Original) ஆவணத்தின் தெளிவான புகைப்படத்தை ஆப்பில் மீண்டும் பதிவேற்றவும். உடனே சரிபார்க்கிறோம்.",
+                "வணக்கம், ஆவணத்தில் உள்ள தேதியும் பதிவிட்ட தேதியும் சரியாக உள்ளதா என சரிபார்த்து பதிவேற்றவும்.",
+                "உங்கள் ஆவண சரிபார்ப்பு நிலையை எங்கள் குழு தற்போது கவனித்து வருகிறது. விரைவில் அப்டேட் செய்கிறோம்.",
+            ]
+        elif lang == "tanglish":
+            return [
+                "Vanakkam, unga original document photo-va app-la marubadi upload pannunga. Immediate-a verify panrom.",
+                "Vanakkam, document-la irukura date correct-a enter panni upload pannunga. Check panrom.",
+                "Unga document verification-ai engal team check pannitu irukanga. Seekiram update panrom.",
+            ]
+        else:
+            return [
+                "Hello, please upload a clear photo of your original document in the app for quick verification.",
+                "Please make sure the dates entered match the exact date on the document and re-upload.",
+                "Our verification team is reviewing your documents right now and will update you shortly.",
+            ]
+
+    if "cancel" in lower or "booking" in lower or "trip" in lower or "ride" in lower:
+        if lang == "ta":
+            return [
+                "வணக்கம், உங்கள் புக்கிங் விவரங்களை சரிபார்க்கிறோம். ஒரு நிமிடம் காத்திருக்கவும்.",
+                "புக்கிங் தொடர்பான உங்கள் கோரிக்கை ஏற்கப்பட்டது. உங்களுக்கு உதவ எங்கள் குழு தயாராக உள்ளது.",
+                "ட்ரிப் தொடர்பான சந்தேகங்களுக்கு இந்த சேட்டில் நீங்கள் கேட்கலாம், உதவுகிறோம்.",
+            ]
+        elif lang == "tanglish":
+            return [
+                "Vanakkam, unga booking details-a check panrom. One minute wait pannunga.",
+                "Booking related issue-kku engal support team udane help panrom.",
+                "Trip pathina details ethuvum thevaipatta inga kekaalam, help panrom.",
+            ]
+        else:
+            return [
+                "Hello, we are checking your booking details right now. Please hold on a moment.",
+                "Your booking enquiry has been received and our operations desk is assisting you.",
+                "Feel free to share any specific trip details here and we will help you right away.",
+            ]
+
+    if lang == "ta":
+        return [
+            "வணக்கம், உங்கள் செய்தி பெறப்பட்டது. உங்களுக்கு உதவ மகிழ்ச்சி அடைகிறோம்.",
+            "உங்கள் கோரிக்கையை எங்கள் குழு பரிசீலித்து வருகிறது. விரைவில் பதிலளிக்கிறோம்.",
+            "வணக்கம், Drop Cars சப்போர்ட் உங்களை தொடர்பு கொண்டு உதவ தயாராக உள்ளது.",
+        ]
+    elif lang == "tanglish":
+        return [
+            "Vanakkam, unga message vandhadhu. Ungalukku help panna ready-a irukom.",
+            "Unga request-a engal team check pannitu irukanga. Seekiram reply panrom.",
+            "Vanakkam, Drop Cars support ungalukku help panna eppothum irukom.",
+        ]
+    return [
+        "Hello, thank you for reaching out. We have received your message and are looking into it.",
+        "Our support team is reviewing your request and will assist you shortly.",
+        "Hello, please let us know how else we can help you today.",
+    ]
+
+
+def draft_replies(
+    db: Session,
+    thread_key: str,
+    sender_role: str,
+    messages: List[Dict[str, str]],
+    facts: Dict[str, Any],
+) -> List[str]:
+    """Generate up to 3 drafted replies. Always falls back to rule-based drafts if LLM is off/exhausted."""
+    prov = provider()
+    enabled = _setting(db, "ai_draft_reply_enabled", "1") in ("1", "true", "True")
+
+    if not prov or not enabled or not _within_feature_limit(db, "draft_reply", 300):
+        return _rule_based_draft_replies(messages, facts)
+
+    # Sanitize facts: NO wallet balances, NO OTPs, NO bank details
+    safe_facts = {
+        "role": sender_role,
+        "name": facts.get("name", "User"),
+        "document_status": facts.get("document_status", "ACTIVE"),
+        "open_bookings_count": facts.get("open_bookings_count", 0),
+        "document_notes": facts.get("document_notes", ""),
+    }
+
+    formatted_msgs = "\n".join([f"- [{m.get('sender', 'User')}]: {m.get('text', '')[:200]}" for m in messages[-12:]])
+    system = DRAFT_REPLY_PROMPT.format(facts=json.dumps(safe_facts, ensure_ascii=False), messages=formatted_msgs)
+
+    try:
+        t0 = time.time()
+        turns = [{"role": "user", "text": "Draft 3 quick replies for this thread."}]
+        raw = _call_gemini(system, turns) if prov == "gemini" else _call_anthropic(system, turns)
+        if raw:
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I).strip()
+            data = json.loads(cleaned)
+            drafts = [str(d).strip() for d in (data.get("drafts") or []) if str(d).strip()][:3]
+            if drafts:
+                _log_ai_call(
+                    db, category="SUPPORT_REPLY_DRAFT", action_type="DRAFTED",
+                    entity_type=sender_role.lower(), entity_id=thread_key,
+                    summary=f"Drafted {len(drafts)} replies for thread {thread_key}",
+                    details_json={"provider": prov, "duration_s": round(time.time() - t0, 2)},
+                )
+                return drafts
+    except Exception as e:  # noqa: BLE001
+        logger.warning("LLM draft replies failed: %s", e)
+
+    return _rule_based_draft_replies(messages, facts)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# B2. Thread Summarization & Tagging
+# ----------------------------------------------------------------------------------------------------------------------
+SUMMARY_CACHE: Dict[str, Dict[str, Any]] = {}  # key = (thread_key, last_msg_id) -> summary_dict
+
+
+def _rule_based_summary(messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    if not messages:
+        return {"summary": "No messages in thread", "topic": "GENERAL", "urgency": "NORMAL", "mood": "NEUTRAL"}
+
+    last_text = messages[-1].get("text", "")
+    all_text = " ".join([m.get("text", "") for m in messages]).lower()
+
+    topic = "GENERAL"
+    if any(k in all_text for k in ["doc", "rc", "permit", "insurance", "aadhar", "dl", "licence", "verify"]):
+        topic = "DOCUMENTS"
+    elif any(k in all_text for k in ["otp", "login", "password", "sign in", "pin"]):
+        topic = "LOGIN_OTP"
+    elif any(k in all_text for k in ["wallet", "payout", "payment", "money", "deduct", "balance", "recharge"]):
+        topic = "WALLET_PAYMENTS"
+    elif any(k in all_text for k in ["booking", "trip", "ride", "duty", "order", "fare", "km"]):
+        topic = "TRIPS_BOOKINGS"
+    elif any(k in all_text for k in ["subscri", "plan", "trusted", "preferred", "pro"]):
+        topic = "SUBSCRIPTION"
+    elif any(k in all_text for k in ["app", "crash", "error", "bug", "gps", "location"]):
+        topic = "APP_ISSUES"
+
+    urgency = "NORMAL"
+    if any(k in all_text for k in ["urgent", "emergency", "sos", "accident", "police", "help", "danger"]):
+        urgency = "URGENT"
+    elif any(k in all_text for k in ["immediately", "waiting", "stuck", "fast", "customer angry"]):
+        urgency = "HIGH"
+
+    mood = "NEUTRAL"
+    if any(k in all_text for k in ["bad", "worst", "cheat", "angry", "waste", "problem"]):
+        mood = "FRUSTRATED"
+    elif any(k in all_text for k in ["thanks", "good", "super", "nandri", "ok sir"]):
+        mood = "POSITIVE"
+
+    short_summary = (last_text[:90] + "...") if len(last_text) > 90 else (last_text or "Support thread")
+    return {"summary": short_summary, "topic": topic, "urgency": urgency, "mood": mood}
+
+
+def summarize_thread(
+    db: Session,
+    thread_key: str,
+    last_message_id: Any,
+    messages: List[Dict[str, str]],
+) -> Dict[str, Any]:
+    """Returns { summary, topic, urgency, mood } cached per (thread_key, last_message_id)."""
+    cache_key = f"{thread_key}:{last_message_id}"
+    if cache_key in SUMMARY_CACHE:
+        return SUMMARY_CACHE[cache_key]
+
+    prov = provider()
+    enabled = _setting(db, "ai_thread_summary_enabled", "1") in ("1", "true", "True")
+
+    if not prov or not enabled or not _within_feature_limit(db, "thread_summary", 300) or not messages:
+        res = _rule_based_summary(messages)
+        SUMMARY_CACHE[cache_key] = res
+        return res
+
+    formatted = "\n".join([f"- [{m.get('sender', 'User')}]: {m.get('text', '')[:200]}" for m in messages[-10:]])
+    system = f"""You are an operations assistant for Drop Cars Taxi platform.
+Summarize this support conversation into a structured JSON object:
+{{
+  "summary": "<one crisp sentence in plain English, max 15 words>",
+  "topic": "DOCUMENTS" | "LOGIN_OTP" | "WALLET_PAYMENTS" | "TRIPS_BOOKINGS" | "SUBSCRIPTION" | "APP_ISSUES" | "GENERAL",
+  "urgency": "NORMAL" | "HIGH" | "URGENT",
+  "mood": "POSITIVE" | "NEUTRAL" | "FRUSTRATED" | "URGENT"
+}}
+
+MESSAGES:
+{formatted}
+"""
+    try:
+        t0 = time.time()
+        turns = [{"role": "user", "text": "Provide thread summary JSON."}]
+        raw = _call_gemini(system, turns) if prov == "gemini" else _call_anthropic(system, turns)
+        if raw:
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I).strip()
+            data = json.loads(cleaned)
+            res = {
+                "summary": str(data.get("summary") or _rule_based_summary(messages)["summary"])[:150],
+                "topic": str(data.get("topic") or "GENERAL"),
+                "urgency": str(data.get("urgency") or "NORMAL"),
+                "mood": str(data.get("mood") or "NEUTRAL"),
+            }
+            SUMMARY_CACHE[cache_key] = res
+            _log_ai_call(
+                db, category="CHAT_SUMMARY", action_type="SUMMARIZED",
+                entity_type="thread", entity_id=thread_key,
+                summary=f"Summary: {res['summary']}",
+                details_json={"provider": prov, "duration_s": round(time.time() - t0, 2)},
+            )
+            return res
+    except Exception as e:  # noqa: BLE001
+        logger.warning("LLM summarize thread failed: %s", e)
+
+    res = _rule_based_summary(messages)
+    SUMMARY_CACHE[cache_key] = res
+    return res
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# B4. Today at a Glance Digest
+# ----------------------------------------------------------------------------------------------------------------------
+def generate_daily_digest(db: Session, numbers: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates a structured daily digest headline from live database numbers."""
+    posted = numbers.get("bookings_posted", 0)
+    closed = numbers.get("bookings_closed", 0)
+    unassigned = numbers.get("bookings_unassigned", 0)
+    chats = numbers.get("chats_waiting", 0)
+    docs = numbers.get("documents_pending", 0)
+    low_rated = numbers.get("low_rated_count", 0)
+
+    # Clean factual fallback headline
+    default_headline = (
+        f"Today's Overview: {posted} bookings posted ({closed} completed, {unassigned} unassigned). "
+        f"{chats} chats and {docs} documents pending staff attention."
+    )
+
+    prov = provider()
+    enabled = _setting(db, "ai_daily_digest_enabled", "1") in ("1", "true", "True")
+
+    if not prov or not enabled or not _within_feature_limit(db, "daily_digest", 50):
+        return {"headline": default_headline, "numbers": numbers}
+
+    system = f"""You are an executive dispatcher writing a 2-sentence 'Today at a Glance' summary for Drop Cars taxi admin dashboard.
+Rules:
+- Write exactly 2 concise, energetic, professional sentences.
+- Include key numbers accurately (posted: {posted}, completed: {closed}, unassigned: {unassigned}, waiting chats: {chats}, pending docs: {docs}, low rated cars: {low_rated}).
+- If everything is clear, highlight smooth operations. If items are pending, clearly state what needs staff focus.
+- Output ONLY valid JSON: {{"headline": "<your 2 sentences>"}}
+"""
+    try:
+        t0 = time.time()
+        turns = [{"role": "user", "text": "Generate today's headline."}]
+        raw = _call_gemini(system, turns) if prov == "gemini" else _call_anthropic(system, turns)
+        if raw:
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I).strip()
+            data = json.loads(cleaned)
+            headline = str(data.get("headline") or default_headline).strip()
+            if headline:
+                _log_ai_call(
+                    db, category="DAILY_DIGEST", action_type="GENERATED",
+                    summary=f"Digest: {headline[:140]}",
+                    details_json={"provider": prov, "duration_s": round(time.time() - t0, 2)},
+                )
+                return {"headline": headline, "numbers": numbers, "source": "llm"}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("LLM daily digest failed: %s", e)
+
+    return {"headline": default_headline, "numbers": numbers}
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# B5. Rating Comments Themes Grouping
+# ----------------------------------------------------------------------------------------------------------------------
+THEME_KEYWORDS = {
+    "cleanliness": ["clean", "dirty", "smell", "dust", "hygiene", "tidy", "neat", "wash", "சுத்தம்"],
+    "behaviour": ["polite", "rude", "behaviour", "behavior", "friendly", "helpful", "driver good", "kind", "respect", "மரியாதை"],
+    "punctuality": ["time", "late", "delay", "punctual", "early", "waiting", "wait", "on time", "நேரம்", "லேட்"],
+    "vehicle_condition": ["ac", "air condition", "seat", "brake", "tyre", "noise", "comfort", "vibration", "smooth car"],
+    "pricing_toll": ["fare", "price", "extra", "toll", "charge", "money", "cost", "overcharge", "ரூபாய்", "கட்டணம்"],
+    "driving_safety": ["speed", "rash", "safe", "smooth driving", "careful", "braking", "over speeding"],
+}
+
+
+def extract_feedback_themes(db: Session, feedback_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Groups customer comments into themes (cleanliness, behaviour, punctuality, etc.) with counts and top examples."""
+    theme_buckets: Dict[str, List[Dict[str, Any]]] = {
+        "Cleanliness & Hygiene": [],
+        "Driver Behaviour": [],
+        "Punctuality & Timing": [],
+        "Vehicle Condition & AC": [],
+        "Pricing & Tolls": [],
+        "Driving Safety": [],
+        "General Experience": [],
+    }
+
+    mapping = {
+        "cleanliness": "Cleanliness & Hygiene",
+        "behaviour": "Driver Behaviour",
+        "punctuality": "Punctuality & Timing",
+        "vehicle_condition": "Vehicle Condition & AC",
+        "pricing_toll": "Pricing & Tolls",
+        "driving_safety": "Driving Safety",
+    }
+
+    for item in feedback_items:
+        comment = (item.get("comment") or "").strip()
+        if not comment or len(comment) < 3:
+            continue
+        lower = comment.lower()
+        matched = False
+        for key, words in THEME_KEYWORDS.items():
+            if any(w in lower for w in words):
+                theme_buckets[mapping[key]].append(item)
+                matched = True
+                break
+        if not matched:
+            theme_buckets["General Experience"].append(item)
+
+    total_valid = sum(len(items) for items in theme_buckets.values()) or 1
+    result = []
+    for theme_name, items in theme_buckets.items():
+        if items:
+            sample = items[0].get("comment", "")
+            avg_rating = round(sum(i.get("rating", 5) for i in items) / len(items), 1)
+            result.append({
+                "theme": theme_name,
+                "count": len(items),
+                "pct": round(100 * len(items) / total_valid, 1),
+                "average_rating": avg_rating,
+                "sample_quote": sample[:120],
+                "sample_order_id": items[0].get("order_id"),
+            })
+
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return result

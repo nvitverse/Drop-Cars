@@ -58,7 +58,7 @@ import { LABELS } from '@/constants/labels';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import VoiceNoteButton from '@/components/VoiceNoteButton';
-import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock, Shimmer, LiveNumber, FadeIn } from '@/components/ui';
+import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock, Shimmer, LiveNumber, FadeIn, StatChip, Pill } from '@/components/ui';
 import DutySignOffModal from '@/components/DutySignOffModal';
 import StaffWelcomeShiftModal from '@/components/StaffWelcomeShiftModal';
 import { useStaffDuty } from '@/context/StaffDutyContext';
@@ -297,6 +297,29 @@ export default function DashboardScreen() {
 
   // Older, separate "shared actions/day" target feature (staff-performance.tsx
   // / Staff & Roles) - kept as-is, not part of this redesign's new per-metric
+  const [dailyDigest, setDailyDigest] = useState<{
+    headline: string;
+    generated_at: string;
+    source: string;
+    metrics: {
+      bookings_posted_today: number;
+      bookings_completed_today: number;
+      unassigned_bookings: number;
+      waiting_chats: number;
+      documents_pending_review: number;
+      low_rated_drivers: number;
+      unpaid_invoices: number;
+    };
+  } | null>(null);
+
+  const fetchDigest = async () => {
+    try {
+      const res = await apiService.getDashboardDigest();
+      if (res) setDailyDigest(res);
+    } catch {
+      // Non-fatal - dashboard continues if digest is unavailable
+    }
+  };
   // targets, but still real and still worth showing to Staff.
   const [staffTarget, setStaffTarget] = useState<{ target: number; achieved: number } | null>(null);
   const [ownRecordSubmitted, setOwnRecordSubmitted] = useState(false);
@@ -576,6 +599,7 @@ export default function DashboardScreen() {
       }
       try {
         const subs = await apiService.getFleetSubscriptions('OVERDUE', '', 0, 1);
+      fetchDigest(),
         setFleetOverdueCount(subs?.summary?.overdue_count ?? 0);
       } catch (e) {
         // Non-fatal
@@ -895,6 +919,78 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>Shift Ready</Text>
               </View>
             </View>
+        {/* 1.8. Today at a Glance (AI-Assisted Operations Digest) */}
+        {dailyDigest && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginTop: 10,
+              marginBottom: 4,
+              padding: 14,
+              borderRadius: 14,
+              backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+              borderWidth: 1.5,
+              borderColor: isDark ? '#334155' : '#E2E8F0',
+              ...shadows.card,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={14} color="#8B5CF6" />
+                </View>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
+                  Today at a Glance
+                </Text>
+              </View>
+              <View style={{ backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '700', color: themeColors.textSecondary }}>
+                  {dailyDigest.source === 'llm' ? 'AI Summary' : 'Live Snapshot'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 12.5, lineHeight: 18, color: themeColors.textSecondary, marginBottom: 10, fontWeight: '500' }}>
+              {dailyDigest.headline}
+            </Text>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              <StatChip
+                label="Bookings"
+                value={`${dailyDigest.metrics.bookings_posted_today} posted`}
+                variant="primary"
+                onPress={() => router.push('/(tabs)/orders' as any)}
+              />
+              <StatChip
+                label="Unassigned"
+                value={dailyDigest.metrics.unassigned_bookings}
+                variant={dailyDigest.metrics.unassigned_bookings > 0 ? 'warning' : 'neutral'}
+                onPress={() => router.push({ pathname: '/(tabs)/orders', params: { tab: 'unassigned' } } as any)}
+              />
+              <StatChip
+                label="Chats Waiting"
+                value={dailyDigest.metrics.waiting_chats}
+                variant={dailyDigest.metrics.waiting_chats > 0 ? 'info' : 'neutral'}
+                onPress={() => router.push('/(tabs)/chats' as any)}
+              />
+              <StatChip
+                label="Docs Pending"
+                value={dailyDigest.metrics.documents_pending_review}
+                variant={dailyDigest.metrics.documents_pending_review > 0 ? 'danger' : 'neutral'}
+                onPress={() => router.push('/documents-review-queue' as any)}
+              />
+              {dailyDigest.metrics.low_rated_drivers > 0 && (
+                <StatChip
+                  label="Low Rated"
+                  value={dailyDigest.metrics.low_rated_drivers}
+                  variant="danger"
+                  onPress={() => router.push('/ratings-analytics' as any)}
+                />
+              )}
+            </View>
+          </View>
+        )}
+
 
             <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
               Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.

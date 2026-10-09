@@ -1245,6 +1245,15 @@ class ApiService {
   async waiveQualityPenalty(source: string, sourceId: string, note: string): Promise<any> {
     return this.makeRequest(`/admin/quality/feedback/${source}/${sourceId}/waive`, { method: 'POST', body: JSON.stringify({ note }) });
   }
+  async getQualityThemes(days = 30): Promise<{ themes: Array<{ theme: string; count: number; sentiment: string; examples: string[] }>; total_reviewed: number }> {
+    return this.makeRequest(`/admin/quality/themes?days=${days}`);
+  }
+  async getDashboardDigest(): Promise<{
+    headline: string; generated_at: string; source: string;
+    metrics: { bookings_posted_today: number; bookings_completed_today: number; unassigned_bookings: number; waiting_chats: number; documents_pending_review: number; low_rated_drivers: number; unpaid_invoices: number };
+  }> {
+    return this.makeRequest('/admin/dashboard/digest');
+  }
   async applyQualityPenalty(source: string, sourceId: string, amount: number): Promise<any> {
     return this.makeRequest(`/admin/quality/feedback/${source}/${sourceId}/penalize`, { method: 'POST', body: JSON.stringify({ amount }) });
   }

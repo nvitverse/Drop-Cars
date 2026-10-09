@@ -617,3 +617,148 @@ def reply_to_support_thread(thread_key: str, payload: SupportMessagePayload, db:
     db.refresh(m)
     _notify_driver_owner_of_admin_reply(db, thread_key, m.text)
     return _msg_out(m, "ADMIN")
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# AI Support Helper Endpoints: Draft Reply & Summary (B1 & B2)
+# ----------------------------------------------------------------------------------------------------------------------
+@router.post("/admin/threads/{thread_key}/draft-reply")
+def draft_support_thread_reply(
+    thread_key: str,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Generate up to 3 polite, contextual reply drafts in the user's language (Tamil/Tanglish/English).
+    Uses account verification notes & open bookings count; never reveals wallet/financial balances.
+    Staff clicks to populate their reply box without auto-sending."""
+    from app.utils.ai_llm import draft_replies
+    from app.models.vehicle_owner import VehicleOwner
+    from app.models.car_driver import CarDriver
+    from app.models.orders import Order
+    from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
+
+    # Fetch last 12 messages
+    msgs = db.query(SupportMessage).filter(SupportMessage.thread_key == thread_key).order_by(SupportMessage.id.desc()).limit(12).all()
+    if not msgs:
+        raise HTTPException(status_code=404, detail="Thread not found or has no messages")
+    msgs = list(reversed(msgs))
+
+    # Determine caller and basic facts
+    first_msg = msgs[0]
+    role = first_msg.thread_role or "OWNER"
+    name = first_msg.thread_name or "User"
+    doc_notes = ""
+    open_bookings_count = 0
+
+    try:
+        # Check if caller is owner or driver
+        owner = db.query(VehicleOwner).filter(VehicleOwner.id == thread_key).first()
+        if owner:
+            name = owner.full_name or name
+            open_bookings_count = db.query(OrderAssignment).filter(
+                OrderAssignment.vehicle_owner_id == owner.id,
+                OrderAssignment.assignment_status.in_([AssignmentStatusEnum.PENDING, AssignmentStatusEnum.ASSIGNED, AssignmentStatusEnum.DRIVING]),
+            ).count()
+        else:
+            driver = db.query(CarDriver).filter(CarDriver.id == thread_key).first()
+            if driver:
+                name = driver.full_name or name
+                doc_notes = driver.document_notes or ""
+                open_bookings_count = db.query(OrderAssignment).filter(
+                    OrderAssignment.driver_id == driver.id,
+                    OrderAssignment.assignment_status.in_([AssignmentStatusEnum.PENDING, AssignmentStatusEnum.ASSIGNED, AssignmentStatusEnum.DRIVING]),
+                ).count()
+    except Exception:
+        pass
+
+    messages_payload = [{"sender": m.sender_side, "text": m.text or ""} for m in msgs]
+    facts = {
+        "name": name,
+        "role": role,
+        "document_notes": doc_notes,
+        "open_bookings_count": open_bookings_count,
+    }
+
+    drafts = draft_replies(db, thread_key=thread_key, sender_role=role, messages=messages_payload, facts=facts)
+    return {"thread_key": thread_key, "drafts": drafts}
+
+
+@router.post("/admin/threads/{thread_key}/summary")
+def summarize_support_thread(
+    thread_key: str,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Summarize and tag the support thread (topic, urgency, mood, 1-line summary). Cached per (thread_key, last_msg_id)."""
+    from app.utils.ai_llm import summarize_thread
+
+    msgs = db.query(SupportMessage).filter(SupportMessage.thread_key == thread_key).order_by(SupportMessage.id.desc()).limit(12).all()
+    if not msgs:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    msgs = list(reversed(msgs))
+    last_id = msgs[-1].id
+
+    messages_payload = [{"sender": m.sender_side, "text": m.text or ""} for m in msgs]
+    result = summarize_thread(db, thread_key=thread_key, last_message_id=last_id, messages=messages_payload)
+    return {"thread_key": thread_key, "last_message_id": last_id, **result}
+
+
+@router.post("/admin/booking-threads/{order_id}/draft-reply")
+def draft_booking_chat_reply(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Booking chat variant for drafting quick replies for an order discussion thread."""
+    from app.utils.ai_llm import draft_replies
+    from app.models.booking_chat import BookingChatMessage
+    from app.models.orders import Order
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    msgs = db.query(BookingChatMessage).filter(BookingChatMessage.order_id == order_id).order_by(BookingChatMessage.id.desc()).limit(12).all()
+    if not msgs:
+        # If no messages yet, provide starter greetings
+        return {
+            "order_id": order_id,
+            "drafts": [
+                f"Hello, this is Drop Cars Admin regarding booking #{order_id}. How can we help you?",
+                f"வணக்கம், புக்கிங் #{order_id} தொடர்பாக உங்களுக்கு என்ன உதவி தேவை?",
+                f"Vanakkam, booking #{order_id} related doubt ethavathu irukka?",
+            ],
+        }
+    msgs = list(reversed(msgs))
+
+    messages_payload = [{"sender": m.sender_side, "text": m.text or ""} for m in msgs]
+    facts = {
+        "name": f"Booking #{order_id}",
+        "role": "BOOKING_CHAT",
+        "trip_type": order.trip_type or "OUTSTATION",
+        "trip_status": str(order.trip_status or ""),
+    }
+
+    drafts = draft_replies(db, thread_key=f"order:{order_id}", sender_role="BOOKING_CHAT", messages=messages_payload, facts=facts)
+    return {"order_id": order_id, "drafts": drafts}
+
+
+@router.post("/admin/booking-threads/{order_id}/summary")
+def summarize_booking_chat(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Booking chat variant for thread summary and mood tagging."""
+    from app.utils.ai_llm import summarize_thread
+    from app.models.booking_chat import BookingChatMessage
+
+    msgs = db.query(BookingChatMessage).filter(BookingChatMessage.order_id == order_id).order_by(BookingChatMessage.id.desc()).limit(12).all()
+    if not msgs:
+        return {"order_id": order_id, "summary": "No messages yet", "topic": "TRIPS_BOOKINGS", "urgency": "NORMAL", "mood": "NEUTRAL"}
+    msgs = list(reversed(msgs))
+    last_id = msgs[-1].id
+
+    messages_payload = [{"sender": m.sender_side, "text": m.text or ""} for m in msgs]
+    result = summarize_thread(db, thread_key=f"order:{order_id}", last_message_id=last_id, messages=messages_payload)
+    return {"order_id": order_id, "last_message_id": last_id, **result}

@@ -12,10 +12,10 @@ import {
   RefreshControl,
   Linking,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Star, ShieldAlert, Award, Search, Phone, MessageSquare, X, Gavel } from 'lucide-react-native';
+import { ArrowLeft, Star, ShieldAlert, Award, Search, Phone, MessageSquare, X, Gavel, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import Toast, { useToast } from '@/components/Toast';
@@ -47,6 +47,7 @@ export default function RatingsAnalyticsScreen() {
 
   const [settings, setSettings] = useState<{ enabled: boolean; threshold: number; amount: string } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [themesData, setThemesData] = useState<{ themes: Array<{ theme: string; count: number; sentiment: string; examples: string[] }>; total_reviewed: number } | null>(null);
 
   const [noteModal, setNoteModal] = useState<null | { mode: 'resolve' | 'waive'; item: any }>(null);
   const [noteText, setNoteText] = useState('');
@@ -54,10 +55,15 @@ export default function RatingsAnalyticsScreen() {
 
   const load = useCallback(async (f: Filter = filter, s: string = search) => {
     try {
-      const [sum, fb] = await Promise.all([apiService.getQualitySummary(30), apiService.getQualityFeedback(f, s)]);
+      const [sum, fb, th] = await Promise.all([
+        apiService.getQualitySummary(30),
+        apiService.getQualityFeedback(f, s),
+        apiService.getQualityThemes(30).catch(() => ({ themes: [], total_reviewed: 0 })),
+      ]);
       setSummary(sum);
       setItems(fb.items || []);
       setThreshold(fb.threshold);
+      setThemesData(th);
       if (sum?.penalty_settings) {
         setSettings({ enabled: !!sum.penalty_settings.enabled, threshold: sum.penalty_settings.threshold, amount: String(sum.penalty_settings.amount) });
       }
@@ -183,6 +189,57 @@ export default function RatingsAnalyticsScreen() {
               ) : null}
             </View>
           </View>
+
+          {/* B5. Customer Feedback Themes Card */}
+          {themesData && themesData.themes && themesData.themes.length > 0 && (
+            <View style={[styles.settingsCard, card, { padding: 14 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Sparkles size={16} color={themeColors.primary} />
+                <Text style={[styles.settingsTitle, { color: themeColors.text }]}>
+                  Customer Feedback Themes
+                </Text>
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary, marginLeft: 'auto' }}>
+                  {themesData.total_reviewed} comments
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                {themesData.themes.map((th, idx) => {
+                  const isNeg = th.sentiment === 'negative';
+                  const badgeColor = isNeg ? '#DC2626' : '#10B981';
+                  const bg = isNeg ? (isDark ? '#450A0A' : '#FEF2F2') : (isDark ? '#064E3B' : '#ECFDF5');
+                  return (
+                    <View
+                      key={idx}
+                      style={{
+                        backgroundColor: bg,
+                        borderColor: badgeColor,
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: isDark ? '#FFF' : badgeColor }}>
+                          {th.theme}
+                        </Text>
+                        <View style={{ backgroundColor: badgeColor, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFF' }}>{th.count}</Text>
+                        </View>
+                      </View>
+                      {th.examples && th.examples[0] && (
+                        <Text style={{ fontSize: 11, color: isDark ? '#CBD5E1' : '#475569', fontStyle: 'italic', marginTop: 3 }}>
+                          "{th.examples[0]}"
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {settings && (
             <View style={[styles.settingsCard, card]}>

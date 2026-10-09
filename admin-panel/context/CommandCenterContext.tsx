@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { useRouter } from 'expo-router';
 import { smartIntent, buildBrief } from '@/utils/commandSmart';
 import { apiService } from '@/services/api';
-import { enquiriesApi } from '@/services/enquiriesApi';
 import { useStaffDuty } from '@/context/StaffDutyContext';
 import { printOrDownloadInvoice, shareQuotationViaWhatsApp, InvoiceData } from '@/utils/invoiceGenerator';
+import { parseBookingVoiceCommand, ParsedBookingVoiceDraft } from '@/utils/magicParser';
 
 export interface CommandMessage {
   id: string;
@@ -206,86 +206,34 @@ export const CommandCenterProvider: React.FC<{ children: React.ReactNode }> = ({
       return { type: 'GENERATE_INVOICE', bookingId: undefined };
     }
 
-    // 4. Create Booking Intent (City to City + Vehicle + Rates)
-    let pickup = '';
-    let drop = '';
-
-    // Check Tamil City Names
-    for (const [tamName, engName] of Object.entries(TAMIL_CITY_MAP)) {
-      if (raw.includes(tamName)) {
-        if (!pickup) pickup = engName;
-        else if (!drop && engName !== pickup) drop = engName;
+    // 4. Create Booking / Estimate Draft Intent (Tamil, Tanglish, English)
+    const isBookingOrEst = /\bto\b|\bடூ\b|\bஇலிருந்து\b|sedan|suv|innova|crysta|etios|tempo|booking|புக்கிங்|estimate|quotation|quote|எஸ்டிமேட்|கொட்டேஷன்/i.test(raw);
+    if (isBookingOrEst) {
+      const voiceDraft = parseBookingVoiceCommand(raw);
+      if (voiceDraft.isEstimate) {
+        return {
+          type: 'ESTIMATE_DRAFT_PARSED',
+          draft: voiceDraft,
+        };
       }
-    }
-
-    // Check English City Names
-    for (const cityName of KNOWN_CITIES) {
-      if (lower.includes(cityName.toLowerCase())) {
-        if (!pickup) pickup = cityName;
-        else if (!drop && cityName !== pickup) drop = cityName;
-      }
-    }
-
-    // Vehicle detection
-    let vehicle = 'SEDAN_4_PLUS_1';
-    let vehicleDisplay = 'Sedan (4+1)';
-    if (lower.includes('crysta') || lower.includes('கிரிஸ்டா')) {
-      vehicle = 'INNOVA_CRYSTA';
-      vehicleDisplay = 'Innova Crysta';
-    } else if (lower.includes('innova') || lower.includes('இன்னோவா')) {
-      vehicle = 'INNOVA';
-      vehicleDisplay = 'Innova';
-    } else if (lower.includes('suv') || lower.includes('எர்டிகா') || lower.includes('ertiga')) {
-      vehicle = 'SUV';
-      vehicleDisplay = 'SUV';
-    } else if (lower.includes('etios') || lower.includes('எட்டியோஸ்')) {
-      vehicle = 'ETIOS_4_PLUS_1';
-      vehicleDisplay = 'Etios';
-    }
-
-    // Trip Type
-    const isRound = lower.includes('round') || lower.includes('ரவுண்ட்');
-    const tripType = isRound ? 'roundtrip' : 'oneway';
-
-    // Extract numbers in sequence
-    const numbers = raw.match(/\b\d+\b/g)?.map(Number) || [];
-    // User format: "Tiruvannamalai to Chennai, Sedan, 14, 1, 300, 100"
-    // numbers[0] = KM Rate (e.g. 14 or 15)
-    // numbers[1] = Extra KM Rate (e.g. 1 or 0)
-    // numbers[2] = Driver Bata (e.g. 300 or 400)
-    // numbers[3] = Extra Driver Bata (e.g. 100 or 0)
-
-    const defaultKmRate = vehicle.includes('CRYSTA')
-      ? (isRound ? '22' : '23')
-      : vehicle.includes('INNOVA')
-      ? (isRound ? '20' : '21')
-      : vehicle.includes('SUV')
-      ? (isRound ? '19' : '20')
-      : (isRound ? '14' : '15');
-
-    const defaultBata = (vehicle.includes('INNOVA') && isRound) ? '400' : '300';
-
-    const costPerKm = numbers[0] ? String(numbers[0]) : defaultKmRate;
-    const extraCostPerKm = numbers[1] !== undefined ? String(numbers[1]) : '0';
-    const driverAllowance = numbers[2] ? String(numbers[2]) : defaultBata;
-    const extraDriverAllowance = numbers[3] !== undefined ? String(numbers[3]) : '0';
-
-    const tollExtra = lower.includes('toll extra') || lower.includes('டோல் எக்ஸ்ட்ரா') || lower.includes('excl');
-
-    if (pickup || drop || lower.includes('booking') || lower.includes('புக்கிங்')) {
       return {
         type: 'CREATE_BOOKING_PARSED',
         parsed: {
-          pickup: pickup || 'Tiruvannamalai',
-          drop: drop || 'Chennai',
-          vehicleType: vehicleDisplay,
-          carTypeValue: vehicle,
-          tripType,
-          costPerKm,
-          extraCostPerKm,
-          driverAllowance,
-          extraDriverAllowance,
-          includeToll: !tollExtra,
+          pickup: voiceDraft.pickup,
+          drop: voiceDraft.drop,
+          vehicleType: voiceDraft.vehicleType,
+          carTypeValue: voiceDraft.carTypeValue,
+          tripType: voiceDraft.tripType,
+          costPerKm: voiceDraft.costPerKm,
+          extraCostPerKm: voiceDraft.extraCostPerKm,
+          driverAllowance: voiceDraft.driverAllowance,
+          extraDriverAllowance: voiceDraft.extraDriverAllowance,
+          includeToll: voiceDraft.includeToll,
+          tollMode: voiceDraft.tollMode,
+          gstMode: voiceDraft.gstMode,
+          gstRate: voiceDraft.gstRate,
+          advance: voiceDraft.advance,
+          days: voiceDraft.days,
         },
       };
     }
@@ -389,11 +337,25 @@ export const CommandCenterProvider: React.FC<{ children: React.ReactNode }> = ({
         const reply: CommandMessage = {
           id: 'asst-' + Date.now(),
           sender: 'assistant',
-          text: `புதிய Booking விவரங்கள் தயாராக உள்ளன:\n\n📍 வழித்தடம்: ${p.pickup} ➔ ${p.drop}\n🚗 வாகனம்: ${p.vehicleType} (${p.tripType === 'roundtrip' ? 'Round Trip' : 'One Way'})\n💵 கட்டணம்: ₹${p.costPerKm}/KM (Extra: ₹${p.extraCostPerKm}/KM)\n👨‍✈️ Driver Bata: ₹${p.driverAllowance} (Extra: ₹${p.extraDriverAllowance})\n🛣️ டோல்: ${p.includeToll ? 'Included' : 'Extra (Passenger Pays)'}\n\nகீழே உள்ள பட்டனை அழுத்தி Booking Form-ல் சரிபார்த்து உறுதி செய்யவும்.`,
+          text: `புதிய Booking விவரங்கள் தயாராக உள்ளன:\n\n📍 வழித்தடம்: ${p.pickup} ➔ ${p.drop}\n🚗 வாகனம்: ${p.vehicleType} (${p.tripType === 'roundtrip' ? 'Round Trip' : 'One Way'})\n📅 நாட்கள்: ${p.days || 1} day(s)\n💵 கட்டணம்: ₹${p.costPerKm}/KM (Extra: ₹${p.extraCostPerKm}/KM)\n👨‍✈️ Driver Bata: ₹${p.driverAllowance} (Extra: ₹${p.extraDriverAllowance})\n🛣️ டோல்: ${p.tollMode === 'INCLUDED' ? 'Included' : 'Extra'}\n🧾 GST: ${p.gstMode === 'NONE' ? 'None' : `${p.gstRate}% ${p.gstMode}`}\n💰 அட்வான்ஸ்: ₹${p.advance || 0}\n\nகீழே உள்ள பட்டனை அழுத்தி Booking Form-ல் சரிபார்த்து உறுதி செய்யவும்.`,
           timestamp: Date.now(),
           actionCard: {
             type: 'create_booking_preview',
             data: p,
+            status: 'pending',
+          },
+        };
+        setMessages((prev) => [...prev, reply]);
+      } else if (intent.type === 'ESTIMATE_DRAFT_PARSED' && (intent as any).draft) {
+        const d = (intent as any).draft as ParsedBookingVoiceDraft;
+        const reply: CommandMessage = {
+          id: 'asst-' + Date.now(),
+          sender: 'assistant',
+          text: `📋 Estimate / Quotation Draft தயார்:\n\n📍 Route: ${d.pickup} ➔ ${d.drop}\n🚗 Vehicle: ${d.vehicleType} (${d.days} day${d.days > 1 ? 's' : ''})\n🛣️ Toll: ${d.tollMode}\n🧾 GST: ${d.gstMode === 'NONE' ? 'None' : `${d.gstRate}% ${d.gstMode}`}\n💰 Advance Req: ₹${d.advance}\n\nStaff can review, edit and generate brand quotation now.`,
+          timestamp: Date.now(),
+          actionCard: {
+            type: 'generate_invoice',
+            data: d.estimateDraft,
             status: 'pending',
           },
         };

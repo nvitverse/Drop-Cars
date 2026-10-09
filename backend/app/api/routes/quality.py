@@ -135,6 +135,24 @@ def quality_feedback(
         items = [i for i in items if any(s in str(i.get(k) or "").lower() for k in ("customer_name", "customer_phone", "driver_name", "car_number", "order_id", "comment"))]
     return {"items": items[:200], "threshold": threshold}
 
+@router.get("/themes")
+def quality_feedback_themes(
+    days: int = Query(90, ge=1, le=365),
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """B5. Rating comments themes: groups recent customer comments into themes (cleanliness, behaviour, punctuality, etc.)
+    with counts and representative quotes, using keyword grouping with optional LLM enhancement."""
+    from app.utils.ai_llm import extract_feedback_themes
+    items = _collect(db, days, limit=500)
+    themes = extract_feedback_themes(db, items)
+    return {
+        "days": days,
+        "themes": themes,
+        "total_comments": sum(t["count"] for t in themes),
+    }
+
+
 
 class PenaltySettingsIn(BaseModel):
     enabled: bool

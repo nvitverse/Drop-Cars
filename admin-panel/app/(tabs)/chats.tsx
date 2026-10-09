@@ -282,6 +282,9 @@ export default function AdminChatsScreen() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [threadSummary, setThreadSummary] = useState<{ summary?: string; topic?: string; urgency?: string; mood?: string } | null>(null);
+  const [draftingReply, setDraftingReply] = useState(false);
+  const [suggestedAiDrafts, setSuggestedAiDrafts] = useState<string[]>([]);
   const listRef = useRef<FlatList>(null);
 
   const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -393,15 +396,40 @@ export default function AdminChatsScreen() {
   const openThread = async (row: Row) => {
     setOpenRow(row);
     setMessages([]);
+    setThreadSummary(null);
+    setSuggestedAiDrafts([]);
     try {
       if (row.kind === 'SUPPORT') {
         const res = await supportApi.getSupportThread(row.key);
         setMessages((res.messages || []).map((m: any) => ({ ...m, id: `s-${m.id}`, read: isMsgRead(m) })));
+        supportApi.summarizeSupportThread(row.key).then(setThreadSummary).catch(() => {});
       } else if (row.order_id) {
         const res = await apiService.getBookingChat(row.order_id);
         setMessages((res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}`, read: isMsgRead(m) })));
+        supportApi.summarizeBookingThread(row.order_id).then(setThreadSummary).catch(() => {});
       }
     } catch {}
+  };
+
+  const handleDraftWithAi = async () => {
+    if (!openRow || draftingReply) return;
+    setDraftingReply(true);
+    try {
+      const res = openRow.kind === 'SUPPORT'
+        ? await supportApi.draftReplySupportThread(openRow.key)
+        : await supportApi.draftReplyBookingThread(openRow.order_id!);
+      if (res && res.drafts && res.drafts.length > 0) {
+        if (res.drafts.length === 1) {
+          setInput(res.drafts[0]);
+        } else {
+          setSuggestedAiDrafts(res.drafts);
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('AI Drafting', e?.message || 'Could not generate reply draft');
+    } finally {
+      setDraftingReply(false);
+    }
   };
 
   // Problem solved / booking finished -> Trash (kept 30 days, then deleted for good); a new message from the driver brings it back
@@ -1190,6 +1218,60 @@ export default function AdminChatsScreen() {
                 <Text style={[styles.rowSub, { color: themeColors.textSecondary }]}>
                   {openRow?.subtitle}{openRow?.trashed_at ? `  ·  in Trash, clears in ${openRow.trash_days_left ?? TRASH_DAYS} days` : ''}
                 </Text>
+                {threadSummary?.summary && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <Sparkles size={11} color={themeColors.primary} />
+                    <Text numberOfLines={1} style={{ fontSize: 11, color: themeColors.textSecondary, fontStyle: 'italic', flex: 1 }}>
+                      {threadSummary.summary}
+                    </Text>
+                    {threadSummary.mood && threadSummary.mood !== 'NEUTRAL' && (
+                      <View style={{ backgroundColor: threadSummary.mood === 'ANGRY' || threadSummary.mood === 'URGENT' ? '#FEF2F2' : '#EFF6FF', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: threadSummary.mood === 'ANGRY' || threadSummary.mood === 'URGENT' ? '#DC2626' : themeColors.primary }}>
+                          {threadSummary.mood}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TouchableOpacity
+                  onPress={handleDraftWithAi}
+                  disabled={draftingReply}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF',
+                    borderColor: '#6366F1',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 6,
+                  }}
+                >
+                  {draftingReply ? (
+                    <ActivityIndicator size="small" color="#6366F1" />
+                  ) : (
+                    <>
+                      <Sparkles size={12} color="#6366F1" />
+                      <Text style={{ color: '#4F46E5', fontWeight: '800', fontSize: 11.5 }}>Draft AI</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {openRow && openRow.key !== 'owner_office_desk' && (
+                  openRow.trashed_at && openRow.kind === 'SUPPORT' ? (
+                    <TouchableOpacity onPress={restoreOpenRow} style={{ borderWidth: 1, borderColor: themeColors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Text style={{ color: themeColors.primary, fontWeight: '800', fontSize: 12 }}>Restore</Text>
+                    </TouchableOpacity>
+                  ) : !openRow.trashed_at ? (
+                    <TouchableOpacity onPress={trashOpenRow} style={{ borderWidth: 1, borderColor: '#10B981', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 }}>
+                      <Text style={{ color: '#059669', fontWeight: '800', fontSize: 11.5 }}>Solved ✓</Text>
+                    </TouchableOpacity>
+                  ) : null
+                )}
               </View>
               {openRow && openRow.key !== 'owner_office_desk' && (
                 openRow.trashed_at && openRow.kind === 'SUPPORT' ? (
@@ -1248,6 +1330,37 @@ export default function AdminChatsScreen() {
                 </View>
               )}
             />
+            {/* AI Draft Suggestions Popover/Row if multiple drafts generated */}
+            {suggestedAiDrafts.length > 0 && (
+              <View style={{ backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', padding: 8, borderTopWidth: 1, borderTopColor: '#C7D2FE' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={12} color="#6366F1" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>Choose AI Draft:</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setSuggestedAiDrafts([])}>
+                    <X size={14} color="#6366F1" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {suggestedAiDrafts.map((d, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => {
+                        setInput(d);
+                        setSuggestedAiDrafts([]);
+                      }}
+                      style={{ backgroundColor: themeColors.surface, borderColor: '#6366F1', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 280 }}
+                    >
+                      <Text numberOfLines={2} style={{ fontSize: 12, color: themeColors.text }}>
+                        {d}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
 
             {/* Suggested replies: fixed-height, never overlaps the list or the box; the last incoming message picks the best fits */}
             <ReplySuggestions

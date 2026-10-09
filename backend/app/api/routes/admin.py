@@ -4528,6 +4528,105 @@ def admin_analytics_summary(
     return get_dashboard_summary(db, date_from, date_to)
 
 
+@router.get("/admin/dashboard/digest")
+def admin_dashboard_daily_digest(
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """B4. Today at a glance digest (Admin Dashboard card + optional evening push).
+    Factual operational metrics collected live from database; 2-line executive headline drafted by LLM with safe local fallback."""
+    from app.utils.ai_llm import generate_daily_digest
+    from app.models.orders import Order
+    from app.models.support_message import SupportMessage
+    from app.models.car_details import CarDetails
+    from app.models.car_driver import CarDriver
+
+    now = datetime.now(timezone.utc)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+
+    from app.models.orders import Trip_status
+    # 1. Bookings posted today
+    bookings_posted = db.query(Order).filter(Order.created_at >= today_start).count()
+
+    # 2. Bookings completed today
+    bookings_closed = db.query(Order).filter(
+        Order.trip_status == Trip_status.COMPLETED,
+        Order.start_date_time >= today_start,
+    ).count()
+
+    # 3. Unassigned bookings waiting for a driver
+    bookings_unassigned = db.query(Order).filter(
+        Order.trip_status == Trip_status.PENDING,
+    ).count()
+
+    # 4. Support chats waiting for staff reply
+    chats_waiting = db.query(SupportMessage).filter(
+        SupportMessage.sender_side == "DRIVER_OWNER",
+        SupportMessage.read_at.is_(None),
+    ).count()
+
+    # 5. Documents waiting for review
+    from app.models.common_enums import DocumentStatusEnum
+    cars_pending_doc = db.query(CarDetails).filter(
+        (CarDetails.rc_front_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING])) |
+        (CarDetails.rc_back_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING])) |
+        (CarDetails.insurance_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING])) |
+        (CarDetails.permit_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING]))
+    ).count()
+    drivers_pending_doc = db.query(CarDriver).filter(
+        (CarDriver.licence_front_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING])) |
+        (CarDriver.aadhar_front_status.in_([DocumentStatusEnum.NEEDS_REVIEW, DocumentStatusEnum.PENDING]))
+    ).count()
+    documents_pending = cars_pending_doc + drivers_pending_doc
+
+    # 6. Low rated cars/drivers
+    low_rated_count = db.query(CarDriver).filter(
+        CarDriver.rating_avg.isnot(None),
+        CarDriver.rating_avg < 4.0,
+        CarDriver.rating_count >= 3,
+    ).count()
+
+    # 7. Unpaid invoices if billing documents table exists
+    unpaid_invoices = 0
+    try:
+        from app.models.billing import BillingDocument
+        unpaid_invoices = db.query(BillingDocument).filter(
+            BillingDocument.doc_type == "INVOICE",
+            BillingDocument.status == "ISSUED",
+            BillingDocument.payment_status.in_(["UNPAID", "PARTIAL"]),
+        ).count()
+    except Exception:
+        pass
+
+    numbers = {
+        "bookings_posted": bookings_posted,
+        "bookings_closed": bookings_closed,
+        "bookings_unassigned": bookings_unassigned,
+        "chats_waiting": chats_waiting,
+        "documents_pending": documents_pending,
+        "low_rated_count": low_rated_count,
+        "unpaid_invoices": unpaid_invoices,
+    }
+
+    digest = generate_daily_digest(db, numbers)
+    # Shape the Admin App reads: plain-words headline + named metrics (the numbers always come from the database, never from the model)
+    return {
+        "headline": digest.get("headline"),
+        "source": digest.get("source", "rules"),
+        "numbers": digest.get("numbers", numbers),
+        "generated_at": now.isoformat(),
+        "metrics": {
+            "bookings_posted_today": bookings_posted,
+            "bookings_completed_today": bookings_closed,
+            "unassigned_bookings": bookings_unassigned,
+            "waiting_chats": chats_waiting,
+            "documents_pending_review": documents_pending,
+            "low_rated_drivers": low_rated_count,
+            "unpaid_invoices": unpaid_invoices,
+        },
+    }
+
+
 @router.get("/admin/dashboard/needs-attention")
 def admin_needs_attention_summary(
     db: Session = Depends(get_db),

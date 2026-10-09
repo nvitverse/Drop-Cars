@@ -1351,3 +1351,503 @@ export function AccentPicker() {
   );
 }
 
+/** 9. SectionHeader: Clean, consistent section divider with title, count badge, and optional right action */
+export function SectionHeader({
+  title,
+  subtitle,
+  badge,
+  badgeVariant = 'primary',
+  rightAction,
+  style,
+}: {
+  title: string;
+  subtitle?: string;
+  badge?: string | number;
+  badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  rightAction?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { themeColors } = useTheme();
+
+  return (
+    <View style={[sectionHeaderStyles.container, style]}>
+      <View style={sectionHeaderStyles.left}>
+        <Text style={[sectionHeaderStyles.title, { color: themeColors.textSecondary }]}>
+          {title}
+        </Text>
+        {badge !== undefined && badge !== null && (
+          <View style={sectionHeaderStyles.badgeWrapper}>
+            <Pill
+              label={String(badge)}
+              variant={badgeVariant}
+              size="xs"
+            />
+          </View>
+        )}
+        {subtitle && (
+          <Text style={[sectionHeaderStyles.subtitle, { color: themeColors.textMuted }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      {rightAction && <View style={sectionHeaderStyles.right}>{rightAction}</View>}
+    </View>
+  );
+}
+
+const sectionHeaderStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  title: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  subtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  badgeWrapper: {
+    alignSelf: 'center',
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+});
+
+/** 10. Pill: Versatile badge/tag for status indication and interactive filter selection */
+export function Pill({
+  label,
+  variant = 'primary',
+  size = 'md',
+  icon: Icon,
+  dot = false,
+  active = false,
+  onPress,
+  style,
+}: {
+  label: string;
+  variant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'outline';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  icon?: any;
+  dot?: boolean;
+  active?: boolean;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { themeColors } = useTheme();
+
+  let tone = themeColors.primary;
+  if (variant === 'success') tone = themeColors.success;
+  else if (variant === 'warning') tone = themeColors.warning;
+  else if (variant === 'danger') tone = themeColors.error;
+  else if (variant === 'info') tone = themeColors.info;
+  else if (variant === 'neutral') tone = themeColors.textSecondary;
+
+  const isOutline = variant === 'outline';
+  const bg = active
+    ? tone
+    : isOutline
+    ? 'transparent'
+    : tone + '18';
+  const fg = active
+    ? '#FFFFFF'
+    : isOutline
+    ? themeColors.text
+    : tone;
+  const borderColor = active
+    ? tone
+    : isOutline
+    ? themeColors.border
+    : tone + '30';
+
+  const isXs = size === 'xs';
+  const isSm = size === 'sm';
+  const isLg = size === 'lg';
+
+  const padH = isXs ? 5 : isSm ? 7 : isLg ? 12 : 9;
+  const padV = isXs ? 1.5 : isSm ? 3 : isLg ? 6 : 4;
+  const fontSize = isXs ? 9.5 : isSm ? 11 : isLg ? 13 : 12;
+  const iconSize = isXs ? 10 : isSm ? 12 : isLg ? 15 : 13;
+
+  const content = (
+    <View
+      style={[
+        pillStyles.container,
+        {
+          backgroundColor: bg,
+          borderColor,
+          borderWidth: 1,
+          paddingHorizontal: padH,
+          paddingVertical: padV,
+          borderRadius: 6,
+        },
+        style,
+      ]}
+    >
+      {dot && (
+        <View
+          style={[
+            pillStyles.dot,
+            { backgroundColor: fg, width: isXs ? 4 : 6, height: isXs ? 4 : 6, borderRadius: 3 },
+          ]}
+        />
+      )}
+      {Icon && <Icon size={iconSize} color={fg} />}
+      <Text
+        style={[
+          pillStyles.text,
+          {
+            color: fg,
+            fontSize,
+            fontFamily: 'Inter-Bold',
+            fontWeight: '700',
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+
+  return onPress ? (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
+  ) : (
+    content
+  );
+}
+
+const pillStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  dot: {
+    marginRight: 2,
+  },
+  text: {
+    letterSpacing: -0.1,
+  },
+});
+
+/** 11. Skeleton: Polished placeholder block for loading states */
+export function Skeleton({
+  width = '100%',
+  height = 16,
+  borderRadius = 6,
+  circle = false,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  borderRadius?: number;
+  circle?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { themeColors, isDark } = useTheme();
+  const actualRadius = circle ? (typeof height === 'number' ? height / 2 : 999) : borderRadius;
+
+  return (
+    <View
+      style={[
+        {
+          width: width as any,
+          height: height as any,
+          borderRadius: actualRadius,
+          backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : themeColors.border,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/** 12. ListRow: Dense, informative list row with icon, title, subtitle, status pill, and chevron */
+export function ListRow({
+  icon: Icon,
+  iconColor,
+  iconBg,
+  avatarText,
+  title,
+  subtitle,
+  caption,
+  badge,
+  badgeVariant = 'primary',
+  statusPill,
+  rightValue,
+  rightSubtitle,
+  rightContent,
+  chevron = false,
+  onPress,
+  onLongPress,
+  last = false,
+  style,
+}: {
+  icon?: any;
+  iconColor?: string;
+  iconBg?: string;
+  avatarText?: string;
+  title: string;
+  subtitle?: string;
+  caption?: string;
+  badge?: string | number;
+  badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  statusPill?: { label: string; variant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral' };
+  rightValue?: string | number;
+  rightSubtitle?: string;
+  rightContent?: React.ReactNode;
+  chevron?: boolean;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  last?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { themeColors } = useTheme();
+  const tone = iconColor || themeColors.primary;
+  const bg = iconBg || (tone + '18');
+
+  const content = (
+    <View
+      style={[
+        listRowStyles.row,
+        {
+          backgroundColor: themeColors.surface,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+          borderBottomColor: themeColors.border,
+        },
+        style,
+      ]}
+    >
+      {Icon ? (
+        <View style={[listRowStyles.iconBox, { backgroundColor: bg }]}>
+          <Icon size={18} color={tone} />
+        </View>
+      ) : avatarText ? (
+        <View style={[listRowStyles.iconBox, { backgroundColor: themeColors.primaryLight }]}>
+          <Text style={listRowStyles.avatarText}>{avatarText.slice(0, 2).toUpperCase()}</Text>
+        </View>
+      ) : null}
+
+      <View style={listRowStyles.contentBox}>
+        <View style={listRowStyles.titleRow}>
+          <Text style={[listRowStyles.title, { color: themeColors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {badge !== undefined && badge !== null && (
+            <Pill label={String(badge)} variant={badgeVariant} size="xs" />
+          )}
+        </View>
+        {subtitle && (
+          <Text style={[listRowStyles.subtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        )}
+        {caption && (
+          <Text style={[listRowStyles.caption, { color: themeColors.textMuted }]} numberOfLines={1}>
+            {caption}
+          </Text>
+        )}
+      </View>
+
+      <View style={listRowStyles.rightArea}>
+        {rightContent}
+        {statusPill && (
+          <Pill label={statusPill.label} variant={statusPill.variant || 'primary'} size="sm" />
+        )}
+        {rightValue !== undefined && rightValue !== null && (
+          <Text style={[listRowStyles.rightValue, { color: themeColors.text }]}>
+            {rightValue}
+          </Text>
+        )}
+        {rightSubtitle && (
+          <Text style={[listRowStyles.rightSubtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>
+            {rightSubtitle}
+          </Text>
+        )}
+        {chevron && <ChevronRight size={16} color={themeColors.textMuted} />}
+      </View>
+    </View>
+  );
+
+  return onPress || onLongPress ? (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} onLongPress={onLongPress}>
+      {content}
+    </TouchableOpacity>
+  ) : (
+    content
+  );
+}
+
+const listRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 52,
+    gap: 12,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '800',
+  },
+  contentBox: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 2,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  title: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  caption: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  rightArea: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  rightValue: {
+    fontSize: 13.5,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+  },
+  rightSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+});
+
+/** 13. StatChip: Compact statistical chip for quick data insights */
+export function StatChip({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  variant,
+  onPress,
+  style,
+}: {
+  label: string;
+  value: string | number;
+  icon?: any;
+  tone?: string;
+  variant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { themeColors } = useTheme();
+
+  let color = tone || themeColors.text;
+  if (variant === 'primary') color = themeColors.primary;
+  else if (variant === 'success') color = themeColors.success;
+  else if (variant === 'warning') color = themeColors.warning;
+  else if (variant === 'danger') color = themeColors.error;
+  else if (variant === 'info') color = themeColors.info;
+  else if (variant === 'neutral') color = themeColors.textSecondary;
+
+  const content = (
+    <View
+      style={[
+        statChipStyles.chip,
+        {
+          backgroundColor: themeColors.surface,
+          borderColor: themeColors.border,
+        },
+        style,
+      ]}
+    >
+      {Icon && <Icon size={14} color={color} />}
+      <View style={statChipStyles.textBox}>
+        <Text style={[statChipStyles.value, { color }]} numberOfLines={1}>
+          {value}
+        </Text>
+        <Text style={[statChipStyles.label, { color: themeColors.textSecondary }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+
+  return onPress ? (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
+  ) : (
+    content
+  );
+}
+
+const statChipStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  textBox: {
+    justifyContent: 'center',
+  },
+  value: {
+    fontSize: 13,
+    fontFamily: 'Inter-ExtraBold',
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+});
+
+// Re-export design tokens for standard styling consistency
+export const uiSpacing = spacing;
+export const uiRadii = radii;
+export const uiTypography = typography;
+export const uiShadows = shadows;
