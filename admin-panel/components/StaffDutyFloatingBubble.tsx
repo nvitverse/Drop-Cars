@@ -7,8 +7,8 @@ import {
   PanResponder,
   Animated,
   Dimensions,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter, usePathname } from 'expo-router';
 import {
   Clock,

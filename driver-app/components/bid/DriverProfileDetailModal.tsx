@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   View,
-  Modal,
   TouchableOpacity,
   Image,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   Star,

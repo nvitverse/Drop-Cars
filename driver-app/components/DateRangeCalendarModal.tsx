@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Calendar, ChevronLeft, ChevronRight, X, Check } from 'lucide-react-native';
 

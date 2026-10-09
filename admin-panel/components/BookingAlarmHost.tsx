@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Animated,
   Platform,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname } from 'expo-router';
 import { BellRing, Car, Phone, MapPin, Calendar, IndianRupee, Zap, Clock, ChevronRight, ChevronLeft, ArrowRight, AlertTriangle } from 'lucide-react-native';

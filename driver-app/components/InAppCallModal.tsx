@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Linking,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { Phone, Mic, MicOff, Volume2, VolumeX, PhoneOff, MessageSquare, ShieldCheck } from 'lucide-react-native';
 
 interface InAppCallModalProps {

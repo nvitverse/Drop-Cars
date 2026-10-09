@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Animated,
   Platform,
   AppState,
   AppStateStatus,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';
 import { BellRing, CheckCircle2, Phone, MapPin, Calendar, IndianRupee, Globe, Clock, ChevronRight, ChevronLeft, Sparkles, X } from 'lucide-react-native';

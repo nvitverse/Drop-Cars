@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Pressable } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, ArrowUpRight, ArrowDownLeft, MapPin, Wallet } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axiosInstance from '@/app/api/axiosInstance';

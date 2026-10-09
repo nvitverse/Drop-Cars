@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -8,6 +7,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, AlertCircle, Check } from 'lucide-react-native';
 

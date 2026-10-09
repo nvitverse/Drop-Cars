@@ -5,6 +5,13 @@ import { apiService } from './api';
 
 export const getSupportThreads = (): Promise<any[]> => apiService.makeRequest('/support/admin/threads');
 
+// Trash: solved problems / finished bookings wait 30 days (server setting chat_trash_days), then are deleted for good
+export const moveChatToTrash = (threadType: 'SUPPORT' | 'BOOKING', threadKey: string, reason: string = 'SOLVED'): Promise<any> =>
+  apiService.makeRequest('/support/admin/trash', { method: 'POST', body: JSON.stringify({ thread_type: threadType, thread_key: threadKey, reason }) });
+
+export const restoreChatFromTrash = (threadType: 'SUPPORT' | 'BOOKING', threadKey: string): Promise<any> =>
+  apiService.makeRequest(`/support/admin/trash/${threadType}/${encodeURIComponent(threadKey)}`, { method: 'DELETE' });
+
 export const getSupportThread = (threadKey: string): Promise<{ thread_key: string; thread_name: string; thread_role: string; messages: any[] }> =>
   apiService.makeRequest(`/support/admin/threads/${encodeURIComponent(threadKey)}`);
 

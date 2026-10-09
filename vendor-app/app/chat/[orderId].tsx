@@ -6,9 +6,20 @@
 //  - ✓ sent / ✓✓ read, day separators, quoted replies
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
-  Linking, Modal, Pressable, ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Platform,
+  Alert,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';

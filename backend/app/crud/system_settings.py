@@ -54,6 +54,7 @@ SYSTEM_SETTING_DEFAULTS = {
     "multicity_waiting_rate_per_hour": "60",    # Rs billed per hour of waiting on a multi-city trip (60 = the old Rs 1 per minute)
     "multicity_waiting_free_minutes": "0",      # waiting minutes that are never billed (waiting hours included in the booking are free too)
     "doc_model_match_threshold": "0.85",        # how closely a new upload must look like a saved document model (0-1) to be verified automatically
+    "chat_trash_days": "30",                    # days a chat stays in the Admin App Chats > Trash before it is deleted for good
     "payout_min_retained_balance": "500",       # a payout request must leave at least this much in the wallet
     "min_car_rating": "0",                      # a car rated below this (once it has enough ratings) becomes Inactive; 0 = off
     "min_driver_rating": "0",                   # same for a driver

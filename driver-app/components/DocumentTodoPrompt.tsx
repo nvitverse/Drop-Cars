@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { AlertTriangle, FileWarning } from 'lucide-react-native';

@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';

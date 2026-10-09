@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   Platform,
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, CheckCircle2, AlertTriangle, XCircle, Bell, RefreshCw, Smartphone, Radio, PlayCircle, Settings } from 'lucide-react-native';
 import { alertHealth, AlertHealthState } from '@/services/alertHealth';
 import { triggerTestEnquiryAlarm } from '@/components/EnquiryAlarmHost';

@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ShieldAlert, CheckCircle2, Tag, Percent, Lock } from 'lucide-react-native';
 

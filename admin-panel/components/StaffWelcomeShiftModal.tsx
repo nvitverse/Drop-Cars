@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Animated,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   Sparkles,
   Zap,

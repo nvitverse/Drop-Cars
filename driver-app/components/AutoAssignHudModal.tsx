@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   StyleSheet,
   Animated,
   Vibration,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   Zap,
   MapPin,

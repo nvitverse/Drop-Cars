@@ -1,15 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  Modal,
   View,
   StyleSheet,
   TouchableOpacity,
   Animated,
   Dimensions,
   Platform,
-  KeyboardAvoidingView,
   TouchableWithoutFeedback,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView, useNavInsetWhenClosed } from '@/components/KeyboardSafe';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DesignTokens } from '@/constants/designTokens';
@@ -32,6 +32,7 @@ export default function MotionBottomSheet({
   enableBackdropDismiss = true,
 }: MotionBottomSheetProps) {
   const { colors, isDarkMode } = useTheme();
+  const navInset = useNavInsetWhenClosed();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [rendered, setRendered] = React.useState(visible);
@@ -106,6 +107,7 @@ export default function MotionBottomSheet({
               maxHeight: maxHeight as any,
               backgroundColor: isDarkMode ? DesignTokens.colors.darkElevated : DesignTokens.colors.lightSurface,
               borderColor: isDarkMode ? DesignTokens.colors.darkBorder : DesignTokens.colors.lightBorder,
+              paddingBottom: navInset,
             },
           ]}
         >

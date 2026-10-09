@@ -4,8 +4,8 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { Camera, Image as ImageIcon, X, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 

@@ -8,9 +8,9 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import {
   PhoneCall,
   MessageSquare,

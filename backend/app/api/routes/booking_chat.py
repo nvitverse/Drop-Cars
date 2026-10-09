@@ -128,6 +128,9 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
     """All bookings this user can chat about (WhatsApp-style list), newest activity first."""
     role, caller = _resolve_caller(request, db)
     cutoff = datetime.now(timezone.utc) - timedelta(days=chat.CHAT_RETENTION_DAYS)
+    from app.crud import chat_trash as _trash
+    admin_cutoff = datetime.now(timezone.utc) - timedelta(days=_trash.trash_days(db))
+    manual_trash = _trash.trash_map(db, "BOOKING") if role == "ADMIN" else {}
     if role == "ADMIN":
         # Bookings with no vendor/owner poster (posted via Website/Admin
         # directly) - Admin is the only real POSTER-side party for these,
@@ -198,8 +201,8 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
         done_at = a.completed_at or a.created_at
         if finished and done_at is not None:
             d = done_at if done_at.tzinfo else done_at.replace(tzinfo=timezone.utc)
-            if d < cutoff:
-                continue  # chat for a trip finished >10 days ago is already purged
+            if d < (admin_cutoff if role == "ADMIN" else cutoff):
+                continue  # finished trip: its chat is gone after the retention (10 days; Admin keeps it 30 days in Trash)
         last = last_msg.get(o.id)
         unread = sum(n for sd, n in unread_by.get(o.id, {}).items() if sd != side)
         other, other_role, other_phone = _other_party(db, o, a, side)
@@ -210,6 +213,11 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
             "last_text": last.text if last else None,
             "last_at": last.created_at.isoformat() if last and last.created_at else None,
             "unread": int(unread),
+            # Admin Trash: a finished trip is Trash from its completion day; staff can also trash any booking chat by hand
+            "trashed_at": (
+                (_trash._aware(manual_trash[str(o.id)].trashed_at).isoformat() if str(o.id) in manual_trash else None)
+                or ((_trash._aware(done_at).isoformat() if done_at else None) if (role == "ADMIN" and finished) else None)
+            ),
         })
     out.sort(key=lambda t: (t["last_at"] or t["start_date_time"] or ""), reverse=True)
     return out

@@ -2,17 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  Modal,
   StyleSheet,
   TouchableOpacity,
   FlatList,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   AppState,
   AppStateStatus,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   X,

@@ -10,12 +10,13 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
-  Modal,
-  KeyboardAvoidingView,
+  Alert,
   Platform,
   StatusBar as RNStatusBar,
   Linking,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import ReplySuggestions, { ReplyTemplate } from '@/components/ReplySuggestions';
@@ -225,6 +226,8 @@ interface Row {
   role?: string;               // SUPPORT rows: OWNER | VEHICLE_OWNER | DRIVER | VENDOR | CUSTOMER
   help?: boolean;              // asked for help from the forgot-password screen (could not log in)
   stage?: string;              // BOOKING rows: the assignment status (COMPLETED = finished trip)
+  trashed_at?: string | null;  // in Trash since (solved problem / finished booking) - deleted for good after the retention
+  trash_days_left?: number | null;
 }
 
 const timeLabel = (iso?: string | null) => {
@@ -240,6 +243,8 @@ const timeLabel = (iso?: string | null) => {
 const isMsgRead = (m: any) => Boolean(m?.read || m?.read_at || m?.is_read || m?.seen || m?.status === 'READ');
 
 // Ready replies for the Chats inbox (support threads and booking chats)
+const TRASH_DAYS = 30;   // matches the server setting chat_trash_days (default 30)
+
 const QUICK_REPLIES: ReplyTemplate[] = [
   { label: 'Checking', group: 'General', keywords: ['check', 'status', 'update', 'any news', 'sollunga', 'enna aachu'], text: 'We are checking this now. We will update you here shortly.' },
   { label: 'Need details', group: 'Account', keywords: ['login', 'account', 'register', 'signup', 'sign up', 'password', 'number'], text: 'Please send your full name, vehicle number and registered mobile number so we can verify you.' },
@@ -312,6 +317,8 @@ export default function AdminChatsScreen() {
         unread: t.unread || 0,
         role: String(t.thread_role || '').toUpperCase(),
         help: !!t.help_request,
+        trashed_at: t.trashed_at || null,
+        trash_days_left: typeof t.trash_days_left === 'number' ? t.trash_days_left : null,
       }));
       const bookingRows: Row[] = (booking || []).map((t: any) => ({
         key: `order-${t.order_id}`,
@@ -323,6 +330,8 @@ export default function AdminChatsScreen() {
         last_at: t.last_at,
         unread: t.unread || 0,
         stage: String(t.assignment_status || '').toUpperCase(),
+        trashed_at: t.trashed_at || null,
+        trash_days_left: t.trashed_at ? Math.max(0, TRASH_DAYS - Math.floor((Date.now() - new Date(t.trashed_at).getTime()) / 86400000)) : null,
       }));
 
       // Unread / Needs-Reply chats ALWAYS sorted to the very top with priority
@@ -393,6 +402,34 @@ export default function AdminChatsScreen() {
         setMessages((res.messages || []).map((m: any) => ({ ...m, id: `b-${m.id}`, read: isMsgRead(m) })));
       }
     } catch {}
+  };
+
+  // Problem solved / booking finished -> Trash (kept 30 days, then deleted for good); a new message from the driver brings it back
+  const trashOpenRow = async () => {
+    if (!openRow || openRow.key === 'owner_office_desk') return;
+    try {
+      const type = openRow.kind === 'SUPPORT' ? 'SUPPORT' : 'BOOKING';
+      const key = openRow.kind === 'SUPPORT' ? openRow.key : String(openRow.order_id);
+      await supportApi.moveChatToTrash(type, key, 'SOLVED');
+      setOpenRow(null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Could not move to Trash', e?.message || 'Try again');
+    }
+  };
+
+  const restoreOpenRow = async () => {
+    if (!openRow) return;
+    try {
+      const type = openRow.kind === 'SUPPORT' ? 'SUPPORT' : 'BOOKING';
+      const key = openRow.kind === 'SUPPORT' ? openRow.key : String(openRow.order_id);
+      await supportApi.restoreChatFromTrash(type, key);
+      // a finished trip's chat is Trash by definition (until it is deleted), a support / manually trashed chat leaves Trash
+      setOpenRow(null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Could not restore', e?.message || 'Try again');
+    }
   };
 
   const openOwnerOfficeChat = () => {
@@ -532,20 +569,26 @@ export default function AdminChatsScreen() {
 
   // "Needs a reply" stays pinned on top; everything else is sorted  who > what it is about  (utils/chatTopics.ts)
   const PINNED_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
-    { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Unread messages awaiting staff response', match: (r) => r.unread > 0 },
+    { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Unread messages awaiting staff response', match: (r) => r.unread > 0 && !r.trashed_at },
   ];
 
   const SUPPORT_MAINS: MainCategory<Row>[] = [
-    { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', topics: PARTNER_TOPICS, hint: 'No chats from fleet owners right now', match: (r) => r.kind === 'SUPPORT' && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
-    { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', topics: PARTNER_TOPICS, hint: 'No chats from drivers right now', match: (r) => r.kind === 'SUPPORT' && r.role === 'DRIVER' },
-    { id: 'vendor', label: 'Vendors & B2B Partners', icon: Store, color: '#8B5CF6', topics: VENDOR_TOPICS, hint: 'No chats from vendors right now', match: (r) => r.kind === 'SUPPORT' && r.role === 'VENDOR' },
-    { id: 'customer', label: 'Customers', icon: User, color: '#06B6D4', topics: CUSTOMER_TOPICS, hint: 'Customer messages from the Customer App', match: (r) => r.kind === 'SUPPORT' && r.role === 'CUSTOMER' },
+    { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', topics: PARTNER_TOPICS, hint: 'No chats from fleet owners right now', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
+    { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', topics: PARTNER_TOPICS, hint: 'No chats from drivers right now', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && r.role === 'DRIVER' },
+    { id: 'vendor', label: 'Vendors & B2B Partners', icon: Store, color: '#8B5CF6', topics: VENDOR_TOPICS, hint: 'No chats from vendors right now', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && r.role === 'VENDOR' },
+    { id: 'customer', label: 'Customers', icon: User, color: '#06B6D4', topics: CUSTOMER_TOPICS, hint: 'Customer messages from the Customer App', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && r.role === 'CUSTOMER' },
   ];
 
   const TRIP_MAINS: MainCategory<Row>[] = [
-    { id: 'live', label: 'Booking chats - Live & Upcoming', icon: Compass, color: '#10B981', topics: TRIP_TOPICS, hint: 'No ongoing or scheduled booking chats', match: (r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED' },
-    { id: 'done', label: 'Booking chats - Completed', icon: CheckCheck, color: '#64748B', topics: TRIP_TOPICS, hint: 'No completed booking chats', match: (r) => r.kind === 'BOOKING' && r.stage === 'COMPLETED' },
+    { id: 'live', label: 'Booking chats - Live & Upcoming', icon: Compass, color: '#10B981', topics: TRIP_TOPICS, hint: 'No ongoing or scheduled booking chats', match: (r) => !r.trashed_at && r.kind === 'BOOKING' && r.stage !== 'COMPLETED' },
   ];
+
+  // Trash: finished booking chats and solved problems, sorted the same way (who > what), kept TRASH_DAYS days and then deleted for good
+  const TRASH_MAINS: MainCategory<Row>[] = [
+    { id: 'trash-booking', label: 'Trash - Booking chats', icon: Package, color: '#64748B', topics: TRIP_TOPICS, hint: 'No finished booking chats', match: (r) => !!r.trashed_at && r.kind === 'BOOKING' },
+    { id: 'trash-support', label: 'Trash - Solved problems', icon: CheckCheck, color: '#64748B', topics: PARTNER_TOPICS, hint: 'No solved problems yet. Open a chat and tap "Solved".', match: (r) => !!r.trashed_at && r.kind === 'SUPPORT' },
+  ];
+  const trashCount = rows.filter((r) => !!r.trashed_at).length;
 
   const chatColors = {
     surface: themeColors.surface, surfaceAlt: themeColors.surfaceAlt, border: themeColors.border,
@@ -566,9 +609,16 @@ export default function AdminChatsScreen() {
         <View style={styles.rowMid}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text numberOfLines={1} style={[styles.rowTitle, { color: themeColors.text, flex: 1 }]}>{item.title}</Text>
-            {item.help && (
+            {item.help && !item.trashed_at && (
               <View style={[styles.miniTag, { backgroundColor: '#FEF3C7' }]}>
                 <Text style={{ fontSize: 9, fontWeight: '700', color: '#B45309' }}>LOGIN HELP</Text>
+              </View>
+            )}
+            {!!item.trashed_at && (
+              <View style={[styles.miniTag, { backgroundColor: '#E2E8F0' }]}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: '#475569' }}>
+                  {item.trash_days_left === 0 ? 'CLEARS TODAY' : `CLEARS IN ${item.trash_days_left ?? TRASH_DAYS}d`}
+                </Text>
               </View>
             )}
           </View>
@@ -1087,6 +1137,25 @@ export default function AdminChatsScreen() {
                       />
                     </View>
                   )}
+                  {/* Trash (All tab): kept 30 days, then deleted for good */}
+                  {activeTab === 'ALL' && (
+                    <View style={styles.sectionGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Trash</Text>
+                        <View style={[styles.badgePill, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border, borderWidth: 1 }]}>
+                          <Text style={[styles.badgePillText, { color: themeColors.textSecondary }]}>{trashCount} kept {TRASH_DAYS} days</Text>
+                        </View>
+                      </View>
+                      <ChatCategories
+                        categories={TRASH_MAINS}
+                        rows={rows}
+                        open={openGroups}
+                        onToggle={toggleGroup}
+                        renderRow={renderRow}
+                        colors={chatColors}
+                      />
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -1118,8 +1187,21 @@ export default function AdminChatsScreen() {
               </TouchableOpacity>
               <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={[styles.rowTitle, { color: themeColors.text }]}>{openRow?.title}</Text>
-                <Text style={[styles.rowSub, { color: themeColors.textSecondary }]}>{openRow?.subtitle}</Text>
+                <Text style={[styles.rowSub, { color: themeColors.textSecondary }]}>
+                  {openRow?.subtitle}{openRow?.trashed_at ? `  ·  in Trash, clears in ${openRow.trash_days_left ?? TRASH_DAYS} days` : ''}
+                </Text>
               </View>
+              {openRow && openRow.key !== 'owner_office_desk' && (
+                openRow.trashed_at && openRow.kind === 'SUPPORT' ? (
+                  <TouchableOpacity onPress={restoreOpenRow} style={{ borderWidth: 1, borderColor: themeColors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ color: themeColors.primary, fontWeight: '800', fontSize: 12 }}>Restore</Text>
+                  </TouchableOpacity>
+                ) : !openRow.trashed_at ? (
+                  <TouchableOpacity onPress={trashOpenRow} style={{ borderWidth: 1, borderColor: '#10B981', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ color: '#059669', fontWeight: '800', fontSize: 12 }}>Solved ✓ Trash</Text>
+                  </TouchableOpacity>
+                ) : null
+              )}
             </View>
 
             <FlatList

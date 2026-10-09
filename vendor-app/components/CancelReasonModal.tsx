@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, Platform, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { X } from 'lucide-react-native';
 import { colors } from '../constants/theme';
 

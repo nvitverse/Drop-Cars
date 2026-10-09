@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Modal,
   ScrollView,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { History, Car, UserCheck, Building2, Shield, ArrowUpRight, X, Info, FileText } from 'lucide-react-native';

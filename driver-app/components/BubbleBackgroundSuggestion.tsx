@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Modal, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, AppStateStatus, Platform, Text, TouchableOpacity, View } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { MessageCircle } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';

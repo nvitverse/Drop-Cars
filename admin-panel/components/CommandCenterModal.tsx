@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Modal,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView, useNavInsetWhenClosed } from '@/components/KeyboardSafe';
 import {
   Mic,
   Send,
@@ -39,6 +39,7 @@ import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync } from 'expo-audio';
 
 export default function CommandCenterModal() {
+  const navInset = useNavInsetWhenClosed();
   const { isDark, themeColors } = useTheme();
   const {
     isOpen,
@@ -113,7 +114,7 @@ export default function CommandCenterModal() {
         <View
           style={[
             styles.modalContainer,
-            { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+            { backgroundColor: themeColors.surface, borderColor: themeColors.border, paddingBottom: navInset },
           ]}
         >
           {/* Header */}

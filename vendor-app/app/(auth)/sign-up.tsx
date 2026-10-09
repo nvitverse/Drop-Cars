@@ -6,12 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Dimensions,
   Image,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Phone, Lock, FileText, Camera, Eye, EyeOff, ArrowRight, CircleCheck as CheckCircle, MapPin, Trash2, Mail, Building, Car } from 'lucide-react-native';

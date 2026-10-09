@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { ShieldAlert, X, ChevronRight, FileCheck, AlertTriangle, ArrowUpRight, Clock } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DocumentAlertItem } from '@/services/documents/documentStatusService';

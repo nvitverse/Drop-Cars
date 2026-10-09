@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   Share,
   Alert,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import {
   X,
   Send,

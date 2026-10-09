@@ -2,10 +2,10 @@ import React from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { Crown, Sparkles, CheckCircle2, X } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';

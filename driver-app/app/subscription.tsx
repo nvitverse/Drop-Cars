@@ -9,8 +9,8 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';

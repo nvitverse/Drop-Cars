@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   ScrollView,
   Alert,
   Animated,
@@ -13,6 +12,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { BlurView } from 'expo-blur';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';

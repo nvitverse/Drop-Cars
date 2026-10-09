@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 // Ported from the Driver App's create-booking.tsx (same calendar-grid date

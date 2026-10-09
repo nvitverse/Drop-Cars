@@ -11,10 +11,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
-  Modal,
   Animated,
   Easing,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';

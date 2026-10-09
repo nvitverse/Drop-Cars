@@ -10,11 +10,11 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
-  Modal,
   Image as RNImage,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, User, Save, Upload, CheckCircle, FileText, Image as ImageIcon, Phone, Lock, MapPin, CreditCard, Eye, EyeOff, ShieldCheck, RefreshCw, X, Camera, Calendar } from 'lucide-react-native';

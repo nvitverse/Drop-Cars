@@ -4,13 +4,13 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   Image,
   ActivityIndicator,
   PanResponder,
   Platform,
   Dimensions,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, RotateCw, ZoomIn, ZoomOut, Check, Crop as CropIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 

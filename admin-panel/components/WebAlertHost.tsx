@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert as RNAlert, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert as RNAlert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/context/ThemeContext';
 
 // react-native-web ships Alert.alert as a literal no-op ("static alert() {}") -

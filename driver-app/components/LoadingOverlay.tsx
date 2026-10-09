@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Modal,
   Dimensions,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 

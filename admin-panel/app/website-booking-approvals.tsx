@@ -8,12 +8,12 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Globe, Check, X, Clock, CalendarClock, Pause, Play, SlidersHorizontal, Zap } from 'lucide-react-native';

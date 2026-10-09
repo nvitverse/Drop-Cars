@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Linking, Text, TouchableOpacity, View } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import Constants from 'expo-constants';
 import axiosInstance from '@/app/api/axiosInstance';
 

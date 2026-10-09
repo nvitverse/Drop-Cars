@@ -10,10 +10,10 @@ import {
   StyleProp,
   ScrollView,
   Modal,
-  KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme, ACCENTS, ACCENT_KEYS, AccentKey } from '@/context/ThemeContext';

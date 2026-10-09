@@ -17,6 +17,7 @@ from app.utils.car_models import load_car_models_once
 import app.models.admin
 import app.models.worker_management
 import app.models.document_model  # document_models table must be known before create_all()
+import app.models.chat_trash  # chat_trash table must be known before create_all()
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
@@ -1179,6 +1180,14 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"chat purge failed (continuing): {_e}")
+            try:
+                from app.crud.chat_trash import purge_expired_trash
+                _trash = purge_expired_trash(db)
+                if any(_trash.values()):
+                    print(f"Chat Trash cleared for good: {_trash}")
+            except Exception as _e:
+                db.rollback()
+                print(f"chat trash purge failed (continuing): {_e}")
             try:
                 from app.api.routes.support import purge_old_support_messages
                 _support_purged = purge_old_support_messages(db)

@@ -29,7 +29,12 @@ def purge_old_support_messages(db: Session) -> int:
     (called from main.py's hourly housekeeping sweep, alongside
     booking_chat.purge_old_chat_messages)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=SUPPORT_RETENTION_DAYS)
-    n = db.query(SupportMessage).filter(SupportMessage.created_at < cutoff).delete(synchronize_session=False)
+    from app.crud.chat_trash import protected_keys
+    _keys, _orders = protected_keys(db)                      # threads in Trash are cleared by the Trash clean-up (30 days), not here
+    q = db.query(SupportMessage).filter(SupportMessage.created_at < cutoff)
+    if _keys:
+        q = q.filter(~SupportMessage.thread_key.in_(_keys))
+    n = q.delete(synchronize_session=False)
     db.commit()
     return int(n or 0)
 
@@ -516,16 +521,61 @@ def list_support_threads_for_admin(db: Session = Depends(get_db), current_admin=
     )
     # people who could not log in and asked for help from the forgot-password screen get their own group in the Admin App
     help_keys = {r[0] for r in db.query(SupportMessage.thread_key).filter(SupportMessage.text.like("%Password Reset Support Request%")).distinct().all()}
+    from app.crud import chat_trash as _trash
+    trashed = _trash.trash_map(db, "SUPPORT")
     out = []
     for last in lasts:
         key = last.thread_key
+        t = trashed.get(key)
+        trashed_at = None
+        if t is not None:
+            # a new message from the driver / owner after it was trashed brings the thread back by itself
+            ta, la = _trash._aware(t.trashed_at), _trash._aware(last.created_at)
+            if last.sender_side == "DRIVER_OWNER" and la is not None and ta is not None and la > ta:
+                db.delete(t)
+                db.commit()
+            else:
+                trashed_at = ta.isoformat() if ta else None
         out.append({
             "thread_key": key, "thread_name": last.thread_name, "thread_role": last.thread_role,
             "last_text": last.text, "last_at": last.created_at.isoformat() if last.created_at else None,
             "unread": int(unread_by.get(key, 0)), "help_request": key in help_keys,
+            "trashed_at": trashed_at, "trash_days_left": _trash.days_left(db, t.trashed_at) if trashed_at else None,
         })
     out.sort(key=lambda t: t["last_at"] or "", reverse=True)
     return out
+
+
+class TrashPayload(BaseModel):
+    thread_type: str = Field(..., description="SUPPORT or BOOKING")
+    thread_key: str
+    reason: Optional[str] = "SOLVED"
+
+
+@router.post("/admin/trash")
+def move_chat_to_trash(payload: TrashPayload, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Problem solved / booking finished: move the chat to Trash. It stays 30 days (setting chat_trash_days), then it is deleted."""
+    from app.crud import chat_trash as _trash
+    if payload.thread_type.upper() not in ("SUPPORT", "BOOKING"):
+        raise HTTPException(status_code=400, detail="thread_type must be SUPPORT or BOOKING")
+    row = _trash.move_to_trash(db, payload.thread_type, payload.thread_key, getattr(current_admin, "username", "Admin"), (payload.reason or "SOLVED").upper())
+    return {"thread_type": row.thread_type, "thread_key": row.thread_key, "trash_days_left": _trash.days_left(db, row.trashed_at)}
+
+
+@router.delete("/admin/trash/{thread_type}/{thread_key}")
+def restore_chat_from_trash(thread_type: str, thread_key: str, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    from app.crud import chat_trash as _trash
+    return {"restored": _trash.restore(db, thread_type, thread_key)}
+
+
+@router.get("/admin/trash")
+def list_trashed_chats(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Trash rows with their days left - the booking chat list uses this to mark manually trashed bookings."""
+    from app.crud import chat_trash as _trash
+    from app.models.chat_trash import ChatTrash
+    return [{"thread_type": r.thread_type, "thread_key": r.thread_key, "reason": r.reason,
+             "trashed_at": _trash._aware(r.trashed_at).isoformat() if r.trashed_at else None,
+             "trash_days_left": _trash.days_left(db, r.trashed_at)} for r in db.query(ChatTrash).all()]
 
 
 @router.get("/admin/threads/{thread_key}")

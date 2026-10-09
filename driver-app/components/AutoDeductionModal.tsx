@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   StyleSheet,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { IndianRupee, AlertTriangle, CheckCircle, XCircle } from 'lucide-react-native';

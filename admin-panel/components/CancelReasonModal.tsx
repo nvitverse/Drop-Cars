@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Platform, StyleSheet } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
+import { KeyboardAvoidingView, useNavInsetWhenClosed } from '@/components/KeyboardSafe';
 import { X } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -25,6 +27,7 @@ interface Props {
 }
 
 export default function CancelReasonModal({ visible, title = 'Cancel this booking?', message, confirmLabel = 'Confirm Cancel', submitting, onClose, onConfirm }: Props) {
+  const navInset = useNavInsetWhenClosed();
   const { themeColors } = useTheme();
   const colors: any = { ...themeColors, textSecondary: themeColors.textSecondary ?? themeColors.textMuted };
   const [selected, setSelected] = useState<string>('');
@@ -43,7 +46,7 @@ export default function CancelReasonModal({ visible, title = 'Cancel this bookin
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView style={styles.overlay} behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-        <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: (Number((StyleSheet.flatten(styles.sheet) as any)?.paddingBottom) || 0) + navInset }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
             <TouchableOpacity onPress={onClose} disabled={submitting}>

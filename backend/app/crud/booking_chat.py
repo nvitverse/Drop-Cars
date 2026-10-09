@@ -213,7 +213,12 @@ def unanswered_driver_questions(messages: List[BookingChatMessage]) -> List[str]
 def purge_old_chat_messages(db: Session) -> int:
     """Delete chat older than CHAT_RETENTION_DAYS (called from the periodic sweep)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=CHAT_RETENTION_DAYS)
-    n = db.query(BookingChatMessage).filter(BookingChatMessage.created_at < cutoff).delete(synchronize_session=False)
+    from app.crud.chat_trash import protected_keys
+    _support_keys, _trashed_orders = protected_keys(db)      # chats in Trash / finished trips are cleared by the Trash clean-up instead
+    q = db.query(BookingChatMessage).filter(BookingChatMessage.created_at < cutoff)
+    if _trashed_orders:
+        q = q.filter(~BookingChatMessage.order_id.in_(_trashed_orders))
+    n = q.delete(synchronize_session=False)
     db.commit()
     return int(n or 0)
 

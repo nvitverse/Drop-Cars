@@ -4,11 +4,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   Image,
   ActivityIndicator,
   PanResponder,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { X, RotateCw, ZoomIn, ZoomOut, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImageManipulator from 'expo-image-manipulator';

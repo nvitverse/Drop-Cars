@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert as RNAlert, Modal, Platform, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Alert as RNAlert, Platform, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react-native';
 import { plainAlertMessage } from '@/utils/errorMessage';
 

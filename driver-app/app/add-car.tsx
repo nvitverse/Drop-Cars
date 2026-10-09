@@ -11,8 +11,8 @@ import {
   ActivityIndicator,
   Image as RNImage,
   Platform,
-  KeyboardAvoidingView,
 } from 'react-native';
+import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useConfirmBack } from '@/hooks/useConfirmBack';
