@@ -12,7 +12,7 @@ import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
-import { applyLatestUpdateOnLaunch } from '@/utils/otaUpdates';
+import UpdateGate from '@/components/UpdateGate';
 
 import { ThemeProvider } from '@/context/ThemeContext';
 import { StaffDutyProvider } from '@/context/StaffDutyContext';
@@ -51,10 +51,8 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Start straight on the newest live update instead of one launch later.
-  useEffect(() => {
-    applyLatestUpdateOnLaunch();
-  }, []);
+  // The newest live update is checked at launch and whenever the app comes back to the front, downloaded in a visible
+  // "Updating..." box and applied by restarting (components/UpdateGate.tsx) - it used to happen silently and a failure was invisible.
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -75,6 +73,7 @@ export default function RootLayout() {
               <WebAlertHost />
               {/* Alarms paused temporarily as requested to work freely in other sections */}
               <AlarmDutyGate />
+              <UpdateGate />
               <EnquiryAlarmHost />
               <BookingAlarmHost />
               <StaffDutyFloatingBubble />

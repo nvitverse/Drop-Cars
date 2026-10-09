@@ -4,6 +4,10 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Admin App: visible update gate (Claude, 2026-10-09)
+- Owner never saw the Admin updates (keyboard fix etc.) arrive. Server side checked: channel preview -> branch preview, runtime 1.0.0, the manifest endpoint serves the newest update; the 09-29 local APK and the 10-04 EAS build both match (runtime 1.0.0, channel preview). The 09-25 / 09-27 local APKs are version 1.1.0 with NO channel header, so they can never receive an update. The new bundle was exported for web and renders the login screen with no JS error (no launch crash).
+- components/UpdateGate.tsx (mounted in pp/_layout.tsx, replaces the silent pplyLatestUpdateOnLaunch): checks at launch and when the app comes to the front (3-minute throttle), shows a full-screen 'Updating Drop Cars Admin' box, downloads and restarts by itself; a failed download shows the reason + Try again; if the phone skipped a crashing update at start-up it says so with the reason.
+
 ### Keyboard never covers the typing box; chat suggestions; chat categories; trip-close + posting charges (Claude, 2026-10-09)
 - **Keyboard (Admin + Driver apps, every screen):** on Android the app draws edge to edge so the keyboard no longer shrank the screen - chat reply box and form fields were hidden behind it. components/KeyboardSafe.tsx (KeyboardSafeView, drop-in Modal): KeyboardAvoidingView in padding mode (measures the overlap, so it does nothing when the system already resized). Root layouts wrap the Stack; 75 files' Modal now imports the keyboard-safe one; every existing ehavior={Platform.OS === 'ios' ? 'padding' : undefined|'height'} (all 4 apps) is now padding; tab bars hide while typing. Customer + Vendor apps got only the KeyboardAvoidingView fix (needs a build).
 - **Chat suggestions (Admin Chats):** components/ReplySuggestions.tsx: fixed-height row (the old horizontal ScrollView collapsed and drew over the input), the replies that fit the last message come first, 'All N' opens full cards with the whole text; 15 templates in groups (documents, payment, trip, app...). Helper chat chip row fixed the same way.
@@ -134,7 +138,7 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
    - Presets updated to `5h / 50km` and `8h / 80km`.
    - Added `Custom / Manual` duration option with real-time 10 km/hr auto calculation.
-   - Default hourly tariffs aligned (Driver: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹250, Vendor Extra: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹50, Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹25, Vendor Extra Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹5).
+   - Default hourly tariffs aligned (Driver: ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹250, Vendor Extra: ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹50, Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹25, Vendor Extra Addon KM: ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹5).
 
 2. **Booking Cards Direct Cancellation** (`(tabs)/orders.tsx`):
    - Added direct `[ Cancel ]` button on Live / Unassigned / Assigned / Running booking cards.
