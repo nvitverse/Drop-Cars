@@ -1,6 +1,6 @@
 # i18n Translation Audit Report: admin-panel
 
-Generated on: 2026-10-09T13:09:11.058Z
+Generated on: 2026-10-09T13:46:39.162Z
 
 ## Dictionary Status
 - **EN keys:** 0
@@ -15,7 +15,7 @@ Generated on: 2026-10-09T13:09:11.058Z
 - **KN:** 0 missing keys
 - **HI:** 0 missing keys
 
-## Untranslated Hardcoded Literals (3037 items in 160 files)
+## Untranslated Hardcoded Literals (3043 items in 162 files)
 
 | File | Line | Type | English Literal |
 | :--- | :--- | :--- | :--- |
@@ -220,4 +220,4 @@ Generated on: 2026-10-09T13:09:11.058Z
 | `app/(tabs)/orders.tsx` | 1929 | Text | "Est. Driver Fare:" |
 | `app/(tabs)/orders.tsx` | 1935 | Text | "Advance Received:" |
 
-*(Showing top 200 of 3037 untranslated literals)*
+*(Showing top 200 of 3043 untranslated literals)*

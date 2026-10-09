@@ -1,21 +1,21 @@
 # i18n Translation Audit Report: vendor-app
 
-Generated on: 2026-10-09T13:09:10.761Z
+Generated on: 2026-10-09T13:46:38.847Z
 
 ## Dictionary Status
 - **EN keys:** 5
 - **TA (Tamil) keys:** 5
 - **TE (Telugu) keys:** 5
-- **KN (Kannada) keys:** 0
+- **KN (Kannada) keys:** 15
 - **HI (Hindi) keys:** 5
 
 ## Missing Keys Against English
 - **TA:** 0 missing keys
 - **TE:** 0 missing keys
-- **KN:** 5 missing keys
+- **KN:** 3 missing keys
 - **HI:** 0 missing keys
 
-## Untranslated Hardcoded Literals (675 items in 54 files)
+## Untranslated Hardcoded Literals (684 items in 62 files)
 
 | File | Line | Type | English Literal |
 | :--- | :--- | :--- | :--- |
@@ -220,4 +220,4 @@ Generated on: 2026-10-09T13:09:10.761Z
 | `app/(tabs)/create-order.tsx` | 1880 | Placeholder | "Cost/KM" |
 | `app/(tabs)/create-order.tsx` | 1890 | Text | "Extra Cost per KM" |
 
-*(Showing top 200 of 675 untranslated literals)*
+*(Showing top 200 of 684 untranslated literals)*

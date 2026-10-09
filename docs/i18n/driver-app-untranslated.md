@@ -1,6 +1,6 @@
 # i18n Translation Audit Report: driver-app
 
-Generated on: 2026-10-09T13:09:10.512Z
+Generated on: 2026-10-09T13:46:38.571Z
 
 ## Dictionary Status
 - **EN keys:** 60
@@ -15,7 +15,7 @@ Generated on: 2026-10-09T13:09:10.512Z
 - **KN:** 0 missing keys
 - **HI:** 0 missing keys
 
-## Untranslated Hardcoded Literals (342 items in 145 files)
+## Untranslated Hardcoded Literals (347 items in 152 files)
 
 | File | Line | Type | English Literal |
 | :--- | :--- | :--- | :--- |
@@ -169,55 +169,55 @@ Generated on: 2026-10-09T13:09:10.512Z
 | `app/(tabs)/rides.tsx` | 629 | Text | "Vendor Details" |
 | `app/(tabs)/rides.tsx` | 631 | Text | "Vendor Name:" |
 | `app/(tabs)/rides.tsx` | 635 | Text | "Vendor Phone:" |
-| `app/(tabs)/settings.tsx` | 128 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 165 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 175 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 201 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 224 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 260 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 264 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 273 | Alert Title | "Success" |
-| `app/(tabs)/settings.tsx` | 278 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 286 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 286 | Alert Body | "Please enter a valid email address" |
-| `app/(tabs)/settings.tsx` | 293 | Alert Title | "Code Sent" |
-| `app/(tabs)/settings.tsx` | 296 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 304 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 304 | Alert Body | "Enter the 6-digit code from the email" |
-| `app/(tabs)/settings.tsx` | 322 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 356 | Alert Title | "Code Sent" |
-| `app/(tabs)/settings.tsx` | 378 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 378 | Alert Body | "Enter the 6-digit code from the email" |
-| `app/(tabs)/settings.tsx` | 382 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 382 | Alert Body | "New password must be at least 6 characters" |
-| `app/(tabs)/settings.tsx` | 386 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 386 | Alert Body | "Passwords do not match" |
-| `app/(tabs)/settings.tsx` | 402 | Alert Title | "Password Changed" |
-| `app/(tabs)/settings.tsx` | 405 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 433 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 495 | Alert Title | "Error" |
-| `app/(tabs)/settings.tsx` | 837 | Text | "Settings" |
-| `app/(tabs)/settings.tsx` | 923 | Alert Title | "Edit Profile" |
-| `app/(tabs)/settings.tsx` | 923 | Alert Body | "Profile editing coming soon" |
-| `app/(tabs)/settings.tsx` | 1278 | Text | "dropcars.in@gmail.com" |
-| `app/(tabs)/settings.tsx` | 1289 | Text | "www.dropcars.in" |
-| `app/(tabs)/settings.tsx` | 1301 | Text | "Drop Cars Driver App" |
-| `app/(tabs)/settings.tsx` | 1302 | Text | "Version 0.1" |
-| `app/(tabs)/settings.tsx` | 1309 | Text | "Logout" |
-| `app/(tabs)/settings.tsx` | 1337 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1343 | Text | "Logout" |
-| `app/(tabs)/settings.tsx` | 1398 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1433 | Placeholder | "your.email@gmail.com" |
-| `app/(tabs)/settings.tsx` | 1450 | Placeholder | "Code from the email" |
-| `app/(tabs)/settings.tsx` | 1463 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1515 | Placeholder | "Code from the email" |
-| `app/(tabs)/settings.tsx` | 1531 | Placeholder | "At least 6 characters" |
-| `app/(tabs)/settings.tsx` | 1547 | Placeholder | "Type the same password again" |
-| `app/(tabs)/settings.tsx` | 1556 | Text | "Passwords do not match" |
-| `app/(tabs)/settings.tsx` | 1563 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1626 | Placeholder | "e.g. SBIN0001234" |
-| `app/(tabs)/settings.tsx` | 1666 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1727 | Text | "Cancel" |
-| `app/(tabs)/settings.tsx` | 1986 | Text | "Full Name:" |
+| `app/(tabs)/settings.tsx` | 129 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 166 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 176 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 202 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 225 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 261 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 265 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 274 | Alert Title | "Success" |
+| `app/(tabs)/settings.tsx` | 279 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 287 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 287 | Alert Body | "Please enter a valid email address" |
+| `app/(tabs)/settings.tsx` | 294 | Alert Title | "Code Sent" |
+| `app/(tabs)/settings.tsx` | 297 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 305 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 305 | Alert Body | "Enter the 6-digit code from the email" |
+| `app/(tabs)/settings.tsx` | 323 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 357 | Alert Title | "Code Sent" |
+| `app/(tabs)/settings.tsx` | 379 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 379 | Alert Body | "Enter the 6-digit code from the email" |
+| `app/(tabs)/settings.tsx` | 383 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 383 | Alert Body | "New password must be at least 6 characters" |
+| `app/(tabs)/settings.tsx` | 387 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 387 | Alert Body | "Passwords do not match" |
+| `app/(tabs)/settings.tsx` | 403 | Alert Title | "Password Changed" |
+| `app/(tabs)/settings.tsx` | 406 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 434 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 496 | Alert Title | "Error" |
+| `app/(tabs)/settings.tsx` | 838 | Text | "Settings" |
+| `app/(tabs)/settings.tsx` | 924 | Alert Title | "Edit Profile" |
+| `app/(tabs)/settings.tsx` | 924 | Alert Body | "Profile editing coming soon" |
+| `app/(tabs)/settings.tsx` | 1279 | Text | "dropcars.in@gmail.com" |
+| `app/(tabs)/settings.tsx` | 1290 | Text | "www.dropcars.in" |
+| `app/(tabs)/settings.tsx` | 1302 | Text | "Drop Cars Driver App" |
+| `app/(tabs)/settings.tsx` | 1303 | Text | "Version 0.1" |
+| `app/(tabs)/settings.tsx` | 1310 | Text | "Logout" |
+| `app/(tabs)/settings.tsx` | 1338 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1344 | Text | "Logout" |
+| `app/(tabs)/settings.tsx` | 1399 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1434 | Placeholder | "your.email@gmail.com" |
+| `app/(tabs)/settings.tsx` | 1451 | Placeholder | "Code from the email" |
+| `app/(tabs)/settings.tsx` | 1464 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1516 | Placeholder | "Code from the email" |
+| `app/(tabs)/settings.tsx` | 1532 | Placeholder | "At least 6 characters" |
+| `app/(tabs)/settings.tsx` | 1548 | Placeholder | "Type the same password again" |
+| `app/(tabs)/settings.tsx` | 1557 | Text | "Passwords do not match" |
+| `app/(tabs)/settings.tsx` | 1564 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1627 | Placeholder | "e.g. SBIN0001234" |
+| `app/(tabs)/settings.tsx` | 1667 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1728 | Text | "Cancel" |
+| `app/(tabs)/settings.tsx` | 1987 | Text | "Full Name:" |
 
-*(Showing top 200 of 342 untranslated literals)*
+*(Showing top 200 of 347 untranslated literals)*

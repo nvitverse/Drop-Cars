@@ -1,13 +1,13 @@
 # i18n Translation Audit Report: customer-app
 
-Generated on: 2026-10-09T13:09:10.646Z
+Generated on: 2026-10-09T13:46:38.729Z
 
 ## Dictionary Status
 - **EN keys:** 0
-- **TA (Tamil) keys:** 0
-- **TE (Telugu) keys:** 0
-- **KN (Kannada) keys:** 0
-- **HI (Hindi) keys:** 0
+- **TA (Tamil) keys:** 56
+- **TE (Telugu) keys:** 11
+- **KN (Kannada) keys:** 11
+- **HI (Hindi) keys:** 11
 
 ## Missing Keys Against English
 - **TA:** 0 missing keys
@@ -15,7 +15,7 @@ Generated on: 2026-10-09T13:09:10.646Z
 - **KN:** 0 missing keys
 - **HI:** 0 missing keys
 
-## Untranslated Hardcoded Literals (627 items in 50 files)
+## Untranslated Hardcoded Literals (618 items in 58 files)
 
 | File | Line | Type | English Literal |
 | :--- | :--- | :--- | :--- |
@@ -198,9 +198,7 @@ Generated on: 2026-10-09T13:09:10.646Z
 | `app/(customer)/carpool.tsx` | 475 | Text | "Book Taxi ➔" |
 | `app/(customer)/carpool.tsx` | 482 | Text | "Customer Car-Pool Community" |
 | `app/(customer)/carpool.tsx` | 483 | Text | "Aadhaar & DL verified customer hosts, personal vehicles, and ₹3.5/km fuel cost recovery cap." |
-| `app/(customer)/carpool.tsx` | 493 | Text | "Where are you going?" |
 | `app/(customer)/carpool.tsx` | 494 | Text | "Enter your pickup and destination locations" |
-| `app/(customer)/carpool.tsx` | 499 | Placeholder | "Pickup Location" |
 | `app/(customer)/carpool.tsx` | 510 | Placeholder | "Destination Location" |
 | `app/(customer)/carpool.tsx` | 516 | Placeholder | "Intermediate Stop (Optional)" |
 | `app/(customer)/carpool.tsx` | 524 | Text | "Add Stop" |
@@ -219,5 +217,7 @@ Generated on: 2026-10-09T13:09:10.646Z
 | `app/(customer)/carpool.tsx` | 687 | Text | "REQUEST TO JOIN" |
 | `app/(customer)/carpool.tsx` | 696 | Text | "Back to Date & Passengers" |
 | `app/(customer)/carpool.tsx` | 707 | Text | "Create a Car Pool" |
+| `app/(customer)/carpool.tsx` | 708 | Text | "Enter pickup, destination, and stops for your journey" |
+| `app/(customer)/carpool.tsx` | 718 | Placeholder | "Destination Location" |
 
-*(Showing top 200 of 627 untranslated literals)*
+*(Showing top 200 of 618 untranslated literals)*
