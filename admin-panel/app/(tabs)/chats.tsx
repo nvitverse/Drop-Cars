@@ -20,7 +20,8 @@ import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import ReplySuggestions, { ReplyTemplate } from '@/components/ReplySuggestions';
-import ChatCategories, { MainCategory } from '@/components/ChatCategories';
+import type { MainCategory } from '@/components/ChatCategories';
+import ChatDrillDown, { buildTopicCats, DrillSection } from '@/components/ChatDrillDown';
 import { PARTNER_TOPICS, VENDOR_TOPICS, CUSTOMER_TOPICS, TRIP_TOPICS, classifyTopic } from '@/utils/chatTopics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -271,7 +272,7 @@ export default function AdminChatsScreen() {
   const router = useRouter();
   const { openCommandCenter } = useCommandCenter();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['reply', 'main:driver']));
+  const [navPath, setNavPath] = useState<string[]>([]);      // Chats drill-down: [] tiles > [section] categories > [section, category] chats
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -595,11 +596,6 @@ export default function AdminChatsScreen() {
   const loginHelpCount = rows.filter((r) => r.kind === 'SUPPORT' && (r.help || classifyTopic(r, PARTNER_TOPICS) === 'login') && r.role !== 'CUSTOMER' && r.role !== 'VENDOR').length;
   const activeTripsCount = rows.filter((r) => r.kind === 'BOOKING' && r.stage !== 'COMPLETED').length;
 
-  // "Needs a reply" stays pinned on top; everything else is sorted  who > what it is about  (utils/chatTopics.ts)
-  const PINNED_GROUPS: Array<{ id: string; label: string; icon: any; hint?: string; match: (r: Row) => boolean; color?: string }> = [
-    { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Unread messages awaiting staff response', match: (r) => r.unread > 0 && !r.trashed_at },
-  ];
-
   const SUPPORT_MAINS: MainCategory<Row>[] = [
     { id: 'owner', label: 'Fleet owners & Partners', icon: Building2, color: '#3B82F6', topics: PARTNER_TOPICS, hint: 'No chats from fleet owners right now', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && (r.role === 'OWNER' || r.role === 'VEHICLE_OWNER') },
     { id: 'driver', label: 'Duty & Attached Drivers', icon: Users, color: '#10B981', topics: PARTNER_TOPICS, hint: 'No chats from drivers right now', match: (r) => !r.trashed_at && r.kind === 'SUPPORT' && r.role === 'DRIVER' },
@@ -623,7 +619,27 @@ export default function AdminChatsScreen() {
     text: themeColors.text, textMuted: themeColors.textMuted, primary: themeColors.primary,
   };
 
-  const toggleGroup = (id: string) => setOpenGroups((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const replyRows = rows.filter((r) => r.unread > 0 && !r.trashed_at);
+  const sections: DrillSection<Row>[] = [
+    { id: 'reply', label: 'Needs a reply', icon: AlertCircle, color: '#EF4444', hint: 'Nothing is waiting for a reply', rows: replyRows, cats: null },
+    ...SUPPORT_MAINS.map((m) => ({ id: m.id, label: m.label, icon: m.icon, color: m.color, hint: m.hint, rows: rows.filter(m.match), cats: buildTopicCats(m, rows) })),
+    ...TRIP_MAINS.map((m) => ({ id: m.id, label: m.label.replace('Booking chats - ', 'Booking chats: '), icon: m.icon, color: m.color, hint: m.hint, rows: rows.filter(m.match), cats: buildTopicCats(m, rows) })),
+    {
+      id: 'trash', label: 'Trash', icon: CheckCheck, color: '#64748B', hint: `Solved problems and finished bookings stay here ${TRASH_DAYS} days`,
+      rows: rows.filter((r) => !!r.trashed_at),
+      cats: TRASH_MAINS.map((m) => ({ id: m.id, label: m.label.replace('Trash - ', ''), color: m.color, rows: rows.filter(m.match) })).filter((c) => c.rows.length > 0),
+    },
+  ];
+  const sectionsFor = (tab: TabType): DrillSection<Row>[] =>
+    tab === 'SUPPORT' ? sections.filter((x) => ['reply', 'owner', 'driver', 'vendor', 'customer'].includes(x.id))
+      : tab === 'TRIPS' ? sections.filter((x) => x.id === 'live')
+      : sections;
+  const switchTab = (tab: TabType) => { setActiveTab(tab); setNavPath([]); };
+  const openLoginHelp = () => {
+    const login = (id: string) => sections.find((x) => x.id === id)?.cats?.find((c) => c.id === 'login')?.rows.length || 0;
+    setActiveTab('SUPPORT');
+    setNavPath([login('owner') > login('driver') ? 'owner' : 'driver', 'login']);
+  };
 
   const renderRow = (item: Row) => (
     <Card
@@ -824,7 +840,7 @@ export default function AdminChatsScreen() {
           {/* Tab 1: HQ & AI */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => setActiveTab('ASSISTANTS')}
+            onPress={() => switchTab('ASSISTANTS')}
             style={[
               styles.dockSegment,
               activeTab === 'ASSISTANTS' && styles.dockSegmentActive,
@@ -848,7 +864,7 @@ export default function AdminChatsScreen() {
           {/* Tab 2: Support */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => setActiveTab('SUPPORT')}
+            onPress={() => switchTab('SUPPORT')}
             style={[
               styles.dockSegment,
               activeTab === 'SUPPORT' && styles.dockSegmentActive,
@@ -890,7 +906,7 @@ export default function AdminChatsScreen() {
           {/* Tab 3: Trips */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => setActiveTab('TRIPS')}
+            onPress={() => switchTab('TRIPS')}
             style={[
               styles.dockSegment,
               activeTab === 'TRIPS' && styles.dockSegmentActive,
@@ -932,7 +948,7 @@ export default function AdminChatsScreen() {
           {/* Tab 4: All (At the Last Position) */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => setActiveTab('ALL')}
+            onPress={() => switchTab('ALL')}
             style={[
               styles.dockSegment,
               activeTab === 'ALL' && styles.dockSegmentActive,
@@ -994,10 +1010,7 @@ export default function AdminChatsScreen() {
                       tone: needsReplyCount > 0 ? '#EF4444' : '#10B981',
                       delta: needsReplyCount > 0 ? 'Urgent' : 'Clear',
                       isPositive: needsReplyCount === 0,
-                      onPress: () => {
-                        setActiveTab('SUPPORT');
-                        setOpenGroups((prev) => new Set([...prev, 'reply']));
-                      },
+                      onPress: () => { setActiveTab('SUPPORT'); setNavPath(['reply']); },
                     },
                     {
                       label: 'Login Help',
@@ -1005,10 +1018,7 @@ export default function AdminChatsScreen() {
                       tone: loginHelpCount > 0 ? '#F59E0B' : '#64748B',
                       delta: loginHelpCount > 0 ? 'OTP' : 'Clear',
                       isPositive: loginHelpCount === 0,
-                      onPress: () => {
-                        setActiveTab('SUPPORT');
-                        setOpenGroups((prev) => new Set([...prev, 'main:driver', 'sub:driver:login', 'main:owner', 'sub:owner:login']));
-                      },
+                      onPress: openLoginHelp,
                     },
                     {
                       label: 'Trip Chats',
@@ -1016,10 +1026,7 @@ export default function AdminChatsScreen() {
                       tone: activeTripsCount > 0 ? '#10B981' : '#64748B',
                       delta: activeTripsCount > 0 ? 'Live' : 'Standby',
                       isPositive: true,
-                      onPress: () => {
-                        setActiveTab('TRIPS');
-                        setOpenGroups((prev) => new Set([...prev, 'main:live']));
-                      },
+                      onPress: () => { setActiveTab('TRIPS'); setNavPath(['live']); },
                     },
                     {
                       label: 'Total Active',
@@ -1027,9 +1034,7 @@ export default function AdminChatsScreen() {
                       tone: '#8B5CF6',
                       delta: 'Active',
                       isPositive: true,
-                      onPress: () => {
-                        setActiveTab('ALL');
-                      },
+                      onPress: () => switchTab('ALL'),
                     },
                   ]}
                 />
@@ -1059,131 +1064,19 @@ export default function AdminChatsScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* 3. Non-search sections */}
+              {/* 3. Drill-down: tiles > categories > chats (one page at a time, no dropdowns) */}
               {!search.trim() && (
                 <View style={{ gap: 14 }}>
-                  {/* Assistants Section (Visible in 'ALL' and 'ASSISTANTS' tabs) */}
-                  {(activeTab === 'ALL' || activeTab === 'ASSISTANTS') && renderAssistantsSection()}
-
-                  {/* Support & Driver Groups (Visible in 'ALL' and 'SUPPORT' tabs) */}
-                  {(activeTab === 'ALL' || activeTab === 'SUPPORT') && (
-                    <View style={styles.sectionGroup}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Support & Partner Inbox</Text>
-                        {supportUnread > 0 && (
-                          <View style={[styles.badgePill, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', borderWidth: 1 }]}>
-                            <Text style={[styles.badgePillText, { color: '#DC2626' }]}>{supportUnread} Pending</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {PINNED_GROUPS.map((g) => {
-                        const list = rows.filter(g.match);
-                        const unread = list.reduce((n, r) => n + (r.unread || 0), 0);
-                        const open = openGroups.has(g.id);
-                        const IconComponent = g.icon;
-
-                        return (
-                          <View key={g.id} style={{ marginBottom: 4 }}>
-                            <TouchableOpacity
-                              activeOpacity={0.75}
-                              onPress={() => toggleGroup(g.id)}
-                              style={[
-                                styles.foldRow,
-                                {
-                                  borderColor: unread > 0 ? themeColors.primary + '55' : themeColors.border,
-                                  backgroundColor: themeColors.surface,
-                                },
-                              ]}
-                            >
-                              <View style={[styles.foldIconWrap, { backgroundColor: (g.color || themeColors.primary) + '18' }]}>
-                                <IconComponent size={15} color={g.color || themeColors.primary} />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ color: themeColors.text, fontWeight: '700', fontSize: 13 }}>
-                                  {g.label}
-                                </Text>
-                                <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
-                                  {list.length} {list.length === 1 ? 'chat' : 'chats'}
-                                </Text>
-                              </View>
-                              {unread > 0 && (
-                                <View style={[styles.unreadBadge, { backgroundColor: g.color || themeColors.primary }]}>
-                                  <Text style={styles.unreadText}>{unread}</Text>
-                                </View>
-                              )}
-                              {open ? <ChevronDown size={15} color={themeColors.textMuted} /> : <ChevronRight size={15} color={themeColors.textMuted} />}
-                            </TouchableOpacity>
-                            {open && (
-                              <View style={{ gap: 6, marginTop: 6, paddingLeft: 4 }}>
-                                {list.length === 0 ? (
-                                  <View style={[styles.emptyGroupHint, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border }]}>
-                                    <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
-                                      {g.hint || 'No active conversations in this category'}
-                                    </Text>
-                                  </View>
-                                ) : (
-                                  list.map((r) => <View key={r.key}>{renderRow(r)}</View>)
-                                )}
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-
-                      <ChatCategories
-                        categories={SUPPORT_MAINS}
-                        rows={rows}
-                        open={openGroups}
-                        onToggle={toggleGroup}
-                        renderRow={renderRow}
-                        colors={chatColors}
-                      />
-                    </View>
+                  {activeTab !== 'ASSISTANTS' && (
+                    <ChatDrillDown
+                      sections={sectionsFor(activeTab)}
+                      path={navPath}
+                      onPath={setNavPath}
+                      renderRow={renderRow}
+                      colors={chatColors}
+                    />
                   )}
-
-                  {/* Booking & Trip Chats (Visible in 'ALL' and 'TRIPS' tabs) */}
-                  {(activeTab === 'ALL' || activeTab === 'TRIPS') && (
-                    <View style={styles.sectionGroup}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Trip & Booking Communications</Text>
-                        {bookingUnread > 0 && (
-                          <View style={[styles.badgePill, { backgroundColor: themeColors.primaryLight, borderColor: themeColors.border, borderWidth: 1 }]}>
-                            <Text style={[styles.badgePillText, { color: themeColors.primary }]}>{bookingUnread} Unread</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <ChatCategories
-                        categories={TRIP_MAINS}
-                        rows={rows}
-                        open={openGroups}
-                        onToggle={toggleGroup}
-                        renderRow={renderRow}
-                        colors={chatColors}
-                        noun="trip chat"
-                      />
-                    </View>
-                  )}
-                  {/* Trash (All tab): kept 30 days, then deleted for good */}
-                  {activeTab === 'ALL' && (
-                    <View style={styles.sectionGroup}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionHeading, { color: themeColors.text }]}>Trash</Text>
-                        <View style={[styles.badgePill, { backgroundColor: themeColors.surfaceAlt, borderColor: themeColors.border, borderWidth: 1 }]}>
-                          <Text style={[styles.badgePillText, { color: themeColors.textSecondary }]}>{trashCount} kept {TRASH_DAYS} days</Text>
-                        </View>
-                      </View>
-                      <ChatCategories
-                        categories={TRASH_MAINS}
-                        rows={rows}
-                        open={openGroups}
-                        onToggle={toggleGroup}
-                        renderRow={renderRow}
-                        colors={chatColors}
-                      />
-                    </View>
-                  )}
+                  {(activeTab === 'ASSISTANTS' || (activeTab === 'ALL' && navPath.length === 0)) && renderAssistantsSection()}
                 </View>
               )}
             </View>
