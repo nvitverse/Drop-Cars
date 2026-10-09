@@ -133,22 +133,44 @@ def package(p: Dict[str, Any], amount: Optional[float] = None, name: Optional[st
 
 
 def compute(method: str, params: Dict[str, Any], *, km: float = 0, days: int = 1, hours: str = "", trip_type: str = "oneway",
-            amount: Optional[float] = None, name: Optional[str] = None, rules: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            amount: Optional[float] = None, name: Optional[str] = None, rules: Optional[Dict[str, Any]] = None,
+            adjust: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """`adjust` comes from the pricing rules the staff applied: min_km_per_day, min_km_oneway (replace the minimums), rate_delta, bata_delta (added)."""
     method = (method or "").upper()
     if method not in METHODS:
         raise ValueError(f"Unknown method {method}")
-    rules = rules or {}
+    rules = dict(rules or {})
+    adj = adjust or {}
+    rd, bd = _n(adj.get("rate_delta")), _n(adj.get("bata_delta"))
+    if adj.get("min_km_per_day"):
+        rules["round_trip_min_km_per_day"] = rules["multicity_min_km_per_day"] = adj["min_km_per_day"]
+    if adj.get("min_km_oneway"):
+        rules["oneway_min_km"] = adj["min_km_oneway"]
+    params = dict(params)
     if method == "KM_BATA":
-        return km_bata(km=km, rate_per_km=_n(params.get("rate_per_km")), extra_rate_per_km=_n(params.get("extra_rate_per_km")),
-                       bata_per_day=_n(params.get("bata_per_day")), days=days, trip_type=trip_type,
-                       min_km_oneway=int(rules.get("oneway_min_km", 130)), min_km_per_day_round=int(rules.get("round_trip_min_km_per_day", 250)),
-                       min_km_per_day_multicity=int(rules.get("multicity_min_km_per_day", 250)))
-    if method == "SLAB_DROP":
-        return slab_drop(params, km, double=params.get("double_for_drop", True) is not False)
-    if method == "SLAB_ROUND":
-        return slab_round(params, km, days)
-    if method == "LOCAL":
-        return local_package(params, hours)
-    if method == "DAY_RENT":
-        return day_rent(params, km, days)
-    return package(params, amount, name)
+        res = km_bata(km=km, rate_per_km=_n(params.get("rate_per_km")) + rd, extra_rate_per_km=_n(params.get("extra_rate_per_km")),
+                      bata_per_day=_n(params.get("bata_per_day")) + bd, days=days, trip_type=trip_type,
+                      min_km_oneway=int(rules.get("oneway_min_km", 130)), min_km_per_day_round=int(rules.get("round_trip_min_km_per_day", 250)),
+                      min_km_per_day_multicity=int(rules.get("multicity_min_km_per_day", 250)))
+    elif method == "SLAB_DROP":
+        params["start_rate"] = _n(params.get("start_rate")) + rd
+        if adj.get("min_km_oneway"):
+            params["min_chargeable_km"] = max(_n(params.get("min_chargeable_km")), float(adj["min_km_oneway"]))
+        res = slab_drop(params, km, double=params.get("double_for_drop", True) is not False)
+    elif method == "SLAB_ROUND":
+        params["round_rate"] = _n(params.get("round_rate")) + rd
+        params["driver_allowance"] = _n(params.get("driver_allowance")) + bd
+        if adj.get("min_km_per_day"):
+            params["min_km_per_day"] = float(adj["min_km_per_day"])
+        res = slab_round(params, km, days)
+    elif method == "LOCAL":
+        res = local_package(params, hours)
+    elif method == "DAY_RENT":
+        params["extra_km_rate"] = _n(params.get("extra_km_rate")) + rd
+        res = day_rent(params, km, days)
+    else:
+        res = package(params, amount, name)
+    shown = ", ".join(f"{k.replace('_', ' ')} {v:g}" for k, v in adj.items() if v)
+    if shown:
+        res.setdefault("notes", []).append("Pricing rules applied: " + shown)
+    return res

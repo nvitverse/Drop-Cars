@@ -7,7 +7,7 @@ BillingDocument - an INVOICE or an ESTIMATE: customer, trip, line items (each in
                   is issued, so changing the brand later never rewrites an old invoice."""
 import uuid
 
-from sqlalchemy import Boolean, Column, Date, Integer, JSON, String, Text, TIMESTAMP, func
+from sqlalchemy import Boolean, Column, Date, Float, Integer, JSON, String, Text, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database.session import Base
@@ -138,5 +138,38 @@ class BillingRateCard(Base):
     params = Column(JSON, nullable=False)
     is_active = Column(Boolean, nullable=False, server_default="true")
     sort_order = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class BillingRule(Base):
+    """A pricing rule the staff can apply to an estimate - state-wise, location-wise, route-wise, hill-wise ...
+    It never changes a price by itself unless `auto_apply` is on: by default the editor SUGGESTS it for a matching trip and the staff taps Apply.
+        scope    STATE | LOCATION | ROUTE | HILL | ALL        (what the keywords are matched against)
+        effect   MIN_KM_PER_DAY | MIN_KM_ONEWAY | RATE_DELTA | BATA_DELTA | CHARGE | HILL_CHARGE | PERCENT
+    brand_id empty = the rule is for every brand. keywords / route_from / route_to hold place words; a word may list aliases with '|'  (ooty|udhagamandalam)."""
+    __tablename__ = "billing_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, unique=True, index=True)
+    brand_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    scope = Column(String, nullable=False, server_default="LOCATION")
+    keywords = Column(JSON, nullable=True)
+    route_from = Column(JSON, nullable=True)
+    route_to = Column(JSON, nullable=True)
+    match_on = Column(String, nullable=False, server_default="ANY")        # ANY (any stop) | PICKUP | DROP | BOTH (pickup and drop)
+    effect = Column(String, nullable=False)
+    value = Column(Float, nullable=True)
+    label = Column(String, nullable=True)                                   # the line text for charges
+    params = Column(JSON, nullable=True)                                    # CHARGE: {basis: TRIP|DAY|MATCH, included: bool}; HILL_CHARGE: {one_way, round_amount, round_basis}
+    trip_types = Column(JSON, nullable=True)                                # ["oneway","round","multicity"]; empty = all
+    vehicles = Column(JSON, nullable=True)                                  # vehicle words; empty = all
+    valid_from = Column(Date, nullable=True)
+    valid_to = Column(Date, nullable=True)
+    auto_apply = Column(Boolean, nullable=False, server_default="false")
+    is_active = Column(Boolean, nullable=False, server_default="true")
+    priority = Column(Integer, nullable=False, server_default="100")
+    note = Column(Text, nullable=True)
+    created_by = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

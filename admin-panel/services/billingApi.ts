@@ -35,7 +35,17 @@ export interface RateCard {
   id: string; brand_id: string; method: TariffMethod; method_label: string; vehicle_key?: string | null; vehicle_name?: string | null; name?: string | null;
   params: Record<string, any>; is_active: boolean; sort_order: number;
 }
+export interface PricingRule {
+  id: string; brand_id?: string | null; name: string; scope: 'STATE' | 'LOCATION' | 'ROUTE' | 'HILL' | 'ALL'; keywords: string[]; route_from: string[]; route_to: string[];
+  match_on: 'ANY' | 'PICKUP' | 'DROP' | 'BOTH'; effect: string; effect_label?: string; value?: number | null; label?: string | null; params: Record<string, any>;
+  trip_types: string[]; vehicles: string[]; valid_from?: string | null; valid_to?: string | null; auto_apply: boolean; is_active: boolean; priority: number; note?: string | null;
+}
+export interface RuleSuggestion {
+  rule: PricingRule; matched: string[]; auto_apply: boolean; kind: 'ADJUST' | 'CHARGE'; summary: string;
+  adjust?: Record<string, number>; line?: { label: string; amount: number; kind: string; included: boolean } | null;
+}
 export interface EstimateLinesIn {
+  adjust?: Record<string, number>;
   method?: TariffMethod; rate_card_id?: string; params?: Record<string, any>; km?: number; days?: number; hours?: string; trip_type?: string; amount?: number; name?: string;
 }
 export interface BillingRow {
@@ -53,7 +63,7 @@ export const billingApi = {
   options: (): Promise<any> => apiService.makeRequest('/admin/billing/options'),
   prefill: (ref: string, brandId?: string): Promise<any> =>
     apiService.makeRequest(`/admin/billing/prefill?ref=${encodeURIComponent(ref)}${brandId ? `&brand_id=${brandId}` : ''}`),
-  fareLines: (b: { trip_type: string; km: number; rate_per_km: number; extra_rate_per_km?: number; bata_per_day?: number; days?: number }): Promise<{ lines: BillingLine[] }> =>
+  fareLines: (b: { trip_type: string; km: number; rate_per_km: number; extra_rate_per_km?: number; bata_per_day?: number; days?: number; adjust?: Record<string, number> }): Promise<{ lines: BillingLine[]; notes?: string[] }> =>
     apiService.makeRequest('/admin/billing/fare-lines', j(b)),
   calc: (b: any): Promise<BillingTotals> => apiService.makeRequest('/admin/billing/calc', j(b)),
   rateCards: (brandId?: string, includeInactive = false): Promise<RateCard[]> =>
@@ -63,6 +73,13 @@ export const billingApi = {
   deleteRateCard: (id: string): Promise<any> => apiService.makeRequest(`/admin/billing/rate-cards/${id}`, { method: 'DELETE' }),
   estimateLines: (b: EstimateLinesIn): Promise<{ lines: BillingLine[]; notes: string[]; meta: Record<string, any>; method: TariffMethod }> =>
     apiService.makeRequest('/admin/billing/estimate-lines', j(b)),
+  rules: (brandId?: string): Promise<{ rules: PricingRule[]; effects: { key: string; label: string }[]; scopes: string[] }> =>
+    apiService.makeRequest(`/admin/billing/rules${brandId ? `?brand_id=${brandId}` : ''}`),
+  createRule: (b: Partial<PricingRule>): Promise<PricingRule> => apiService.makeRequest('/admin/billing/rules', j(b)),
+  updateRule: (id: string, b: Partial<PricingRule>): Promise<PricingRule> => apiService.makeRequest(`/admin/billing/rules/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  deleteRule: (id: string): Promise<any> => apiService.makeRequest(`/admin/billing/rules/${id}`, { method: 'DELETE' }),
+  suggestRules: (b: { brand_id?: string; pickup?: string; drop?: string; via?: string[]; trip_type?: string; days?: number; km?: number; vehicle?: string; on_date?: string; fare_total?: number }): Promise<{ suggestions: RuleSuggestion[] }> =>
+    apiService.makeRequest('/admin/billing/rules/suggest', j(b)),
   staff: (): Promise<string[]> => apiService.makeRequest('/admin/billing/staff'),
   list: (q: { doc_type?: string; status?: string; brand_id?: string; search?: string; created_by?: string; skip?: number } = {}): Promise<BillingRow[]> => {
     const p = Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');

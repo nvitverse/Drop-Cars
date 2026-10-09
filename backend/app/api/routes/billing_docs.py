@@ -176,16 +176,16 @@ class FareLinesIn(BaseModel):
     extra_rate_per_km: float = 0
     bata_per_day: float = 0
     days: int = 1
+    adjust: Optional[Dict[str, Any]] = None        # from the pricing rules the staff applied
 
 
 @router.post("/fare-lines")
 def fare_lines(body: FareLinesIn, admin=Depends(get_current_admin)):
     from app.utils.fare_rules import get_fare_rules
-    r = get_fare_rules()
-    return {"lines": billing_calc.fare_lines(
-        trip_type=body.trip_type, km=body.km, rate_per_km=body.rate_per_km, bata_per_day=body.bata_per_day, days=body.days,
-        extra_rate_per_km=body.extra_rate_per_km, min_km_oneway=int(r["oneway_min_km"]), min_km_per_day_round=int(r["round_trip_min_km_per_day"]),
-        min_km_per_day_multicity=int(r["multicity_min_km_per_day"]))}
+    from app.utils import billing_tariff
+    res = billing_tariff.compute("KM_BATA", {"rate_per_km": body.rate_per_km, "extra_rate_per_km": body.extra_rate_per_km, "bata_per_day": body.bata_per_day},
+                                 km=body.km, days=body.days, trip_type=body.trip_type, rules=get_fare_rules(), adjust=body.adjust)
+    return {"lines": res["lines"], "notes": res["notes"]}
 
 
 class CalcIn(BaseModel):
@@ -297,6 +297,7 @@ class EstimateLinesIn(BaseModel):
     trip_type: Optional[str] = "oneway"
     amount: Optional[float] = None
     name: Optional[str] = None
+    adjust: Optional[Dict[str, Any]] = None
 
 
 @router.post("/estimate-lines")
@@ -309,6 +310,95 @@ def staff_names(db: Session = Depends(get_db), admin=Depends(get_current_admin))
     """People who made documents - for the 'made by' filter in the list."""
     rows = db.query(BillingDocument.created_by).filter(BillingDocument.created_by.isnot(None)).distinct().all()
     return sorted({r[0] for r in rows if r[0]})
+
+
+# ------------------------------------------------------------------ pricing rules (state / location / route / hill ...)
+class RuleIn(BaseModel):
+    name: Optional[str] = None
+    brand_id: Optional[str] = None
+    scope: Optional[str] = None
+    keywords: Optional[Any] = None
+    route_from: Optional[Any] = None
+    route_to: Optional[Any] = None
+    match_on: Optional[str] = None
+    effect: Optional[str] = None
+    value: Optional[float] = None
+    label: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+    trip_types: Optional[Any] = None
+    vehicles: Optional[Any] = None
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    auto_apply: Optional[bool] = None
+    is_active: Optional[bool] = None
+    priority: Optional[int] = None
+    note: Optional[str] = None
+
+
+def _rule(db: Session, rule_id: str):
+    import uuid
+    from app.models.billing import BillingRule
+    try:
+        r = db.query(BillingRule).filter(BillingRule.id == uuid.UUID(rule_id)).first()
+    except ValueError:
+        r = None
+    if r is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return r
+
+
+@router.get("/rules")
+def list_rules(brand_id: Optional[str] = None, include_inactive: bool = True, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    from app.crud import billing_rules as rules
+    svc.seed_default_brands(db)
+    return {"rules": [rules.rule_dict(r) for r in rules.list_rules(db, brand_id, include_inactive)],
+            "effects": [{"key": k, "label": v} for k, v in rules.EFFECT_LABELS.items()], "scopes": list(rules.SCOPES)}
+
+
+@router.post("/rules")
+def create_rule(body: RuleIn, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    from app.api.routes.admin import require_owner
+    from app.crud import billing_rules as rules
+    require_owner(admin)
+    return rules.rule_dict(rules.save_rule(db, body.model_dump(exclude_unset=True), _admin_name(admin)))
+
+
+@router.put("/rules/{rule_id}")
+def update_rule(rule_id: str, body: RuleIn, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    from app.api.routes.admin import require_owner
+    from app.crud import billing_rules as rules
+    require_owner(admin)
+    return rules.rule_dict(rules.save_rule(db, body.model_dump(exclude_unset=True), _admin_name(admin), _rule(db, rule_id)))
+
+
+@router.delete("/rules/{rule_id}")
+def delete_rule(rule_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    from app.api.routes.admin import require_owner
+    require_owner(admin)
+    db.delete(_rule(db, rule_id))
+    db.commit()
+    return {"deleted": True}
+
+
+class SuggestIn(BaseModel):
+    brand_id: Optional[str] = None
+    pickup: Optional[str] = None
+    drop: Optional[str] = None
+    via: Optional[Any] = None
+    texts: Optional[Any] = None
+    trip_type: Optional[str] = None
+    days: int = 1
+    km: float = 0
+    vehicle: Optional[str] = None
+    on_date: Optional[str] = None
+    fare_total: float = 0
+
+
+@router.post("/rules/suggest")
+def suggest_rules(body: SuggestIn, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """Which pricing rules fit this trip. Nothing is applied here - the editor shows them and the staff taps Apply (rules marked auto-apply are pre-ticked)."""
+    from app.crud import billing_rules as rules
+    return {"suggestions": rules.suggest(db, body.model_dump())}
 
 
 # ------------------------------------------------------------------ documents

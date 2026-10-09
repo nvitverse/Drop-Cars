@@ -70,6 +70,8 @@ def seed_default_brands(db: Session) -> int:
     if n:
         db.commit()
     seed_rate_cards(db)
+    from app.crud.billing_rules import seed_starter_rules
+    seed_starter_rules(db)
     return n
 
 
@@ -108,7 +110,8 @@ def estimate_lines(db: Session, p: Dict[str, Any]) -> Dict[str, Any]:
         method, params = card.method, {**(card.params or {}), **params}
     try:
         res = billing_tariff.compute(method, params, km=float(p.get("km") or 0), days=int(p.get("days") or 1), hours=str(p.get("hours") or ""),
-                                     trip_type=str(p.get("trip_type") or "oneway"), amount=p.get("amount"), name=p.get("name"), rules=get_fare_rules())
+                                     trip_type=str(p.get("trip_type") or "oneway"), amount=p.get("amount"), name=p.get("name"), rules=get_fare_rules(),
+                                     adjust=p.get("adjust") or None)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     res["lines"] = billing_calc.normalize_lines(res["lines"])

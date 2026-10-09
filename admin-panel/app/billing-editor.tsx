@@ -5,9 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Check, CreditCard, FileText, Link2, Plus, Receipt, RefreshCw, Search, Send, Trash2, X } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
-import { billingApi, BillingBrand, BillingDoc, BillingTotals, RateCard, TariffMethod } from '@/services/billingApi';
+import { billingApi, BillingBrand, BillingDoc, BillingTotals, RateCard, RuleSuggestion, TariffMethod } from '@/services/billingApi';
 
-type Line = { id: string; label: string; amount: string; kind: 'FARE' | 'CHARGE'; included: boolean; note?: string | null; gen?: boolean };
+type Line = { id: string; label: string; amount: string; kind: 'FARE' | 'CHARGE'; included: boolean; note?: string | null; gen?: boolean; rule?: string };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const num = (s: string) => parseInt(String(s || '').replace(/[^0-9]/g, ''), 10) || 0;
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
@@ -69,6 +69,10 @@ export default function BillingEditor() {
   const [sharedBy, setSharedBy] = useState<{ name?: string | null; at?: string | null }[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [sugg, setSugg] = useState<RuleSuggestion[]>([]);
+  const [applied, setApplied] = useState<Record<string, RuleSuggestion>>({});
+  const [needsRecalc, setNeedsRecalc] = useState(false);
+  const autoDone = useRef<Set<string>>(new Set());
   const [showPay, setShowPay] = useState(false);
   const [pay, setPay] = useState({ amount: '', mode: 'UPI', ref: '', purpose: 'PAYMENT' });
   const [showLink, setShowLink] = useState(false);
@@ -133,6 +137,42 @@ export default function BillingEditor() {
   const paymentsTotal = useMemo(() => payments.reduce((n, p) => n + (Number(p.amount) || 0), 0), [payments]);
   const linePayload = useMemo(() => lines.map((l) => ({ label: l.label.trim(), amount: num(l.amount), kind: l.kind, included: l.included, note: l.note || null })).filter((l) => l.label), [lines]);
 
+  // pricing rules (state / place / route / hill ...) that fit this trip - suggested, never applied behind the staff's back (unless a rule is set to auto-apply)
+  const fareTotal = useMemo(() => lines.filter((l) => l.included && l.kind === 'FARE').reduce((n, l) => n + num(l.amount), 0), [lines]);
+  const adjustNow = useMemo(() => {
+    const adj: Record<string, number> = {};
+    Object.values(applied).filter((x) => x.kind === 'ADJUST').forEach((x) => Object.entries(x.adjust || {}).forEach(([k, v]) => {
+      if (k === 'discount') return;
+      adj[k] = k.startsWith('min_km') ? Math.max(adj[k] || 0, v) : (adj[k] || 0) + v;
+    }));
+    return adj;
+  }, [applied]);
+  const sTimer = useRef<any>(null);
+  useEffect(() => {
+    if (locked || (!trip.pickup && !trip.drop)) { setSugg([]); return; }
+    clearTimeout(sTimer.current);
+    sTimer.current = setTimeout(async () => {
+      try {
+        const r = await billingApi.suggestRules({ brand_id: brandId || undefined, pickup: trip.pickup, drop: trip.drop, trip_type: trip.trip_type, days: Number(calc.days) || 1, km: Number(calc.km) || Number(trip.km) || 0, vehicle: trip.vehicle, fare_total: fareTotal });
+        setSugg(r.suggestions);
+        r.suggestions.filter((x) => x.auto_apply && !autoDone.current.has(x.rule.id)).forEach((x) => { autoDone.current.add(x.rule.id); applyRule(x); });
+      } catch { setSugg([]); }
+    }, 600);
+    return () => clearTimeout(sTimer.current);
+  }, [trip.pickup, trip.drop, trip.trip_type, trip.vehicle, calc.days, brandId, Math.round(fareTotal / 100), locked]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyRule = (x: RuleSuggestion) => {
+    setApplied((a) => ({ ...a, [x.rule.id]: x }));
+    if (x.kind === 'CHARGE' && x.line) setLines((ls) => [...ls.filter((l) => l.rule !== x.rule.id), { id: uid(), label: x.line!.label, amount: String(x.line!.amount), kind: 'CHARGE', included: x.line!.included, rule: x.rule.id }]);
+    if (x.adjust?.discount) { setDiscount(String(x.adjust.discount)); setDiscountLabel(x.rule.label || x.rule.name); }
+    if (x.kind === 'ADJUST' && !x.adjust?.discount) setNeedsRecalc(true);
+  };
+  const removeRule = (x: RuleSuggestion) => {
+    setApplied((a) => { const n = { ...a }; delete n[x.rule.id]; return n; });
+    setLines((ls) => ls.filter((l) => l.rule !== x.rule.id));
+    if (x.kind === 'ADJUST') setNeedsRecalc(true);
+  };
+
   // the brand's tariffs (rate cards) for the estimate calculator
   useEffect(() => {
     if (!brandId) return;
@@ -189,11 +229,11 @@ export default function BillingEditor() {
       const km = Number(calc.km) || 0;
       let res: { lines: any[]; notes?: string[]; meta?: Record<string, any> };
       if (method === 'KM_BATA') {
-        res = await billingApi.fareLines({ trip_type: trip.trip_type || 'Oneway', km, rate_per_km: Number(calc.rate) || 0, extra_rate_per_km: Number(calc.extra) || 0, bata_per_day: Number(calc.bata) || 0, days: Number(calc.days) || 1 });
+        res = await billingApi.fareLines({ trip_type: trip.trip_type || 'Oneway', km, rate_per_km: Number(calc.rate) || 0, extra_rate_per_km: Number(calc.extra) || 0, bata_per_day: Number(calc.bata) || 0, days: Number(calc.days) || 1, adjust: adjustNow });
       } else {
         if (['SLAB_DROP', 'SLAB_ROUND', 'LOCAL'].includes(method) && !cardId) return Alert.alert('Vehicle', 'Choose the vehicle tariff first.');
         if (method !== 'PACKAGE' && method !== 'LOCAL' && km <= 0) return Alert.alert('Distance', 'Enter the km.');
-        const body: any = { method, rate_card_id: cardId || undefined, km, days: Number(calc.days) || 1, hours: calc.hours, trip_type: trip.trip_type || 'oneway' };
+        const body: any = { method, rate_card_id: cardId || undefined, km, days: Number(calc.days) || 1, hours: calc.hours, trip_type: trip.trip_type || 'oneway', adjust: adjustNow };
         if (method === 'DAY_RENT') body.params = { rent_per_day: Number(rent.rent) || 0, km_limit_per_day: Number(rent.limit) || 0, extra_km_rate: Number(rent.extra) || 0, fuel_per_km: Number(rent.fuel) || 0, fuel_applies: rent.fuelOn };
         if (method === 'PACKAGE') { body.amount = Number(calc.amount) || 0; body.name = methodCards.find((x) => x.id === cardId)?.name || undefined; if (!body.amount) return Alert.alert('Amount', 'Enter the package amount.'); }
         res = await billingApi.estimateLines(body);
@@ -202,6 +242,7 @@ export default function BillingEditor() {
       const keep = lines.filter((l) => !l.gen && !/^Km fare|^Driver bata/.test(l.label));
       setLines([...res.lines.map((l: any) => ({ id: uid(), label: l.label, amount: String(l.amount), kind: (l.kind === 'FARE' ? 'FARE' : 'CHARGE') as 'FARE' | 'CHARGE', included: true, note: l.note || null, gen: true })), ...keep]);
       setTariffNotes(res.notes || []);
+      setNeedsRecalc(false);
       const pkg = res.meta?.package;
       const nextTrip: Record<string, any> = { ...trip };
       if (pkg) nextTrip.package = pkg; else delete nextTrip.package;
@@ -388,6 +429,36 @@ export default function BillingEditor() {
           ))}
           <Seg items={TRIP_TYPES.map((x) => ({ key: x, label: x }))} value={String(trip.trip_type || '')} onChange={(v) => setTrip({ ...trip, trip_type: v })} />
         </View>
+
+        {/* 3b. pricing rules that fit this trip */}
+        {!locked && (trip.pickup || trip.drop) && (
+          <View style={card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[s.title, { color: c.text, flex: 1, marginBottom: 2 }]}>Pricing rules for this trip</Text>
+              <TouchableOpacity onPress={() => router.push('/billing-brands' as any)}><Text style={{ color: c.primary, fontSize: 12, fontWeight: '700' }}>Manage rules</Text></TouchableOpacity>
+            </View>
+            <Text style={{ color: c.textSecondary, fontSize: 11.5, marginBottom: 8 }}>Suggested from your state, place, route and hill rules. Nothing changes until you tap Apply.</Text>
+            {sugg.length === 0 && <Text style={{ color: c.textMuted, fontSize: 12 }}>No rule matches this trip.</Text>}
+            {sugg.map((x) => {
+              const on = !!applied[x.rule.id];
+              return (
+                <View key={x.rule.id} style={[s.ruleRow, { borderColor: on ? c.primary : c.border, backgroundColor: on ? c.primary + '14' : 'transparent' }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: c.text, fontWeight: '800', fontSize: 13 }}>{x.rule.name}</Text>
+                    <Text style={{ color: c.textSecondary, fontSize: 12 }}>{x.summary}</Text>
+                    {x.matched.length > 0 && x.rule.scope !== 'ALL' && <Text style={{ color: c.textMuted, fontSize: 10.5 }}>matched: {x.matched.join(', ')}</Text>}
+                  </View>
+                  <TouchableOpacity onPress={() => (on ? removeRule(x) : applyRule(x))} style={[s.applyBtn, { backgroundColor: on ? 'transparent' : c.primary, borderColor: c.primary }]}>
+                    <Text style={{ color: on ? c.primary : '#FFFFFF', fontWeight: '800', fontSize: 12 }}>{on ? '✓ Applied' : 'Apply'}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+            {needsRecalc && (
+              <TouchableOpacity onPress={calculateFare} style={[s.ghostBtn, { borderColor: '#B45309' }]}><RefreshCw size={14} color="#B45309" /><Text style={{ color: '#B45309', fontWeight: '800' }}>Recalculate the fare with these rules</Text></TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* 4. tariff calculator - the brand's own ways of pricing a trip */}
         {!locked && (
@@ -693,6 +764,8 @@ const s = StyleSheet.create({
   lineAmt: { width: 78, borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, textAlign: 'right', fontSize: 14 },
   check: { width: 22, height: 22, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   warn: { backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10, marginTop: 8 },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 6 },
+  applyBtn: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   tRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
   bar: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, alignItems: 'center' },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, paddingVertical: 11, paddingHorizontal: 14 },

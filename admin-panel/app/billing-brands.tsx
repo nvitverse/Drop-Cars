@@ -4,13 +4,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
-import { billingApi, BillingBrand, RateCard, TariffMethod } from '@/services/billingApi';
+import { billingApi, BillingBrand, PricingRule, RateCard, TariffMethod } from '@/services/billingApi';
 
 // Brands: everything a document prints for a brand (name, GSTIN, bank, colour, terms, rules) and the brand's tariffs.
 // Writing is Owner-only on the server; staff can open the screen but a save will be refused with a clear message.
 
-type Tab = 'details' | 'tax' | 'terms' | 'tariffs';
-const TABS: { key: Tab; label: string }[] = [{ key: 'details', label: 'Details' }, { key: 'tax', label: 'Tax & bank' }, { key: 'terms', label: 'Terms & rules' }, { key: 'tariffs', label: 'Tariffs' }];
+type Tab = 'details' | 'tax' | 'terms' | 'tariffs' | 'rules';
+const TABS: { key: Tab; label: string }[] = [{ key: 'details', label: 'Details' }, { key: 'tax', label: 'Tax & bank' }, { key: 'terms', label: 'Terms & rules' }, { key: 'tariffs', label: 'Tariffs' }, { key: 'rules', label: 'Rules' }];
+const SCOPES: { key: PricingRule['scope']; label: string; hint: string }[] = [
+  { key: 'STATE', label: 'State', hint: 'Places / state words found in the pickup, drop or stops' },
+  { key: 'LOCATION', label: 'Location', hint: 'A city, town or area word' },
+  { key: 'ROUTE', label: 'Route', hint: 'From one place to another (works both ways)' },
+  { key: 'HILL', label: 'Hills', hint: 'Hill stations - charged per hill' },
+  { key: 'ALL', label: 'All trips', hint: 'Every trip of the chosen trip types' },
+];
+const EFFECTS: { key: string; label: string; unit: string }[] = [
+  { key: 'MIN_KM_PER_DAY', label: 'Minimum km / day', unit: 'km per day (round / multi-city)' },
+  { key: 'MIN_KM_ONEWAY', label: 'Minimum km (one way)', unit: 'km' },
+  { key: 'RATE_DELTA', label: 'Rate / km +/-', unit: '₹ per km (use - to reduce)' },
+  { key: 'BATA_DELTA', label: 'Bata / day +/-', unit: '₹ per day (use - to reduce)' },
+  { key: 'CHARGE', label: 'Extra charge', unit: '₹ amount' },
+  { key: 'HILL_CHARGE', label: 'Hill charge', unit: '' },
+  { key: 'PERCENT', label: '% on fare', unit: '% (use - for a discount)' },
+];
+const TRIP_KINDS = ['oneway', 'round', 'multicity'];
+const csv = (v: any) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
 const COLORS = ['#0EA5E9', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#F59E0B', '#EAB308', '#10B981', '#14B8A6', '#475569'];
 const METHODS: { key: TariffMethod; label: string; template: Record<string, any> }[] = [
   { key: 'KM_BATA', label: 'Km + bata', template: { rate_per_km: 12, extra_rate_per_km: 0, bata_per_day: 300 } },
@@ -41,11 +59,14 @@ export default function BillingBrands() {
   const [cards, setCards] = useState<RateCard[]>([]);
   const [openCard, setOpenCard] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({});
+  const [rules, setRules] = useState<PricingRule[]>([]);
+  const [rd, setRd] = useState<Record<string, any> | null>(null);
 
   const loadBrands = useCallback(async () => { try { setBrands(await billingApi.brands()); } catch (e: any) { Alert.alert('Could not load', e?.message || ''); } finally { setLoading(false); } }, []);
   useEffect(() => { loadBrands(); }, [loadBrands]);
   const loadCards = useCallback(async (b: BillingBrand) => { try { setCards(await billingApi.rateCards(b.id, true)); } catch { setCards([]); } }, []);
-  const open = (b: BillingBrand) => { setSel({ ...b }); setTab('details'); setOpenCard(null); loadCards(b); };
+  const loadRules = useCallback(async (b: BillingBrand) => { try { setRules((await billingApi.rules(b.id || undefined)).rules); } catch { setRules([]); } }, []);
+  const open = (b: BillingBrand) => { setSel({ ...b }); setTab('details'); setOpenCard(null); setRd(null); loadCards(b); loadRules(b); };
   const set = (k: keyof BillingBrand, v: any) => setSel((x) => (x ? { ...x, [k]: v } : x));
 
   const inp = [s.input, { color: c.text, borderColor: c.border, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }];
@@ -123,6 +144,21 @@ export default function BillingBrands() {
       return <View key={k}><Text style={lbl}>{label}</Text><TextInput style={inp} keyboardType={isText ? 'default' : 'numeric'} value={v == null ? '' : String(v)} autoCapitalize={isText ? 'characters' : 'none'}
         onChangeText={(t) => setDraft({ ...draft, [k]: isText ? t : toNum(t) })} placeholderTextColor={c.textMuted} /></View>;
     });
+  };
+
+  const saveRule = async () => {
+    if (!rd) return;
+    const body: any = {
+      name: rd.name, scope: rd.scope, effect: rd.effect, match_on: rd.match_on, keywords: rd.keywords, route_from: rd.route_from, route_to: rd.route_to,
+      value: rd.value === '' || rd.value == null ? null : Number(rd.value), label: rd.label, params: rd.params || {}, trip_types: rd.trip_types || [], vehicles: rd.vehicles,
+      valid_from: rd.valid_from || null, valid_to: rd.valid_to || null, auto_apply: !!rd.auto_apply, is_active: rd.is_active !== false, priority: Number(rd.priority) || 100, note: rd.note,
+      brand_id: rd.allBrands ? null : (sel?.id || null),
+    };
+    try {
+      if (rd.id) await billingApi.updateRule(rd.id, body); else await billingApi.createRule(body);
+      setRd(null);
+      if (sel) loadRules(sel);
+    } catch (e: any) { Alert.alert('Could not save the rule', e?.message || 'Only the Owner can change rules.'); }
   };
 
   const missing = useMemo(() => (sel ? [!sel.gstin && 'GSTIN', !sel.address && 'address', !sel.bank_account_number && !sel.upi_id && 'bank / UPI'].filter(Boolean) as string[] : []), [sel]);
@@ -224,6 +260,115 @@ export default function BillingBrands() {
             {field('terms_estimate', 'Terms on ESTIMATES', { multiline: true })}
             {field('terms_invoice', 'Terms on INVOICES', { multiline: true })}
             {field('rules_text', 'Rules, policies & regulations (cancellation, refund, belongings, safety, liability ...)', { multiline: true })}
+          </View>
+        )}
+
+        {tab === 'rules' && (
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: c.textSecondary, fontSize: 12 }}>
+              Pricing rules by state, place, route or hills - for example "Karnataka round trip: minimum 300 km a day", "Chennai to Madurai: ₹1 less per km", "Hill charges ₹300 one way / ₹500 round trip a day". In an estimate they appear as suggestions; the staff taps Apply. Nothing changes by itself unless you switch on Auto-apply.
+            </Text>
+            {rd === null && (
+              <>
+                {rules.map((r) => (
+                  <TouchableOpacity key={r.id} onPress={() => setRd({ ...r, keywords: csv(r.keywords), route_from: csv(r.route_from), route_to: csv(r.route_to), trip_types: r.trip_types || [], vehicles: csv(r.vehicles), value: r.value == null ? '' : String(r.value), priority: String(r.priority ?? 100), allBrands: !r.brand_id })} style={[card, { opacity: r.is_active ? 1 : 0.55 }]}>
+                    <Text style={{ color: c.text, fontWeight: '800' }}>{r.name}{r.auto_apply ? '  · auto' : ''}{!r.is_active ? '  · off' : ''}</Text>
+                    <Text style={{ color: c.textSecondary, fontSize: 12 }}>{r.effect_label}{r.value != null ? ` · ${r.value}` : ''}{r.effect === 'HILL_CHARGE' ? ` · ₹${r.params?.one_way ?? 0} one way / ₹${r.params?.round_amount ?? 0} round trip day` : ''}</Text>
+                    <Text style={{ color: c.textMuted, fontSize: 11.5 }}>
+                      {r.scope === 'ROUTE' ? `${csv(r.route_from)} ⇄ ${csv(r.route_to)}` : r.scope === 'ALL' ? 'All trips' : csv(r.keywords)}{r.trip_types?.length ? ` · ${r.trip_types.join('/')}` : ''}{r.brand_id ? '' : ' · all brands'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {rules.length === 0 && <Text style={{ color: c.textMuted, textAlign: 'center', marginVertical: 14 }}>No rules yet.</Text>}
+                <TouchableOpacity onPress={() => setRd({ name: '', scope: 'LOCATION', keywords: '', route_from: '', route_to: '', match_on: 'ANY', effect: 'RATE_DELTA', value: '', label: '', params: {}, trip_types: [], vehicles: '', valid_from: '', valid_to: '', auto_apply: false, is_active: true, priority: '100', note: '', allBrands: false })} style={[s.btn, { backgroundColor: c.primary }]}>
+                  <Plus size={16} color="#FFFFFF" /><Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Add a rule</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {rd !== null && (
+              <View style={card}>
+                <Text style={lbl}>RULE NAME</Text>
+                <TextInput style={inp} value={String(rd.name || '')} onChangeText={(t) => setRd({ ...rd, name: t })} placeholder="e.g. Karnataka round trip minimum" placeholderTextColor={c.textMuted} />
+                <Text style={lbl}>APPLIES TO</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                  {SCOPES.map((x) => <TouchableOpacity key={x.key} onPress={() => setRd({ ...rd, scope: x.key })} style={[s.tab, { paddingVertical: 6, borderColor: rd.scope === x.key ? c.primary : c.border, backgroundColor: rd.scope === x.key ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12.5, fontWeight: '700' }}>{x.label}</Text></TouchableOpacity>)}
+                </View>
+                <Text style={{ color: c.textMuted, fontSize: 11, marginBottom: 8 }}>{SCOPES.find((x) => x.key === rd.scope)?.hint}</Text>
+                {rd.scope === 'ROUTE' ? (
+                  <>
+                    <Text style={lbl}>FROM (places, comma separated)</Text>
+                    <TextInput style={inp} value={rd.route_from} onChangeText={(t) => setRd({ ...rd, route_from: t })} placeholder="chennai" placeholderTextColor={c.textMuted} />
+                    <Text style={lbl}>TO</Text>
+                    <TextInput style={inp} value={rd.route_to} onChangeText={(t) => setRd({ ...rd, route_to: t })} placeholder="madurai" placeholderTextColor={c.textMuted} />
+                  </>
+                ) : rd.scope !== 'ALL' && (
+                  <>
+                    <Text style={lbl}>PLACE / STATE WORDS (comma separated; use | for other spellings)</Text>
+                    <TextInput style={[...inp, { minHeight: 60, textAlignVertical: 'top' }]} multiline value={rd.keywords} onChangeText={(t) => setRd({ ...rd, keywords: t })} placeholder="karnataka, bengaluru|bangalore, mysuru|mysore" placeholderTextColor={c.textMuted} />
+                    <Text style={lbl}>LOOK AT</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {[['ANY', 'Any stop'], ['PICKUP', 'Pickup'], ['DROP', 'Drop'], ['BOTH', 'Pickup and drop']].map(([k, l]) => <TouchableOpacity key={k} onPress={() => setRd({ ...rd, match_on: k })} style={[s.tab, { paddingVertical: 6, borderColor: rd.match_on === k ? c.primary : c.border, backgroundColor: rd.match_on === k ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12 }}>{l}</Text></TouchableOpacity>)}
+                    </View>
+                  </>
+                )}
+                <Text style={lbl}>WHAT IT DOES</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {EFFECTS.map((x) => <TouchableOpacity key={x.key} onPress={() => setRd({ ...rd, effect: x.key })} style={[s.tab, { paddingVertical: 6, borderColor: rd.effect === x.key ? c.primary : c.border, backgroundColor: rd.effect === x.key ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12, fontWeight: '700' }}>{x.label}</Text></TouchableOpacity>)}
+                </View>
+                {rd.effect === 'HILL_CHARGE' ? (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flex: 1 }}><Text style={lbl}>ONE WAY, PER HILL ₹</Text><TextInput style={inp} keyboardType="numeric" value={String(rd.params?.one_way ?? '')} onChangeText={(t) => setRd({ ...rd, params: { ...rd.params, one_way: toNum(t) } })} /></View>
+                      <View style={{ flex: 1 }}><Text style={lbl}>ROUND TRIP, PER DAY ₹</Text><TextInput style={inp} keyboardType="numeric" value={String(rd.params?.round_amount ?? '')} onChangeText={(t) => setRd({ ...rd, params: { ...rd.params, round_amount: toNum(t) } })} /></View>
+                    </View>
+                    <Text style={lbl}>ROUND TRIP CHARGE IS PER</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                      {[['DAY', 'Day'], ['HILL_DAY', 'Hill per day']].map(([k, l]) => <TouchableOpacity key={k} onPress={() => setRd({ ...rd, params: { ...rd.params, round_basis: k } })} style={[s.tab, { paddingVertical: 6, borderColor: (rd.params?.round_basis || 'DAY') === k ? c.primary : c.border, backgroundColor: (rd.params?.round_basis || 'DAY') === k ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12 }}>{l}</Text></TouchableOpacity>)}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={lbl}>VALUE — {EFFECTS.find((x) => x.key === rd.effect)?.unit}</Text>
+                    <TextInput style={inp} keyboardType="numbers-and-punctuation" value={String(rd.value ?? '')} onChangeText={(t) => setRd({ ...rd, value: t.replace(/[^0-9.\-]/g, '') })} placeholderTextColor={c.textMuted} />
+                  </>
+                )}
+                {(rd.effect === 'CHARGE' || rd.effect === 'PERCENT' || rd.effect === 'HILL_CHARGE') && (
+                  <>
+                    <Text style={lbl}>LINE TEXT ON THE DOCUMENT</Text>
+                    <TextInput style={inp} value={String(rd.label || '')} onChangeText={(t) => setRd({ ...rd, label: t })} placeholder="e.g. Night halt allowance" placeholderTextColor={c.textMuted} />
+                  </>
+                )}
+                {rd.effect === 'CHARGE' && (
+                  <>
+                    <Text style={lbl}>CHARGE IS</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {[['TRIP', 'Once per trip'], ['DAY', 'Per day'], ['MATCH', 'Per matching place']].map(([k, l]) => <TouchableOpacity key={k} onPress={() => setRd({ ...rd, params: { ...rd.params, basis: k } })} style={[s.tab, { paddingVertical: 6, borderColor: (rd.params?.basis || 'TRIP') === k ? c.primary : c.border, backgroundColor: (rd.params?.basis || 'TRIP') === k ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12 }}>{l}</Text></TouchableOpacity>)}
+                    </View>
+                    <View style={s.switchRow}><Text style={{ color: c.text }}>Included in the total</Text><Switch value={rd.params?.included !== false} onValueChange={(v) => setRd({ ...rd, params: { ...rd.params, included: v } })} /></View>
+                  </>
+                )}
+                <Text style={lbl}>ONLY FOR TRIP TYPES (none = all)</Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                  {TRIP_KINDS.map((k) => { const on = (rd.trip_types || []).includes(k); return <TouchableOpacity key={k} onPress={() => setRd({ ...rd, trip_types: on ? rd.trip_types.filter((x: string) => x !== k) : [...(rd.trip_types || []), k] })} style={[s.tab, { paddingVertical: 6, borderColor: on ? c.primary : c.border, backgroundColor: on ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12 }}>{k === 'oneway' ? 'One way' : k === 'round' ? 'Round trip' : 'Multi city'}</Text></TouchableOpacity>; })}
+                </View>
+                <Text style={lbl}>ONLY FOR VEHICLES (words, none = all)</Text>
+                <TextInput style={inp} value={rd.vehicles} onChangeText={(t) => setRd({ ...rd, vehicles: t })} placeholder="suv, innova" placeholderTextColor={c.textMuted} />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1 }}><Text style={lbl}>VALID FROM</Text><TextInput style={inp} value={String(rd.valid_from || '')} onChangeText={(t) => setRd({ ...rd, valid_from: t })} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></View>
+                  <View style={{ flex: 1 }}><Text style={lbl}>VALID TO</Text><TextInput style={inp} value={String(rd.valid_to || '')} onChangeText={(t) => setRd({ ...rd, valid_to: t })} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></View>
+                </View>
+                <Text style={lbl}>NOTE (only staff see this)</Text>
+                <TextInput style={inp} value={String(rd.note || '')} onChangeText={(t) => setRd({ ...rd, note: t })} placeholderTextColor={c.textMuted} />
+                <View style={s.switchRow}><Text style={{ color: c.text }}>Same rule for all brands</Text><Switch value={!!rd.allBrands} onValueChange={(v) => setRd({ ...rd, allBrands: v })} /></View>
+                <View style={s.switchRow}><Text style={{ color: c.text }}>Auto-apply (otherwise only suggested)</Text><Switch value={!!rd.auto_apply} onValueChange={(v) => setRd({ ...rd, auto_apply: v })} /></View>
+                <View style={s.switchRow}><Text style={{ color: c.text }}>Active</Text><Switch value={rd.is_active !== false} onValueChange={(v) => setRd({ ...rd, is_active: v })} /></View>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+                  {!!rd.id && <TouchableOpacity onPress={() => Alert.alert('Delete this rule?', rd.name, [{ text: 'No', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await billingApi.deleteRule(rd.id); setRd(null); if (sel) loadRules(sel); } catch (e: any) { Alert.alert('Failed', e?.message || 'Only the Owner can change rules.'); } } }])} style={[s.btn, { borderWidth: 1, borderColor: '#DC2626' }]}><Trash2 size={15} color="#DC2626" /></TouchableOpacity>}
+                  <TouchableOpacity onPress={() => setRd(null)} style={[s.btn, { borderWidth: 1, borderColor: c.border }]}><Text style={{ color: c.text, fontWeight: '800' }}>Close</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={saveRule} style={[s.btn, { flex: 1, backgroundColor: c.primary }]}><Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Save rule</Text></TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
