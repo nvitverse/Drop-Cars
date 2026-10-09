@@ -18,6 +18,7 @@ import app.models.admin
 import app.models.worker_management
 import app.models.document_model  # document_models table must be known before create_all()
 import app.models.chat_trash  # chat_trash table must be known before create_all()
+import app.models.billing  # billing_brands / billing_documents tables
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
@@ -284,6 +285,9 @@ from app.api.routes import account_activity_routes as _activity_routes
 app.include_router(_activity_routes.admin_router, prefix="/api", tags=["Active / Inactive"])
 app.include_router(_activity_routes.owner_router, prefix="/api/users", tags=["Active / Inactive"])
 from app.api.routes import admin_trip_close as _trip_close
+from app.api.routes import billing_docs as _billing_docs
+app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estimates"])
+app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
 from app.api.routes import document_models as _doc_models
 app.include_router(_doc_models.router, prefix="/api", tags=["Document Models"])
 app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])
@@ -1128,6 +1132,15 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"payment reconcile failed (continuing): {_e}")
+            # Payment links on invoices / estimates (advance, GST, balance): record whichever were paid while nobody was watching
+            try:
+                from app.crud.billing_docs import reconcile_pending_links as _bill_links
+                _bl = _bill_links(db)
+                if _bl.get("paid"):
+                    print(f"Recorded {_bl['paid']} invoice payment-link payment(s)")
+            except Exception as _e:
+                db.rollback()
+                print(f"invoice payment-link reconcile failed (continuing): {_e}")
             # Payment links staff shared on WhatsApp for Standard -> Trusted upgrades: activate whichever were paid
             try:
                 from app.crud.fleet_payment_links import reconcile_pending_links
@@ -1489,7 +1502,12 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS fc_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_expiry_date DATE'))
+        db.execute(text('ALTER TABLE IF EXISTS billing_documents ADD COLUMN IF NOT EXISTS created_by_phone VARCHAR'))
         db.commit()
+        from app.crud.billing_docs import seed_default_brands
+        _seeded = seed_default_brands(db)
+        if _seeded:
+            print(f"Billing: seeded {_seeded} brand(s)")
         from app.crud.one_time_fixes import reset_false_invalid_documents
         _fixed = reset_false_invalid_documents(db)
         if not _fixed.get("skipped"):

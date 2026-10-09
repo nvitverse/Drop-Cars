@@ -3094,7 +3094,7 @@ export default function OrdersScreen() {
                 subtitle: 'Instant fare calculation & PDF',
                 icon: FileText,
                 count: 0,
-                onPress: () => router.push('/quote-estimate' as any),
+                onPress: () => router.push('/invoices' as any),
               },
               {
                 key: 'missed_leads',
@@ -3219,7 +3219,7 @@ export default function OrdersScreen() {
                 label: 'Estimate & Quote',
                 icon: Plus,
                 isPrimary: true,
-                onPress: () => router.push('/quote-estimate' as any),
+                onPress: () => router.push('/billing-editor?type=ESTIMATE' as any),
               },
               {
                 id: 'live_radar',

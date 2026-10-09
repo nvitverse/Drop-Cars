@@ -1324,11 +1324,11 @@ export default function DashboardScreen() {
             <View style={{ gap: 10 }}>
               {[
                 {
-                  label: 'Create Trip Quotation & Estimate',
-                  sub: 'Instant fare estimate with WhatsApp share & customer booking link',
+                  label: 'Create Estimate / Quotation',
+                  sub: 'Brand-wise estimate with tariff calculator, GST options & WhatsApp share',
                   icon: Calculator,
                   color: '#0EA5E9',
-                  route: '/quote-estimate',
+                  route: '/billing-editor?type=ESTIMATE',
                 },
                 {
                   label: 'New Booking & Broadcast Trip',
@@ -1338,11 +1338,18 @@ export default function DashboardScreen() {
                   route: '/create-booking',
                 },
                 {
-                  label: 'Generate GST Invoice',
-                  sub: 'Corporate & agency billing with tax invoices & PDF print',
+                  label: 'Create Invoice',
+                  sub: 'Type a booking id - with or without GST, payment links & manual receipts',
                   icon: Receipt,
                   color: '#8B5CF6',
-                  route: '/gst-invoices',
+                  route: '/billing-editor?type=INVOICE',
+                },
+                {
+                  label: 'All Invoices & Estimates',
+                  sub: 'Follow-ups, who made each one, unpaid balances',
+                  icon: FileText,
+                  color: '#047857',
+                  route: '/invoices',
                 },
               ].map((item) => (
                 <TouchableOpacity

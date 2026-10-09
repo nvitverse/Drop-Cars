@@ -513,11 +513,10 @@ def issue_manual_invoice(
     Computes taxable value, GST (5% under SAC 9964 pure-km rule), generates the next
     sequential invoice number, and emails the PDF to the customer if email is provided."""
     require_tax_accounts_permission(current_admin)
-    from app.models.platform_setting import PlatformSetting
-    from datetime import date
-    import json
+    # This screen now issues through the Invoices & Estimates engine (same numbering, GST maths, brand details, payments, PDF and share link as
+    # everything else). The old code here built a TaxInvoice by hand with columns that do not exist and could never save.
+    from app.crud import billing_docs
 
-    # Validate required fields
     customer_name = (payload.get("customer_name") or "").strip()
     customer_number = (payload.get("customer_number") or "").strip()
     pickup = (payload.get("pickup") or "").strip()
@@ -525,142 +524,38 @@ def issue_manual_invoice(
     if not all([customer_name, customer_number, pickup, drop]):
         raise HTTPException(status_code=422, detail="customer_name, customer_number, pickup, drop are required")
 
-    distance_km = float(payload.get("distance_km") or 0)
-    rate_per_km = float(payload.get("rate_per_km") or 0)
-    driver_bata = float(payload.get("driver_bata") or 0)
-    toll_charges = float(payload.get("toll_charges") or 0)
-    permit_charges = float(payload.get("permit_charges") or 0)
-    parking_charges = float(payload.get("parking_charges") or 0)
-    hills_charges = float(payload.get("hills_charges") or 0)
-    waiting_charges = float(payload.get("waiting_charges") or 0)
-    night_charges = float(payload.get("night_charges") or 0)
-    extra_charges = float(payload.get("extra_charges") or 0)
-    discount_amount = float(payload.get("discount_amount") or 0)
-    advance_paid = float(payload.get("advance_paid") or 0)
+    def f(k):
+        try:
+            return float(payload.get(k) or 0)
+        except (TypeError, ValueError):
+            return 0.0
 
-    # Compute fare components
-    pure_km_fare = round(distance_km * rate_per_km)
-    gst_rate = 5.0  # SAC 9964 standard rate
-    gst_amount = round(pure_km_fare * gst_rate / 100)
-    is_interstate = bool(payload.get("is_interstate"))
-    subtotal_charges = driver_bata + toll_charges + permit_charges + parking_charges + hills_charges + waiting_charges + night_charges + extra_charges
-    grand_total = max(0.0, pure_km_fare + gst_amount + subtotal_charges - discount_amount)
-    balance_due = max(0.0, grand_total - advance_paid)
-
-    # Generate next invoice number
-    today = date.today()
-    fy_start = today.year if today.month >= 4 else today.year - 1
-    fy_label = f"{fy_start}-{str(fy_start + 1)[-2:]}"
-    series = "DC"
-    seq_key = f"tax_invoice_seq_{fy_start}"
-    seq_row = db.query(PlatformSetting).filter(PlatformSetting.key == seq_key).first()
-    last_number = int(seq_row.value) if seq_row and seq_row.value and seq_row.value.isdigit() else 0
-    next_number = last_number + 1
-    invoice_number = f"{series}/{fy_label}/{next_number:04d}"
-
-    # Persist the new invoice
-    new_invoice = TaxInvoice(
-        invoice_number=invoice_number,
-        # InvoiceTypeEnum has no MANUAL member (RIDE_GST_9_5,
-        # DRIVER_COMMISSION, CARPOOL_RECEIPT, SUBSCRIPTION_FEE, ADS_B2B only)
-        # - this always crashed with AttributeError before it could save
-        # anything (found 2026-09-29, "Registration Error: AttributeError:
-        # MANUAL"). This endpoint computes exactly RIDE_GST_9_5's own SAC
-        # 9964 / 5% pure-km rule for a customer ride, just issued manually
-        # by staff instead of auto-generated from a completed trip.
-        invoice_type=InvoiceTypeEnum.RIDE_GST_9_5,
-        customer_name_snapshot=customer_name,
-        customer_number_snapshot=customer_number,
-        customer_email_snapshot=payload.get("customer_email") or None,
-        customer_gstin=payload.get("customer_gstin") or None,
-        customer_company=payload.get("customer_company") or None,
-        taxable_value=str(pure_km_fare),
-        gst_rate_percent=str(gst_rate),
-        cgst_amount=str(round(gst_amount / 2)) if not is_interstate else "0",
-        sgst_amount=str(round(gst_amount / 2)) if not is_interstate else "0",
-        igst_amount=str(gst_amount) if is_interstate else "0",
-        total_gst_amount=str(gst_amount),
-        total_amount=str(grand_total),
-        hsn_sac_code=payload.get("hsn_sac_code") or "9964",
-        is_interstate=is_interstate,
-        line_items={
-            "pickup": pickup,
-            "drop": drop,
-            "trip_type": payload.get("trip_type") or "One Way",
-            "vehicle_type": payload.get("vehicle_type") or "Sedan",
-            "cab_number": payload.get("cab_number") or "",
-            "driver_name": payload.get("driver_name") or "",
-            "driver_phone": payload.get("driver_phone") or "",
-            "distance_km": distance_km,
-            "rate_per_km": rate_per_km,
-            "pure_km_fare": pure_km_fare,
-            "driver_bata": driver_bata,
-            "toll_charges": toll_charges,
-            "permit_charges": permit_charges,
-            "parking_charges": parking_charges,
-            "hills_charges": hills_charges,
-            "waiting_charges": waiting_charges,
-            "night_charges": night_charges,
-            "extra_charges": extra_charges,
-            "discount_amount": discount_amount,
-            "advance_paid": advance_paid,
-            "balance_due": balance_due,
-            "starting_km": payload.get("starting_km") or "",
-            "closing_km": payload.get("closing_km") or "",
-            "payment_mode": payload.get("payment_mode") or "Cash / UPI",
-            "notes": payload.get("notes") or "",
-        },
-        order_id=payload.get("booking_id") or None,
-        created_by_admin_id=str(current_admin.id),
-        needs_company_profile_review=False,
-    )
-    db.add(new_invoice)
-
-    # Update sequence counter
-    if seq_row:
-        seq_row.value = str(next_number)
-    else:
-        db.add(PlatformSetting(key=seq_key, value=str(next_number)))
-    db.commit()
-    db.refresh(new_invoice)
-
+    km, rate = f("distance_km"), f("rate_per_km")
+    lines = [{"label": f"Km fare ({km:g} km x Rs {rate:g})", "amount": round(km * rate), "kind": "FARE", "included": True}]
+    for key, label in (("driver_bata", "Driver bata"), ("toll_charges", "Toll"), ("permit_charges", "State permit"), ("parking_charges", "Parking"),
+                       ("hills_charges", "Hill / ghat charges"), ("waiting_charges", "Waiting charges"), ("night_charges", "Night allowance"), ("extra_charges", "Other charges")):
+        if f(key) > 0:
+            lines.append({"label": label, "amount": round(f(key)), "kind": "CHARGE", "included": True})
+    pays = []
+    if f("advance_paid") > 0:
+        pays.append({"amount": round(f("advance_paid")), "mode": payload.get("payment_mode") or "Advance", "purpose": "ADVANCE", "source": "MANUAL", "by": current_admin.username})
+    doc = billing_docs.create_document(db, {
+        "doc_type": "INVOICE", "brand_id": payload.get("brand_id"), "booking_ref": str(payload.get("booking_id") or "") or None,
+        "customer": {"name": customer_name, "phone": customer_number, "email": payload.get("customer_email"), "gstin": payload.get("customer_gstin"),
+                     "company": payload.get("customer_company")},
+        "trip": {"pickup": pickup, "drop": drop, "trip_type": payload.get("trip_type") or "One Way", "vehicle": payload.get("vehicle_type") or "Sedan",
+                 "vehicle_number": payload.get("cab_number") or "", "driver_name": payload.get("driver_name") or "", "km": km},
+        "lines": lines, "gst": {"mode": "EXTRA", "interstate": bool(payload.get("is_interstate"))},
+        "discount": round(f("discount_amount")), "notes": payload.get("notes") or None, "payments": pays, "issue": True,
+    }, current_admin.username, getattr(current_admin, "phone", None))
+    t_ = billing_docs.serialize(doc)["totals"]
     log_finance_action(
         db, staff_id=str(current_admin.id), staff_username=current_admin.username, staff_role=current_admin.role,
-        action="MANUAL_INVOICE_ISSUED", entity_type="tax_invoice", entity_id=str(new_invoice.id),
-        new_value={"invoice_number": invoice_number, "customer": customer_name, "total": grand_total},
-        ip_address=_client_ip(request),
+        action="MANUAL_INVOICE_ISSUED", entity_type="billing_document", entity_id=str(doc.id),
+        new_value={"invoice_number": doc.number, "customer": customer_name, "total": t_["total_amount"]}, ip_address=_client_ip(request),
     )
-
-    # Try to email the invoice (non-blocking - failure won't reject the invoice)
-    customer_email = payload.get("customer_email")
-    if customer_email:
-        try:
-            from app.services import email_service
-            email_service.send_tax_invoice_email(
-                to_email=customer_email,
-                customer_name=customer_name,
-                invoice_number=invoice_number,
-                invoice_data={
-                    "pickup": pickup, "drop": drop,
-                    "pure_km_fare": pure_km_fare, "gst_amount": gst_amount,
-                    "driver_bata": driver_bata, "toll_charges": toll_charges,
-                    "permit_charges": permit_charges, "parking_charges": parking_charges,
-                    "hills_charges": hills_charges, "waiting_charges": waiting_charges,
-                    "discount_amount": discount_amount, "grand_total": grand_total,
-                    "advance_paid": advance_paid, "balance_due": balance_due,
-                    "distance_km": distance_km, "rate_per_km": rate_per_km,
-                },
-            )
-        except Exception:
-            pass  # Email failure is non-blocking
-
-    return {
-        "id": str(new_invoice.id),
-        "invoice_number": invoice_number,
-        "total_amount": grand_total,
-        "balance_due": balance_due,
-        "emailed": bool(customer_email),
-    }
+    return {"id": str(doc.id), "invoice_number": doc.number, "total_amount": t_["total_amount"], "balance_due": t_["balance_due"],
+            "emailed": False, "tax_invoice_id": str(doc.tax_invoice_id) if doc.tax_invoice_id else None}
 
 
 def build_invoice_html(invoice, company: dict) -> str:

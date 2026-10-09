@@ -153,3 +153,18 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 
 3. **Multi-Session Safety Rule**:
    - Strictly surgical line-by-line edits only. No file-level overwrites.
+
+
+---
+
+### Recent Changes (2026-10-09) - Invoices & Estimates module (Claude)
+
+- **Backend**: `models/billing.py` (BillingBrand, BillingDocument, BillingRateCard), `utils/billing_calc.py` (GST NONE/EXTRA/INCLUDED, collect / show-only / pay-later, included vs not-included lines),
+  `utils/billing_tariff.py` (KM_BATA, SLAB_DROP, SLAB_ROUND, LOCAL, DAY_RENT, PACKAGE - slab maths copied from Arunachala `fareEngine.js` and unit-tested against it),
+  `utils/billing_policies.py` (taxi vs tours terms/rules, starter rate cards), `utils/billing_render.py` (HTML + PDF, "Prepared by <staff>" footer), `crud/billing_docs.py`, `api/routes/billing_docs.py`
+  (`/api/admin/billing/*`, public customer page `/api/billing/public/{token}`).
+- Every document stores its creator (name + phone), who shared it, full history; numbering `<prefix>/<FY>/<0001>` per brand; GST invoices are copied into the TaxInvoice ledger.
+- `POST /admin/tax/invoices/manual-issue` (old GST screen) now issues through this engine (the old code could never save).
+- **Admin App**: `app/invoices.tsx` (hub), `app/billing-editor.tsx`, `app/billing-brands.tsx` (brand + tariffs, Owner-only writes), `services/billingApi.ts`; menu links in Home quick actions, Settings, CRM, booking detail (Invoice / Estimate buttons pass the booking id).
+- Brand GSTIN / address / bank details are intentionally empty - fill them in Invoices > Brands. GST modes refuse to issue until the brand has a GSTIN.
+- Tests: `test_billing_calc.py`, `test_billing_docs.py`, `test_billing_tariff.py`; full backend suite 308 passed.

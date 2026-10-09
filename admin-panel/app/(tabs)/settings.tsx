@@ -33,6 +33,7 @@ import {
   Mail,
   Bell,
   Calculator,
+  FileText,
   Receipt,
   Smartphone,
   CheckCircle2,
@@ -488,6 +489,12 @@ export default function SettingsScreen() {
               label: 'Billing Automation',
               hint: 'Vendor yearly fees, auto-suspend rules & invoices',
               onPress: () => router.push('/billing'),
+            },
+            {
+              icon: <FileText size={20} color="#047857" />,
+              label: 'Invoices & Estimates',
+              hint: 'Brand-wise invoices and estimates, payment links, tariffs & terms',
+              onPress: () => router.push('/invoices' as any),
             },
             {
               icon: <Receipt size={20} color="#0284C7" />,

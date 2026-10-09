@@ -950,6 +950,24 @@ export default function TripDetailScreen() {
           </View>
 
           <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#047857', flex: 1 }]}
+                onPress={() => router.push({ pathname: '/billing-editor', params: { type: 'INVOICE', ref: String(order.id) } } as any)}
+                activeOpacity={0.85}
+              >
+                <FileText size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Invoice</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#0EA5E9', flex: 1 }]}
+                onPress={() => router.push({ pathname: '/billing-editor', params: { type: 'ESTIMATE', ref: String(order.id) } } as any)}
+                activeOpacity={0.85}
+              >
+                <FileText size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Estimate</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: '#1E293B' }]}
               onPress={() => setShowInvoiceModal(true)}

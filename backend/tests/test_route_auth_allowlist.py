@@ -64,6 +64,8 @@ PUBLIC_BY_DESIGN = {
     # Published app content: OTA manifest (checked before login), terms, cards, GST details.
     "GET /api/app-updates/{app}/manifest",
     "GET /api/app-updates/{app}/version-check",
+    "GET /api/billing/public/{token}",
+    "GET /api/billing/public/{token}/pdf",
     "GET /api/public/app-content/{key}",
     "GET /api/public/terms/driver",
     "GET /api/public/gst-business-info",
