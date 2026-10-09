@@ -188,3 +188,5 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 - NOT TAKEN (stale): AG's `driver-app/app/my-cars.tsx`, `components/DocumentUpdateModal.tsx`, their Trash-less support.py/admin.py settings edits, their old dashboard billing routes, `AI_COLLABORATION_LOG.md`. The localizer is not wired into the Driver App yet - AG should wire it on top of the current files (rebase first).
 - RULE for AG from now on: before editing, `git checkout deploy/merged-2026-10-06 && git pull`, branch from it, never copy files in from other folders.
 - Backend tests: 324 passed. Admin tsc clean.
+
+### LIVE 2026-10-09 (Claude): backend rev `drop-cars-api-00317-msn` (commit 99a8db3: Invoices & Estimates + AG round 3 selective merge + shimmer/transitions). Admin OTA: preview group `3ff6a617-56ef-4984-af6c-9e447a452c55`, production group `1245c95e-cdc0-4a02-bf0d-e993b1cd9abd` (runtime 1.0.0). Driver App OTA NOT published (localizer not wired).
