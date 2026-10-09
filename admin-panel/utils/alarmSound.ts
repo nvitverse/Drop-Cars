@@ -26,6 +26,43 @@ function startNativeSiren() {
   }
 }
 
+// An enquiry (a new lead) is NOT an emergency: it gets a calm, pleasant chime that repeats gently until someone looks at it - not the
+// loud siren (owner, 2026-10-09: "the enquiry alarm used to be calm and nice, now it is disturbing"). The siren stays for
+// the urgent alarms (a booking nobody accepted that is about to reach pickup time).
+const CALM_SOURCES = new Set(['enquiry']);
+const CALM_CHIME_EVERY_MS = 8000;
+let calmTimer: any = null;
+
+function playCalmChimeOnce() {
+  if (Platform.OS === 'web') {
+    playMildNotificationSound(false);
+    return;
+  }
+  try {
+    const chime: any = createAudioPlayer(require('../assets/sounds/notify_chime.wav'));
+    chime.volume = 0.6;
+    chime.play();
+    setTimeout(() => { try { chime.remove?.(); } catch (e) {} }, 3500);
+  } catch (e) {}
+}
+
+function startCalmChime() {
+  if (calmTimer) return;
+  playCalmChimeOnce();
+  calmTimer = setInterval(playCalmChimeOnce, CALM_CHIME_EVERY_MS);
+}
+
+function stopCalmChime() {
+  if (calmTimer) {
+    clearInterval(calmTimer);
+    calmTimer = null;
+  }
+}
+
+function onlyCalmSourcesActive(): boolean {
+  return activeSources.size > 0 && Array.from(activeSources).every((s) => CALM_SOURCES.has(s));
+}
+
 function stopNativeSiren() {
   if (!nativePlayer) return;
   try {
@@ -190,6 +227,11 @@ export function playMildNotificationSound(forceLoud?: boolean) {
 export function playAlarmSound(source: string = 'default') {
   if (!alarmsAllowed) return;
   activeSources.add(source);
+  if (isRinging && calmTimer && !onlyCalmSourcesActive()) {
+    // an urgent alarm arrived while only the calm enquiry chime was ringing: switch to the siren
+    stopCalmChime();
+    isRinging = false;
+  }
   if (isRinging) return;
   isRinging = true;
 
@@ -200,6 +242,12 @@ export function playAlarmSound(source: string = 'default') {
     console.warn('Alarm sound force-stopped by MAX_CONTINUOUS_RING_MS safety backstop.');
     forceStopAlarmSound();
   }, MAX_CONTINUOUS_RING_MS);
+
+  if (onlyCalmSourcesActive()) {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
+    startCalmChime();
+    return;
+  }
 
   // Haptic feedback on supported native devices
   try {
@@ -290,6 +338,7 @@ export function playAlarmSound(source: string = 'default') {
 
 function hardStop() {
   isRinging = false;
+  stopCalmChime();
   stopNativeSiren();
   if (safetyTimeout) {
     clearTimeout(safetyTimeout);

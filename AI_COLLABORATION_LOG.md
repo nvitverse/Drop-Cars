@@ -4,6 +4,9 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Enquiry alarm calm again (Claude, 2026-10-09)
+- On 2026-10-07 the phones got a real looping siren for EVERY alarm, including enquiries (new leads) - owner: it was calm and nice before, now disturbing. dmin-panel/utils/alarmSound.ts: enquiries now use a gentle chime (notify_chime.wav, volume 0.6, repeated every 8 s until looked at). The siren stays only for urgent alarms (booking nobody accepted near pickup). If both ring, the siren wins.
+
 ### Document models - 'Take this as a model' (Claude, 2026-10-09)
 - Staff approve a document by hand, then tap 'Take this as a model' (Admin App, car + account documents) and name it (Karnataka RC, Kerala Permit...). utils/doc_model.py stores a fingerprint (colour histogram + layout hash + aspect) in document_models; many models per kind. In get_auto_verification, a photo the check could not judge (NEEDS_REVIEW / unsure INVALID) that looks like a saved model (similarity >= setting doc_model_match_threshold, default 0.85) is VERIFIED automatically; anything the check is SURE about (expired, date mismatch, another document) is never promoted. Endpoints: POST /api/admin/document-models/from-document, GET, PATCH ?active=, DELETE. Models can be removed in the same popup.
 - Active vs Verified reminder: typed dates drive Active; only originals (checked by a person or matched to a model) drive Verified.
@@ -121,7 +124,7 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 1. **Hourly Rentals Custom Duration & Presets** (`create-booking.tsx`):
    - Presets updated to `5h / 50km` and `8h / 80km`.
    - Added `Custom / Manual` duration option with real-time 10 km/hr auto calculation.
-   - Default hourly tariffs aligned (Driver: Ã¢â€šÂ¹250, Vendor Extra: Ã¢â€šÂ¹50, Addon KM: Ã¢â€šÂ¹25, Vendor Extra Addon KM: Ã¢â€šÂ¹5).
+   - Default hourly tariffs aligned (Driver: ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹250, Vendor Extra: ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹50, Addon KM: ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹25, Vendor Extra Addon KM: ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹5).
 
 2. **Booking Cards Direct Cancellation** (`(tabs)/orders.tsx`):
    - Added direct `[ Cancel ]` button on Live / Unassigned / Assigned / Running booking cards.
