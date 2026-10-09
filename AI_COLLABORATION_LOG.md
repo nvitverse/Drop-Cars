@@ -204,3 +204,140 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 
 - **Full Customize (2026-10-10)**: `components/FullCustomizeModal.tsx` is now the one Customize / Edit screen. Website Approvals > Customize (new `PUT /admin/website-bookings/{id}/customize-full`: customer, route, date/time, trip type, vehicle, km, driver/extra rates, hill/toll/night, customer total, advance; the booking id, status and posting rules are untouched, and a time/address change alone no longer freezes the driver tariff) and Operations > Bookings > Edit / Customize Booking (posted orders via master-edit + edit-fare). The fare-only "Edit Fare" box was removed. Customer-facing links: `whatsappTemplates.ts`, `invoiceGenerator.ts`, `quote-estimate.tsx` no longer send links that do not exist (/track, /sos, /invoice, /pay-advance, /book-confirm, /confirm, driver.dropcars.in, g.page); real ones are /track-booking/<id>, /thank-you/<id>, /review/<token>.
 - **Website (Hostinger) - IMPORTANT**: the FTP root `/` IS the served web root (`/home/.../domains/dropcars.in/public_html`); the `/public_html/` folder inside the FTP root is a stray nested copy that is NOT served. Probed 2026-10-10 with test files. Earlier uploads that used `/public_html/...` paths never went live. Uploaded to `/` today (verified byte-for-byte): `api/send-enquiry.php` (customer WhatsApp quote rewrite, no "?/KM", km limit + included/excluded, emoji as \u{...} escapes), `admin/pages/customize-booking.php` (limits + included/not-included in the quote and trip-summary messages), `assets/js/whatsapp.js` (Android WhatsApp / Business chooser). NOT deployed: Antigravity's newer local versions of send-enquiry.php / customize-booking.php (E-prefixed booking id display, border-tax calc, curated-distance guard, Puducherry fix) - the served root still holds the older ones; the owner said the live booking-id logic is perfect, so those were left alone. Backups of what was live: C:\gtmp\live-root-2026-10-10.
+
+<!-- Antigravity round 4 entries (appended by Claude 2026-10-10; AG's log copy was based on an old file, so only its new entries were taken) -->
+### Master Prompt 4 Batch 4: Help Telemetry Events, Admin Help Insights Dashboard, Offline Banner & Document Coach (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps.
+- **Workstream C8 & E1–E4: Telemetry Analytics, Offline Resilience & Upload Coach:**
+  - **Backend Telemetry Route (`backend/app/api/routes/help_events.py`):**
+    - Purely additive router storing anonymous interactions `{app, code, screen, build, action, lang}` in `help_telemetry_events` table with automatic index creation.
+    - `POST /api/help/events`: Records user events without sensitive or personal identifiers.
+    - `GET /api/help/insights`: Computes top 10 doubt/error codes, detail open rate, and call conversion percentage over 7, 14, or 30 days.
+    - Tested with `backend/tests/test_help_events.py` -> 100% green.
+  - **Admin Help Insights Screen (`admin-panel/app/help-insights.tsx`):**
+    - Full telemetry console showing total issues, detail reads, call escalations, WhatsApp chats, and top 10 ranked doubtful screens.
+  - **Offline Banner (`driver-app/components/OfflineBanner.tsx`):**
+    - Listens to NetInfo and shows a non-intrusive red bar "No internet — showing last saved data" with live retry.
+  - **Document Upload Coach (`driver-app/components/DocumentCoachModal.tsx`):**
+    - Visual guide card highlighting Dos (flat, 4 corners, bright lighting) and Don'ts (no glare, no cropping, no blur) before launching camera.
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **327 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+### Master Prompt 4 Batch 3: Customer App Language System, Vendor App Telugu/Kannada Support & Expanded Catalogs (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps.
+- **Workstream B & C: Multi-Language and Situation Coverage (B5, C4, C5):**
+  - **Customer App Language Architecture:**
+    - Built runtime UI dictionary translation engine `customer-app/utils/uiTranslate.ts` supporting dynamic `{0}` pattern replacements, server remote overrides, and zero build breaking.
+    - Created localized dictionaries `customer-app/locales/ui/ta.json`, `te.json`, `kn.json`, `hi.json`, `en.json` formatted in natural conversational tone per GLOSSARY.
+    - Added `customer-app/contexts/LanguageContext.tsx` with device persistent preference via AsyncStorage (`@customer_app_language`).
+  - **Vendor App Language Expansion:**
+    - Added Kannada (`locales/kn.json`) and verified Telugu (`locales/te.json`), Hindi, and Tamil dictionaries.
+    - Created `vendor-app/utils/uiTranslate.ts` runtime translation engine covering on-screen English lines dynamically.
+  - **i18n Audit Progress:**
+    - Reran `scripts/i18n-audit.js`: Customer App untranslated count reduced from 627 -> 618.
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **326 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+---
+
+### Master Prompt 4 Batch 2: Shared Help & Errors System, Comprehensive Driver Help Catalog, and Global Error Boundary (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps. All modals (`HelpSheet`, error popups) strictly import `Modal` from `@/components/KeyboardSafe`.
+- **Workstream C: Shared Help & Error Components (C1, C2, C3, C7):**
+  - **Shared UI Kit Created in All Apps (`components/help/`):**
+    - `InfoButton.tsx`: Accessible 44x44 dp touch-target (i) button with `accessibilityLabel="More information"`.
+    - `HelpSheet.tsx`: Bottom sheet adhering to `KeyboardSafe` modal rules, providing Title, What Happened, Why, Next Steps (numbered 1-4 max), Action Button ("Fix it now", "Try again"), and Support buttons ("Call Support", "WhatsApp Support" with prefilled, non-sensitive context: screen, code, booking id, app build, language via `openWaUrl`).
+    - `ErrorNotice.tsx`: Compact inline error banner under 90 chars on screen with a "Read more" / Details trigger.
+    - `InlineHint.tsx`: Subtle grey one-liner hint with optional info icon for form inputs and cards.
+    - `HelpEmpty.tsx`: Friendly empty state with illustration, explanation, and primary/secondary action triggers.
+  - **Comprehensive Help Catalogs (`help/catalog.ts` & `help/types.ts`):**
+    - `driver-app/help/catalog.ts`: Covers 17+ driver situations (`DC_ACCOUNT_INACTIVE`, `DC_DOC_REJECTED`, `DC_DOC_WAITING`, `DC_NOT_VERIFIED`, `DC_INSUFFICIENT_WALLET`, `DC_PAYOUT_HELD`, `DC_BOOKING_CANCELLED`, `DC_BOOKING_ALREADY_TAKEN`, `DC_ACCEPT_FAILED`, `DC_INVALID_OTP`, `DC_EXPIRED_OTP`, `DC_TRIP_START_BLOCKED`, `DC_TRIP_END_BLOCKED`, `DC_SUBSCRIPTION_EXPIRED`, `DC_PERMISSIONS_OFF`, `DC_OFFLINE_NO_INTERNET`, `DC_NETWORK_TIMEOUT`, `DC_GPS_OFF`, `DC_UPDATE_REQUIRED`, `DC_SESSION_EXPIRED`, `DC_GENERIC_ERROR`).
+    - `customer-app/help/catalog.ts`: Covers key customer ride situations (`DC_NO_DRIVER_YET`, `DC_DRIVER_DELAYED`, `DC_CUSTOMER_OTP_INFO`, `DC_PAYMENT_PENDING`, `DC_FARE_DIFFERENCE`, `DC_REFUND_STATUS`, `DC_CANCEL_FEE`, `DC_CUSTOMER_SUPPORT`).
+    - `vendor-app/help/catalog.ts`: Covers vendor fleet situations (`DC_ORDER_UNACCEPTED`, `DC_VENDOR_CREDIT_COMMISSION`, `DC_VENDOR_PAYOUT`, `DC_VENDOR_DOC_REJECTED`, `DC_FIRST_REFUSAL`).
+  - **Global Error Boundaries (`components/GlobalErrorBoundary.tsx`):**
+    - Created in `driver-app`, `customer-app`, `vendor-app`, and `admin-panel` to prevent white/blank crash screens, display error reference codes, and offer "Restart / Reload Screen" and support shortcuts.
+  - **Enhanced `driver-app/utils/errorMessage.ts`:**
+    - Integrated `getFriendlyErrorInfo(error)` to map backend HTTP codes and exception details to `DC_*` codes and HelpEntry objects.
+    - Wrapped all error messages and alert strings in `tr()` for automatic real-time translation in Tamil mode.
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **326 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+
+---
+
+### Master Prompt 4 Batch 1: Number Integrity, Natural Tamil Glossary, i18n Audit & In-App Brand Loading Screens (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4` (clean rebase from `deploy/merged-2026-10-06`).
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps. All modals and forms strictly import from `@/components/KeyboardSafe`.
+- **Workstream D: Removed Fake & Misleading Numbers:**
+  - `driver-app/components/BookingCard.tsx` (lines 1911, 1993): Replaced hardcoded `tripDistance || 355` KM limit and `fare_per_km || 15` fallbacks with dynamic booking values or clean `"Standard Distance Limit"` / `"As per tariff"`.
+  - `driver-app/components/BookingDetailModal.tsx` (lines 1078, 1081, 1128): Replaced hardcoded `355` km limit, `400` bata, and `₹15/km` rate fallbacks with real booking values.
+  - `driver-app/app/(tabs)/drop-connect.tsx` (line 456): Validated `formData.pricePerSeat`; removed `|| 400` fallback.
+  - `driver-app/app/(tabs)/going-empty.tsx` (line 122): Validated `pricePerSeat`; removed `|| 200` fallback.
+  - `driver-app/app/subscription.tsx` (line 91): Initialized `walletBalance` to `null` and displayed loading state `—` instead of initial flashing `₹0`.
+  - `customer-app/app/(customer)/carpool.tsx` (line 124): Added validation for seat contribution; removed `|| 300` fallback.
+  - `customer-app/app/(customer)/tariff.tsx` (line 80): Sourced default calculation distance from official `minKm` instead of arbitrary `|| 130`.
+  - `customer-app/app/(customer)/index.tsx` (line 112) & `subscription.tsx` (line 49): Initialized wallet balance to `null` with clean loading indicator.
+  - `customer-app/app/(driver)/(tabs)/wallet.tsx` (line 190): Removed `|| 100` fallback on minimum balance. (Investigation note: `app/(driver)` in Customer App originated from an early unified router prototype during initial build; preserved without deletions).
+  - `vendor-app/app/(tabs)/index.tsx` (line 86): Initialized `walletBalance` to `null` and rendered `—` during loading.
+  - Created `hooks/useRememberedCounts.ts` across `driver-app`, `customer-app`, and `vendor-app`.
+- **Workstream B: i18n Audit Tool, Reports & Glossary:**
+  - `scripts/i18n-audit.js`: Standalone zero-dependency Node CLI auditing untranslated JSX text, alert titles/bodies, placeholders, and accessibilityLabels across all apps.
+  - Initial audit reports committed to `docs/i18n/driver-app-untranslated.md` (342 untranslated literals), `docs/i18n/customer-app-untranslated.md` (627 untranslated literals), `docs/i18n/vendor-app-untranslated.md` (675 untranslated literals), `docs/i18n/admin-panel-untranslated.md`.
+  - `docs/i18n/GLOSSARY.md`: Spoken Tamil style guide established with respectful "நீங்கள்" register, authentic driver phrasing, and preserved industry loan words (`OTP`, `Booking`, `Wallet`, `GPS`, `Trip`, `Toll`, `Permit`, `RC`, `FC`, `Insurance`, `DL`).
+  - `backend/app/utils/user_messages.py`: 40+ standardized error codes (`DC_BOOKING_ALREADY_TAKEN`, `DC_INVALID_OTP`, `DC_INSUFFICIENT_WALLET`, etc.) with full translations across `en`, `ta`, `te`, `kn`, `hi`.
+  - `backend/tests/test_user_messages.py`: Complete test coverage (3 passed).
+- **Workstream A: In-App Brand Loading Screens & Native Splash Spec:**
+  - `admin-panel/components/AppLoadingScreen.tsx`: Admin Console branding with animated glowing ring.
+  - `customer-app/components/AppLoadingScreen.tsx`: Rider branding with animated glowing ring.
+  - `vendor-app/components/AppLoadingScreen.tsx`: Vendor Partner branding with animated glowing ring.
+  - `docs/NATIVE_SPLASH_NEXT_BUILD.md`: Exact `app.json` splash and adaptive icon specifications for future APK builds.
+- **Verification Results:**
+  - Backend tests: `pytest -q tests` -> **326 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+### UI/UX Polish & LLM Intelligence Round 3 (Antigravity, 2026-10-09)
+- **Branch:** `feat/ux-llm-round3` (dual-synced across `dropcars-review` and `Drop-Cars-Full-Repo`).
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched & Strictly Adopted:** All modals and forms strictly import `Modal` and `KeyboardAvoidingView` from `@/components/KeyboardSafe`; bottom sheets and modals padded with `useNavInsetWhenClosed` where appropriate. Zero imports from `react-native`'s native Modal/KeyboardAvoidingView.
+- **Backend LLM Intelligence & Safe Rule Fallbacks (Part B1–B5):**
+  - Built on existing `backend/app/utils/ai_llm.py` with automatic audit logging to `ai_automation_logs`, daily limit enforcement, and 100% offline/rule-based fallbacks:
+    1. **B1: Draft Support/Booking Reply (`draft_replies()`):** Generates polite, non-committal draft suggestions matching the user's language (Tamil / Tanglish / English). Never sends money/promises.
+    2. **B2: Summarise & Tag Thread (`summarize_thread()`):** Generates 1-line summary, topic, urgency (`LOW` | `MEDIUM` | `HIGH` | `URGENT`), and mood (`CALM` | `FRUSTRATED` | `CONFUSED` | `SATISFIED`).
+    3. **B3: Command Center Magic Voice Parser (`parseBookingVoiceCommand()`):** Local-first parsing for Tamil/Tanglish/English voice dictation into booking drafts and Claude billing API estimate shapes (`ESTIMATE` / `INVOICE`).
+    4. **B4: Today at a Glance Daily Digest (`generate_daily_digest()`):** Computes DB counts (posted today, completed, unassigned, waiting chats, pending KYC docs, low-rated drivers, unpaid invoices); LLM writes a 2-line operational headline.
+    5. **B5: Customer Feedback Themes (`extract_feedback_themes()`):** Categorizes feedback comments into actionable themes (Cleanliness, Punctuality, Driver Behaviour, Vehicle Condition, Fare & Billing) with sentiment badges and sample quotes.
+- **Endpoints Added / Connected:**
+  - `POST /api/support/admin/threads/{thread_key}/draft-reply`
+  - `POST /api/support/admin/threads/{thread_key}/summary`
+  - `POST /api/support/admin/booking-threads/{order_id}/draft-reply`
+  - `POST /api/support/admin/booking-threads/{order_id}/summary`
+  - `POST /api/support/admin/trash/move`
+  - `POST /api/support/admin/trash/restore`
+  - `GET /api/admin/dashboard/digest`
+  - `GET /api/admin/quality/themes`
+- **Platform Settings Added:**
+  - `ai_draft_enabled` (default `true`), `ai_draft_daily_limit` (default `100`)
+  - `ai_summary_enabled` (default `true`), `ai_summary_daily_limit` (default `100`)
+  - `ai_digest_enabled` (default `true`), `ai_digest_daily_limit` (default `20`)
+  - `ai_themes_enabled` (default `true`), `ai_themes_daily_limit` (default `50`)
+- **Frontend UI/UX Enhancements (Admin App & Driver App):**
+  - `admin-panel/components/ui.tsx`: Extended with `SectionHeader`, `Pill`, `Skeleton`, `ListRow`, `StatChip`, and exported design token objects `uiSpacing`, `uiRadii`, `uiTypography`, `uiShadows`.
+  - `admin-panel/app/(tabs)/index.tsx`: Integrated Today at a Glance digest card with live metric chips and AI operational headline.
+  - `admin-panel/app/(tabs)/chats.tsx`: Added "Draft with AI" button, thread urgency/mood banner, and integrated AI draft reply chips alongside Claude's `ChatCategories` and `ReplySuggestions`.
+  - `admin-panel/app/ratings-analytics.tsx`: Integrated Customer Feedback Themes card with sentiment badges, theme volume, and quotes.
+  - `driver-app/utils/documentReasonLocalizer.ts`: Multi-language localization helper for document rejection reasons in `ta`, `te`, `kn`, `hi`, `en`.
+  - `driver-app/components/DocumentUpdateModal.tsx` & `driver-app/app/my-cars.tsx`: Localized document reason banner and compact verification state display.
+- **Verification Results:**
+  - Backend tests: `pytest -q tests/test_ux_llm_round3.py` -> **7 passed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+   - Default hourly tariffs aligned (Driver: ₹250, Vendor Extra: ₹50, Addon KM: ₹25, Vendor Extra Addon KM: ₹5).

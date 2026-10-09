@@ -109,7 +109,7 @@ export default function CustomerDashboardScreen() {
   // (same /api/subscriptions/customer/status the subscription screen itself
   // uses, so both surfaces always agree - no separate local mock).
   const [subTier, setSubTier] = useState<'FREE' | 'MONTHLY' | 'YEARLY'>('FREE');
-  const [subWalletBalance, setSubWalletBalance] = useState(0);
+  const [subWalletBalance, setSubWalletBalance] = useState<number | null>(null);
   const subUserId = user?.id || (user as any)?.phone || 'customer_demo_user';
 
   useFocusEffect(
@@ -422,7 +422,9 @@ export default function CustomerDashboardScreen() {
                   onPress={() => router.push('/(customer)/wallet' as any)}
                   style={{ alignItems: 'flex-end' }}
                 >
-                  <Text style={{ color: '#10B981', fontSize: 12.5, fontFamily: 'Inter-Bold' }}>₹{subWalletBalance}</Text>
+                  <Text style={{ color: '#10B981', fontSize: 12.5, fontFamily: 'Inter-Bold' }}>
+                    {subWalletBalance !== null ? `₹${subWalletBalance}` : '—'}
+                  </Text>
                   <Text style={{ color: '#0EA5E9', fontSize: 9.5, fontFamily: 'Inter-SemiBold' }}>Earn</Text>
                 </TouchableOpacity>
 

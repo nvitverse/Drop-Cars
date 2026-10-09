@@ -1908,7 +1908,7 @@ export default function BookingCard({
                         ✅ INCLUDED IN FARE:
                       </Text>
                       <Text style={{ fontSize: 11.5, color: colors.text, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
-                        • {tripDistance || 355} KM Limit Included
+                        • {tripDistance ? `${tripDistance} KM Limit Included` : 'Standard Distance Limit'}
                       </Text>
                       {hasChargeItems && includedItems.map((c, i) => (
                         <Text key={`inc-${i}`} style={{ fontSize: 11.5, color: colors.text, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
@@ -1990,7 +1990,7 @@ export default function BookingCard({
                         </Text>
                       ))}
                       <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
-                        • Extra KM Rate: ₹{toNumber(booking.fare_per_km) || 15}/KM for distance driven beyond {tripDistance || 355} KM
+                        • Extra KM Rate: {toNumber(booking.fare_per_km) > 0 ? `₹${toNumber(booking.fare_per_km)}/KM` : 'As per tariff'}{tripDistance ? ` for distance driven beyond ${tripDistance} KM` : ''}
                       </Text>
                       {!isAllInclusive && ((booking as any).toll_charge_update || !toNumber(booking.toll_charges)) && (
                         <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontFamily: 'Inter-Medium', marginBottom: 3 }}>

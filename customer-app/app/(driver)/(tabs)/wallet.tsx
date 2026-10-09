@@ -187,7 +187,7 @@ export default function WalletScreen() {
           <Text style={styles.infoTitle}>Wallet Information</Text>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Minimum Balance Required</Text>
-            <Text style={styles.infoValue}>₹{wallet?.minBalance || 100}</Text>
+            <Text style={styles.infoValue}>{typeof wallet?.minBalance === 'number' ? `₹${wallet.minBalance}` : '—'}</Text>
           </View>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Wallet Status</Text>
