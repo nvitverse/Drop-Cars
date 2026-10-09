@@ -1342,7 +1342,8 @@ export default function CreateBookingScreen() {
         customCharges.forEach((c) => {
           const cAmt = Number(c.amount) || 0;
           if (c.included) {
-            if (cAmt > 0 || (c.name && c.name.trim())) items.push({ label: c.name || 'Custom Charge', amount: cAmt, included: true });
+            // ticked + 0 = nothing (not included, not excluded, no field for the driver); ticked + 1 or more = included
+            if (cAmt > 0) items.push({ label: c.name || 'Custom Charge', amount: cAmt, included: true });
           } else {
             items.push({ label: c.name || 'Custom Charge', included: false });
           }
@@ -2763,7 +2764,7 @@ export default function CreateBookingScreen() {
                         <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: includeToll ? colors.primary : '#94A3B8', backgroundColor: includeToll ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                           {includeToll && <Check size={11} color="#FFFFFF" />}
                         </View>
-                        <Text style={styles.priceLabel}>Toll charges {includeToll ? '(Included)' : '(Excluded)'}</Text>
+                        <Text style={styles.priceLabel}>Toll charges {!includeToll ? '(Excluded)' : (Number(tollCharges) || 0) > 0 ? '(Included)' : ''}</Text>
                       </TouchableOpacity>
                       <TextInput style={[styles.priceInput, !includeToll && { opacity: 0.5 }]} value={tollCharges} onChangeText={setTollCharges} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textMuted} editable={includeToll} />
                     </View>
@@ -2811,7 +2812,7 @@ export default function CreateBookingScreen() {
                         {item.included && <Check size={12} color="#FFFFFF" />}
                       </View>
                       <Text style={{ fontSize: 11.5, fontWeight: '700', color: item.included ? colors.primary : '#D97706' }}>
-                        {item.included ? 'Included' : 'Excluded (Spot)'}
+                        {!item.included ? 'Excluded (Spot)' : (Number(item.amount) || 0) > 0 ? 'Included' : 'Tick + enter amount'}
                       </Text>
                     </TouchableOpacity>
                     <TextInput

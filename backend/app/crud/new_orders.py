@@ -404,6 +404,28 @@ def _default_priority_cutoff(start_date_time, db=None, now=None) -> datetime:
     return min(max(safe_cutoff, floor), start_at)
 
 
+def normalize_charge_items(items, keep_toll: bool = False):
+    """The one rule for a booking's extra charges (owner, 2026-10-09):
+      - ticked ("included") with an amount of 0  -> nothing: not listed as included, not as excluded, and the driver is asked for nothing
+      - ticked with 1 rupee or more              -> included, shown with that amount
+      - unticked ("excluded")                    -> kept; the driver fills in what he collected at trip end
+    Items with no amount at all (GST line, special requests) are information and stay. A zero Toll line stays only when the booking
+    asks for the toll to be updated at close (that is a request for the real toll, not a charge)."""
+    if not items:
+        return items
+    out = []
+    for c in items:
+        if isinstance(c, dict) and c.get("included") is True and c.get("amount") is not None:
+            try:
+                zero = float(c.get("amount") or 0) <= 0
+            except (TypeError, ValueError):
+                zero = False
+            if zero and not (keep_toll and "toll" in str(c.get("label", "")).lower()):
+                continue
+        out.append(c)
+    return out
+
+
 def create_oneway_order(
     db: Session,
     *,
@@ -468,6 +490,8 @@ def create_oneway_order(
         extra_amount = extra_amount or 0
         estimated_cal_price = int(total_booking_amount)
         vendor_cal_price = int(total_booking_amount) + int(extra_amount)
+
+    charge_items = normalize_charge_items(charge_items, keep_toll=bool(toll_charge_update))
 
     is_gst_included = False
     gst_amount_value = None

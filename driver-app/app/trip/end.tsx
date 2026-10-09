@@ -100,7 +100,8 @@ export default function EndTripScreen() {
   const includedChargeItems = React.useMemo(() => {
     try {
       const items: { label: string; included: boolean; amount?: number }[] = JSON.parse(String(params.charge_items || '[]'));
-      return items.filter((item) => item && item.included !== false);
+      // included with an amount of 0 is nothing: not shown, not asked
+      return items.filter((item) => item && item.included !== false && !(item.amount !== undefined && item.amount !== null && Number(item.amount) <= 0));
     } catch {
       return [];
     }
