@@ -58,7 +58,7 @@ import { LABELS } from '@/constants/labels';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import VoiceNoteButton from '@/components/VoiceNoteButton';
-import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock } from '@/components/ui';
+import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock, Shimmer, LiveNumber, FadeIn } from '@/components/ui';
 import DutySignOffModal from '@/components/DutySignOffModal';
 import StaffWelcomeShiftModal from '@/components/StaffWelcomeShiftModal';
 import { useStaffDuty } from '@/context/StaffDutyContext';
@@ -84,6 +84,8 @@ export default function DashboardScreen() {
   const { isDark, themeColors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // false until the first round of dashboard requests has finished: counts show a shimmer instead of a misleading 0
+  const [dataReady, setDataReady] = useState(false);
   const router = useRouter();
   const [adminRole, setAdminRole] = useState('Owner');
   const { isOnDuty, toggleDuty } = useStaffDuty();
@@ -312,6 +314,39 @@ export default function DashboardScreen() {
     profileReviewsCount +
     payoutsCount +
     futureLeadsCount;
+
+  // Last real numbers, kept on the phone: the dashboard opens with them straight away and quietly replaces them when fresh data
+  // arrives, so there is never a flash of 0 (and never an invented number). Only the very first launch shows shimmer.
+  const DASH_CACHE_KEY = 'dash_counts_cache_v1';
+  const cachedSetters: Record<string, (v: any) => void> = {
+    unrespondedEnquiries: setUnrespondedEnquiries, totalLeadsToday: setTotalLeadsToday, upcomingUnassignedCount: setUpcomingUnassignedCount,
+    upcomingUnder2HrsCount: setUpcomingUnder2HrsCount, feedbacksPendingCount: setFeedbacksPendingCount, docsPendingCount: setDocsPendingCount,
+    profileReviewsCount: setProfileReviewsCount, payoutsCount: setPayoutsCount, futureLeadsCount: setFutureLeadsCount,
+    websiteBookingsPending: setWebsiteBookingsPending, emergencyBidsCount: setEmergencyBidsCount, fleetDocsPending: setFleetDocsPending,
+    payoutsPending: setPayoutsPending, profileReviewsPending: setProfileReviewsPending, recentDirectivesCount: setRecentDirectivesCount,
+    docsNeedingReview: setDocsNeedingReview, fleetOverdueCount: setFleetOverdueCount, snapshot: setSnapshot,
+  };
+  const cachedValues: Record<string, any> = {
+    unrespondedEnquiries, totalLeadsToday, upcomingUnassignedCount, upcomingUnder2HrsCount, feedbacksPendingCount, docsPendingCount,
+    profileReviewsCount, payoutsCount, futureLeadsCount, websiteBookingsPending, emergencyBidsCount, fleetDocsPending, payoutsPending,
+    profileReviewsPending, recentDirectivesCount, docsNeedingReview, fleetOverdueCount, snapshot,
+  };
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DASH_CACHE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        Object.keys(cachedSetters).forEach((k) => { if (saved[k] !== undefined) cachedSetters[k](saved[k]); });
+        setDataReady(true);
+      } catch { /* no cache yet: shimmer shows until the first fetch ends */ }
+    })();
+  }, []);
+  useEffect(() => {
+    if (!dataReady) return;
+    const t = setTimeout(() => { AsyncStorage.setItem(DASH_CACHE_KEY, JSON.stringify(cachedValues)).catch(() => {}); }, 800);
+    return () => clearTimeout(t);
+  }, [dataReady, ...Object.values(cachedValues)]);
 
   const fetchTasksData = async () => {
     try {
@@ -587,6 +622,7 @@ export default function DashboardScreen() {
     // Show the screen right away; each section fills in as its own data arrives (one slow or
     // failing request must never keep the whole dashboard on the "Loading..." screen).
     await Promise.allSettled(jobs);
+    setDataReady(true);
   };
 
   useFocusEffect(
@@ -671,10 +707,9 @@ export default function DashboardScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const displayName = isOwner ? 'NV' : adminUsername;
-  const currentTodayBookings = snapshot?.today_bookings ?? snapshot?.active_bookings ?? 24;
+  const currentTodayBookings = snapshot?.today_bookings ?? snapshot?.active_bookings ?? 0;
   const currentTargetBookings = (staffTarget as any)?.bookings_target ?? staffTarget?.target ?? 30;
   const targetProgressPct = Math.min(100, Math.round((currentTodayBookings / Math.max(1, currentTargetBookings)) * 100));
-  const currentDispatchedAmount = snapshot?.today_profit ? snapshot.today_profit * 10 : 48200;
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -913,14 +948,15 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <Text style={{ fontSize: 18 }}>🔥</Text>
                   <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDA4AF' : '#9F1239' }}>
-                    {unrespondedEnquiries}
+                    {dataReady ? unrespondedEnquiries : ''}
                   </Text>
+                  {!dataReady && <Shimmer width={26} height={18} />}
                 </View>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDA4AF' : '#9F1239' }}>
                   Hot Enquiries
                 </Text>
                 <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCA5A5' : '#BE123C', marginTop: 1, marginBottom: 8 }}>
-                  {unrespondedEnquiries > 0 ? `${unrespondedEnquiries} Pending Calls (<5m)` : 'All Caught Up'}
+                  {!dataReady ? 'Checking…' : unrespondedEnquiries > 0 ? `${unrespondedEnquiries} Pending Calls (<5m)` : 'All Caught Up'}
                 </Text>
               </View>
               <View
@@ -956,14 +992,15 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <Text style={{ fontSize: 18 }}>🚨</Text>
                   <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDE68A' : '#92400E' }}>
-                    {upcomingUnassignedCount}
+                    {dataReady ? upcomingUnassignedCount : ''}
                   </Text>
+                  {!dataReady && <Shimmer width={26} height={18} />}
                 </View>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDE68A' : '#92400E' }}>
                   Unassigned Trips
                 </Text>
                 <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCD34D' : '#B45309', marginTop: 1, marginBottom: 8 }}>
-                  {upcomingUnassignedCount > 0 ? (upcomingUnder2HrsCount > 0 ? `${upcomingUnder2HrsCount} urgent (<2h)` : 'Needs Quick Driver') : 'All Trips Assigned'}
+                  {!dataReady ? 'Checking…' : upcomingUnassignedCount > 0 ? (upcomingUnder2HrsCount > 0 ? `${upcomingUnder2HrsCount} urgent (<2h)` : 'Needs Quick Driver') : 'All Trips Assigned'}
                 </Text>
               </View>
               <View
@@ -1044,7 +1081,7 @@ export default function DashboardScreen() {
         <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
-              Operational Tasks ({totalTasksPending} Pending)
+              {dataReady ? `Operational Tasks (${totalTasksPending} Pending)` : 'Operational Tasks'}
             </Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/tasks' as any)}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>View All →</Text>
@@ -1253,9 +1290,11 @@ export default function DashboardScreen() {
             />
           </View>
           <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
-            {isOwner
-              ? `Today: ${snapshot?.today_bookings || 0} Bookings Dispatched · ${unrespondedEnquiries} Pending Leads`
-              : `Today Active: ${snapshot?.today_bookings || 0} Bookings · ${unrespondedEnquiries} Leads in Queue`}
+            {!dataReady
+              ? 'Loading today’s numbers…'
+              : isOwner
+                ? `Today: ${snapshot?.today_bookings || 0} Bookings Dispatched · ${unrespondedEnquiries} Pending Leads`
+                : `Today Active: ${snapshot?.today_bookings || 0} Bookings · ${unrespondedEnquiries} Leads in Queue`}
           </Text>
         </TouchableOpacity>
       </ScrollView>

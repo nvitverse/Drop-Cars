@@ -95,6 +95,7 @@ export default function TabLayout() {
       backBehavior="history"
       screenOptions={{
         headerShown: false,
+        animation: 'fade',            // switching tabs fades instead of snapping
         tabBarHideOnKeyboard: true,   // the bar must not ride up above the keyboard now that the screen lifts for it
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.textMuted,

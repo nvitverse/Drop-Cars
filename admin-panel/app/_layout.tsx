@@ -65,7 +65,10 @@ export default function RootLayout() {
           <StaffDutyProvider>
             <CommandCenterProvider>
               <KeyboardSafeView>
-                <Stack screenOptions={{ headerShown: false }}>
+                {/* Screens glide in from the right and the previous one eases away (instead of snapping); the tab shell and login just fade. */}
+                <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 260, gestureEnabled: true }}>
+                  <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 200 }} />
+                  <Stack.Screen name="login" options={{ animation: 'fade', animationDuration: 200 }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
               </KeyboardSafeView>

@@ -1,7 +1,9 @@
 // Prompt 11 — High-End Signature UI Kit for Drop Cars Admin (Staff & Owner) App.
 // Linear / Stripe / Razorpay X design language: dense, confident, high-contrast, compact curves (<=10px), tabular numbers.
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   View,
   Text,
   TouchableOpacity,
@@ -1043,6 +1045,46 @@ export function Stat({
         {label}
       </Text>
     </View>
+  );
+}
+
+/** A softly pulsing grey bar: stands in for a number or text until the real data arrives (never show 0 for "not loaded yet"). */
+export function Shimmer({ width = 28, height = 16, radius = 5, style }: { width?: number | string; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const { themeColors, isDark } = useTheme();
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return (
+    <Animated.View
+      style={[{ width: width as any, height, borderRadius: radius, backgroundColor: isDark ? 'rgba(148,163,184,0.35)' : themeColors.border, opacity: pulse }, style]}
+    />
+  );
+}
+
+/** A number that shows a shimmer until `ready`, then the value. Use it wherever a count could briefly read 0 while loading. */
+export function LiveNumber({ ready, children, width = 26, height = 18 }: { ready: boolean; children: React.ReactNode; width?: number; height?: number }) {
+  if (!ready) return <Shimmer width={width} height={height} />;
+  return <>{children}</>;
+}
+
+/** Content that eases in (fade + small rise) when it first appears; `delay` staggers neighbours so a screen "builds" instead of snapping. */
+export function FadeIn({ children, delay = 0, distance = 10, duration = 260, style }: { children: React.ReactNode; delay?: number; distance?: number; duration?: number; style?: StyleProp<ViewStyle> }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: 1, duration, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [v, delay, duration]);
+  return (
+    <Animated.View style={[{ opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) }] }, style]}>
+      {children}
+    </Animated.View>
   );
 }
 

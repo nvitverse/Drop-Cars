@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -71,6 +72,8 @@ export default function TasksScreen() {
   const { themeColors, isDark } = useTheme();
 
   const [loading, setLoading] = useState(false);
+  // false until the first fetch finishes (or last saved numbers are restored): badges show … instead of a false 'Clear'
+  const [tasksReady, setTasksReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter Segment: 'all' | 'verifications' | 'feedback' | 'finance'
@@ -151,6 +154,7 @@ export default function TasksScreen() {
       ];
 
       await Promise.allSettled(jobs);
+      setTasksReady(true);
     } catch (e) {
       console.warn('Failed to refresh tasks:', e);
     } finally {
@@ -158,6 +162,27 @@ export default function TasksScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // Last real counts are kept on the phone and shown at once; fresh ones replace them as soon as they arrive.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('tasks_counts_cache_v1');
+        if (!raw) return;
+        const c = JSON.parse(raw);
+        if (typeof c.feedbacksCount === 'number') setFeedbacksCount(c.feedbacksCount);
+        if (typeof c.docsPendingCount === 'number') setDocsPendingCount(c.docsPendingCount);
+        if (typeof c.profileReviewsCount === 'number') setProfileReviewsCount(c.profileReviewsCount);
+        if (typeof c.payoutsCount === 'number') setPayoutsCount(c.payoutsCount);
+        if (typeof c.futureLeadsCount === 'number') setFutureLeadsCount(c.futureLeadsCount);
+        setTasksReady(true);
+      } catch { /* first launch: no cache */ }
+    })();
+  }, []);
+  useEffect(() => {
+    if (!tasksReady) return;
+    AsyncStorage.setItem('tasks_counts_cache_v1', JSON.stringify({ feedbacksCount, docsPendingCount, profileReviewsCount, payoutsCount, futureLeadsCount })).catch(() => {});
+  }, [tasksReady, feedbacksCount, docsPendingCount, profileReviewsCount, payoutsCount, futureLeadsCount]);
 
   useEffect(() => {
     loadData();
@@ -413,7 +438,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: feedbacksCount > 0 ? '#F59E0B' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {feedbacksCount > 0 ? `${feedbacksCount} Pending` : 'Clear'}
+                      {!tasksReady ? '…' : feedbacksCount > 0 ? `${feedbacksCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>
@@ -452,7 +477,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: futureLeadsCount > 0 ? '#EA580C' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {futureLeadsCount > 0 ? `${futureLeadsCount} Follow-ups` : 'All Clear'}
+                      {!tasksReady ? '…' : futureLeadsCount > 0 ? `${futureLeadsCount} Follow-ups` : 'All Clear'}
                     </Text>
                   </View>
                 </View>
@@ -491,7 +516,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: docsPendingCount > 0 ? '#8B5CF6' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {docsPendingCount > 0 ? `${docsPendingCount} Pending` : 'Clear'}
+                      {!tasksReady ? '…' : docsPendingCount > 0 ? `${docsPendingCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>
@@ -530,7 +555,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: profileReviewsCount > 0 ? '#0EA5E9' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {profileReviewsCount > 0 ? `${profileReviewsCount} Pending` : 'Clear'}
+                      {!tasksReady ? '…' : profileReviewsCount > 0 ? `${profileReviewsCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>

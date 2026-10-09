@@ -174,3 +174,10 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 - **Document look (2026-10-09)**: `billing_render.py` redesigned (brand-colour header band with the exact brand NAME, editable tagline + highlights strip, route card, striped items, totals block, UPI QR, bottom slogan, "Prepared by"). New `billing_brands.highlights` column (startup ALTER). Taglines / slogans / highlights are starter text per brand (`billing_policies.LOOK`), replaced only while still the old seeded placeholder; all editable in Invoices > Brands > Details.
 
 - **Arunachala document style (2026-10-09)**: documents take the brand's own look from its website design system (ember #C24A1E, gold #C8A45A, warm cream, Cormorant Garamond serif) via new brand fields `secondary_color` and `font_style` (both editable). Estimates follow the website's estimate model: Includes / Excludes lists, "Grand Total (incl. GST)", "Advance Required (N%)". Temple/tour wording and the two sample temple-package rate cards removed from the Arunachala defaults (untouched seeded samples are deleted on startup).
+
+## 2026-10-09 (Claude) - No fake zeros, remembered numbers, page transitions (Admin App)
+- Owner: pages showed 0 while loading and switched with no transition. Dashboard also had invented fallbacks (24 bookings / 48200) - removed.
+- `components/ui.tsx`: new `Shimmer`, `LiveNumber`, `FadeIn` (Animated, no new packages).
+- Dashboard (`(tabs)/index.tsx`) and Tasks (`(tabs)/tasks.tsx`): `dataReady` / `tasksReady`; counts show a shimmer / "..." until the first fetch ends. Last real counts are cached in AsyncStorage (`dash_counts_cache_v1`, `tasks_counts_cache_v1`) and shown immediately on open, replaced when fresh data arrives. "Clear / All Caught Up / All Trips Assigned" no longer shown before data exists.
+- `app/_layout.tsx`: Stack `slide_from_right` 260ms, `(tabs)` and `login` fade; `(tabs)/_layout.tsx`: tab switch `animation: 'fade'`. JS-only, ships by OTA.
+- Not yet done (same pattern, other screens): orders.tsx, cars.tsx, accounts.tsx counts. AG round 3 may reuse Shimmer/LiveNumber/FadeIn.
