@@ -658,7 +658,7 @@ def cancel_order_by_vendor(
     current_vendor=Depends(get_current_vendor),
 ):
     from app.models.orders import Order
-    from app.models.common_enums import Trip_status, CancelledByEnum
+    from app.models.orders import Trip_status, CancelledByEnum
 
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:

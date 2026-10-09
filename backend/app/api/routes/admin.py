@@ -3956,115 +3956,135 @@ def admin_remove_account(
             from app.models.orders import Order
             from app.models.razorpay_transactions import RazorpayTransaction
             from app.models.notification_log import NotificationLog
-            from app.models.phone_otp import PhoneOTP
-            from app.models.email_otp import EmailOTP
+            from app.models.phone_otp import PhoneOtp as PhoneOTP
+            from app.models.email_otp import EmailOtp as EmailOTP
 
             db.query(VendorDetails).filter(VendorDetails.vendor_id == record_id).delete(synchronize_session=False)
             try:
-                db.query(VendorWalletLedger).filter(VendorWalletLedger.vendor_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(VendorWalletLedger).filter(VendorWalletLedger.vendor_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(WalletLedger).filter(WalletLedger.vendor_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(WalletLedger).filter(WalletLedger.vendor_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(PayoutRequest).filter(PayoutRequest.vendor_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(PayoutRequest).filter(PayoutRequest.vendor_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(OrderAssignment).filter(OrderAssignment.vendor_id == record_id).update({OrderAssignment.vendor_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(OrderAssignment).filter(OrderAssignment.vendor_id == record_id).update({OrderAssignment.vendor_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Order).filter(Order.vendor_id == record_id).update({Order.vendor_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Order).filter(Order.vendor_id == record_id).update({Order.vendor_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(RazorpayTransaction).filter(RazorpayTransaction.vendor_id == record_id).update({RazorpayTransaction.vendor_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(RazorpayTransaction).filter(RazorpayTransaction.vendor_id == record_id).update({RazorpayTransaction.vendor_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             if primary_num:
-                try:
-                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
-                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
-                except Exception:
-                    pass
+                for _model in (PhoneOTP, EmailOTP):
+                    try:
+                        with db.begin_nested():
+                            db.query(_model).filter(_model.primary_number == primary_num).delete(synchronize_session=False)
+                    except Exception:
+                        pass
 
         elif account_type == "vehicle_owner":
             from app.models.vehicle_owner_details import VehicleOwnerDetails
             from app.models.wallet_ledger import WalletLedger
             from app.models.admin_add_money_to_vehicle_owner import AdminAddMoneyToVehicleOwner
             from app.models.payout_request import PayoutRequest
-            from app.models.drop_bid import DropBid
-            from app.models.carpool import Carpool
+            from app.models.carpool import CarPoolJourneyModel as Carpool
             from app.models.order_assignments import OrderAssignment
             from app.models.orders import Order
             from app.models.razorpay_transactions import RazorpayTransaction
             from app.models.trip_review import TripReview
             from app.models.car_driver import CarDriver
             from app.models.car_details import CarDetails
-            from app.models.vehicle_matching import VehicleMatching
+            from app.models.vehicle_matching import CarSubstitutionRequest as VehicleMatching, VehicleMismatchAttempt
             from app.models.notification_log import NotificationLog
-            from app.models.phone_otp import PhoneOTP
-            from app.models.email_otp import EmailOTP
+            from app.models.phone_otp import PhoneOtp as PhoneOTP
+            from app.models.email_otp import EmailOtp as EmailOTP
 
             db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == record_id).delete(synchronize_session=False)
             try:
-                db.query(WalletLedger).filter(WalletLedger.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(WalletLedger).filter(WalletLedger.vehicle_owner_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(AdminAddMoneyToVehicleOwner).filter(AdminAddMoneyToVehicleOwner.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(AdminAddMoneyToVehicleOwner).filter(AdminAddMoneyToVehicleOwner.vehicle_owner_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(PayoutRequest).filter(PayoutRequest.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(PayoutRequest).filter(PayoutRequest.vehicle_owner_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(DropBid).filter(DropBid.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Carpool).filter(Carpool.vehicle_owner_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Carpool).filter(Carpool.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                db.query(VehicleMatching).filter(VehicleMatching.vehicle_owner_id == record_id).delete(synchronize_session=False)
+                db.query(VehicleMismatchAttempt).filter(VehicleMismatchAttempt.vehicle_owner_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(OrderAssignment).filter(OrderAssignment.vehicle_owner_id == record_id).update({OrderAssignment.vehicle_owner_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(OrderAssignment).filter(OrderAssignment.vehicle_owner_id == record_id).update({OrderAssignment.vehicle_owner_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Order).filter(Order.vehicle_owner_id == record_id).update({Order.vehicle_owner_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Order).filter(Order.vehicle_owner_id == record_id).update({Order.vehicle_owner_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(RazorpayTransaction).filter(RazorpayTransaction.vehicle_owner_id == record_id).update({RazorpayTransaction.vehicle_owner_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(RazorpayTransaction).filter(RazorpayTransaction.vehicle_owner_id == record_id).update({RazorpayTransaction.vehicle_owner_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(TripReview).filter(TripReview.vehicle_owner_id == record_id).update({TripReview.vehicle_owner_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(TripReview).filter(TripReview.vehicle_owner_id == record_id).update({TripReview.vehicle_owner_id: None}, synchronize_session=False)
             except Exception:
                 pass
 
             # Clean up cars associated with this vehicle owner
             try:
+              with db.begin_nested():
                 car_ids = [c.id for c in db.query(CarDetails).filter(CarDetails.vehicle_owner_id == record_id).all()]
                 if car_ids:
                     try:
-                        db.query(VehicleMatching).filter(VehicleMatching.car_id.in_(car_ids)).delete(synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(VehicleMatching).filter(VehicleMatching.car_id.in_(car_ids)).delete(synchronize_session=False)
                     except Exception:
                         pass
                     try:
-                        db.query(OrderAssignment).filter(OrderAssignment.car_id.in_(car_ids)).update({OrderAssignment.car_id: None}, synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(OrderAssignment).filter(OrderAssignment.car_id.in_(car_ids)).update({OrderAssignment.car_id: None}, synchronize_session=False)
                     except Exception:
                         pass
                     try:
-                        db.query(Order).filter(Order.assigned_car_id.in_(car_ids)).update({Order.assigned_car_id: None}, synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(Order).filter(Order.assigned_car_id.in_(car_ids)).update({Order.assigned_car_id: None}, synchronize_session=False)
                     except Exception:
                         pass
                     db.query(CarDetails).filter(CarDetails.vehicle_owner_id == record_id).delete(synchronize_session=False)
@@ -4073,18 +4093,22 @@ def admin_remove_account(
 
             # Clean up or unlink drivers under this vehicle owner
             try:
+              with db.begin_nested():
                 driver_ids = [d.id for d in db.query(CarDriver).filter(CarDriver.vehicle_owner_id == record_id).all()]
                 if driver_ids:
                     try:
-                        db.query(OrderAssignment).filter(OrderAssignment.driver_id.in_(driver_ids)).update({OrderAssignment.driver_id: None}, synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(OrderAssignment).filter(OrderAssignment.driver_id.in_(driver_ids)).update({OrderAssignment.driver_id: None}, synchronize_session=False)
                     except Exception:
                         pass
                     try:
-                        db.query(Order).filter(Order.assigned_driver_id.in_(driver_ids)).update({Order.assigned_driver_id: None}, synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(Order).filter(Order.assigned_driver_id.in_(driver_ids)).update({Order.assigned_driver_id: None}, synchronize_session=False)
                     except Exception:
                         pass
                     try:
-                        db.query(TripReview).filter(TripReview.driver_id.in_(driver_ids)).update({TripReview.driver_id: None}, synchronize_session=False)
+                        with db.begin_nested():
+                            db.query(TripReview).filter(TripReview.driver_id.in_(driver_ids)).update({TripReview.driver_id: None}, synchronize_session=False)
                     except Exception:
                         pass
                     db.query(CarDriver).filter(CarDriver.vehicle_owner_id == record_id).delete(synchronize_session=False)
@@ -4092,15 +4116,17 @@ def admin_remove_account(
                 pass
 
             try:
-                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             if primary_num:
-                try:
-                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
-                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
-                except Exception:
-                    pass
+                for _model in (PhoneOTP, EmailOTP):
+                    try:
+                        with db.begin_nested():
+                            db.query(_model).filter(_model.primary_number == primary_num).delete(synchronize_session=False)
+                    except Exception:
+                        pass
 
         elif account_type == "customer":
             from app.models.customer_details import CustomerDetails
@@ -4111,44 +4137,52 @@ def admin_remove_account(
             from app.models.razorpay_transactions import RazorpayTransaction
             from app.models.trip_review import TripReview
             from app.models.notification_log import NotificationLog
-            from app.models.phone_otp import PhoneOTP
-            from app.models.email_otp import EmailOTP
+            from app.models.phone_otp import PhoneOtp as PhoneOTP
+            from app.models.email_otp import EmailOtp as EmailOTP
 
             db.query(CustomerDetails).filter(CustomerDetails.customer_id == record_id).delete(synchronize_session=False)
             try:
-                db.query(CustomerBookingRequest).filter(CustomerBookingRequest.customer_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(CustomerBookingRequest).filter(CustomerBookingRequest.customer_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(CustomerWalletTopup).filter(CustomerWalletTopup.customer_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(CustomerWalletTopup).filter(CustomerWalletTopup.customer_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Order).filter(Order.customer_id == record_id).update({Order.customer_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Order).filter(Order.customer_id == record_id).update({Order.customer_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(NewOrder).filter(NewOrder.customer_id == record_id).update({NewOrder.customer_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(NewOrder).filter(NewOrder.customer_id == record_id).update({NewOrder.customer_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(RazorpayTransaction).filter(RazorpayTransaction.customer_id == record_id).update({RazorpayTransaction.customer_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(RazorpayTransaction).filter(RazorpayTransaction.customer_id == record_id).update({RazorpayTransaction.customer_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(TripReview).filter(TripReview.customer_id == record_id).update({TripReview.customer_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(TripReview).filter(TripReview.customer_id == record_id).update({TripReview.customer_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             if primary_num:
-                try:
-                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
-                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
-                except Exception:
-                    pass
+                for _model in (PhoneOTP, EmailOTP):
+                    try:
+                        with db.begin_nested():
+                            db.query(_model).filter(_model.primary_number == primary_num).delete(synchronize_session=False)
+                    except Exception:
+                        pass
 
         elif account_type in ("driver", "quickdriver"):
             from app.models.order_assignments import OrderAssignment
@@ -4156,51 +4190,60 @@ def admin_remove_account(
             from app.models.trip_review import TripReview
             from app.models.driver_route_request import DriverRouteRequest
             from app.models.notification_log import NotificationLog
-            from app.models.phone_otp import PhoneOTP
-            from app.models.email_otp import EmailOTP
+            from app.models.phone_otp import PhoneOtp as PhoneOTP
+            from app.models.email_otp import EmailOtp as EmailOTP
 
             try:
-                db.query(OrderAssignment).filter(OrderAssignment.driver_id == record_id).update({OrderAssignment.driver_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(OrderAssignment).filter(OrderAssignment.driver_id == record_id).update({OrderAssignment.driver_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Order).filter(Order.assigned_driver_id == record_id).update({Order.assigned_driver_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Order).filter(Order.assigned_driver_id == record_id).update({Order.assigned_driver_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(TripReview).filter(TripReview.driver_id == record_id).update({TripReview.driver_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(TripReview).filter(TripReview.driver_id == record_id).update({TripReview.driver_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(DriverRouteRequest).filter(DriverRouteRequest.driver_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(DriverRouteRequest).filter(DriverRouteRequest.driver_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(NotificationLog).filter(NotificationLog.user_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             if primary_num:
-                try:
-                    db.query(PhoneOTP).filter(PhoneOTP.phone_number == primary_num).delete(synchronize_session=False)
-                    db.query(EmailOTP).filter(EmailOTP.phone_number == primary_num).delete(synchronize_session=False)
-                except Exception:
-                    pass
+                for _model in (PhoneOTP, EmailOTP):
+                    try:
+                        with db.begin_nested():
+                            db.query(_model).filter(_model.primary_number == primary_num).delete(synchronize_session=False)
+                    except Exception:
+                        pass
 
         elif account_type == "car":
-            from app.models.vehicle_matching import VehicleMatching
+            from app.models.vehicle_matching import CarSubstitutionRequest as VehicleMatching
             from app.models.order_assignments import OrderAssignment
             from app.models.orders import Order
 
             try:
-                db.query(VehicleMatching).filter(VehicleMatching.car_id == record_id).delete(synchronize_session=False)
+                with db.begin_nested():
+                    db.query(VehicleMatching).filter(VehicleMatching.car_id == record_id).delete(synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(OrderAssignment).filter(OrderAssignment.car_id == record_id).update({OrderAssignment.car_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(OrderAssignment).filter(OrderAssignment.car_id == record_id).update({OrderAssignment.car_id: None}, synchronize_session=False)
             except Exception:
                 pass
             try:
-                db.query(Order).filter(Order.assigned_car_id == record_id).update({Order.assigned_car_id: None}, synchronize_session=False)
+                with db.begin_nested():
+                    db.query(Order).filter(Order.assigned_car_id == record_id).update({Order.assigned_car_id: None}, synchronize_session=False)
             except Exception:
                 pass
 
@@ -7717,7 +7760,8 @@ def admin_create_vendor(
     current_admin=Depends(get_current_admin),
 ):
     """Admin manually onboards a Vendor / Travel Desk Partner."""
-    from app.models.vendor import VendorCredentials, VendorDetails
+    from app.models.vendor import VendorCredentials
+    from app.models.vendor_details import VendorDetails
     from app.core.security import get_password_hash
     from app.utils.reg_id import assign_reg_id
 
@@ -7785,7 +7829,8 @@ def admin_create_customer(
     current_admin=Depends(get_current_admin),
 ):
     """Admin manually onboards a B2B / Corporate / Retail Customer."""
-    from app.models.customer import CustomerCredentials, CustomerDetails
+    from app.models.customer import CustomerCredentials
+    from app.models.customer_details import CustomerDetails
     from app.core.security import get_password_hash
 
     p_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]

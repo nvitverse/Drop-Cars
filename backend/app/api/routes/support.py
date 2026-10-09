@@ -276,10 +276,7 @@ def public_request_admin_help(payload: PublicAdminHelpRequest, db: Session = Dep
     try:
         from app.crud import support_autoreply as ar
         row = _guest_from_token(db, token)
-        if row.language in ar.T:
-            ar._post(db, row, ar.T[row.language]['received'] + chr(10) * 2 + ar._topic_text(db, row, row.language, ar.topic_for_reason(reason)))
-        else:
-            ar.first_reply(db, row)
+        ar.first_reply(db, row, reason)
     except Exception:
         db.rollback()
 
@@ -632,7 +629,8 @@ def draft_support_thread_reply(
     Uses account verification notes & open bookings count; never reveals wallet/financial balances.
     Staff clicks to populate their reply box without auto-sending."""
     from app.utils.ai_llm import draft_replies
-    from app.models.vehicle_owner import VehicleOwner
+    from app.models.vehicle_owner import VehicleOwnerCredentials as VehicleOwner
+    from app.models.vehicle_owner_details import VehicleOwnerDetails
     from app.models.car_driver import CarDriver
     from app.models.orders import Order
     from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
@@ -651,10 +649,13 @@ def draft_support_thread_reply(
     open_bookings_count = 0
 
     try:
+        import uuid as _uuid
+        _uuid.UUID(str(thread_key))          # a thread key that is not an account id (staff / guest threads) skips the lookups without touching the database
         # Check if caller is owner or driver
         owner = db.query(VehicleOwner).filter(VehicleOwner.id == thread_key).first()
         if owner:
-            name = owner.full_name or name
+            _det = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == owner.id).first()
+            name = (_det.full_name if _det is not None else None) or name
             open_bookings_count = db.query(OrderAssignment).filter(
                 OrderAssignment.vehicle_owner_id == owner.id,
                 OrderAssignment.assignment_status.in_([AssignmentStatusEnum.PENDING, AssignmentStatusEnum.ASSIGNED, AssignmentStatusEnum.DRIVING]),

@@ -105,3 +105,18 @@ def update_system_settings(db: Session, updates: Dict[str, Any]) -> Dict[str, An
         db.add(row)
     db.commit()
     return get_all_system_settings(db)
+
+
+def get_system_setting(db: Session, key: str, default: Any = None) -> Any:
+    """One platform setting, cast to int / float when it looks numeric; the built-in default, then `default`, when it was never saved."""
+    row = db.query(PlatformSetting).filter(PlatformSetting.key == key).first()
+    raw = row.value if row is not None else SYSTEM_SETTING_DEFAULTS.get(key)
+    if raw is None:
+        return default
+    raw = str(raw)
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    try:
+        return float(raw)
+    except ValueError:
+        return raw
