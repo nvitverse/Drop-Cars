@@ -466,7 +466,7 @@ const priorityStyles = StyleSheet.create({
     gap: 8,
   },
   tile: {
-    width: '48.8%',
+    width: '48.4%',
     borderRadius: 8,
     borderWidth: 1,
     padding: 10,

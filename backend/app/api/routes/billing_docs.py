@@ -523,6 +523,9 @@ def share_info(doc_id: str, request: Request, db: Session = Depends(get_db), adm
             parts.append(f"Advance to confirm: Rs {int(s['advance_requested']):,}")
         if s.get("valid_until"):
             parts.append(f"Valid until {s['valid_until']}")
+    for l in (s.get("payment_links") or []):
+        if l.get("status") in ("PENDING", None) and l.get("url"):
+            parts.append(f"Pay {str(l.get('purpose') or 'payment').lower()} Rs {int(l.get('amount') or 0):,}: {l['url']}")
     parts.append(f"View / download: {url}")
     parts.append(f"- {_admin_name(admin)}, {brand.get('name')} {brand.get('phone') or ''}")
     msg = "\n".join(parts).strip()

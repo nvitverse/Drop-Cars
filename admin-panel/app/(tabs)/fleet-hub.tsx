@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bentoCard: {
-    width: '48.8%',
+    width: '48.4%',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,

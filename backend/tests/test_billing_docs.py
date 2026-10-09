@@ -253,3 +253,20 @@ def test_share_message_carries_km_limit_included_and_excluded(pg_session):
     m = out["message"]
     assert "Km limit: up to 300 km; extra km at Rs 12 per km" in m and "Included:" in m and "Not included (paid on actuals):" in m
     assert "Parking charges" in m and "Advance to confirm: Rs 800" in m and "Valid until" in m and "/api/billing/public/" in m
+
+
+def test_enquiry_style_estimate_total_matches_and_share_carries_advance_link(pg_session):
+    """The customize modal's numbers: base fare already holds the bata, so splitting it must not add 300 again; the share text carries the advance link."""
+    from types import SimpleNamespace
+    from app.api.routes import billing_docs as routes
+    db = pg_session
+    _brand(db)
+    dc = db.query(BillingBrand).filter(BillingBrand.code == "dropcars").first()
+    est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(dc.id), "customer": {"name": "Jeyaselvan", "phone": "9994900802"},
+                                   "lines": [{"label": "Km fare (150 km x Rs 13)", "amount": 1950, "kind": "FARE"}, {"label": "Driver bata (1 day x Rs 300)", "amount": 300, "kind": "CHARGE"}],
+                                   "advance_requested": 450, "issue": True}, "Anitha")
+    assert est.total_amount == 2250 and est.advance_requested == 450                       # exactly what the modal shows, bata counted once
+    est.payment_links = [{"id": "l1", "purpose": "ADVANCE", "amount": 450, "url": "https://rzp.io/l/abc", "status": "PENDING"}]
+    db.flush()
+    out = routes.share_info(str(est.id), SimpleNamespace(base_url="http://localhost:8000/"), db=db, admin=SimpleNamespace(username="Anitha"))
+    assert "Pay advance Rs 450: https://rzp.io/l/abc" in out["message"] and "Estimate total: Rs 2,250" in out["message"]

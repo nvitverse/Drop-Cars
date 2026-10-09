@@ -1,4 +1,5 @@
-import { openWaUrl } from '@/utils/whatsapp';
+import { openWaUrl, openWhatsApp } from '@/utils/whatsapp';
+import { billingApi } from '@/services/billingApi';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -880,7 +881,7 @@ export default function EnquiriesScreen({ isTab = false, hideHeader = false, ini
         state_tax: parseFloat(editStateTax) || 0,
         permit_charges: parseFloat(editStateTax) || 0,
         hill_charges: parseFloat(editHillCharges) || 0,
-        driver_bata: parseFloat(editDriverBata) || 300,
+        driver_bata: parseFloat(editDriverBata) || 0,
         discount_amount: parseFloat(editDiscountAmount) || 0,
         advance_requested: live.advance,
         extra_charges: parseFloat(editExtraCharges) || 0,
@@ -932,63 +933,121 @@ export default function EnquiriesScreen({ isTab = false, hideHeader = false, ini
     }
   };
 
-  const handleShareCustomizeWhatsApp = async () => {
-    if (!customizeTarget) return;
+  // ---- estimates: ONE source of truth. The WhatsApp message, the PDF and the customer page all come from a saved Estimate document on the server
+  // (Invoices & Estimates), so the numbers can never differ between them, the staff name is recorded, and the advance can be paid through a real link / UPI QR.
+  type EstVals = {
+    pickup: string; drop: string; tripType: string; vehicle: string; travelDate: string; travelTime: string; km: number; days: number; rate: number; bata: number;
+    base: number; baseTouched: boolean; toll: number; tollIncluded: boolean; stateTax: number; stateTaxIncluded: boolean; hill: number; hillIncluded: boolean;
+    extra: number; discount: number; advance: number; includeGst: boolean; gstAmount: number; notes: string; grandTotal: number;
+  };
+  const [estimateBusy, setEstimateBusy] = useState(false);
+
+  const liveEstVals = (enq: WebsiteEnquiry): EstVals => {
     const live = getCustomizeLiveTotal();
-    shareQuotationViaWhatsApp({
-      invoiceNumber: `EST-${customizeTarget.id}`,
-      date: new Date().toISOString().split('T')[0],
-      brandName: customizeTarget.website || 'Drop Cars',
-      customerName: customizeTarget.name || 'Valued Customer',
-      customerPhone: customizeTarget.phone || '',
-      pickup: editPickup || customizeTarget.pickup || 'Pickup Location',
-      dropLocation: editDrop || customizeTarget.drop_location || 'Drop Location',
-      travelDate: `${editTravelDate || customizeTarget.travel_date || ''} ${editTravelTime || customizeTarget.travel_time || ''}`,
-      vehicleType: editVehicleType || customizeTarget.vehicle_type || 'Sedan',
-      tripType: editTripType || customizeTarget.trip_type || 'One Way',
-      distanceKm: editDistanceKm ? parseFloat(editDistanceKm) : undefined,
-      ratePerKm: editRatePerKm ? parseFloat(editRatePerKm) : undefined,
-      baseFare: live.base,
-      tollCharges: parseFloat(editTollCharges) || 0,
-      stateTax: parseFloat(editStateTax) || 0,
-      hillsCharges: parseFloat(editHillCharges) || 0,
-      driverBata: parseFloat(editDriverBata) || 300,
-      extraCharges: parseFloat(editExtraCharges) || 0,
-      discountAmount: parseFloat(editDiscountAmount) || 0,
-      advancePaid: live.advance,
-      includeGst: editIncludeGst,
-      gstPercent: 5.0,
-      gstAmount: live.gst,
-      notes: editNotes.trim(),
-    });
+    return {
+      pickup: editPickup || enq.pickup || '', drop: editDrop || enq.drop_location || '', tripType: editTripType || enq.trip_type || 'One Way',
+      vehicle: editVehicleType || enq.vehicle_type || 'Sedan', travelDate: editTravelDate || enq.travel_date || '', travelTime: editTravelTime || enq.travel_time || '',
+      km: parseFloat(editDistanceKm) || 0, days: Math.max(1, parseInt(editTripDays, 10) || 1), rate: parseFloat(editRatePerKm) || 0, bata: parseFloat(editDriverBata) || 0,
+      base: live.base, baseTouched: editBaseFareTouched, toll: parseFloat(editTollCharges) || 0, tollIncluded: editTollIncluded, stateTax: parseFloat(editStateTax) || 0,
+      stateTaxIncluded: editStateTaxIncluded, hill: parseFloat(editHillCharges) || 0, hillIncluded: editHillIncluded, extra: live.extra, discount: live.discount,
+      advance: live.advance, includeGst: editIncludeGst, gstAmount: live.gst, notes: editNotes.trim(), grandTotal: live.grandTotal,
+    };
   };
 
-  const handlePdfEstimation = (enquiry: WebsiteEnquiry) => {
-    printOrDownloadEstimation({
-      invoiceNumber: `EST-${enquiry.id}`,
-      date: new Date().toISOString().split('T')[0],
-      brandName: enquiry.website || 'Drop Cars',
-      customerName: enquiry.name || 'Customer',
-      customerPhone: enquiry.phone || '',
-      pickup: enquiry.pickup || 'Pickup Location',
-      dropLocation: enquiry.drop_location || 'Drop Location',
-      travelDate: `${enquiry.travel_date || ''} ${enquiry.travel_time || ''}`,
-      vehicleType: enquiry.vehicle_type || 'Sedan',
-      tripType: enquiry.trip_type || 'One Way',
-      baseFare: (enquiry as any).base_fare || enquiry.fare_estimate || 0,
-      extraCharges: enquiry.extra_charges || 0,
-      tollCharges: (enquiry as any).toll_charges || 0,
-      stateTax: (enquiry as any).state_tax || (enquiry as any).permit_charges || 0,
-      hillsCharges: (enquiry as any).hill_charges || (enquiry as any).hills_charges || 0,
-      driverBata: (enquiry as any).driver_bata || 300,
-      discountAmount: (enquiry as any).discount_amount || 0,
-      advancePaid: (enquiry as any).advance_requested || (enquiry as any).advance_amount || 0,
-      includeGst: !!enquiry.include_gst,
-      gstPercent: 5.0,
-      gstAmount: enquiry.gst_amount || 0,
-      notes: enquiry.dispatcher_notes || '',
-    });
+  const savedEstVals = (enq: WebsiteEnquiry): EstVals => {
+    const e: any = enq;
+    const base = Number(e.base_fare) || Number(enq.fare_estimate) || 0;
+    const toll = Number(e.toll_charges) || 0, stateTax = Number(e.state_tax) || Number(e.permit_charges) || 0, hill = Number(e.hill_charges) || Number(e.hills_charges) || 0;
+    const extra = Number(enq.extra_charges) || 0, discount = Number(e.discount_amount) || 0;
+    const subtotal = Math.max(0, base + toll + stateTax + hill + extra - discount);
+    const gst = enq.include_gst ? (Number(enq.gst_amount) || Math.round(subtotal * 0.05)) : 0;
+    const grand = subtotal + gst;
+    return {
+      pickup: enq.pickup || '', drop: enq.drop_location || '', tripType: enq.trip_type || 'One Way', vehicle: enq.vehicle_type || 'Sedan', travelDate: enq.travel_date || '',
+      travelTime: enq.travel_time || '', km: Number(e.distance_km) || 0, days: Math.max(1, Number(e.trip_days) || 1), rate: Number(e.cost_per_km) || 0, bata: Number(e.driver_bata) || 0,
+      base, baseTouched: false, toll, tollIncluded: true, stateTax, stateTaxIncluded: true, hill, hillIncluded: true, extra, discount,
+      advance: Number(e.advance_requested) || Number(e.advance_amount) || Math.round(grand * 0.2), includeGst: !!enq.include_gst, gstAmount: gst, notes: enq.dispatcher_notes || '', grandTotal: grand,
+    };
   };
+
+  const buildEstimatePayload = (enq: WebsiteEnquiry, v: EstVals, brandId: string) => {
+    const lines: any[] = [];
+    const bataTotal = Math.round(v.bata * v.days);
+    if (v.base > 0 && bataTotal > 0 && v.base > bataTotal && !v.baseTouched) {
+      const kmFare = v.base - bataTotal;                                  // the base fare already contains the bata, so it is split - never added twice
+      const billedKm = v.rate > 0 ? Math.round(kmFare / v.rate) : 0;
+      lines.push({ label: billedKm ? `Km fare (${billedKm} km x Rs ${v.rate})` : 'Km fare', amount: kmFare, kind: 'FARE', included: true });
+      lines.push({ label: `Driver bata (${v.days} day${v.days > 1 ? 's' : ''} x Rs ${v.bata})`, amount: bataTotal, kind: 'CHARGE', included: true });
+    } else {
+      lines.push({ label: 'Trip fare', amount: v.base, kind: 'FARE', included: true });
+    }
+    if (v.toll > 0) lines.push({ label: 'Highway tolls', amount: Math.round(v.toll), kind: 'CHARGE', included: v.tollIncluded });
+    if (v.stateTax > 0) lines.push({ label: 'State entry permit / border tax', amount: Math.round(v.stateTax), kind: 'CHARGE', included: v.stateTaxIncluded });
+    if (v.hill > 0) lines.push({ label: 'Hill / ghat road charges', amount: Math.round(v.hill), kind: 'CHARGE', included: v.hillIncluded });
+    if (v.extra > 0) lines.push({ label: 'Other charges', amount: Math.round(v.extra), kind: 'CHARGE', included: true });
+    const kmLimit = v.rate > 0 && lines[0]?.kind === 'FARE' && lines.length > 1 && lines[1]?.label.startsWith('Driver bata') ? Math.round((v.base - bataTotal) / v.rate) : v.km;
+    return {
+      doc_type: 'ESTIMATE', brand_id: brandId, booking_ref: enq.booking_id || `ENQ-${enq.id}`,
+      customer: { name: enq.name || 'Customer', phone: enq.phone || '' },
+      trip: { pickup: v.pickup, drop: v.drop, trip_type: v.tripType, vehicle: v.vehicle, km: v.km || undefined, km_limit: kmLimit || undefined, extra_km_rate: v.rate || undefined,
+              start_at: `${v.travelDate} ${v.travelTime}`.trim() },
+      lines, discount: Math.round(v.discount), discount_label: v.discount > 0 ? 'Special discount' : null, advance_requested: Math.round(v.advance), notes: v.notes || null,
+      gst: v.includeGst ? { mode: 'EXTRA', rate: 5, collection: 'COLLECT', override: Math.round(v.gstAmount) } : { mode: 'NONE' },
+    };
+  };
+
+  const ensureEstimate = async (enq: WebsiteEnquiry, v: EstVals) => {
+    const brands = await billingApi.brands();
+    const w = String(enq.website || '').toLowerCase().replace(/^www\./, '');
+    const brand = (w && brands.find((b) => { const d = String(b.domain || '').toLowerCase().replace(/^www\./, ''); return !!d && (d.includes(w) || w.includes(d)); }))
+      || brands.find((b) => b.is_default) || brands[0];
+    if (!brand) throw new Error('No brand is set up for estimates yet (Invoices > Brands).');
+    const payload: any = buildEstimatePayload(enq, v, brand.id);
+    const ref = payload.booking_ref;
+    const rows = await billingApi.list({ doc_type: 'ESTIMATE', search: ref }).catch(() => []);
+    const existing = rows.find((r) => r.booking_ref === ref && r.status !== 'CANCELLED' && r.status !== 'CONVERTED');
+    let doc = existing ? await billingApi.update(existing.id, payload) : await billingApi.create({ ...payload, issue: true });
+    if (doc.status === 'DRAFT') doc = await billingApi.issue(doc.id);
+    // advance: a real payment link when online payments are on (otherwise the page and PDF carry the brand's UPI QR)
+    if (v.advance > 0) {
+      try {
+        const open = (doc.payment_links || []).find((l: any) => l.purpose === 'ADVANCE' && l.status === 'PENDING' && Number(l.amount) === Math.round(v.advance));
+        if (!open) doc = (await billingApi.createLink(doc.id, 'ADVANCE', Math.round(v.advance))).document;
+      } catch { /* Razorpay not switched on: UPI QR is used */ }
+    }
+    return doc;
+  };
+
+  const runEstimate = async (enq: WebsiteEnquiry, mode: 'whatsapp' | 'pdf') => {
+    if (estimateBusy) return;
+    setEstimateBusy(true);
+    try {
+      const v = customizeTarget && customizeTarget.id === enq.id ? liveEstVals(enq) : savedEstVals(enq);
+      if (v.base <= 0) { Alert.alert('Fare missing', 'Enter the base fare first.'); return; }
+      const doc = await ensureEstimate(enq, v);
+      if (Math.abs((doc.totals?.total_amount || 0) - v.grandTotal) > 1) console.warn('estimate total differs from the screen total', doc.totals?.total_amount, v.grandTotal);
+      const share = await billingApi.share(doc.id);
+      if (mode === 'pdf') {
+        await Linking.openURL(share.pdf_url);
+      } else if (share.whatsapp_url) {
+        await openWaUrl(share.whatsapp_url);
+      } else {
+        await openWhatsApp({ phone: enq.phone, message: share.message });
+      }
+      showToast(`Estimate ${doc.number} ready`, 'success');
+    } catch (e: any) {
+      Alert.alert('Could not prepare the estimate', e?.message || 'Try again');
+    } finally {
+      setEstimateBusy(false);
+    }
+  };
+
+  const handleShareCustomizeWhatsApp = async () => {
+    if (!customizeTarget) return;
+    await runEstimate(customizeTarget, 'whatsapp');
+  };
+
+  const handlePdfEstimation = (enquiry: WebsiteEnquiry) => { runEstimate(enquiry, 'pdf'); };
 
   const handleSaveNewLead = async (confirmImmediately: boolean = false) => {
     if (!leadName.trim() || !leadPhone.trim() || !leadPickup.trim() || !leadDrop.trim()) {

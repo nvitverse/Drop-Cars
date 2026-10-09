@@ -818,7 +818,7 @@ export default function TripDetailScreen() {
             <View style={styles.pdfBtnRow}>
               <TouchableOpacity
                 style={[styles.pdfActionBtn, { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderColor: '#BFDBFE' }]}
-                onPress={() => printOrDownloadEstimation(invoicePayload)}
+                onPress={() => router.push({ pathname: '/billing-editor', params: { type: 'ESTIMATE', ref: String(order.id) } } as any)}
               >
                 <FileText size={15} color="#2563EB" />
                 <Text style={[styles.pdfActionBtnText, { color: '#2563EB' }]}>Estimate PDF</Text>
@@ -826,7 +826,7 @@ export default function TripDetailScreen() {
 
               <TouchableOpacity
                 style={[styles.pdfActionBtn, { backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderColor: '#A7F3D0' }]}
-                onPress={() => shareQuotationViaWhatsApp(invoicePayload)}
+                onPress={() => router.push({ pathname: '/billing-editor', params: { type: 'ESTIMATE', ref: String(order.id) } } as any)}
               >
                 <Share2 size={15} color="#10B981" />
                 <Text style={[styles.pdfActionBtnText, { color: '#10B981' }]}>Share Quote</Text>
