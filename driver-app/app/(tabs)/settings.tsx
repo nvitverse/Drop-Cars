@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import FreshRefreshControl from '@/components/FreshRefreshControl';
 import React, { useState, useEffect } from 'react';
 import {
@@ -972,7 +973,7 @@ export default function SettingsScreen() {
             icon={<MessageCircle color="#25D366" size={20} />}
             title="WhatsApp Fleet Help Desk"
             subtitle="Chat directly with fleet support team"
-            onPress={() => Linking.openURL('https://wa.me/917200217986')}
+            onPress={() => openWaUrl('https://wa.me/917200217986')}
           />
         </View>
 

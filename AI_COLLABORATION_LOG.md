@@ -4,6 +4,33 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Master Prompt 4 Batch 2: Shared Help & Errors System, Comprehensive Driver Help Catalog, and Global Error Boundary (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Zero modifications to `components/KeyboardSafe.tsx` across all apps. All modals (`HelpSheet`, error popups) strictly import `Modal` from `@/components/KeyboardSafe`.
+- **Workstream C: Shared Help & Error Components (C1, C2, C3, C7):**
+  - **Shared UI Kit Created in All Apps (`components/help/`):**
+    - `InfoButton.tsx`: Accessible 44x44 dp touch-target (i) button with `accessibilityLabel="More information"`.
+    - `HelpSheet.tsx`: Bottom sheet adhering to `KeyboardSafe` modal rules, providing Title, What Happened, Why, Next Steps (numbered 1-4 max), Action Button ("Fix it now", "Try again"), and Support buttons ("Call Support", "WhatsApp Support" with prefilled, non-sensitive context: screen, code, booking id, app build, language via `openWaUrl`).
+    - `ErrorNotice.tsx`: Compact inline error banner under 90 chars on screen with a "Read more" / Details trigger.
+    - `InlineHint.tsx`: Subtle grey one-liner hint with optional info icon for form inputs and cards.
+    - `HelpEmpty.tsx`: Friendly empty state with illustration, explanation, and primary/secondary action triggers.
+  - **Comprehensive Help Catalogs (`help/catalog.ts` & `help/types.ts`):**
+    - `driver-app/help/catalog.ts`: Covers 17+ driver situations (`DC_ACCOUNT_INACTIVE`, `DC_DOC_REJECTED`, `DC_DOC_WAITING`, `DC_NOT_VERIFIED`, `DC_INSUFFICIENT_WALLET`, `DC_PAYOUT_HELD`, `DC_BOOKING_CANCELLED`, `DC_BOOKING_ALREADY_TAKEN`, `DC_ACCEPT_FAILED`, `DC_INVALID_OTP`, `DC_EXPIRED_OTP`, `DC_TRIP_START_BLOCKED`, `DC_TRIP_END_BLOCKED`, `DC_SUBSCRIPTION_EXPIRED`, `DC_PERMISSIONS_OFF`, `DC_OFFLINE_NO_INTERNET`, `DC_NETWORK_TIMEOUT`, `DC_GPS_OFF`, `DC_UPDATE_REQUIRED`, `DC_SESSION_EXPIRED`, `DC_GENERIC_ERROR`).
+    - `customer-app/help/catalog.ts`: Covers key customer ride situations (`DC_NO_DRIVER_YET`, `DC_DRIVER_DELAYED`, `DC_CUSTOMER_OTP_INFO`, `DC_PAYMENT_PENDING`, `DC_FARE_DIFFERENCE`, `DC_REFUND_STATUS`, `DC_CANCEL_FEE`, `DC_CUSTOMER_SUPPORT`).
+    - `vendor-app/help/catalog.ts`: Covers vendor fleet situations (`DC_ORDER_UNACCEPTED`, `DC_VENDOR_CREDIT_COMMISSION`, `DC_VENDOR_PAYOUT`, `DC_VENDOR_DOC_REJECTED`, `DC_FIRST_REFUSAL`).
+  - **Global Error Boundaries (`components/GlobalErrorBoundary.tsx`):**
+    - Created in `driver-app`, `customer-app`, `vendor-app`, and `admin-panel` to prevent white/blank crash screens, display error reference codes, and offer "Restart / Reload Screen" and support shortcuts.
+  - **Enhanced `driver-app/utils/errorMessage.ts`:**
+    - Integrated `getFriendlyErrorInfo(error)` to map backend HTTP codes and exception details to `DC_*` codes and HelpEntry objects.
+    - Wrapped all error messages and alert strings in `tr()` for automatic real-time translation in Tamil mode.
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **326 passed, 1 skipped, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors**.
+
+---
+
 ### Master Prompt 4 Batch 1: Number Integrity, Natural Tamil Glossary, i18n Audit & In-App Brand Loading Screens (Antigravity, 2026-10-09)
 - **Branch:** `feat/brand-language-help-round4` (clean rebase from `deploy/merged-2026-10-06`).
 - **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).

@@ -1,3 +1,4 @@
+import { openWaUrl } from '@/utils/whatsapp';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -64,9 +65,8 @@ export default function InAppCallModal({
     )}`;
 
     try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
+      if (await openWaUrl(url)) {
+        // opened - the chooser lets the caller pick WhatsApp or WhatsApp Business
       } else {
         Alert.alert('WhatsApp Not Installed', 'Please place a regular phone call.');
       }
