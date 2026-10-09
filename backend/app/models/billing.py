@@ -45,6 +45,8 @@ class BillingBrand(Base):
     terms_estimate = Column(Text, nullable=True)
     rules_text = Column(Text, nullable=True)                                # rules and regulations: cancellation, waiting, night, hill ...
     footer_note = Column(String, nullable=True)                             # the slogan printed at the bottom of every document
+    secondary_color = Column(String, nullable=True)                         # accent (gold etc.) used for the header line, rules and slogan
+    font_style = Column(String, nullable=False, server_default="SANS")      # SANS | SERIF (serif display type for the brand name and slogan)
     highlights = Column(Text, nullable=True)                                # short selling points for the header strip, one per line
     signatory = Column(String, nullable=True)
     primary_color = Column(String, nullable=True, server_default="#0EA5E9")

@@ -97,6 +97,32 @@ def _highlights(b: Dict[str, Any]) -> List[str]:
     return [x.strip(" -*•\t") for x in str(b.get("highlights") or "").replace("\r", "").replace("|", "\n").split("\n") if x.strip(" -*•\t")]
 
 
+def _inc_exc(doc: Dict[str, Any]):
+    """The two plain lists an estimate shows (like the website's estimate): what the fare includes, and what is paid on actuals."""
+    t = doc.get("trip") or {}
+    pk = t.get("package") or {}
+    lines = doc.get("lines") or []
+    inc, exc, seen = [], [], set()
+    for l in lines:
+        name = str(l.get("label") or "").split(" (")[0].strip()
+        if l.get("included", True):
+            if l.get("kind") == "CHARGE" and name and name.lower() not in seen:
+                inc.append(name)
+                seen.add(name.lower())
+        elif name and name.lower() not in seen:
+            exc.append(name + (f" (approx. {_inr(l['amount'])})" if l.get("amount") else ""))
+            seen.add(name.lower())
+    for x in pk.get("includes") or []:
+        if str(x).lower() not in seen:
+            inc.append(str(x))
+            seen.add(str(x).lower())
+    for x in pk.get("excludes") or []:
+        if str(x).lower() not in seen:
+            exc.append(str(x))
+            seen.add(str(x).lower())
+    return inc, exc
+
+
 def _payable_now(doc: Dict[str, Any]) -> int:
     tot = doc.get("totals") or {}
     if doc.get("doc_type") == "ESTIMATE":
@@ -145,8 +171,11 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
     tot = doc.get("totals") or {}
     gst = doc.get("gst") or {}
     color = _clamp_color(b.get("primary_color"))
-    dark = _shade(color, 0.62)
-    soft = _shade(color, 1.9)
+    serif = str(b.get("font_style") or "").upper() == "SERIF"
+    dark = _shade(color, 0.36 if serif else 0.62)
+    soft = "#F8F0E4" if serif else _shade(color, 1.9)
+    gold = _clamp_color(b.get("secondary_color")) if b.get("secondary_color") else _shade(color, 1.35)
+    page_bg = "#F5EFE6" if serif else "#e2e8f0"
     on_color = "#FFFFFF" if _is_dark(color) else "#0F172A"
     lines = doc.get("lines") or []
     inc = [l for l in lines if l.get("included", True)]
@@ -175,7 +204,8 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
     totals += gst_block
     if mode == "INCLUDED":
         totals += "<tr><td class='muted' colspan=2>GST is included in the amounts above</td></tr>"
-    totals += f"<tr class='grand'><td>Total</td><td class='num'>{_inr(tot.get('total_amount'))}</td></tr>"
+    total_label = ("Grand Total" + (" (incl. GST)" if mode != "NONE" and coll == "COLLECT" else "")) if is_est else "Total"
+    totals += f"<tr class='grand'><td>{total_label}</td><td class='num'>{_inr(tot.get('total_amount'))}</td></tr>"
     if mode != "NONE" and coll == "SHOW_ONLY":
         totals += (f"<tr class='disc'><td>GST shown for records - not charged</td><td class='num'>- {_inr(tot.get('gst_amount'))}</td></tr>"
                    f"<tr class='grand'><td>Amount payable</td><td class='num'>{_inr(tot.get('amount_due'))}</td></tr>")
@@ -189,7 +219,8 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
             totals += (f"<tr><td class='muted' colspan=2>Of this, GST {_inr(tot.get('gst_pending'))} can be paid later through the GST payment link. "
                        f"The trip amount {_inr(tot.get('payable_now'))} is payable now.</td></tr>")
     elif doc.get("advance_requested"):
-        totals += f"<tr class='grand adv'><td>Advance to confirm the booking</td><td class='num'>{_inr(doc['advance_requested'])}</td></tr>"
+        pct = round(100 * int(doc["advance_requested"]) / int(tot.get("total_amount") or 1)) if tot.get("total_amount") else 0
+        totals += f"<tr class='grand adv'><td>Advance Required{(' (' + str(pct) + '%)') if pct else ''}</td><td class='num'>{_inr(doc['advance_requested'])}</td></tr>"
 
     # trip: the route drawn as From -> To, the rest as small facts
     route_html = ""
@@ -214,6 +245,13 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
     if exc:
         exc_html = ("<div class='box'><h4>Not included in the total - payable on actuals</h4><ul>" +
                     "".join(f"<li>{_e(l['label'])}{(' - ' + _inr(l['amount']) + ' (approx.)') if l.get('amount') else ''}</li>" for l in exc) + "</ul></div>")
+
+    if is_est:
+        inc_l, exc_l = _inc_exc(doc)
+        if inc_l or exc_l:
+            def _col(title, items):
+                return (f"<div class='pk'><b>{title}</b><ul>" + "".join(f"<li>{_e(x)}</li>" for x in items) + "</ul></div>") if items else ""
+            exc_html = "<div class='box'><div class='pkg'>" + _col("Includes", inc_l) + _col("Excludes - paid on actuals", exc_l) + "</div></div>"
 
     bank = [("Account name", b.get("bank_account_name")), ("Bank", b.get("bank_name")), ("Account no.", b.get("bank_account_number")),
             ("IFSC", b.get("bank_ifsc")), ("Branch", b.get("bank_branch")), ("UPI", b.get("upi_id"))]
@@ -248,6 +286,10 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
         ps = doc.get("payment_status")
         pstat = f"<span class='pill {ps}'>{'PAID' if ps == 'PAID' else 'PART PAID' if ps == 'PARTIAL' else 'UNPAID'}</span>"
 
+    body_font = "'Hanken Grotesk',Segoe UI,Roboto,Arial,sans-serif" if serif else "Segoe UI,Roboto,Arial,sans-serif"
+    font_link = ("<link rel='preconnect' href='https://fonts.googleapis.com'><link href='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap' rel='stylesheet'>") if serif else ""
+    serif_css = (".brand,.slogan,.doc .no{{font-family:'Cormorant Garamond',Georgia,serif}} .brand{{font-size:36px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}} .tag{{font-family:'Cormorant Garamond',Georgia,serif;font-size:16px;letter-spacing:.5px}} "
+                 ".slogan{{font-size:19px}} .band .tag,.doc h2,.box h4,.col h4{{letter-spacing:2px}}").replace("{{", "{").replace("}}", "}") if serif else ""
     chips = "".join(f"<span class='chip'>{_e(x)}</span>" for x in _highlights(b))
     tagline = f"<div class='tag'>{_e(b.get('tagline'))}</div>" if b.get("tagline") else ""
     contact = " &nbsp;&bull;&nbsp; ".join(_e(x) for x in [b.get("phone"), b.get("email"), b.get("domain")] if x)
@@ -263,13 +305,13 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
 
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(_title(doc))} {_e(doc.get('number'))}</title>
-<style>
-:root{{--c:{color};--d:{dark};--s:{soft};--on:{on_color}}} *{{box-sizing:border-box}} body{{font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1e293b;margin:0;background:#e2e8f0}}
+{font_link}<style>
+:root{{--c:{color};--d:{dark};--s:{soft};--on:{on_color};--g:{gold}}} *{{box-sizing:border-box}} body{{font-family:{body_font};color:#1e293b;margin:0;background:{page_bg}}}
 .page{{max-width:840px;margin:0 auto;background:#fff;position:relative;overflow:hidden}}
-.band{{background:linear-gradient(120deg,var(--d),var(--c));color:var(--on);padding:24px 28px 18px}}
+.band{{background:linear-gradient(120deg,var(--d),var(--c));color:var(--on);padding:24px 28px 18px;border-bottom:4px solid var(--g)}}
 .band .top{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}}
 .brand{{font-size:30px;font-weight:800;letter-spacing:.4px;line-height:1.1}} .tag{{margin-top:5px;font-size:13.5px;font-style:italic;opacity:.92}}
-.chips{{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}} .chip{{font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}}
+.chips{{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}} .chip{{font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(255,255,255,.14);border:1px solid var(--g)}}
 .doc{{text-align:right;min-width:210px}} .doc h2{{margin:0;font-size:15px;letter-spacing:1.6px;font-weight:700;opacity:.95}} .doc .no{{font-weight:800;font-size:19px;margin-top:4px}}
 .doc .dt{{font-size:12px;opacity:.9;margin-top:2px}} .validity{{display:inline-block;margin-top:8px;background:#fff;color:var(--d);border-radius:12px;padding:3px 11px;font-size:11.5px}}
 .contact{{margin-top:14px;padding-top:9px;border-top:1px solid rgba(255,255,255,.3);font-size:12px;opacity:.95}}
@@ -282,7 +324,7 @@ def render_document_html(doc: Dict[str, Any], public: bool = False) -> str:
 .fact span{{display:block;font-size:9.5px;color:#64748b;letter-spacing:.8px;text-transform:uppercase}}
 table{{width:100%;border-collapse:collapse}} .items{{margin-top:14px;border-radius:10px;overflow:hidden}} .items th{{background:var(--c);color:var(--on);text-align:left;padding:9px 11px;font-size:12px;letter-spacing:.5px}}
 .items td{{padding:9px 11px;border-bottom:1px solid #e2e8f0;font-size:13px}} .items tr:nth-child(even) td{{background:#f8fafc}} .num{{text-align:right;white-space:nowrap}} th.num{{text-align:right}}
-.tot{{width:340px;margin-left:auto;margin-top:12px}} .tot td{{padding:5px 11px;font-size:13px}} .tot .grand td{{font-weight:800;font-size:15.5px;background:var(--s);color:#0f172a}}
+.tot{{width:340px;margin-left:auto;margin-top:12px}} .tot td{{padding:5px 11px;font-size:13px}} .tot .grand td{{font-weight:800;font-size:15.5px;background:var(--s);color:#0f172a;border-bottom:2px solid var(--g)}}
 .tot .grand td:first-child{{border-radius:8px 0 0 8px}} .tot .grand td:last-child{{border-radius:0 8px 8px 0}}
 .tot .bal td{{color:#b91c1c}} .tot .paid td{{color:#047857}} .tot .disc td{{color:#b45309}} .tot .adv td{{background:var(--c);color:var(--on)}} .muted{{color:#64748b;font-size:11.5px}} .note{{color:#64748b;font-size:11px}}
 .box{{border:1px solid #e2e8f0;border-radius:10px;padding:11px 13px;margin-top:13px;font-size:12.5px}} .box h4{{margin:0 0 6px;font-size:11.5px;color:var(--d);text-transform:uppercase;letter-spacing:.8px}}
@@ -291,15 +333,15 @@ table{{width:100%;border-collapse:collapse}} .items{{margin-top:14px;border-radi
 .pkg{{display:flex;gap:16px;flex-wrap:wrap}} .pk{{flex:1;min-width:150px}} .pk ul,.pk ol{{margin:4px 0 0;padding-left:18px;line-height:1.55}}
 .words{{margin-top:9px;font-size:12px;color:#334155}} .btn{{display:inline-block;margin:4px 8px 4px 0;padding:11px 18px;background:var(--c);color:var(--on);text-decoration:none;border-radius:9px;font-weight:700}}
 .pill{{display:inline-block;padding:2px 10px;border-radius:12px;font-size:10.5px;font-weight:800;margin-left:8px;vertical-align:middle}} .pill.PAID{{background:#dcfce7;color:#166534}} .pill.PARTIAL{{background:#fef3c7;color:#92400e}} .pill.UNPAID{{background:#fee2e2;color:#991b1b}}
-.slogan{{margin-top:22px;text-align:center;font-size:15px;font-style:italic;color:var(--d);font-weight:600}}
+.slogan{{margin-top:22px;padding-top:14px;border-top:1px solid var(--g);text-align:center;font-size:15px;font-style:italic;color:var(--d);font-weight:600}}
 .foot{{margin-top:14px;display:flex;justify-content:flex-end;font-size:12px;color:#475569}} .sign{{text-align:right}}
 .stamp{{position:absolute;top:210px;left:50%;transform:translateX(-50%) rotate(-18deg);font-size:64px;font-weight:900;color:rgba(220,38,38,.18);border:6px solid rgba(220,38,38,.18);padding:0 22px;z-index:2}}
 .prep{{margin-top:12px;padding-top:8px;border-top:1px dashed #cbd5e1;font-size:11.5px;color:#64748b;text-align:center}}
-.endband{{height:8px;background:linear-gradient(90deg,var(--d),var(--c))}}
+.endband{{height:8px;background:linear-gradient(90deg,var(--d),var(--c),var(--g))}}
 .print{{text-align:center;padding:12px}} .print a{{display:inline-block;padding:9px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none;font-weight:700}}
 @media print{{body{{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}} .print{{display:none}}}}
 @media(max-width:600px){{.cols{{flex-direction:column}} .band .top{{flex-direction:column}} .doc{{text-align:left}} .tot{{width:100%}} .brand{{font-size:24px}} .payto{{flex-direction:column;align-items:flex-start}} .route{{flex-direction:column;align-items:flex-start}} .arrow{{transform:rotate(90deg)}}}}
-</style></head><body>
+{serif_css}</style></head><body>
 <div class="print"><a href="javascript:window.print()">Print / Save as PDF</a></div>
 <div class="page">{cancelled}
 <div class="band"><div class="top"><div><div class="brand">{_e(b.get('name'))}</div>{tagline}{('<div class="chips">' + chips + '</div>') if chips else ''}</div>
@@ -336,20 +378,22 @@ def render_document_pdf(doc: Dict[str, Any]) -> bytes:
     gst = doc.get("gst") or {}
     is_est = doc.get("doc_type") == "ESTIMATE"
     hexc = _clamp_color(b.get("primary_color"))
+    serif = str(b.get("font_style") or "").upper() == "SERIF"
     accent = colors.HexColor(hexc)
-    deep = colors.HexColor(_shade(hexc, 0.62))
-    soft = colors.HexColor(_shade(hexc, 1.9))
+    deep = colors.HexColor(_shade(hexc, 0.36 if serif else 0.62))
+    soft = colors.HexColor("#F8F0E4" if serif else _shade(hexc, 1.9))
+    gold = colors.HexColor(_clamp_color(b.get("secondary_color")) if b.get("secondary_color") else _shade(hexc, 1.35))
     on = colors.white if _is_dark(hexc) else colors.HexColor("#0F172A")
     ss = getSampleStyleSheet()
     small = ParagraphStyle("s", parent=ss["Normal"], fontSize=8.5, leading=11, textColor=colors.HexColor("#334155"))
     body = ParagraphStyle("b", parent=ss["Normal"], fontSize=9.5, leading=12.5)
     h = ParagraphStyle("h", parent=ss["Normal"], fontSize=9, leading=12, textColor=deep, fontName="Helvetica-Bold")
-    big = ParagraphStyle("big", parent=ss["Normal"], fontSize=23, leading=26, textColor=on, fontName="Helvetica-Bold")
-    tag = ParagraphStyle("tag", parent=ss["Normal"], fontSize=10, leading=13, textColor=on, fontName="Helvetica-Oblique")
+    big = ParagraphStyle("big", parent=ss["Normal"], fontSize=25 if serif else 23, leading=28 if serif else 26, textColor=on, fontName="Times-Bold" if serif else "Helvetica-Bold")
+    tag = ParagraphStyle("tag", parent=ss["Normal"], fontSize=11 if serif else 10, leading=14, textColor=on, fontName="Times-Italic" if serif else "Helvetica-Oblique")
     chipst = ParagraphStyle("chip", parent=ss["Normal"], fontSize=8, leading=11, textColor=on)
     rt = ParagraphStyle("rt", parent=body, alignment=2)
     rt_on = ParagraphStyle("rton", parent=body, alignment=2, textColor=on)
-    slog = ParagraphStyle("slog", parent=ss["Normal"], fontSize=11.5, leading=15, alignment=1, textColor=deep, fontName="Helvetica-BoldOblique")
+    slog = ParagraphStyle("slog", parent=ss["Normal"], fontSize=13 if serif else 11.5, leading=16, alignment=1, textColor=deep, fontName="Times-BoldItalic" if serif else "Helvetica-BoldOblique")
 
     def money(v):
         return f"Rs {int(round(float(v or 0))):,}"
@@ -373,7 +417,7 @@ def render_document_pdf(doc: Dict[str, Any]) -> bytes:
     if contact:
         band_rows.append([Paragraph(html.escape(contact), chipst), ""])
     band = Table(band_rows, colWidths=[118 * mm, 64 * mm])
-    band_style = [("BACKGROUND", (0, 0), (-1, -1), accent), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 9), ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+    band_style = [("BACKGROUND", (0, 0), (-1, -1), accent), ("LINEBELOW", (0, -1), (-1, -1), 3, gold), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 9), ("RIGHTPADDING", (0, 0), (-1, -1), 9),
                   ("TOPPADDING", (0, 0), (-1, 0), 10), ("BOTTOMPADDING", (0, 0), (-1, 0), 8)]
     if contact:
         band_style += [("SPAN", (0, 1), (1, 1)), ("LINEABOVE", (0, 1), (-1, 1), 0.6, on), ("TOPPADDING", (0, 1), (-1, 1), 5), ("BOTTOMPADDING", (0, 1), (-1, 1), 6)]
@@ -428,7 +472,7 @@ def render_document_pdf(doc: Dict[str, Any]) -> bytes:
         else:
             half = float(gst.get("rate") or 0) / 2
             rows += [(f"CGST @ {half:g}%", money(tot.get("cgst"))), (f"SGST @ {half:g}%", money(tot.get("sgst")))]
-    rows.append(("TOTAL", money(tot.get("total_amount"))))
+    rows.append((("GRAND TOTAL" + (" (incl. GST)" if gst.get("mode") != "NONE" and gst.get("collection") == "COLLECT" else "")) if is_est else "TOTAL", money(tot.get("total_amount"))))
     grand_idx = [len(rows) - 1]
     if gst.get("mode") != "NONE" and gst.get("collection") == "SHOW_ONLY":
         rows += [("GST shown for records - not charged", "- " + money(tot.get("gst_amount"))), ("AMOUNT PAYABLE", money(tot.get("amount_due")))]
@@ -439,7 +483,8 @@ def render_document_pdf(doc: Dict[str, Any]) -> bytes:
         rows.append(("BALANCE DUE", money(tot.get("balance_due"))))
         grand_idx.append(len(rows) - 1)
     elif doc.get("advance_requested"):
-        rows.append(("Advance to confirm the booking", money(doc["advance_requested"])))
+        pct = round(100 * int(doc["advance_requested"]) / int(tot.get("total_amount") or 1)) if tot.get("total_amount") else 0
+        rows.append((f"Advance Required{(' (' + str(pct) + '%)') if pct else ''}", money(doc["advance_requested"])))
         grand_idx.append(len(rows) - 1)
     tt2 = Table([[Paragraph(k, body), Paragraph(v, rt)] for k, v in rows], colWidths=[120 * mm, 42 * mm], hAlign="RIGHT")
     st = [("PADDING", (0, 0), (-1, -1), 3)] + [("BACKGROUND", (0, i), (-1, i), soft) for i in grand_idx]
@@ -457,7 +502,15 @@ def render_document_pdf(doc: Dict[str, Any]) -> bytes:
             s += [Paragraph("<b>Not included:</b> " + html.escape(", ".join(pk["excludes"])), small)]
         s += [Spacer(1, 6)]
     exc = [l for l in (doc.get("lines") or []) if not l.get("included", True)]
-    if exc:
+    if is_est:
+        inc_l, exc_l = _inc_exc(doc)
+        if inc_l:
+            s += [Paragraph("<b>Includes:</b> " + html.escape(" · ".join(inc_l)), small)]
+        if exc_l:
+            s += [Paragraph("<b>Excludes (paid on actuals):</b> " + html.escape(" · ".join(exc_l)), small)]
+        if inc_l or exc_l:
+            s += [Spacer(1, 6)]
+    elif exc:
         s += [Paragraph("NOT INCLUDED IN THE TOTAL - PAYABLE ON ACTUALS", h), Paragraph("; ".join(html.escape(str(l["label"])) + (f" (approx. {money(l['amount'])})" if l.get("amount") else "") for l in exc), small), Spacer(1, 6)]
 
     bank = [f"{k}: {v}" for k, v in (("Account name", b.get("bank_account_name")), ("Bank", b.get("bank_name")), ("A/c no.", b.get("bank_account_number")), ("IFSC", b.get("bank_ifsc")), ("UPI", b.get("upi_id"))) if v]

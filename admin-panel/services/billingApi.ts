@@ -9,7 +9,7 @@ export interface BillingBrand {
   whatsapp?: string | null; email?: string | null; address?: string | null; state?: string | null; state_code?: string | null; gstin?: string | null;
   pan?: string | null; sac_code?: string | null; gst_rate: number; gst_applies_to: 'KM_FARE' | 'ALL'; invoice_prefix: string; estimate_prefix: string;
   bank_account_name?: string | null; bank_name?: string | null; bank_account_number?: string | null; bank_ifsc?: string | null; bank_branch?: string | null;
-  upi_id?: string | null; terms_invoice?: string | null; terms_estimate?: string | null; rules_text?: string | null; footer_note?: string | null; highlights?: string | null;
+  upi_id?: string | null; terms_invoice?: string | null; terms_estimate?: string | null; rules_text?: string | null; footer_note?: string | null; highlights?: string | null; secondary_color?: string | null; font_style?: 'SANS' | 'SERIF' | null;
   signatory?: string | null; primary_color?: string | null; estimate_valid_days: number; advance_percent: number; payment_links_enabled: boolean;
   is_default: boolean; is_active: boolean;
 }

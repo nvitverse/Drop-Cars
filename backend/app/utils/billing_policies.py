@@ -55,7 +55,7 @@ TOURS_TERMS_ESTIMATE = "\n".join([
 ])
 TOURS_RULES = "\n".join([
     "VEHICLE AND DRIVER: Verified drivers with valid licence, RC, insurance, permit and fitness certificate. Driver and vehicle details are shared before the trip.",
-    "ITINERARY: The plan can be adjusted on the way (traffic, weather, temple timings, road closures) while keeping the places promised wherever possible.",
+    "ROUTE AND PLAN: The route and timings can be adjusted on the way (traffic, weather, road closures) while keeping the stops agreed with you wherever possible.",
     "LAST-MINUTE AVAILABILITY: If the booked vehicle cannot be arranged at the last moment, we offer an equal or better vehicle; if that needs a higher rate we ask you first, "
     "within 1 hour of pickup, and you can accept, choose another option or cancel without charge.",
     "CANCELLATION: Free up to 7 days before the trip. 3-7 days before: up to 25% of the package may be kept. Within 72 hours: up to 50%. Within 24 hours or no-show: the advance may be kept. "
@@ -63,7 +63,7 @@ TOURS_RULES = "\n".join([
     "REFUNDS: Made to the original payment method within 7 working days after the cancellation is confirmed.",
     "STAY AND TICKETS: Hotel, entry ticket and guide charges are included only where the package says so. Third-party bookings follow that provider's own cancellation rules.",
     "YOUR BELONGINGS: Please keep valuables and documents with you. Items left in the vehicle are kept safe and returned on request.",
-    "SAFETY AND CONDUCT: Seat belts on; no smoking or alcohol in the vehicle; please respect temple, forest and local rules. Elders and children travel with us at their guardians' care.",
+    "SAFETY AND CONDUCT: Seat belts on; no smoking or alcohol in the vehicle; please respect local rules at every place you visit. Elders and children travel in their guardians' care.",
     "OUR RESPONSIBILITY: We arrange safe, comfortable travel and stay in touch throughout the trip. Our liability is limited to the package value except where the law says otherwise; "
     "we are not liable for delays or changes caused by weather, traffic, closures, strikes or other events beyond our control.",
     "FEEDBACK: Tell us during the trip if anything is not right so that we can fix it on the spot. We answer every complaint within 24 hours.",
@@ -166,7 +166,7 @@ LOOK = {
     "yellowboard": ("Commercial Fleet Cabs You Can Count On", "Dependable rides. Every day.",
                     "Commercial permit vehicles\nProfessional drivers\nOn-time service"),
     "arunachala": ("Dedicated to Spiritual Journeys", "Your journey to the sacred begins here.",
-                   "Temple tours & Girivalam trips\nTempo Traveller & Force Urbania specialists\nExperienced local drivers\nComfortable family travel"),
+                   "Tempo Traveller & Force Urbania specialists\nExperienced drivers\nClear, upfront pricing\nComfortable family travel"),
 }
 OLD_TAGLINES = {
     "dropcars": ("Standard & Premium Taxis",), "24droptaxi": ("One Way & Outstation Cabs",), "tatataxi": ("Reliable Outstation Fleet",),
@@ -174,6 +174,27 @@ OLD_TAGLINES = {
     "arunachala": ("Tempo Traveller & Force Urbania Specialist",),
 }
 OLD_SLOGANS = ("Thank you for travelling with us.",)
+OLD_HIGHLIGHTS = ("Temple tours & Girivalam trips\nTempo Traveller & Force Urbania specialists\nExperienced local drivers\nComfortable family travel",)
+
+# the brand's own look, taken from its website's design system (arunachalatravels.com): ember orange, gold, warm cream, serif display type
+STYLE = {
+    "arunachala": {"primary": "#C24A1E", "secondary": "#C8A45A", "font": "SERIF", "old_primary": "#8B5CF6"},
+}
+
+_NEUTRAL_SWAPS = (
+    ("The plan can be adjusted on the way (traffic, weather, temple timings, road closures) while keeping the places promised wherever possible.",
+     "The route and timings can be adjusted on the way (traffic, weather, road closures) while keeping the stops agreed with you wherever possible."),
+    ("ITINERARY:", "ROUTE AND PLAN:"),
+    ("please respect temple, forest and local rules. Elders and children travel with us at their guardians' care.",
+     "please respect local rules at every place you visit. Elders and children travel in their guardians' care."),
+)
+
+
+def neutral_tours_text(text: str) -> str:
+    """The first tours wording mentioned temples; the estimate is for vehicle trips, so swap those phrases (only where they are still the seeded words)."""
+    for old, new in _NEUTRAL_SWAPS:
+        text = text.replace(old, new)
+    return text
 
 
 def look_for(code: str) -> Dict[str, str]:

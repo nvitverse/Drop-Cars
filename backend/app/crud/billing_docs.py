@@ -68,14 +68,31 @@ def seed_default_brands(db: Session) -> int:
             if (b.footer_note or "") in billing_policies.OLD_SLOGANS or not (b.footer_note or "").strip():
                 b.footer_note = look["slogan"]
                 n += 1
-            if not (b.highlights or "").strip():
+            if not (b.highlights or "").strip() or (b.highlights or "").strip() in billing_policies.OLD_HIGHLIGHTS:
                 b.highlights = look["highlights"]
                 n += 1
+            style = billing_policies.STYLE.get(code)
+            if style:                                        # the brand's own website colours / type - only over the colours first seeded
+                if (b.primary_color or "") in (style["old_primary"], ""):
+                    b.primary_color = style["primary"]
+                    n += 1
+                if not (b.secondary_color or "").strip():
+                    b.secondary_color = style["secondary"]
+                    n += 1
+                if (b.font_style or "SANS") == "SANS":
+                    b.font_style = style["font"]
+                    n += 1
+            if billing_policies.family(code) == "TOURS" and b.rules_text:
+                fixed = billing_policies.neutral_tours_text(b.rules_text)
+                if fixed != b.rules_text:
+                    b.rules_text = fixed
+                    n += 1
             continue
         db.add(BillingBrand(
             code=code, name=name, legal_name=name, domain=domain, phone="9043990439", whatsapp="919043990439",
             email=f"support@{domain}", primary_color=color, invoice_prefix=prefix, estimate_prefix=f"{prefix}-EST",
-            tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], signatory="Authorised signatory", is_default=default, **pol,
+            tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], **(billing_policies.STYLE.get(code) and
+            {"primary_color": billing_policies.STYLE[code]["primary"], "secondary_color": billing_policies.STYLE[code]["secondary"], "font_style": billing_policies.STYLE[code]["font"]} or {}), signatory="Authorised signatory", is_default=default, **pol,
         ))
         n += 1
     if n:
@@ -89,7 +106,15 @@ def seed_default_brands(db: Session) -> int:
 def seed_rate_cards(db: Session) -> int:
     """Starter tariffs: Arunachala's website slab tariff + local packages + sample tour packages, and Drop Cars km / day-rent samples. Only when a brand has none."""
     made = 0
-    for code, cards in (("arunachala", billing_policies.arunachala_rate_cards() + billing_policies.arunachala_packages()), ("dropcars", billing_policies.dropcars_rate_cards())):
+    # the first version seeded two sample temple-tour packages; the estimate document is for taxi / vehicle trips, so take those untouched samples away again
+    old = db.query(BillingRateCard).filter(BillingRateCard.method == "PACKAGE", BillingRateCard.vehicle_key == "tour",
+                                           BillingRateCard.name.in_(["Tiruvannamalai Girivalam weekend", "Pondicherry - Mahabalipuram 2 days"])).all()
+    for o in old:
+        if not float((o.params or {}).get("amount") or 0):
+            db.delete(o)
+    if old:
+        db.commit()
+    for code, cards in (("arunachala", billing_policies.arunachala_rate_cards()), ("dropcars", billing_policies.dropcars_rate_cards())):
         b = db.query(BillingBrand).filter(BillingBrand.code == code).first()
         if b is None or db.query(BillingRateCard.id).filter(BillingRateCard.brand_id == b.id).first() is not None:
             continue
@@ -134,7 +159,7 @@ def brand_dict(b: BillingBrand) -> Dict[str, Any]:
     cols = ["id", "code", "name", "legal_name", "tagline", "domain", "phone", "whatsapp", "email", "address", "state", "state_code", "gstin",
             "pan", "sac_code", "gst_rate", "gst_applies_to", "invoice_prefix", "estimate_prefix", "bank_account_name", "bank_name",
             "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights",
-            "signatory", "primary_color", "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
+            "signatory", "primary_color", "secondary_color", "font_style", "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
     out = {c: getattr(b, c) for c in cols}
     out["id"] = str(b.id)
     return out

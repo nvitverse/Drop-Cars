@@ -225,7 +225,16 @@ export default function BillingBrands() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
               {COLORS.map((x) => <TouchableOpacity key={x} onPress={() => set('primary_color', x)} style={[s.swatch, { backgroundColor: x, borderWidth: sel.primary_color === x ? 3 : 0, borderColor: c.text }]} />)}
             </View>
-            {field('primary_color', 'Colour code (#RRGGBB)', { caps: true })}
+            {field('primary_color', 'Main colour code (#RRGGBB)', { caps: true })}
+            <Text style={lbl}>Accent colour (gold line, chip borders, slogan rule)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {['#C8A45A', '#F59E0B', '#EAB308', '#E2E8F0', '#F2C58A', '#14B8A6'].map((x) => <TouchableOpacity key={x} onPress={() => set('secondary_color', x)} style={[s.swatch, { backgroundColor: x, borderWidth: sel.secondary_color === x ? 3 : 0, borderColor: c.text }]} />)}
+            </View>
+            {field('secondary_color', 'Accent colour code (#RRGGBB, blank = automatic)', { caps: true })}
+            <Text style={lbl}>Type style of the brand name and slogan</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              {[['SANS', 'Modern (sans)'], ['SERIF', 'Classic (serif)']].map(([k, l]) => <TouchableOpacity key={k} onPress={() => set('font_style', k as any)} style={[s.tab, { flex: 1, alignItems: 'center', borderColor: (sel.font_style || 'SANS') === k ? c.primary : c.border, backgroundColor: (sel.font_style || 'SANS') === k ? c.primary + '22' : 'transparent' }]}><Text style={{ color: c.text, fontSize: 12.5, fontWeight: '700' }}>{l}</Text></TouchableOpacity>)}
+            </View>
             {field('signatory', 'Signatory text')}
             <View style={s.switchRow}><Text style={{ color: c.text }}>Default brand</Text><Switch value={!!sel.is_default} onValueChange={(v) => set('is_default', v)} /></View>
             <View style={s.switchRow}><Text style={{ color: c.text }}>Active (shown when making documents)</Text><Switch value={sel.is_active !== false} onValueChange={(v) => set('is_active', v)} /></View>

@@ -49,7 +49,7 @@ def _doc(db: Session, doc_id: str) -> BillingDocument:
 # ------------------------------------------------------------------ brands
 BRAND_FIELDS = ["name", "legal_name", "tagline", "domain", "phone", "whatsapp", "email", "address", "state", "state_code", "gstin", "pan", "sac_code",
                 "gst_rate", "gst_applies_to", "invoice_prefix", "estimate_prefix", "bank_account_name", "bank_name", "bank_account_number", "bank_ifsc",
-                "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights", "signatory", "primary_color",
+                "bank_branch", "upi_id", "terms_invoice", "terms_estimate", "rules_text", "footer_note", "highlights", "signatory", "primary_color", "secondary_color", "font_style",
                 "estimate_valid_days", "advance_percent", "payment_links_enabled", "is_default", "is_active"]
 
 
@@ -85,6 +85,8 @@ class BrandIn(BaseModel):
     highlights: Optional[str] = None
     signatory: Optional[str] = None
     primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    font_style: Optional[str] = None
     estimate_valid_days: Optional[int] = Field(None, ge=1, le=90)
     advance_percent: Optional[int] = Field(None, ge=0, le=100)
     payment_links_enabled: Optional[bool] = None

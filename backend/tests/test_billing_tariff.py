@@ -80,6 +80,6 @@ def test_unknown_method():
 
 def test_policies_by_family():
     assert "VEHICLE CHANGE" in billing_policies.defaults_for("dropcars")["rules_text"]
-    assert "ITINERARY" in billing_policies.defaults_for("arunachala")["rules_text"]
+    assert "ROUTE AND PLAN" in billing_policies.defaults_for("arunachala")["rules_text"] and "temple" not in billing_policies.defaults_for("arunachala")["rules_text"].lower()
     assert "Rs 16 or Rs 17" in billing_policies.defaults_for("dropcars")["rules_text"]
     assert billing_policies.is_old_seed("Minimum billable distance applies as per the trip type (one way / round trip / multi city).\nWaiting...")

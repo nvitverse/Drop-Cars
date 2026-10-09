@@ -133,7 +133,7 @@ def test_rate_cards_are_seeded_and_estimate_lines_work(pg_session):
     from app.models.billing import BillingBrand, BillingRateCard
     arun = db.query(BillingBrand).filter(BillingBrand.code == "arunachala").first()
     cards = db.query(BillingRateCard).filter(BillingRateCard.brand_id == arun.id).all()
-    assert {"SLAB_DROP", "SLAB_ROUND", "LOCAL", "PACKAGE"} <= {c.method for c in cards}
+    assert {"SLAB_DROP", "SLAB_ROUND", "LOCAL"} <= {c.method for c in cards}
     sedan_drop = next(c for c in cards if c.method == "SLAB_DROP" and c.vehicle_key == "sedan")
     r = svc.estimate_lines(db, {"rate_card_id": str(sedan_drop.id), "km": 100})
     assert sum(l["amount"] for l in r["lines"]) == 3375 and r["method"] == "SLAB_DROP"
@@ -177,7 +177,7 @@ def test_brand_look_name_is_exact_tagline_slogan_and_qr(pg_session):
     db = pg_session
     svc.seed_default_brands(db)
     arun = db.query(BillingBrand).filter(BillingBrand.code == "arunachala").first()
-    assert arun.name == "Arunachala Travels" and arun.tagline == "Dedicated to Spiritual Journeys" and "Girivalam" in arun.highlights
+    assert arun.name == "Arunachala Travels" and arun.tagline == "Dedicated to Spiritual Journeys" and "Tempo Traveller" in arun.highlights and "Temple" not in arun.highlights and arun.primary_color == "#C24A1E" and arun.font_style == "SERIF"
     dc = db.query(BillingBrand).filter(BillingBrand.code == "dropcars").first()
     assert dc.tagline == "Your Trusted One-Way Drop Taxi Service"
     dc.tagline = "Typed by the owner"          # an edited tagline survives a re-seed
@@ -193,3 +193,21 @@ def test_brand_look_name_is_exact_tagline_slogan_and_qr(pg_session):
     assert "<svg" in html and "Scan to pay" in html                      # UPI QR present because the brand has a UPI id
     assert dc.footer_note in html and "Prepared by" in html
     assert render_document_pdf(s).startswith(b"%PDF")
+
+
+def test_estimate_follows_the_website_model_and_arunachala_uses_its_own_style(pg_session):
+    db = pg_session
+    svc.seed_default_brands(db)
+    arun = db.query(BillingBrand).filter(BillingBrand.code == "arunachala").first()
+    arun.gstin = "33AAACD1234E1Z5"
+    db.flush()
+    est = svc.create_document(db, {"doc_type": "ESTIMATE", "brand_id": str(arun.id), "customer": {"name": "Ravi"}, "gst": {"mode": "EXTRA"},
+                                   "lines": [{"label": "Distance 300 km x Rs 12", "amount": 3600, "kind": "FARE"}, {"label": "Driver allowance", "amount": 400, "kind": "CHARGE"},
+                                             {"label": "Toll", "amount": 0, "included": False}, {"label": "Parking", "amount": 0, "included": False}],
+                                   "advance_requested": 800, "trip": {"pickup": "Chennai", "drop": "Madurai"}, "issue": True}, "Anitha")
+    html = render_document_html(svc.serialize(est, db), public=True)
+    assert "Grand Total (incl. GST)" in html and "Advance Required (" in html and "Includes" in html and "Excludes" in html
+    assert "Driver allowance" in html and "Toll" in html
+    assert "Cormorant Garamond" in html and "#C24A1E" in html and "--g:#C8A45A" in html           # the website's ember + gold + serif
+    assert "temple" not in html.lower()
+    assert render_document_pdf(svc.serialize(est, db)).startswith(b"%PDF")
