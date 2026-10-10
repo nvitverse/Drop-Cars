@@ -222,3 +222,6 @@ Went live on owner's explicit "deploy pannu": import-error fixes (AI draft etc.)
 
 ## 2026-10-10d - LIVE: backend rev 00324 (commit 7006331) - DropBot for vendors (Claude)
 The Vendor App's DropBot shared the DRIVER bot: it showed the Rs 500 wallet hold, the cancellation penalty and a hard-coded per-km rate card. Backend now knows the caller's role: a vendor gets vendor rules (`ai_llm._vendor_rules_text`), vendor facts (own latest bookings) and vendor wording in the rule-based fallback (no hold/penalty/rates). vendor-app/app/chats.tsx texts (welcome, chips, offline fallback with no numbers, `audience: 'vendor'`) are committed but need the next Vendor build to reach phones.
+
+## 2026-10-10e - LIVE: backend rev 00325 (commit 7013c9f) - bot reads the real tariff (Claude)
+Help bot (rule-based + LLM rule sheet) no longer has a typed-in rate card: tariff, minimum km, hold, commission/fees, waiting, bata come from driver_tariff + fare_rules + fee settings (utils/bot_facts.py). Default driver tariff Sedan round trip changed 13 -> 14 on the owner's word (2026-10-10); a saved Admin > Tariffs > Driver config still wins. Named-route estimates now work (a 'fare' word used to hijack them), unknown distances are not guessed.
