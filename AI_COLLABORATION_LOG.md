@@ -216,3 +216,6 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 - Portal: `/p/{token}` mobile page (backend-served), `/api/portal/{token}/...` (take, pay UTR, start/end with the CUSTOMER's OTP, location, feedback) and `/api/admin/portal/{order_id}` (+confirm-payment). Group share message from the Unaccepted Desk now carries the link. OTPs are never returned to the executor; wrong-OTP guessing is locked after 5 tries / 15 min. Table `portal_trips`.
 - Admin App: desk cards got a "Web link" panel (link, commission confirm, send driver + OTPs to customer, location, rating); Chats thread header shows what the help bot collected; `KeyboardSafe` Modal lifts transparent sheets above the Android navigation bar (Customize modal buttons were hidden behind it).
 - Backend of 347c7d8 is NOT deployed (classifier denied the deploy).
+
+## 2026-10-10c - LIVE: backend rev 00323 (commit 9898768) (Claude)
+Went live on owner's explicit "deploy pannu": import-error fixes (AI draft etc.), guest-help bot v2, web execution portal (/p/{token}) with commission through the EXISTING Razorpay account (payment link, auto-confirms when paid; UPI QR + UTR fallback), bot-collected details in the Admin thread. Admin OTA (nav-bar overlap fix, Web link panel) published earlier the same day. Log check after deploy: no errors.
