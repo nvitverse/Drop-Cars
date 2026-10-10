@@ -219,3 +219,6 @@ OTAs published afterwards from this tree (2026-10-07): Admin App `preview` group
 
 ## 2026-10-10c - LIVE: backend rev 00323 (commit 9898768) (Claude)
 Went live on owner's explicit "deploy pannu": import-error fixes (AI draft etc.), guest-help bot v2, web execution portal (/p/{token}) with commission through the EXISTING Razorpay account (payment link, auto-confirms when paid; UPI QR + UTR fallback), bot-collected details in the Admin thread. Admin OTA (nav-bar overlap fix, Web link panel) published earlier the same day. Log check after deploy: no errors.
+
+## 2026-10-10d - LIVE: backend rev 00324 (commit 7006331) - DropBot for vendors (Claude)
+The Vendor App's DropBot shared the DRIVER bot: it showed the Rs 500 wallet hold, the cancellation penalty and a hard-coded per-km rate card. Backend now knows the caller's role: a vendor gets vendor rules (`ai_llm._vendor_rules_text`), vendor facts (own latest bookings) and vendor wording in the rule-based fallback (no hold/penalty/rates). vendor-app/app/chats.tsx texts (welcome, chips, offline fallback with no numbers, `audience: 'vendor'`) are committed but need the next Vendor build to reach phones.
