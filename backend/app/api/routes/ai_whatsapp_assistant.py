@@ -12,6 +12,8 @@ from app.core.security import get_current_driver
 
 logger = logging.getLogger(__name__)
 from app.core.security import get_current_admin, get_current_user_flexible, get_current_driver
+from app.utils import bot_facts
+
 router = APIRouter(tags=["AI WhatsApp & Voice Assistant"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -180,23 +182,7 @@ DISTANCE_DB = {
 
 KNOWN_CITIES = sorted({c for pair in DISTANCE_DB for c in pair})
 
-PER_KM_RATES = {
-    "hatchback": 13,
-    "sedan": 14,
-    "suv": 19,
-    "innova": 21,
-    "crysta": 23,
-    "tempo": 28,
-}
-
-DRIVER_BETA_MAP = {
-    "hatchback": 400,
-    "sedan": 400,
-    "suv": 500,
-    "innova": 600,
-    "crysta": 600,
-    "tempo": 800,
-}
+# NB: no rates are typed in here any more - every number the bot quotes comes from app/utils/bot_facts.py (driver tariff, fare rules, fee settings).
 
 
 def _helpline_number(db: Session) -> str:
@@ -216,6 +202,12 @@ def _helpline_number(db: Session) -> str:
     except Exception:
         logger.exception("Could not look up on-duty helpline number")
     return "your fleet owner"
+
+
+def distance_if_known(city1: str, city2: str):
+    """The table's distance, or None when the pair is not in it (the bot then says so instead of guessing 320 km)."""
+    c1, c2 = city1.lower().strip(), city2.lower().strip()
+    return DISTANCE_DB.get((c1, c2)) or DISTANCE_DB.get((c2, c1))
 
 
 def get_distance(city1: str, city2: str) -> int:
@@ -380,29 +372,8 @@ async def _rule_based_assistant(
     is_opt_9 = trimmed in ["9", "option 9", "opt 9", "nine"]
 
     # Category 1: TARIFF & DISTANCE ESTIMATION (Direct 1 shortcut or keywords)
-    if is_opt_1 or (any_kw(tokens, lower_msg, ["tariff", "fare", "rate", "rates", "charges", "pricing", "kattanam"]) and not any_kw(tokens, lower_msg, ["cancel", "penalty", "wait", "otp"])):
-        if is_tamil:
-            reply = (
-                "💰 **Drop Cars நிலையான கட்டண விகிதங்கள் (Standard Tariffs)**:\n\n"
-                "• **Sedan (Dzire / Etios)**: ₹14/km (குறைந்தபட்சம் 250 கி.மீ/நாள்)\n"
-                "• **SUV (Ertiga / Marazzo)**: ₹19/km\n"
-                "• **Prime SUV (Innova / Crysta)**: ₹21/km\n"
-                "• **Hatchback (Swift / WagonR)**: ₹13/km\n\n"
-                "• **Driver Beta**: பகல் ₹300 (06:00 AM - 10:00 PM) | இரவு ₹400 (10:00 PM - 06:00 AM)\n"
-                "• **Tolls & Parking**: அசல் ரசீதுப்படி வாடிக்கையாளர் செலுத்துவார்.\n\n"
-                "💡 *குறிப்பிட்ட ஊர்களுக்கு இடையே தூரம் அறிய (எ.கா: 'Chennai to Madurai') என டைப் செய்யவும்.*"
-            )
-        else:
-            reply = (
-                "💰 **Drop Cars Standard Partner Tariffs**:\n\n"
-                "• **Sedan (Dzire / Etios)**: ₹14/km (Outstation min 250 km/day)\n"
-                "• **SUV (Ertiga / Marazzo)**: ₹19/km\n"
-                "• **Prime SUV (Innova Crysta)**: ₹21/km\n"
-                "• **Hatchback (Swift / WagonR)**: ₹13/km\n\n"
-                "• **Driver Allowance**: Day ₹300 (6 AM–10 PM) | Night ₹400 (10 PM–6 AM)\n"
-                "• **Tolls & Fastag**: Reimbursed on actual receipts by customer.\n\n"
-                "💡 *Type any two cities (e.g. 'Chennai to Madurai') for instant distance and fare calculation.*"
-            )
+    if is_opt_1 or (any_kw(tokens, lower_msg, ["tariff", "fare", "rate", "rates", "charges", "pricing", "kattanam"]) and not any_kw(tokens, lower_msg, ["cancel", "penalty", "wait", "otp"]) and len(_find_cities(tokens, lower_msg)) < 2):
+        reply = bot_facts.tariff_overview(db, is_tamil)
         category = "TARIFF"
         suggestions = ["🚗 Chennai ➔ Madurai", "🚗 Chennai ➔ Bangalore", "🔑 Start Trip OTP", "🅿️ Toll Rules"]
 
@@ -451,26 +422,7 @@ async def _rule_based_assistant(
 
     # Category 4: WAITING TIME & PASSENGER DELAY
     elif is_opt_4 or any_kw(tokens, lower_msg, ["wait", "waiting", "delay", "late", "reach", "unreachable", "thamadham"]):
-        if is_tamil:
-            reply = (
-                "⏳ **வாடிக்கையாளர் தாமதம் & காத்திருப்பு கட்டணக் கொள்கை**:\n\n"
-                "• **இலவச காத்திருப்பு நேரம்**: திட்டமிட்ட நேரத்திலிருந்து முதல் 15 நிமிடங்கள் முற்றிலும் இலவசம்.\n"
-                "• **காத்திருப்பு கட்டணம்**: 15 நிமிடங்களுக்குப் பிறகு:\n"
-                "  - Sedan: நிமிடத்திற்கு ₹2 (மணிக்கு ₹120)\n"
-                "  - SUV / Innova: நிமிடத்திற்கு ₹2.5 (மணிக்கு ₹150)\n"
-                "• **போன் எடுக்கவில்லை என்றால்**: In-App Chat-ல் 'பிக்கப் வந்துவிட்டேன்' என்று மெசேஜ் அனுப்பவும். "
-                "15 நிமிடங்களுக்குப் பிறகும் வரவில்லை என்றால் 'Report Delay' பதிவு செய்யவும்."
-            )
-        else:
-            reply = (
-                "⏳ **Passenger Delay & Waiting Time Policy**:\n\n"
-                "• **Free Waiting Window**: The first 15 minutes from scheduled pickup time is completely free.\n"
-                "• **Waiting Charges** (after 15 mins):\n"
-                "  - Sedan: ₹2/min (₹120/hr)\n"
-                "  - SUV / Innova: ₹2.5/min (₹150/hr)\n"
-                "• **If Unreachable**: Send a message via In-App Chat ('Reached pickup'). "
-                "If no response after 15 mins, log via Report Issue to document waiting charges."
-            )
+        reply = bot_facts.waiting_text(db, is_tamil)
         category = "WAITING_TIME"
         suggestions = ["📍 Reached pickup point", "⚠️ Report Delay to Dispatch", "📞 Call Masked Proxy"]
 
@@ -498,43 +450,13 @@ async def _rule_based_assistant(
 
     # Category 6: WALLET, SECURITY HOLD & PAYOUT
     elif is_opt_5 or any_kw(tokens, lower_msg, ["wallet", "hold", "security", "balance", "payout", "vaalat", "panam", "settlement"]):
-        if is_tamil:
-            reply = (
-                "💳 **வாலட் செக்யூரிட்டி ஹோல்டு & கட்டணப் பட்டுவாடா**:\n\n"
-                "• **வாலட் ஹோல்டு (குறைந்தது ₹500)**: ஒவ்வொரு சவாரியை ஏற்கும் போதும் வாலட்டில் குறைந்தது ₹500 ஹோல்டு செய்யப்படும் (கமிஷன் ₹301 மட்டுமே என்றாலும்). கமிஷன் + கூடுதல் கட்டணம் ₹500-ஐ விட அதிகமாக இருந்தால் அந்தத் தொகை ஹோல்டு ஆகும்.\n"
-                "• **கமிஷன் கழிக்கப்பட்டு மீதி திரும்பும்**: சவாரி முடிந்ததும் ஹோல்டு தொகையிலிருந்து கமிஷன் கழிக்கப்படும்; மீதித் தொகை உங்கள் வாலட்டிற்கு திரும்பி வரும். புக்கிங் ரத்தானால் முழுத் தொகையும் திரும்பும்.\n"
-                "• **வாராந்திர வரவு (Weekly Payout)**: உங்கள் நிகர வருமானம் மற்றும் கமிஷன் தொகை பதிவு செய்த வங்கி கணக்கிற்கு நேரடியாக அனுப்பப்படும்.\n"
-                "• குறைந்தபட்சம் ₹1,000 வாலட் பேலன்ஸ் வைத்திருப்பது தொடர்ச்சியாக புதிய சவாரிகளை ஏற்க உதவும்."
-            )
-        else:
-            reply = (
-                "💳 **Wallet Security Hold & Payout Overview**:\n\n"
-                "• **Wallet Hold (minimum ₹500)**: On every booking you accept, at least ₹500 is held from your wallet - even if the commission is only ₹301. If the commission with extras is more than ₹500, that bigger amount is held.\n"
-                "• **Commission deducted, rest refunded**: When the ride is completed the commission is taken from the hold and the remaining amount is refunded to your available balance. A cancelled booking is refunded in full.\n"
-                "• **Bank Settlement**: Earnings and partner payouts are automatically disbursed directly to your verified bank account.\n"
-                "• Maintaining at least ₹1,000 wallet balance ensures uninterrupted booking acceptance."
-            )
+        reply = bot_facts.wallet_text(db, is_tamil)
         category = "WALLET_HOLD"
         suggestions = ["➕ Recharge Wallet Now", "🔒 View Active Holds", "🎧 Dispatch Support"]
 
     # Category 7: ROUND TRIP, BATA & OUTSTATION RULES
-    elif is_opt_7 or any_kw(tokens, lower_msg, ["round", "roundtrip", "bata", "return", "halt", "thirumba"]) or "two way" in lower_msg:
-        if is_tamil:
-            reply = (
-                "🔄 **ரவுண்ட் ட்ரிப் & இரவு நேர தங்குதல் விதிமுறைகள்**:\n\n"
-                "• **குறைந்தபட்ச தூரம்**: ரவுண்ட் ட்ரிப் சவாரிகளுக்கு ஒரு நாளைக்கு குறைந்தபட்சம் 250 கி.மீ கணக்கிடப்படும்.\n"
-                "• **டிரைவர் பேட்டா (Driver Bata)**: ஒரு நாளைக்கு ₹400 முதல் ₹600 வரை வாகன வகையை பொறுத்து வழங்கப்படும்.\n"
-                "• **இரவு நேர தங்குதல் கட்டணம் (Night Halt)**: இரவு 10:00 மணி முதல் காலை 6:00 மணி வரை வாடிக்கையாளர் காரணமாக வாகனம் தங்கும் போது ₹300 - ₹500 கூடுதலாக வழங்கப்படும்.\n"
-                "• திரும்பும் போதும் சுங்கக் கட்டணம் (Return Toll) அசல் ரசீதுப்படி வாடிக்கையாளரால் செலுத்தப்பட வேண்டும்."
-            )
-        else:
-            reply = (
-                "🔄 **Round Trip & Outstation Guidelines**:\n\n"
-                "• **Minimum Kilometers**: Round trips are subject to a standard minimum of 250 KM per calendar day.\n"
-                "• **Driver Beta Allowance**: ₹400 to ₹600 per day depending on vehicle segment.\n"
-                "• **Night Halt Charges**: Between 10:00 PM and 6:00 AM, if an overnight stay is required, a night halt charge of ₹300 to ₹500 applies.\n"
-                "• **Tolls**: Return tolls and state entrance taxes are payable by customer on actuals."
-            )
+    elif is_opt_7 or (any_kw(tokens, lower_msg, ["round", "roundtrip", "bata", "return", "halt", "thirumba"]) or "two way" in lower_msg) and not (len(_find_cities(tokens, lower_msg)) >= 2 and any_kw(tokens, lower_msg, ["fare", "estimate", "price", "cost", "tariff", "rate", "kattanam"])):
+        reply = bot_facts.round_trip_text(db, is_tamil)
         category = "ROUND_TRIP"
         suggestions = ["💰 Estimate Round Trip Fare", "🅿️ Toll Collection Rules", "🎧 Contact Dispatch Desk"]
 
@@ -563,22 +485,7 @@ async def _rule_based_assistant(
 
     # Category 9: PET TRAVEL POLICY
     elif any_kw(tokens, lower_msg, ["pet", "dog", "cat", "animal", "naai", "poonai"]):
-        if is_tamil:
-            reply = (
-                "🐾 **செல்லப்பிராணிகள் பயண வழிகாட்டுதல் (Pet Policy)**:\n\n"
-                "• செல்லப்பிராணிகள் முன்னறிவிப்புடன் மட்டுமே பயணிக்க அனுமதிக்கப்படும்.\n"
-                "• வாடிக்கையாளர் பிரத்யேக துணி அல்லது பெட் சீட் கவரிங் (Pet Bedding Sheet) கொண்டு வர வேண்டும்.\n"
-                "• காரின் இருக்கைகள் மற்றும் உட்புற சுகாதாரம் பாதிக்கப்படாமல் பார்த்துக் கொள்ள வேண்டும்.\n"
-                "• வாடிக்கையாளரிடம் செல்லப்பிராணி தூய்மைப் பராமரிப்புக்காக (Pet Hygiene Fee) ₹300 வரை கட்டணம் பெறப்படலாம்."
-            )
-        else:
-            reply = (
-                "🐾 **Pet Travel Policy**:\n\n"
-                "• Pets are permitted strictly with prior notification during booking.\n"
-                "• Passengers must provide a pet bed or sheet to protect vehicle seats and upholstery.\n"
-                "• A nominal ₹300 pet hygiene / interior sanitization charge applies.\n"
-                "• Drivers may request pet safety cages for aggressive or untamed pets."
-            )
+        reply = bot_facts.pet_text(is_tamil)
         category = "PET_POLICY"
         suggestions = ["🚗 Outstation Guidelines", "💬 Message in App", "🎧 Help Desk"]
 
@@ -647,22 +554,7 @@ async def _rule_based_assistant(
 
     # Category 13: ADVANCE PAYMENT, GST & INVOICE
     elif any_kw(tokens, lower_msg, ["advance", "gst", "invoice", "bill", "commission", "deduction", "muthal"]):
-        if is_tamil:
-            reply = (
-                "🧾 **அட்வான்ஸ் பேமெண்ட், GST & இன்வாய்ஸ்**:\n\n"
-                "• **அட்வான்ஸ்**: வாடிக்கையாளர் முன்கூட்டியே செலுத்தும் அட்வான்ஸ் தொகை, சவாரி Accept ஆன பிறகு App-ல் காண்பிக்கும்.\n"
-                "• **கமிஷன் / பிளாட்ஃபார்ம் கட்டணம்**: நிலையான Standard கமிஷன் (10%) மற்றும் சிறிய பிளாட்ஃபார்ம் கட்டணம் (2%) சவாரி "
-                "தொகையிலிருந்து கழிக்கப்படும் - சவாரி முடிந்ததும் Wallet-ல் விவரம் தெளிவாக இருக்கும்.\n"
-                "• **GST இன்வாய்ஸ்**: நிறுவன வாடிக்கையாளர்களுக்கு GST இன்வாய்ஸ் தேவைப்பட்டால் அது வாடிக்கையாளர் தரப்பில் Website/Admin மூலம் வழங்கப்படும்."
-            )
-        else:
-            reply = (
-                "🧾 **Advance Payment, GST & Invoice**:\n\n"
-                "• **Advance**: Any advance the passenger paid up front is shown in the app once you accept the ride.\n"
-                "• **Commission / Platform Fee**: The standard commission (10%) and a small platform fee (2%) are deducted from the trip amount - "
-                "the exact split is shown in your Wallet once the trip is completed.\n"
-                "• **GST Invoice**: For business customers who need a GST invoice, that is issued on the customer side via the Website/Admin, not from the Driver App."
-            )
+        reply = bot_facts.advance_text(db, is_tamil)
         category = "ADVANCE_GST"
         suggestions = ["💳 View Wallet Breakdown", "💰 View Tariff Rates", "🎧 Contact Dispatch Desk"]
 
@@ -799,36 +691,10 @@ async def _rule_based_assistant(
                 car_type_key = "hatchback"
                 car_type_display = "Hatchback (Swift / WagonR)"
 
-            estimated_km = get_distance(pickup_city, drop_city)
-            rate_per_km = PER_KM_RATES.get(car_type_key, 14)
-            estimated_fare = estimated_km * rate_per_km
-            driver_beta = DRIVER_BETA_MAP.get(car_type_key, 400)
-            total_quote = estimated_fare + driver_beta
-
-            if is_tamil:
-                reply = (
-                    f"🚗 **கட்டணக் கணக்கீடு: {pickup_city} ➔ {drop_city}**\n\n"
-                    f"• வாகனம்: **{car_type_display}**\n"
-                    f"• உத்தேச தூரம்: **{estimated_km} km**\n"
-                    f"• கிலோமீட்டர் கட்டணம்: **₹{rate_per_km}/km**\n"
-                    f"• சவாரி கட்டணம்: **₹{estimated_fare:,}**\n"
-                    f"• ஓட்டுநர் படி (Driver Beta): **₹{driver_beta}**\n"
-                    f"💰 **மொத்த உத்தேச கட்டணம்: சுமார் ₹{total_quote:,}**\n"
-                    f"✨ (சுங்கக் கட்டணம் அசல் ரசீதுப்படி வாடிக்கையாளரால் செலுத்தப்படும்)\n\n"
-                    f"மேலும் விவரங்கள் அறிய கீழே உள்ள ஆப்ஷன்களை தட்டவும்."
-                )
-            else:
-                reply = (
-                    f"🚗 **Tariff Estimate: {pickup_city} to {drop_city}**\n\n"
-                    f"• Vehicle: **{car_type_display}**\n"
-                    f"• Estimated Distance: **{estimated_km} km**\n"
-                    f"• Per KM Tariff: **₹{rate_per_km}/km**\n"
-                    f"• Base Fare: **₹{estimated_fare:,}**\n"
-                    f"• Driver Beta: **₹{driver_beta}**\n"
-                    f"💰 **Total Estimated Fare: ~₹{total_quote:,}**\n"
-                    f"✨ (Fastag tolls payable as per actual receipts)\n\n"
-                    f"Tap below for quick options or to chat with Dispatch."
-                )
+            known_km = distance_if_known(pickup_city, drop_city)
+            round_requested = any_kw(tokens, lower_msg, ["round", "roundtrip", "return", "thirumba"]) or "two way" in lower_msg
+            _car_key = {"sedan": "SEDAN_4_PLUS_1", "suv": "SUV", "innova": "INNOVA", "hatchback": "HATCHBACK", "crysta": "INNOVA_CRYSTA"}.get(car_type_key, "SEDAN_4_PLUS_1")
+            reply = bot_facts.tariff_estimate(db, is_tamil, pickup_city, drop_city, known_km, car_type_display, _car_key, round_requested)
             category = "TARIFF"
             suggestions = [
                 f"💰 Check SUV Fare ({pickup_city} ➔ {drop_city})",

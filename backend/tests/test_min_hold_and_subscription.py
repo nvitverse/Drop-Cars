@@ -87,7 +87,7 @@ def test_owner_driver_rates_per_vehicle_and_trip_type():
     r = _split("SEDAN_4_PLUS_1", "Oneway", 15, 400, 500)
     assert (r["cost_per_km"], r["extra_cost_per_km"], r["driver_allowance"], r["extra_driver_allowance"], r["permit_charges"], r["extra_permit_charges"]) == (15, 0, 300, 100, 400, 100)
     r = _split("SEDAN_4_PLUS_1", "Round Trip", 16, 300, 0)
-    assert (r["cost_per_km"], r["extra_cost_per_km"]) == (13, 3)
+    assert (r["cost_per_km"], r["extra_cost_per_km"]) == (14, 2)         # owner 2026-10-10: Sedan round trip 14 (was 13)
     assert _split("SUV", "Oneway", 20, 500, 0)["extra_driver_allowance"] == 200                      # SUV bata 300, the rest is extra
     assert [_split("SUV_6_PLUS_1", t, 25, 300, 0)["cost_per_km"] for t in ("Oneway", "Round Trip")] == [20, 18]
     assert [_split("INNOVA", t, 25, 400, 0)["cost_per_km"] for t in ("Oneway", "Round Trip")] == [20, 19]

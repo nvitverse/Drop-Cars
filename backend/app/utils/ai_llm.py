@@ -189,7 +189,13 @@ def _rules_text(db: Session) -> str:
     fee = s.get("convenience_fee", 30)
     share_min = s.get("platform_share_min", 30)
     hold = _setting(db, "min_driver_hold", "500")
+    try:
+        from app.utils.bot_facts import tariff_plain
+        tariff_line = tariff_plain(db)
+    except Exception:  # noqa: BLE001
+        tariff_line = ""
     return f"""DROP CARS RULES (authoritative - use exactly these):
+{tariff_line}
 - Commission on Outstation bookings taken from a poster (vendor/other driver): the driver pays 10% of the KM fare as commission, at least Rs {cmin}. LOCAL bookings have no minimum. Bookings marked "10% CC OFF" have no commission.
 - Out of that commission the platform keeps 1% of the km fare (at least Rs {share_min}); the rest goes to whoever posted the booking (vendor / other driver). Nothing else is deducted from the driver.
 - Extras (toll, parking, permit, waiting, night/driver allowance if excluded) are paid by the customer at actuals and go to the driver/poster as per the booking; included items are not collected again.
