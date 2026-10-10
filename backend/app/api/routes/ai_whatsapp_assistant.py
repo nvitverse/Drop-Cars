@@ -290,7 +290,45 @@ async def chat_assistant_route(
                     "category": "UNRECOGNIZED" if llm["needs_human"] else "AI_ASSISTANT",
                     "suggestions": llm["suggestions"],
                 }
+    try:                      # the vendor app is not the driver app: a vendor must never be shown the driver's hold / penalty / rate card
+        from app.utils import ai_llm
+        role, _ = await asyncio.to_thread(ai_llm.identify, request, db)
+    except Exception:  # noqa: BLE001
+        role = None
+    if role == "VENDOR" or str(payload.get("audience", "")).lower() == "vendor":
+        payload = {**payload, "audience": "vendor"}
     return await _rule_based_assistant(payload, db)
+
+
+_VENDOR_TEXT = {
+    "WALLET_HOLD": (
+        "\U0001F4B3 The wallet hold is only for the driver / fleet owner who ACCEPTS a booking. As a vendor you have no hold and no penalty for posting.\n"
+        "Your share of a booking (commission share + extras) is settled to you after the trip completes. Open the booking to see it.",
+        "\U0001F4B3 Wallet hold என்பது booking-ஐ ACCEPT செய்யும் driver / fleet owner-க்கு மட்டும். Vendor-க்கு hold இல்லை, post செய்வதற்கு penalty-உம் இல்லை.\n"
+        "உங்கள் பங்கு (commission share + extras) trip முடிந்த பிறகு உங்களுக்கு settle ஆகும். Booking-ஐத் திறந்து பாருங்கள்."),
+    "CANCELLATION_PENALTY": (
+        "\u274C To cancel a posted booking open it and tap Cancel. If a driver has already accepted it, please chat with the Admin / Dispatch Desk first - they handle the driver, the customer and any refund properly.",
+        "\u274C Post செய்த booking-ஐ cancel செய்ய அதைத் திறந்து Cancel தட்டுங்கள். Driver ஏற்கனவே accept செய்திருந்தால் முதலில் Admin / Dispatch Desk-உடன் பேசுங்கள் - driver, customer, refund எல்லாவற்றையும் அவர்கள் சரியாகக் கையாள்வார்கள்."),
+    "DOCUMENTS": (
+        "\U0001F4C4 Your business documents (GST, PAN, KYC) are checked by Drop Cars Admin. Send or update them in the Admin / Dispatch Desk chat.",
+        "\U0001F4C4 உங்கள் business ஆவணங்கள் (GST, PAN, KYC) Drop Cars Admin சரிபார்ப்பார். Admin / Dispatch Desk chat-ல் அனுப்புங்கள்."),
+    "TARIFF": (
+        "\U0001F4B0 Open Post Booking, choose pickup, drop and car - the fare box shows the fare from the CURRENT tariff, and you add your own markup. "
+        "For a special route or a bulk rate, ask the Admin / Dispatch Desk.",
+        "\U0001F4B0 Post Booking-ஐத் திறந்து pickup, drop, car தேர்ந்தெடுங்கள் - தற்போதைய tariff-படி fare தெரியும், அதன்மேல் உங்கள் markup சேர்க்கலாம். "
+        "சிறப்பு route அல்லது bulk rate என்றால் Admin / Dispatch Desk-ஐக் கேளுங்கள்."),
+    "UNRECOGNIZED": (
+        "I can help with: how to post a booking, how your share / commission works, Start & End OTP, toll & Fastag, waiting charges, GST & advance, "
+        "what to do if nobody accepts, and emergencies.\n\nFor anything else please chat with the Admin / Dispatch Desk.",
+        "நான் உதவ முடிந்தவை: booking post செய்வது, உங்கள் பங்கு / commission எப்படி, Start & End OTP, toll & Fastag, waiting charges, GST & advance, "
+        "யாரும் accept செய்யாவிட்டால் என்ன செய்வது, அவசரநிலை.\n\nமற்றவற்றுக்கு Admin / Dispatch Desk-உடன் chat செய்யுங்கள்."),
+}
+_VENDOR_SUGGESTIONS = ["How is my share worked out?", "What if nobody accepts?", "Who gives the Start OTP?", "Chat with Dispatch Desk"]
+
+
+def _vendor_override(category: str, is_tamil: bool):
+    t = _VENDOR_TEXT.get(category)
+    return (t[1] if is_tamil else t[0]) if t else None
 
 
 async def _rule_based_assistant(
@@ -798,6 +836,11 @@ async def _rule_based_assistant(
                 "🔑 How to get Start OTP?",
                 "⏳ Waiting charges policy"
             ]
+
+    if payload.get("audience") == "vendor":              # vendor wording for the driver-only topics (hold, penalty, rate card, documents)
+        _vo = _vendor_override(category, is_tamil)
+        if _vo:
+            reply, suggestions = _vo, _VENDOR_SUGGESTIONS
 
     # Audit logging
     try:

@@ -72,9 +72,9 @@ const timeLabel = (iso?: string | null) => {
 
 // Initial AI Quick Chips
 const AI_QUICK_SUGGESTIONS = [
-  'Estimate Chennai ➔ Madurai fare',
-  'Explain ₹500 Security Hold rule',
-  'What is the cancellation penalty?',
+  'How is my share worked out?',
+  'What if nobody accepts my booking?',
+  'Who gives the Start OTP?',
   'Toll & Fastag collection rules',
   'Start & End Trip OTP guide',
   'Ghat road & hill station rules',
@@ -99,12 +99,12 @@ export default function ChatsScreen() {
     {
       id: 'welcome-vendor',
       sender: 'BOT',
-      text: 'Vanakkam! I am DropBot, your 24/7 Fleet & Booking AI Assistant.\n\nAsk me anything about outstation tariffs, OTP rules, Fastag tolls, ₹500 security hold, or partner cancellation policies!',
+      text: 'Vanakkam! I am DropBot, your 24/7 booking assistant for vendors.\n\nAsk me how posting works, how your share is calculated, OTP rules, tolls, GST & advance, or what to do when nobody accepts a booking.',
       created_at: new Date().toISOString(),
       suggestions: [
-        'Calculate Chennai ➔ Bangalore fare',
-        'How does ₹500 Security Hold work?',
-        'Cancellation & penalty rules',
+        'How is my share worked out?',
+        'What if nobody accepts my booking?',
+        'How do I cancel a posted booking?',
       ],
     },
   ]);
@@ -150,6 +150,7 @@ export default function ChatsScreen() {
       const response = await api.post('/ai/chat-assistant', {
         message: text,
         language: 'ta',
+        audience: 'vendor',
       });
 
       if (response.data && response.data.reply) {
@@ -165,15 +166,8 @@ export default function ChatsScreen() {
         throw new Error('No reply from server');
       }
     } catch (err) {
-      // High quality offline fallback
-      let fallbackText = 'I am here to help! Standard Outstation rates are:\n• Sedan: ₹14/km\n• SUV: ₹19/km\n• Innova: ₹21/km\n\nFastag tolls are payable as per actuals. ₹500 security hold is released instantly upon End OTP.';
-      const lower = text.toLowerCase();
-      if (lower.includes('cancel') || lower.includes('penalty') || lower.includes('500')) {
-        fallbackText = '⚠️ **Cancellation Policy**:\n• 10s HUD decline window is 100% FREE (₹0 penalty).\n• Cancelling after driver/car assignment incurs a ₹500 penalty deducted from wallet.';
-      } else if (lower.includes('hold') || lower.includes('security') || lower.includes('wallet')) {
-        fallbackText = '💳 **₹500 Security Hold**:\n• A refundable ₹500 hold is temporarily reserved per active trip.\n• Instantly released to available balance once ride is completed via End OTP.';
-      }
-
+      // The server could not be reached. No rates or rules are written here on purpose - those come from the server so they are never out of date.
+      const fallbackText = 'I could not reach the server just now. Please try again in a minute, or chat with the Admin / Dispatch Desk - they reply right here in Chats.';
       setAiMessages((prev) => [
         ...prev,
         {
@@ -181,7 +175,7 @@ export default function ChatsScreen() {
           sender: 'BOT',
           text: fallbackText,
           created_at: new Date().toISOString(),
-          suggestions: ['Call Operations Helpline', 'Check Wallet Balance'],
+          suggestions: ['Try again', 'Chat with Dispatch Desk'],
         },
       ]);
     } finally {
@@ -335,7 +329,7 @@ export default function ChatsScreen() {
                     </View>
                   </View>
                   <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 12.5 }}>
-                    Instant fare calculations, ₹500 hold info & operational rules
+                    Booking, commission and OTP help - what to do when nobody accepts
                   </Text>
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />

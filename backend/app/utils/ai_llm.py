@@ -163,7 +163,17 @@ def build_context(db: Session, role: Optional[str], caller) -> str:
                 else:
                     lines.append("No current or upcoming trips.")
         elif role == "VENDOR":
-            lines.append("Vendor account (posts bookings for drivers to take).")
+            lines.append("Vendor account (posts bookings for drivers to take). Has no wallet hold.")
+            from app.models.orders import Order
+            from app.crud.booking_chat import _cities
+            rows = db.query(Order).filter(Order.vendor_id == caller.id).order_by(Order.created_at.desc()).limit(5).all()
+            if rows:
+                lines.append("Latest bookings posted by this vendor:")
+                for o in rows:
+                    p, d = _cities(o)
+                    lines.append(f"- Booking #{o.id}: {p} -> {d or '-'}, pickup {_ist(o.start_date_time) if o.start_date_time else '?'}, trip status {_v(o.trip_status)}")
+            else:
+                lines.append("No bookings posted yet.")
     except Exception as e:  # noqa: BLE001
         logger.warning("ai context build failed: %s", e)
     return "\n".join(lines)
@@ -190,6 +200,30 @@ def _rules_text(db: Session) -> str:
 - Customer rating bonus: after a customer rates the trip through the QR / link, 3 stars and above pays Rs 10 per star to the owner's wallet after 24 hours.
 - Wallet rows can be tapped for a plain-language explanation of that entry.
 - Support: a person from Drop Cars support can join the chat; booking questions go to the booking's own chat with its poster first, and support joins if there is no reply within 10 minutes."""
+
+
+def _vendor_rules_text(db: Session) -> str:
+    """What a VENDOR (the one who posts bookings) needs - the driver-only rules (wallet hold, penalty) are deliberately left out."""
+    try:
+        from app.utils.commission import get_fee_settings
+        s = get_fee_settings(db)
+    except Exception:  # noqa: BLE001
+        s = {}
+    cmin = s.get("commission_min", 200)
+    fee = s.get("convenience_fee", 30)
+    share_min = s.get("platform_share_min", 30)
+    return f"""DROP CARS RULES FOR VENDORS (authoritative - use exactly these; the user is a VENDOR who POSTS bookings, not a driver):
+- A vendor posts a booking with the driver fare (and any extras); a driver / fleet owner accepts it, assigns a vehicle and drives it. The customer's number is shown to the driver only at the time set for that booking.
+- The wallet hold (security hold) is for the DRIVER / fleet owner who accepts a booking. A vendor has NO hold and no penalty for posting.
+- Your share on a standard outstation booking: the driver pays 10% of the km fare as commission (at least Rs {cmin}); the platform keeps 1% of the km fare (at least Rs {share_min}); the rest of that commission comes to you, plus ALL extras you charged (extra per-km, extra allowance, extra permit). Local trips have no minimum.
+- "Driver fare + your markup" (all-inclusive) bookings: the driver keeps the whole driver fare; the platform share (1% of the km fare, at least Rs {share_min}, never more than your markup) comes out of your markup.
+- Bookings marked "10% CC OFF" have no commission and no platform share.
+- A Rs {fee} convenience fee is added to every customer bill; the driver collects it and settles it with the platform. It is not charged to the vendor.
+- Trip flow: post -> a driver accepts and assigns driver + car -> at pickup the CUSTOMER tells the START OTP to the driver -> at drop the customer tells the END OTP -> trip completes -> your share is settled. Drop Cars staff never share an OTP with a driver.
+- If nobody accepts a booking, Drop Cars dispatch can help: chat with the Admin / Dispatch Desk in Chats. Cancelling a booking a driver already accepted, refunds and disputes go through dispatch (needs_human=true).
+- Fares for a route: the Post Booking screen shows the fare from the current tariff - do NOT quote per-km rates from memory.
+- Minimum billing at trip close: One-way 130 km; Round trip / Multi-city 250 km per day. Toll, parking, permit, waiting are paid by the customer at actuals unless the booking says included.
+- Support: a person from Drop Cars support can join the chat."""
 
 
 def _knowledge_text(db: Session) -> str:
@@ -301,7 +335,11 @@ def answer(db: Session, request, message: str, history: Any = None) -> Optional[
     user_key = f"{role}:{getattr(caller, 'id', None) or (request.client.host if request.client else 'anon')}"
     if not _within_limits(db, user_key):
         return None
-    system = SYSTEM_TEMPLATE.format(rules=_rules_text(db), knowledge=_knowledge_text(db), facts=build_context(db, role, caller))
+    if role == "VENDOR":
+        system = SYSTEM_TEMPLATE.replace("the Drop Cars driver / fleet-owner app", "the Drop Cars VENDOR app (vendors post bookings for drivers; they are not drivers)").format(
+            rules=_vendor_rules_text(db), knowledge=_knowledge_text(db), facts=build_context(db, role, caller))
+    else:
+        system = SYSTEM_TEMPLATE.format(rules=_rules_text(db), knowledge=_knowledge_text(db), facts=build_context(db, role, caller))
     turns = _clean_history(history)
     if turns and turns[-1]["role"] == "user":
         turns[-1]["text"] += "\n" + message[:600]
