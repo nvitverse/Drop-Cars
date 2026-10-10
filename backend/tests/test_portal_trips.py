@@ -14,6 +14,8 @@ def _quiet(pg_session, monkeypatch):
     PortalTrip.__table__.create(bind=pg_session.get_bind(), checkfirst=True)
     UnacceptedCase.__table__.create(bind=pg_session.get_bind(), checkfirst=True)
     monkeypatch.setattr(P, "notify_admins", lambda *a, **k: None)
+    monkeypatch.delenv("RAZORPAY_KEY_ID", raising=False)               # no real Razorpay call from a test
+    monkeypatch.delenv("RAZORPAY_KEY_SECRET", raising=False)
     import app.utils.website_status_webhook as w
     monkeypatch.setattr(w, "notify_website_of_status", lambda *a, **k: None, raising=False)
 
@@ -126,3 +128,22 @@ def test_guessing_the_otp_is_stopped_after_five_wrong_tries(pg_session, client_w
     codes = [_api(c, pt.token, "/start", "post", data={"otp": wrong, "km": "10"}).status_code for _ in range(6)]
     assert codes == [400] * 5 + [429]
     assert _api(c, pt.token, "/start", "post", data={"otp": pt.start_otp, "km": "10"}).status_code == 429       # even the right code waits
+
+
+def test_commission_can_be_paid_online_through_razorpay_and_confirms_itself(pg_session, client_with_db, monkeypatch):
+    from app.utils import razorpay_client as rc
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "k")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "s")
+    made, state = [], {"status": "created"}
+    monkeypatch.setattr(rc.RazorpayClient, "create_payment_link", lambda self, **kw: made.append(kw) or {"id": "plink_1", "short_url": "https://rzp.io/i/abc"})
+    monkeypatch.setattr(rc.RazorpayClient, "get_payment_link", lambda self, link_id: {"status": state["status"], "payments": [{"payment_id": "pay_9", "status": "captured"}]})
+    c = client_with_db
+    o = _order(pg_session, hours_ahead=1)
+    tok = P.create_link(pg_session, o.id, "tester").token
+    assert _api(c, tok, "/take", "post", json=GOOD).status_code == 200
+    v = _api(c, tok).json()
+    assert v["pay"]["online_link"] == "https://rzp.io/i/abc" and made[0]["amount_rupees"] == 280 and v["commission_status"] == "PENDING" and v["customer"] is None
+    state["status"] = "paid"                                                   # the executor paid in Razorpay: no staff tap needed
+    v = _api(c, tok).json()
+    assert v["commission_status"] == "CONFIRMED" and v["customer"]["phone"] == "9000000001"
+    assert len(made) == 1                                                       # one link per booking, not one per refresh

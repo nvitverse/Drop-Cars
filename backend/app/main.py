@@ -484,6 +484,8 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS subscription_paid_at TIMESTAMPTZ',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS reason VARCHAR(100)',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS topic VARCHAR(20)',
+        'ALTER TABLE IF EXISTS portal_trips ADD COLUMN IF NOT EXISTS pay_link_id VARCHAR',
+        'ALTER TABLE IF EXISTS portal_trips ADD COLUMN IF NOT EXISTS pay_link_url VARCHAR',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS collected TEXT',
         # Trusted Partner (tier=PREFERRED) - two extra grant paths alongside
         # the yearly-billing evidence above (2026-09-30)

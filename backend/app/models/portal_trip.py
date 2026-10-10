@@ -28,6 +28,8 @@ class PortalTrip(Base):
     commission_due = Column(Integer, nullable=True)
     commission_status = Column(String, nullable=False, server_default="PENDING")    # PENDING | REPORTED (UTR sent) | CONFIRMED (staff saw the money)
     commission_utr = Column(String, nullable=True)
+    pay_link_id = Column(String, nullable=True)         # Razorpay payment link for the commission (same account as the wallet / billing links)
+    pay_link_url = Column(String, nullable=True)
 
     start_otp = Column(String, nullable=True)           # told to the customer, never shown to the executor
     end_otp = Column(String, nullable=True)

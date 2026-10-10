@@ -115,7 +115,55 @@ def pay_info(db: Session, pt: PortalTrip, order) -> Dict[str, Any]:
             qr = _qr_svg(uri, 168)
         except Exception:        # noqa: BLE001
             qr = ""
-    return {"upi_id": upi or None, "payee": name or None, "upi_uri": uri, "upi_qr_svg": qr, "helpline": phone}
+    return {"upi_id": upi or None, "payee": name or None, "upi_uri": uri, "upi_qr_svg": qr, "helpline": phone, "online_link": pt.pay_link_url}
+
+
+def razorpay_configured() -> bool:
+    import os
+    return bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET"))
+
+
+def ensure_pay_link(db: Session, pt: PortalTrip, order) -> None:
+    """The commission as a Razorpay payment link (UPI / card / netbanking) - the same Razorpay account the wallet and billing links use.
+    Best effort: when Razorpay is not set up or is down, the UPI QR + UTR route still works."""
+    if pt.pay_link_id or not pt.exec_name or not pt.commission_due or not razorpay_configured():
+        return
+    try:
+        from app.utils.razorpay_client import RazorpayClient
+        link = RazorpayClient().create_payment_link(
+            amount_rupees=int(pt.commission_due), description=f"Drop Cars commission - booking #{order.id}", reference_id=f"portal-{pt.id.hex[:30]}",
+            customer_name=pt.exec_name, customer_contact=f"+91{pt.exec_phone}" if pt.exec_phone else None,
+            notes={"purpose": "portal_commission", "order_id": str(order.id), "portal_trip_id": str(pt.id)}, expire_in_hours=72)
+        pt.pay_link_id, pt.pay_link_url = link["id"], link.get("short_url")
+        _log(pt, "system", "PAY_LINK_CREATED", pt.pay_link_id)
+        db.commit()
+    except Exception:        # noqa: BLE001
+        pass
+
+
+def check_pay_link(db: Session, pt: PortalTrip) -> bool:
+    """Ask Razorpay whether the link was paid; if so the commission is confirmed by itself (no staff tap needed). Safe to call often."""
+    if not pt.pay_link_id or pt.commission_status == "CONFIRMED":
+        return pt.commission_status == "CONFIRMED"
+    try:
+        from app.utils.razorpay_client import RazorpayClient
+        info = RazorpayClient().get_payment_link(pt.pay_link_id)
+    except Exception:        # noqa: BLE001
+        return False
+    if (info.get("status") or "").lower() != "paid":
+        return False
+    pays = [p for p in (info.get("payments") or []) if (p.get("status") or "").lower() in ("captured", "paid")]
+    pt.commission_status = "CONFIRMED"
+    pt.commission_utr = (pays[0].get("payment_id") if pays else None) or pt.pay_link_id
+    _log(pt, "razorpay", "PAYMENT_CONFIRMED", pt.commission_utr or "")
+    db.commit()
+    try:
+        from app.crud.unaccepted_desk import mark_commission
+        mark_commission(db, pt.order_id, True, "Razorpay")
+    except Exception:        # noqa: BLE001
+        pass
+    notify_admins(db, "💰 Web link: commission paid online", f"#{pt.order_id} {pt.exec_name} paid Rs {pt.commission_due} through Razorpay.")
+    return True
 
 
 def view(db: Session, pt: PortalTrip, base_url: str = "") -> Dict[str, Any]:
@@ -127,6 +175,9 @@ def view(db: Session, pt: PortalTrip, base_url: str = "") -> Dict[str, Any]:
         due = commission_amount(db, o)
     else:
         due = pt.commission_due
+    if pt.exec_name and pt.commission_status != "CONFIRMED":
+        ensure_pay_link(db, pt, o)
+        check_pay_link(db, pt)
     paid = is_paid(db, pt)
     revealed = bool(pt.exec_name) and paid and is_customer_number_revealed(db, o)
     notice = None

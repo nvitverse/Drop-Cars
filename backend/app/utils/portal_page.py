@@ -63,7 +63,7 @@ function render(){if(MODE==="feedback")return feedbackPage();var app=document.ge
  var e=s.executor;if(e){var d=el("div",{class:"card"},[el("h2",{text:"Driver & cab"})]);kv(d,"Driver",e.name);kv(d,"Mobile",e.phone);kv(d,"Vehicle",e.vehicle_number+(e.vehicle_model?" - "+e.vehicle_model:""));app.appendChild(d)}
  var paid=s.commission_status==="CONFIRMED";
  if(!paid){var p=el("div",{class:"card"},[el("h2",{text:"Commission to Drop Cars"}),el("div",{class:"row"},[el("span",{text:"Amount"}),el("b",{text:money(s.commission_due)})])]);
-  var pay=s.pay||{};if(pay.upi_qr_svg){var q=el("div",{class:"qr"});q.innerHTML=pay.upi_qr_svg;p.appendChild(q)}
+  var pay=s.pay||{};if(pay.online_link)p.appendChild(el("a",{class:"btn",href:pay.online_link,text:"Pay online (UPI / card / netbanking)"}));if(pay.upi_qr_svg){var q=el("div",{class:"qr"});q.innerHTML=pay.upi_qr_svg;p.appendChild(q)}
   if(pay.upi_uri)p.appendChild(el("a",{class:"btn",href:pay.upi_uri,text:"Pay with UPI app"}));
   if(pay.upi_id)p.appendChild(el("div",{class:"small",text:"UPI ID: "+pay.upi_id+(pay.payee?" ("+pay.payee+")":"")}));else p.appendChild(el("div",{class:"small",text:"Call Drop Cars for the payment details: +91 "+(pay.helpline||"7200217986")}));
   if(s.commission_status==="REPORTED"){p.appendChild(el("div",{class:"msg good",text:"UTR received. Waiting for Drop Cars to confirm - this page opens the trip by itself."}))}
