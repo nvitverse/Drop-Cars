@@ -1,3 +1,4 @@
+import re
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta, timezone
@@ -438,6 +439,39 @@ def increase_all_inclusive_fare(db: Session, order_id: int, vendor_id: Optional[
     return order, current_amount, order.total_booking_amount
 
 
+def _trip_type_enum(value):
+    """'oneway', 'Oneway', 'ONEWAY', 'one way', 'round_trip', 'roundtrip', 'multicity', 'multy city', 'hourly', 'local' ... -> the enum (the Admin App
+    sends its own screen words; the database only accepts the enum's names)."""
+    from app.models.new_orders import OrderTypeEnum
+    if isinstance(value, OrderTypeEnum):
+        return value
+    key = re.sub(r"[^a-z]", "", str(value or "").lower())
+    table = {"oneway": OrderTypeEnum.ONEWAY, "roundtrip": OrderTypeEnum.ROUND_TRIP, "multycity": OrderTypeEnum.MULTY_CITY, "multicity": OrderTypeEnum.MULTY_CITY,
+             "hourly": OrderTypeEnum.HOURLY_RENTAL, "hourlyrental": OrderTypeEnum.HOURLY_RENTAL, "local": OrderTypeEnum.LOCAL}
+    if key not in table:
+        raise ValueError(f"Unknown trip type: {value}")
+    return table[key]
+
+
+def _car_type_enum(value):
+    from app.models.new_orders import CarTypeEnum
+    if isinstance(value, CarTypeEnum):
+        return value
+    raw = str(value or "").strip()
+    for c in CarTypeEnum:
+        if raw.upper().replace(" ", "_") in (c.name, str(c.value).upper()):
+            return c
+    raise ValueError(f"Unknown vehicle type: {value}")
+
+
+def _ist_if_naive(dt):
+    """The Admin App works in Indian time; a pickup time sent without an offset is IST, not UTC (it used to move the trip by 5 h 30 m)."""
+    from datetime import timezone as _tz, timedelta as _td
+    if dt is not None and getattr(dt, "tzinfo", None) is None:
+        return dt.replace(tzinfo=_tz(_td(hours=5, minutes=30)))
+    return dt
+
+
 def admin_master_edit_order(db: Session, order_id: int, updates: Dict) -> Order:
     """Master edit of any booking by Admin at ANY TIME.
     Can edit: customer_name, customer_number, customer_email,
@@ -458,14 +492,17 @@ def admin_master_edit_order(db: Session, order_id: int, updates: Dict) -> Order:
     if "customer_number" in updates and updates["customer_number"] is not None:
         order.customer_number = str(updates["customer_number"]).strip()
     if "start_date_time" in updates and updates["start_date_time"] is not None:
+        updates["start_date_time"] = _ist_if_naive(updates["start_date_time"])
         order.start_date_time = updates["start_date_time"]
     if "trip_distance" in updates and updates["trip_distance"] is not None:
         order.trip_distance = int(updates["trip_distance"])
         order.calculated_trip_distance = int(updates["trip_distance"])
         order.distance_edited = True
     if "car_type" in updates and updates["car_type"] is not None:
+        updates["car_type"] = _car_type_enum(updates["car_type"])
         order.car_type = updates["car_type"]
     if "trip_type" in updates and updates["trip_type"] is not None:
+        updates["trip_type"] = _trip_type_enum(updates["trip_type"])
         order.trip_type = updates["trip_type"]
     if "estimated_price" in updates and updates["estimated_price"] is not None:
         order.estimated_price = int(updates["estimated_price"])

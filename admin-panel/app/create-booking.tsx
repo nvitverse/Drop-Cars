@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import Modal from '@/components/KeyboardSafe';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft, Plus, X, Search, CheckCircle2, Car, ChevronDown, ChevronRight, Sparkles,
@@ -163,6 +163,7 @@ const toIsoDateTime = (date: string, time: string): string | undefined => {
 
 export default function CreateBookingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();      // the sticky Save / Confirm bar must sit ABOVE the phone's navigation bar
   const { isDark, themeColors } = useTheme();
   const params = useLocalSearchParams<{
     edit_order_id?: string;
@@ -1695,7 +1696,7 @@ export default function CreateBookingScreen() {
           customer_name: customerName.trim(),
           customer_number: `${customerCountryCode}${customerPhone}`.replace(/[^0-9+]/g, ''),
           trip_distance: Math.round(Number(minKm) || Number(fare?.total_km) || Number(routeKm) || 0),
-          start_date_time: `${startDate}T${startTime}:00`,
+          start_date_time: `${startDate}T${startTime.padStart(5, '0')}:00+05:30`,
           car_type: carType,
           trip_type: tripType,
           estimated_price: estPrice > 0 ? estPrice : undefined,
@@ -3689,11 +3690,6 @@ export default function CreateBookingScreen() {
           </TouchableOpacity>
         )}
 
-        {!!params.edit_order_id && (
-          <TouchableOpacity style={[styles.confirmButton, { backgroundColor: '#2563EB', marginTop: 12 }, confirming && { opacity: 0.6 }]} onPress={() => handleConfirm()} disabled={confirming}>
-            {confirming ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.primaryButtonText}>Save Changes to Booking #{params.edit_order_id}</Text>}
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
       {/* Sticky Quote Review bar - once a fare is calculated, keep the total
@@ -3704,12 +3700,12 @@ export default function CreateBookingScreen() {
           changes - the button below just calls the same handleConfirm()
           as the one inside the scroll). Sits outside the ScrollView so it
           never moves. */}
-      {fare && !confirming && (
-        <View style={[styles.stickyReviewBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+      {(fare || !!params.edit_order_id) && !confirming && (
+        <View style={[styles.stickyReviewBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border, paddingBottom: 14 + (Platform.OS === 'android' ? insets.bottom : 0) }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.stickyReviewLabel, { color: themeColors.textSecondary }]}>Customer fare</Text>
             <Text style={[styles.stickyReviewAmount, { color: themeColors.text }]}>
-              ₹{Number(fare.customer_amount || fare.total_amount || 0).toLocaleString('en-IN')}
+              ₹{Number(fare?.customer_amount || fare?.total_amount || totalBookingAmount || 0).toLocaleString('en-IN')}
             </Text>
           </View>
           <TouchableOpacity style={[styles.stickyReviewBtn, !!params.edit_order_id && { backgroundColor: '#2563EB' }]} onPress={() => handleConfirm()} disabled={confirming}>

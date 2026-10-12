@@ -276,3 +276,7 @@ RULE going forward: never deploy the backend or publish an Admin OTA from `dropc
 - `crud/customer_booking_request.py`: the 85/15 all-inclusive split, the 10% platform percent and the 300 bata fallback were typed in; now read from System Config (`platform_all_inclusive_pct`), commission rates and the driver tariff.
 - `scripts/verify_live_routes.py` compares live routes with this repo (0 / 0 now).
 - `ANTIGRAVITY_PROMPT_Reconcile_and_Rules.md` (repo root + Desktop): the rules Antigravity must follow.
+
+## 2026-10-12c - Customize Booking (edit mode) save error + duplicate Save bar (Claude)
+- Save failed with `invalid input value for enum ORDER_TYPE_ENUM: "oneway"`: the screen sent its own word for the trip type and a pickup time without an offset (the server read it as UTC: 5 h 30 m shift). Backend `crud/orders.py admin_master_edit_order` now maps trip / vehicle words to the enums and treats an offset-less time as IST; the app sends `+05:30`. Tests: `tests/test_master_edit_enums.py`.
+- `create-booking.tsx`: the sticky Save / Confirm bar now sits above the Android navigation bar (safe-area inset) and shows in edit mode even before a re-calculate; the second "Save Changes" button inside the form was removed (one Save only).
