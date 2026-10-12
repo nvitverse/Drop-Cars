@@ -71,10 +71,10 @@ def expired_car_documents(car: CarDetails, today=None) -> list:
     out = []
     for label, field in (("Insurance", "insurance_expiry_date"), ("Permit", "permit_expiry_date")):
         d = getattr(car, field, None)
-        if d is not None and d < today:
+        if d is not None and d <= today:
             out.append(label)
     fc_date = getattr(car, "fc_expiry_date", None)
-    if fc_date is not None and fc_date < today and fc_status_for_car(car, today)["required"]:
+    if fc_date is not None and fc_date <= today and fc_status_for_car(car, today)["required"]:
         out.append("FC")
     return out
 
@@ -83,7 +83,7 @@ def expired_driver_documents(driver: CarDriver, today=None) -> list:
     from datetime import date
     today = today or date.today()
     d = getattr(driver, "licence_expiry_date", None)
-    return ["Driving licence"] if (d is not None and d < today) else []
+    return ["Driving licence"] if (d is not None and d <= today) else []
 
 
 def invalid_car_documents(car: CarDetails, today=None) -> list:

@@ -70,3 +70,15 @@ def test_switching_a_car_off_records_who_when_and_why(pg_session):
     assert "Customer complaints" in text and "by Priya" in text and "IST" in text
     set_manual_active(pg_session, "car", car.id, True, None)
     assert car_document_problems(car) == []
+
+
+def test_a_document_stops_working_on_its_expiry_date_not_after_it():
+    from datetime import timedelta
+    from app.crud.verification import expired_car_documents, expired_driver_documents
+    today = date.today()
+    car = SimpleNamespace(insurance_expiry_date=today, permit_expiry_date=today + timedelta(days=1), fc_expiry_date=None, registration_date=None,
+                          year_of_the_car="2015", fc_img_url=None)
+    assert expired_car_documents(car, today) == ["Insurance"]                   # expiry day itself = already stopped
+    assert expired_car_documents(SimpleNamespace(**{**car.__dict__, "insurance_expiry_date": today + timedelta(days=1)}), today) == []
+    assert expired_driver_documents(SimpleNamespace(licence_expiry_date=today), today) == ["Driving licence"]
+    assert expired_driver_documents(SimpleNamespace(licence_expiry_date=today + timedelta(days=1)), today) == []

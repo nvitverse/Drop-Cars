@@ -90,10 +90,10 @@ def own_fleet_summary(current_admin=Depends(get_current_admin), db: Session = De
     for c in cars:
         for label, d in (("Insurance", c.insurance_expiry), ("FC", c.fc_expiry), ("Permit", c.permit_expiry)):
             if d and d <= soon:
-                expiring.append({"kind": "car", "name": f"{c.name} ({c.car_number})", "document": label, "expires_on": d.isoformat(), "expired": d < today})
+                expiring.append({"kind": "car", "name": f"{c.name} ({c.car_number})", "document": label, "expires_on": d.isoformat(), "expired": d <= today})
     for dr in drivers:
         if dr.licence_expiry and dr.licence_expiry <= soon:
-            expiring.append({"kind": "driver", "name": dr.name, "document": "Licence", "expires_on": dr.licence_expiry.isoformat(), "expired": dr.licence_expiry < today})
+            expiring.append({"kind": "driver", "name": dr.name, "document": "Licence", "expires_on": dr.licence_expiry.isoformat(), "expired": dr.licence_expiry <= today})
     unrecovered = db.query(OwnFleetAdvance).filter(OwnFleetAdvance.recovered_in_month.is_(None)).all()
     return {
         "cars_total": len(cars),

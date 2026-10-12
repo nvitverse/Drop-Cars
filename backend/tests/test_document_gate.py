@@ -33,7 +33,8 @@ def test_an_expired_document_blocks_and_is_named():
 
 
 def test_rc_has_no_expiry_and_a_valid_or_missing_date_is_fine():
-    assert is_car_verified(_car(permit_expiry_date=date.today() + timedelta(days=30), insurance_expiry_date=date.today())) is True
+    assert is_car_verified(_car(permit_expiry_date=date.today() + timedelta(days=30), insurance_expiry_date=date.today() + timedelta(days=1))) is True
+    assert is_car_verified(_car(insurance_expiry_date=date.today())) is False   # owner rule 2026-10-13: stopped ON the expiry date
     assert is_car_verified(_car()) is True
 
 

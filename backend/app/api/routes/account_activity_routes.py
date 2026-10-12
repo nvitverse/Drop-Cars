@@ -115,8 +115,8 @@ def my_document_todos(db: Session = Depends(get_db), vehicle_owner_id: str = Dep
                                      ("FC", c.fc_img_url if fc_needed else None, c.fc_expiry_date, "fc")):
             if img and exp is None:
                 items.append(_item("car", c.id, name, label, "Expiry date is not entered", f"Enter the expiry date printed on the {label}"))
-            elif img and exp < today:
-                items.append(_item("car", c.id, name, label, f"Expired on {exp.strftime('%d %b %Y')}", f"Upload the renewed {label} and its new expiry date", "bad"))
+            elif img and exp <= today:
+                items.append(_item("car", c.id, name, label, f"Expiry date reached: {exp.strftime('%d %b %Y')}", f"Upload the renewed {label} and its new expiry date", "bad"))
         for label, key, st in (("RC front", "rc_front", c.rc_front_status), ("RC back", "rc_back", c.rc_back_status),
                                ("Insurance", "insurance", c.insurance_status), ("Permit", "permit", c.permit_status),
                                ("FC", "fc", c.fc_status if fc_needed else None)):
@@ -128,8 +128,8 @@ def my_document_todos(db: Session = Depends(get_db), vehicle_owner_id: str = Dep
         notes = get_notes(d)
         if d.licence_front_img and d.licence_expiry_date is None:
             items.append(_item("driver", d.id, d.full_name, "Driving licence", "Expiry date is not entered", "Enter the validity date printed on the licence"))
-        elif d.licence_front_img and d.licence_expiry_date < today:
-            items.append(_item("driver", d.id, d.full_name, "Driving licence", f"Expired on {d.licence_expiry_date.strftime('%d %b %Y')}", "Upload the renewed licence and its new date", "bad"))
+        elif d.licence_front_img and d.licence_expiry_date <= today:
+            items.append(_item("driver", d.id, d.full_name, "Driving licence", f"Expiry date reached: {d.licence_expiry_date.strftime('%d %b %Y')}", "Upload the renewed licence and its new date", "bad"))
         for label, key, st in (("Licence front", "licence", d.licence_front_status), ("Licence back", "licence_back", d.licence_back_status)):
             if st == DocumentStatusEnum.INVALID:
                 items.append(_item("driver", d.id, d.full_name, label, notes.get(key) or "Not accepted", f"Upload the ORIGINAL {label.lower()} again", "bad"))

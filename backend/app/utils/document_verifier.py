@@ -715,12 +715,12 @@ def verify_uploaded_document(
         except ValueError:
             exp_typed = None
     # a typed date that is printed on the document (and not past) outranks whichever date the reader guessed to be the expiry
-    if exp_typed and exp_typed >= today and not ai and exp_typed in set(all_dates_in_text(text)):
+    if exp_typed and exp_typed > today and not ai and exp_typed in set(all_dates_in_text(text)):
         detected_expiry, expiry_trusted = exp_typed, True
     for label_date in (exp_typed, detected_expiry if expiry_trusted else None):
-        if label_date and label_date < today:
+        if label_date and label_date <= today:
             _lab = profile["label"] if profile else "document"
-            return _result("INVALID", f"Your {_lab} expired on {label_date.strftime('%d %b %Y')}. Upload the renewed {_lab} and enter its new expiry date.", base, 0.93, confident=True,
+            return _result("INVALID", f"Your {_lab} is not valid from {label_date.strftime('%d %b %Y')} (its expiry date; it is accepted only until the day before). Upload the renewed {_lab} and enter its new expiry date.", base, 0.93, confident=True,
                            extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
         # The typed date may well be printed on the document even if it is not the one picked as "the expiry" (a licence carries several
