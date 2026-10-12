@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Car, Check } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LANGUAGE_OPTIONS, LanguageCode } from '@/contexts/LanguageContext';
+import BrandLogo from '@/components/BrandLogo';
 
 // Persisted flag so this picker is only ever shown once, on the driver's
 // very first launch. Exported so app/index.tsx can check it before
@@ -45,9 +46,7 @@ export default function LanguageSelectScreen({ onDone }: LanguageSelectScreenPro
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.content}>
-          <View style={styles.logoCircle}>
-            <Car size={40} color="#FFFFFF" />
-          </View>
+          <BrandLogo size={104} style={{ marginBottom: 20 }} />
           <Text style={styles.title}>{t('languageSelect.title')}</Text>
           <Text style={styles.subtitle}>{t('languageSelect.subtitle')}</Text>
 

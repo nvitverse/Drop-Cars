@@ -16,6 +16,7 @@ import { useCarDriver } from '@/contexts/CarDriverContext';
 import { CarDriverSigninRequest } from '@/services/driver/carDriverService';
 import { ArrowLeft, Phone, Lock, Eye, EyeOff, Car } from 'lucide-react-native';
 import { useLanguage } from '@/contexts/LanguageContext';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function CarDriverSigninScreen() {
   const { colors } = useTheme();
@@ -230,7 +231,7 @@ export default function CarDriverSigninScreen() {
 
       <View style={dynamicStyles.content}>
         <View style={dynamicStyles.logoContainer}>
-          <Car color={colors.primary} size={64} style={dynamicStyles.logoIcon} />
+          <BrandLogo size={96} style={{ marginBottom: 12 }} />
           <Text style={dynamicStyles.title}>{t('carDriverSignin.title')}</Text>
           <Text style={dynamicStyles.subtitle}>
             {t('carDriverSignin.subtitle')}

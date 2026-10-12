@@ -60,6 +60,7 @@ import { signupAndLogin, uploadSignupDoc, SignupDocType, SignupSucceededLoginFai
 import * as ImagePicker from 'expo-image-picker';
 import { useLanguage } from '@/contexts/LanguageContext';
 import * as SecureStore from '@/utils/secureStore';
+import BrandLogo from '@/components/BrandLogo';
 
 const DRAFT_KEY = 'dropcars_signup_draft_v1';
 const CHAT_HISTORY_KEY = 'dropcars_signup_chat_history_v1';
@@ -766,99 +767,36 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
       panNumber: panNumber.trim().toUpperCase(),
     };
 
-    if (!personalData.fullName) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterFullName'));
-      return;
-    }
-    if (!personalData.primaryMobile) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterPrimaryNumber'));
-      return;
-    }
-    if (personalData.primaryMobile.length !== 10) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.mobileMustBe10Digits'));
-      return;
-    }
-    if (!/^[6-9]/.test(personalData.primaryMobile)) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.mobileMustStartWith'));
-      return;
-    }
-    if (personalData.secondaryMobile && personalData.secondaryMobile.length !== 10) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.secondaryMobileMustBe10Digits'));
-      return;
-    }
-    if (personalData.secondaryMobile && !/^[6-9]/.test(personalData.secondaryMobile)) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.secondaryMobileMustStartWith'));
-      return;
-    }
-    if (!personalData.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(personalData.email)) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterValidEmail'));
-      return;
-    }
-    if (!isEmailVerified) {
-      Alert.alert(
-        'Email Verification Required 📧',
-        'Please verify your email address by tapping "Verify Email" before completing registration.',
-        [
-          { text: 'Verify Email Now', onPress: handleSendEmailOtp },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-      return;
-    }
-    if (!personalData.city) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterCity'));
-      return;
-    }
-    if (personalData.pincode && personalData.pincode.length !== 6) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.pincodeMustBe6Digits'));
-      return;
-    }
-    if (!personalData.aadharNumber) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterAadhar'));
-      return;
-    }
-    if (personalData.aadharNumber.length !== 12) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.aadharMustBe12Digits'));
-      return;
-    }
-    if (!personalData.panNumber) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterPan'));
-      return;
-    }
-    if (!/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(personalData.panNumber)) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.invalidPanFormat'));
-      return;
-    }
-    if (!personalData.password) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.enterPassword'));
-      return;
-    }
-    if (personalData.password.length < 6) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.passwordTooShort'));
-      return;
-    }
-    if (!confirmPassword.trim()) {
-      Alert.alert(t('signupSinglePage.errorTitle'), 'Please confirm your password.');
-      return;
-    }
-    if (personalData.password !== confirmPassword.trim()) {
-      Alert.alert('Password Mismatch', 'Create Password and Confirm Password do not match. Please enter matching passwords.');
-      return;
-    }
+    // All problems at once (it used to stop at the first one: a person had to tap OK and fix, again and again).
+    const problems: string[] = [];
+    if (!personalData.fullName) problems.push(t('signupSinglePage.enterFullName'));
+    if (!personalData.primaryMobile) problems.push(t('signupSinglePage.enterPrimaryNumber'));
+    else if (personalData.primaryMobile.length !== 10) problems.push(t('signupSinglePage.mobileMustBe10Digits'));
+    else if (!/^[6-9]/.test(personalData.primaryMobile)) problems.push(t('signupSinglePage.mobileMustStartWith'));
+    if (personalData.secondaryMobile && personalData.secondaryMobile.length !== 10) problems.push(t('signupSinglePage.secondaryMobileMustBe10Digits'));
+    else if (personalData.secondaryMobile && !/^[6-9]/.test(personalData.secondaryMobile)) problems.push(t('signupSinglePage.secondaryMobileMustStartWith'));
+    const emailOk = !!personalData.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(personalData.email);
+    if (!emailOk) problems.push(t('signupSinglePage.enterValidEmail'));
+    else if (!isEmailVerified) problems.push('Verify your e-mail: tap "Verify Email", type the code you receive, then continue.');
+    if (!personalData.city) problems.push(t('signupSinglePage.enterCity'));
+    if (personalData.pincode && personalData.pincode.length !== 6) problems.push(t('signupSinglePage.pincodeMustBe6Digits'));
+    if (!personalData.aadharNumber) problems.push(t('signupSinglePage.enterAadhar'));
+    else if (personalData.aadharNumber.length !== 12) problems.push(t('signupSinglePage.aadharMustBe12Digits'));
+    if (!personalData.panNumber) problems.push(t('signupSinglePage.enterPan'));
+    else if (!/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(personalData.panNumber)) problems.push(t('signupSinglePage.invalidPanFormat'));
+    if (!personalData.password) problems.push(t('signupSinglePage.enterPassword'));
+    else if (personalData.password.length < 6) problems.push(t('signupSinglePage.passwordTooShort'));
+    else if (!confirmPassword.trim()) problems.push('Please confirm your password.');
+    else if (personalData.password !== confirmPassword.trim()) problems.push('Create Password and Confirm Password do not match.');
     if (isAnyDocUploading) {
       Alert.alert(t('signupSinglePage.pleaseWaitTitle'), t('signupSinglePage.pleaseWaitBody'));
       return;
     }
-    if (aadharFront.status !== 'uploaded' || !aadharFront.url) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.uploadAadharFront'));
-      return;
-    }
-    if (aadharBack.status !== 'uploaded' || !aadharBack.url) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.uploadAadharBack'));
-      return;
-    }
-    if (pan.status !== 'uploaded' || !pan.url) {
-      Alert.alert(t('signupSinglePage.errorTitle'), t('signupSinglePage.uploadPan'));
+    if (aadharFront.status !== 'uploaded' || !aadharFront.url) problems.push(t('signupSinglePage.uploadAadharFront'));
+    if (aadharBack.status !== 'uploaded' || !aadharBack.url) problems.push(t('signupSinglePage.uploadAadharBack'));
+    if (pan.status !== 'uploaded' || !pan.url) problems.push(t('signupSinglePage.uploadPan'));
+    if (problems.length > 0) {
+      Alert.alert(t('signupSinglePage.errorTitle'), problems.map((p) => '\u2022 ' + p).join('\n'));
       return;
     }
 
@@ -1076,9 +1014,7 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Hero Branding Header */}
         <View style={styles.heroBannerContainer}>
-          <View style={styles.iconCircle}>
-            <Car color="#6366F1" size={26} />
-          </View>
+          <BrandLogo size={84} style={{ marginBottom: 6 }} />
           <Text style={styles.heroTitle}>{t('signupSinglePage.title')}</Text>
           <Text style={styles.heroSubtitle}>{t('signupSinglePage.subtitle')}</Text>
 

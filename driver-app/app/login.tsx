@@ -44,6 +44,7 @@ import {
 } from '@/services/support/guestHelpService';
 import GuestHelpFloatingButton from '@/components/guest/GuestHelpFloatingButton';
 import GuestHelpModal from '@/components/guest/GuestHelpModal';
+import BrandLogo from '@/components/BrandLogo';
 
 // Helper function to validate Indian mobile numbers
 const validateIndianMobile = (phone: string): boolean => {
@@ -390,9 +391,7 @@ export default function LoginScreen() {
           >
             {/* Branding Header */}
             <View style={styles.header}>
-              <View style={styles.iconCircle}>
-                <Car color="#6366F1" size={26} />
-              </View>
+              <BrandLogo size={84} style={{ marginBottom: 6 }} />
               <Text style={styles.title}>Drop Cars</Text>
               <Text style={styles.subtitle}>Driver & Fleet Partner Portal</Text>
 
