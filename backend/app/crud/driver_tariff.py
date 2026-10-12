@@ -157,8 +157,10 @@ def split_fare(cfg: Dict[str, Any], *, car_type: str, pickup_drop_location: Any,
     """The DRIVER part and the EXTRA part of each fare component. driver + extra == what the customer pays, driver <= customer."""
     veh = (cfg.get("vehicles") or {}).get(car_type) or {}
     # One-way uses the one-way rate, Round trip / Multi-city the round-trip rate; any other trip type keeps the customer's rate
-    tt = str(getattr(trip_type, "value", trip_type) or "").lower()
-    km_rate = veh.get("km_rate_round") if tt in ("round trip", "multy city", "multi city") else veh.get("km_rate") if tt in ("oneway", "one way", "") else None
+    tt = str(getattr(trip_type, "value", trip_type) or "").lower().replace("_", " ").replace("-", "").strip()
+    is_round = tt in ("round trip", "roundtrip", "multy city", "multi city", "multicity")
+    is_oneway = tt in ("oneway", "one way", "")
+    km_rate = veh.get("km_rate_round") if is_round else veh.get("km_rate") if is_oneway else None
     drv_km = min(int(km_rate), customer_km_rate) if km_rate else customer_km_rate
     bata_cfg = veh.get("bata")
     drv_bata = min(int(DEFAULT_BATA if bata_cfg is None else bata_cfg), customer_bata)

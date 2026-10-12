@@ -45,6 +45,7 @@ import {
   Car,
   ChevronRight,
   Zap,
+  Trash2,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
@@ -60,6 +61,14 @@ interface FounderDirective {
   target_admin_ids: string[] | null;
   created_by_username: string;
   created_at: string;
+  directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+  priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+  expires_at?: string | null;
+  action_type?: string | null;
+  action_screen?: string | null;
+  action_label?: string | null;
+  completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+  is_archived?: number;
 }
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -95,6 +104,27 @@ export default function TasksScreen() {
   const [newDirectiveModalVisible, setNewDirectiveModalVisible] = useState(false);
   const [newDirectiveMessage, setNewDirectiveMessage] = useState('');
   const [submittingDirective, setSubmittingDirective] = useState(false);
+  const [directiveType, setDirectiveType] = useState<'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT'>('ANNOUNCEMENT');
+  const [timelineDuration, setTimelineDuration] = useState<number | null>(8); // default 8 hours (Shift)
+  const [directivePriority, setDirectivePriority] = useState<'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
+  const [actionPresetIndex, setActionPresetIndex] = useState<number>(0);
+
+  const ACTION_PRESETS = [
+    { label: 'None (Just Info)', screen: '', btnText: '' },
+    { label: 'Unassigned Bookings', screen: '/(tabs)/orders?tab=live&sub=unassigned', btnText: 'Open Unassigned' },
+    { label: 'KYC Document Queue', screen: '/documents-review-queue', btnText: 'Review Documents' },
+    { label: 'Payout Requests', screen: '/payout-requests', btnText: 'Check Payouts' },
+    { label: 'Website Approvals', screen: '/website-booking-approvals', btnText: 'Approve Bookings' },
+    { label: 'Trip Feedbacks', screen: '/(tabs)/profile-reviews', btnText: 'Check Reviews' },
+  ];
+
+  const TIMELINE_PRESETS = [
+    { label: '⚡ 2h Quick', hours: 2 },
+    { label: '🌅 8h Shift', hours: 8 },
+    { label: '📅 24h Day', hours: 24 },
+    { label: '📌 Pinned', hours: null },
+  ];
+
 
   const animateLayout = () => {
     if (Platform.OS !== 'web') {
@@ -213,6 +243,26 @@ export default function TasksScreen() {
       setSubmittingDirective(false);
     }
   };
+
+  const handleExpireDirective = (id: string) => {
+    Alert.alert('Expire Directive', 'Expire and dismiss this directive from all dashboards immediately?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Expire Now',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiService.expireStaffDirective(id);
+            setDirectives((prev) => prev.filter((d) => d.id !== id));
+            Alert.alert('Success', 'Directive expired and dismissed.');
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to expire directive');
+          }
+        },
+      },
+    ]);
+  };
+
 
   const totalTasksPending =
     feedbacksCount +
@@ -406,6 +456,28 @@ export default function TasksScreen() {
                   <View style={{ marginTop: 8 }}>
                     <VoiceNoteButton url={d.voice_note_url} />
                   </View>
+                )}
+
+                {!!d.action_screen && (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginTop: 8,
+                      alignSelf: 'flex-start',
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      backgroundColor: colors.primary,
+                    }}
+                    onPress={() => router.push(d.action_screen as any)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+                      {d.action_label || 'Go to Task Screen'}
+                    </Text>
+                    <ArrowRight size={11} color="#FFFFFF" />
+                  </TouchableOpacity>
                 )}
               </View>
             ))

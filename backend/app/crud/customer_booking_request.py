@@ -238,6 +238,32 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
     from app.crud.new_orders import _default_priority_cutoff, is_urgent_pickup
     is_urgent_booking = bool(request.is_urgent) or is_urgent_pickup(request.start_date_time)
 
+    toll_val = _pick(request.admin_toll_charges, request.quoted_toll_charges) or 0
+    hill_val = _pick(request.admin_hill_charges, request.quoted_hill_charges) or 0
+    effective_pickup_notes = (
+        getattr(request, "pickup_notes", None) or
+        getattr(request, "notes", None) or
+        getattr(request, "remarks", None) or
+        "Website Booking"
+    )
+
+    auto_charge_items = []
+    if posted_driver_allowance and posted_driver_allowance > 0:
+        auto_charge_items.append({"label": f"Driver Bata (Rs {posted_driver_allowance})", "amount": posted_driver_allowance, "included": True})
+    if posted_permit_charges and posted_permit_charges > 0:
+        auto_charge_items.append({"label": f"State Permit / Border Tax (Rs {posted_permit_charges})", "amount": posted_permit_charges, "included": True})
+    else:
+        auto_charge_items.append({"label": "State Permit / Border Tax", "included": False})
+    if toll_val and toll_val > 0:
+        auto_charge_items.append({"label": f"Toll Charges (Rs {toll_val})", "amount": toll_val, "included": True})
+    else:
+        auto_charge_items.append({"label": "Toll Charges", "included": False})
+    if hill_val and hill_val > 0:
+        auto_charge_items.append({"label": f"Hill / Ghat Charges (Rs {hill_val})", "amount": hill_val, "included": True})
+    if getattr(request, 'gst_included', False):
+        gst_amt = getattr(request, 'gst_amount', None)
+        auto_charge_items.append({"label": f"GST Included{f' (Rs {gst_amt})' if gst_amt else ''}", "amount": gst_amt, "included": True})
+
     new_order = NewOrder(
         vendor_id=None,  # Vendor-less platform booking
         trip_type=trip_type_enum,
@@ -252,9 +278,9 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         extra_driver_allowance=posted_extra_driver_allowance,
         permit_charges=posted_permit_charges,
         extra_permit_charges=posted_extra_permit_charges,
-        hill_charges=_pick(request.admin_hill_charges, request.quoted_hill_charges),
-        toll_charges=_pick(request.admin_toll_charges, request.quoted_toll_charges),
-        pickup_notes="",
+        hill_charges=hill_val,
+        toll_charges=toll_val,
+        pickup_notes=effective_pickup_notes,
         trip_distance=request.quoted_trip_distance,
         trip_time=request.quoted_trip_time,
         platform_fees_percent=platform_fee,
@@ -269,7 +295,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         calculated_trip_distance=request.quoted_trip_distance,
         advance_received=request.advance_amount,
         fare_type=fare_type_str,
-        charge_items=([{"label": "GST Included", "included": True}] if getattr(request, 'gst_included', False) else None),
+        charge_items=auto_charge_items,
         gst_included=getattr(request, 'gst_included', False),
         gst_amount=getattr(request, 'gst_amount', None),
         # All-inclusive: the customer's single amount is what the 85/15 platform split is taken from
@@ -286,6 +312,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         max_time_to_assign_order=assign_minutes,
         toll_charge_update=False,
         night_charges=request.admin_night_charges,
+        customer_phone_reveal_at=getattr(request, 'customer_phone_reveal_at', None),
     )
 
     request.status = "APPROVED"

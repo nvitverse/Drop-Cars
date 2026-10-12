@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Bell, Shield, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, RefreshCw } from 'lucide-react-native';
 import api from '../api/api';
 
@@ -77,12 +78,18 @@ export default function NotificationSettingsScreen() {
         return null;
       }
 
-      const token = await Notifications.getExpoPushTokenAsync();
+      const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ??
+        (Constants as any)?.easConfig?.projectId ??
+        '31f4ffee-37b4-4db6-a102-1cd99bd74f8e';
+
+      const token = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
 
       return token.data;
     } catch (error) {
-      console.error('Error getting push token:', error);
-      Alert.alert('Error', 'Failed to get push notification token');
+      console.warn('Silent notice: Push token fetch unavailable:', error);
       return null;
     }
   }

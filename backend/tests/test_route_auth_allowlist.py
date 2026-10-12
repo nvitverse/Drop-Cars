@@ -65,6 +65,8 @@ PUBLIC_BY_DESIGN = {
     "GET /api/app-updates/{app}/manifest",
     "GET /api/app-updates/{app}/version-check",
     # web execution portal: the link's secret token is the credential (the executor / customer has no login); OTPs are never returned
+    # anonymous help / error telemetry from the apps (no personal data: app, code, screen, action)
+    "POST /api/help/events",
     "GET /p/{token}",
     "GET /p/{token}/feedback",
     "GET /api/portal/{token}",

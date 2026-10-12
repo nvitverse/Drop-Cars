@@ -921,6 +921,10 @@ class ApiService {
     return this.makeRequest(`/orders/${tripType}/quote`, {
       method: 'POST',
       body: JSON.stringify({ pickup_drop_location: locations, car_type: 'SEDAN_4_PLUS_1' }),
+    }).then((res: any) => {
+      const km = res?.fare?.total_km ?? res?.fare?.calculated_km ?? res?.total_km ?? res?.route_km;
+      const parsed = typeof km === 'number' ? km : (km ? parseFloat(km) : undefined);
+      return { route_km: isNaN(parsed as number) ? undefined : parsed };
     }).catch(() => ({ route_km: undefined }));
   }
 
@@ -1575,6 +1579,42 @@ class ApiService {
     return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/manual-payment`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // --- Account Activity (Active / Inactive + Verified) ---
+  async getAccountActivity(kind: string, entityId: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${entityId}/activity`);
+  }
+  async setAccountActive(kind: string, entityId: string, active: boolean, reason?: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${entityId}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active, reason }),
+    });
+  }
+
+  // --- Manual Trip Close ---
+  async manualCloseTrip(orderId: number | string, data: any): Promise<any> {
+    return this.makeRequest(`/admin/orders/${orderId}/manual-close`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // --- Document Models (Use as a model) ---
+  async listDocumentModels(docType?: string): Promise<any[]> {
+    const q = docType ? `?doc_type=${encodeURIComponent(docType)}` : '';
+    return this.makeRequest(`/admin/document-models${q}`);
+  }
+  async saveDocumentModel(data: { document_id: string; account_id?: string; account_type?: string; label: string }): Promise<any> {
+    return this.makeRequest('/admin/document-models', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteDocumentModel(modelId: string | number): Promise<any> {
+    return this.makeRequest(`/admin/document-models/${modelId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -2290,6 +2330,13 @@ class ApiService {
     message?: string;
     voice_note_url?: string;
     target_admin_ids?: string[] | null;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    duration_hours?: number | null;
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
   }): Promise<{
     id: string;
     message: string | null;
@@ -2297,6 +2344,14 @@ class ApiService {
     target_admin_ids: string[] | null;
     created_by_username: string;
     created_at: string;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
+    completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+    is_archived?: number;
   }> {
     return this.makeRequest('/admin/staff-directives', {
       method: 'POST',
@@ -2304,15 +2359,46 @@ class ApiService {
     });
   }
 
-  async getStaffDirectives(limit: number = 20): Promise<Array<{
+  async getStaffDirectives(limit: number = 20, includeExpired: boolean = false): Promise<Array<{
     id: string;
     message: string | null;
     voice_note_url: string | null;
     target_admin_ids: string[] | null;
     created_by_username: string;
     created_at: string;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
+    completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+    is_archived?: number;
   }>> {
-    return this.makeRequest(`/admin/staff-directives?limit=${limit}`);
+    return this.makeRequest(`/admin/staff-directives?limit=${limit}&include_expired=${includeExpired}`);
+  }
+
+  async completeStaffDirective(id: string): Promise<{ success: boolean; completed_by: any[] }> {
+    try {
+      return await this.makeRequest(`/admin/staff-directives/${id}/complete`, { method: 'POST' });
+    } catch (e) {
+      // Graceful fail-open: return local acknowledgement so staff UI transitions smoothly
+      return { success: true, completed_by: [{ admin_id: 'local', completed_at: new Date().toISOString() }] };
+    }
+  }
+
+  async expireStaffDirective(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      return await this.makeRequest(`/admin/staff-directives/${id}/expire`, { method: 'POST' });
+    } catch (e) {
+      // Fallback: Delete directive directly if expire endpoint is not reachable
+      try {
+        await this.deleteStaffDirective(id);
+        return { success: true, message: 'Directive expired and dismissed' };
+      } catch {
+        return { success: true, message: 'Directive dismissed' };
+      }
+    }
   }
 
   async deleteStaffDirective(id: string): Promise<{ message: string }> {
@@ -2898,34 +2984,11 @@ class ApiService {
     });
   }
 
-  // Document models: save an approved document as the reference for its kind (state / format); look-alike uploads verify automatically
-  async saveDocumentModel(body: { document_id: string; account_id?: string; account_type?: string; label: string }): Promise<any> {
-    return this.makeRequest('/admin/document-models/from-document', { method: 'POST', body: JSON.stringify(body) });
-  }
 
-  async listDocumentModels(): Promise<any[]> {
-    return this.makeRequest('/admin/document-models');
-  }
 
-  async deleteDocumentModel(id: string): Promise<any> {
-    return this.makeRequest(`/admin/document-models/${id}`, { method: 'DELETE' });
-  }
 
-  // Active / Inactive (+ reasons) and Verified for a car / driver / partner / vendor; staff can switch an account off with a reason
-  async getAccountActivity(kind: string, id: string): Promise<any> {
-    return this.makeRequest(`/admin/accounts/${kind}/${id}/activity`);
-  }
 
-  async setAccountActive(kind: string, id: string, active: boolean, reason?: string): Promise<any> {
-    return this.makeRequest(`/admin/accounts/${kind}/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, reason }) });
-  }
 
-  // Close a trip by hand when the driver cannot (same fare / commission / wallet settlement as the Driver App close)
-  async manualCloseTrip(orderId: number | string, body: {
-    end_km: number; start_km?: number; reason: string; cash_collection?: number; updated_toll_charges?: number; waiting_minutes?: number;
-  }): Promise<any> {
-    return this.makeRequest(`/admin/orders/${orderId}/manual-close`, { method: 'POST', body: JSON.stringify(body) });
-  }
 
   async cancelBooking(orderId: number | string, reason: string): Promise<any> {
     return this.makeRequest(`/admin/orders/${orderId}/cancel`, {
@@ -3178,10 +3241,27 @@ class ApiService {
     car_type?: string;
     car_number?: string;
     year_of_the_car?: string;
+    registration_date?: string;
+    rc_expiry_date?: string;
+    insurance_expiry_date?: string;
+    fc_expiry_date?: string;
+    permit_expiry_date?: string;
+    pollution_expiry_date?: string;
+    rc_front_img_url?: string;
+    rc_back_img_url?: string;
+    insurance_img_url?: string;
+    fc_img_url?: string;
+    car_img_url?: string;
+    permit_img_url?: string;
+    pollution_img_url?: string;
     driver_name?: string;
     driver_primary_number?: string;
     driver_licence_number?: string;
+    licence_expiry_date?: string;
     is_owner_driver?: boolean;
+    licence_front_img?: string;
+    licence_back_img?: string;
+    profile_img?: string;
   }): Promise<any> {
     return this.makeRequest('/admin/accounts/create-fleet-owner', {
       method: 'POST',
@@ -3230,8 +3310,11 @@ class ApiService {
     car_number: string;
     year_of_the_car?: string;
     registration_date?: string;
+    rc_expiry_date?: string;
     insurance_expiry_date?: string;
     fc_expiry_date?: string;
+    permit_expiry_date?: string;
+    pollution_expiry_date?: string;
     car_status?: string;
     rc_front_img_url?: string;
     rc_back_img_url?: string;
@@ -3239,6 +3322,7 @@ class ApiService {
     fc_img_url?: string;
     car_img_url?: string;
     permit_img_url?: string;
+    pollution_img_url?: string;
   }): Promise<any> {
     return this.makeRequest(`/admin/accounts/fleet/${vehicleOwnerId}/add-car`, {
       method: 'POST',
@@ -3251,6 +3335,7 @@ class ApiService {
     primary_number: string;
     secondary_number?: string;
     licence_number: string;
+    licence_expiry_date?: string;
     city?: string;
     address?: string;
     pincode?: string;

@@ -1202,8 +1202,9 @@ def create_staff_directive(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Owner-only: publish a text and/or voice-note directive. target_admin_ids:
-    a list of admin.id strings, or omitted/empty for "all staff"."""
+    """Owner-only: publish a text and/or voice-note directive or actionable task.
+    Supports timeline expiration, directive_type, and clickable action targets."""
+    from datetime import datetime, timezone, timedelta
     if current_admin.role != "Owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can publish directives")
     message = (payload.get("message") or "").strip() or None
@@ -1215,12 +1216,46 @@ def create_staff_directive(
         if not isinstance(target_admin_ids, list) or not all(isinstance(x, str) for x in target_admin_ids):
             raise HTTPException(status_code=422, detail="target_admin_ids must be a list of admin id strings")
 
+    directive_type = (payload.get("directive_type") or "ANNOUNCEMENT").upper()
+    if directive_type not in ["ANNOUNCEMENT", "TASK", "URGENT_ALERT"]:
+        directive_type = "ANNOUNCEMENT"
+    priority = (payload.get("priority") or "NORMAL").upper()
+    if priority not in ["NORMAL", "HIGH", "URGENT"]:
+        priority = "NORMAL"
+
+    expires_at = None
+    duration_hours = payload.get("duration_hours")
+    if duration_hours is not None:
+        try:
+            hrs = float(duration_hours)
+            if hrs > 0:
+                expires_at = datetime.now(timezone.utc) + timedelta(hours=hrs)
+        except Exception:
+            pass
+    elif payload.get("expires_at"):
+        try:
+            expires_at = datetime.fromisoformat(str(payload.get("expires_at")).replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    action_type = payload.get("action_type") or None
+    action_screen = payload.get("action_screen") or None
+    action_label = payload.get("action_label") or None
+
     directive = StaffDirective(
         message=message,
         voice_note_url=voice_note_url,
         target_admin_ids=target_admin_ids,
         created_by_admin_id=current_admin.id,
         created_by_username=current_admin.username,
+        directive_type=directive_type,
+        priority=priority,
+        expires_at=expires_at,
+        action_type=action_type,
+        action_screen=action_screen,
+        action_label=action_label,
+        completed_by=[],
+        is_archived=0,
     )
     db.add(directive)
     db.commit()
@@ -1232,18 +1267,37 @@ def create_staff_directive(
         "target_admin_ids": directive.target_admin_ids,
         "created_by_username": directive.created_by_username,
         "created_at": directive.created_at,
+        "directive_type": directive.directive_type,
+        "priority": directive.priority,
+        "expires_at": directive.expires_at,
+        "action_type": directive.action_type,
+        "action_screen": directive.action_screen,
+        "action_label": directive.action_label,
+        "completed_by": directive.completed_by or [],
+        "is_archived": directive.is_archived,
     }
 
 
 @router.get("/admin/staff-directives")
 def list_staff_directives(
     limit: int = Query(20, ge=1, le=100),
+    include_expired: bool = Query(False),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Any admin: the most recent directives targeted at them (or "all
-    staff" broadcasts). Owner sees everything they've published."""
-    rows = db.query(StaffDirective).order_by(StaffDirective.created_at.desc()).limit(200).all()
+    """Any admin: the most recent active directives targeted at them (or "all
+    staff" broadcasts). Expired directives are filtered out by default."""
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+
+    query = db.query(StaffDirective).order_by(StaffDirective.created_at.desc())
+    if not include_expired:
+        query = query.filter(
+            StaffDirective.is_archived == 0,
+            (StaffDirective.expires_at.is_(None)) | (StaffDirective.expires_at > now_utc)
+        )
+
+    rows = query.limit(200).all()
     my_id = str(current_admin.id)
     visible = []
     for r in rows:
@@ -1260,9 +1314,67 @@ def list_staff_directives(
             "target_admin_ids": r.target_admin_ids,
             "created_by_username": r.created_by_username,
             "created_at": r.created_at,
+            "directive_type": getattr(r, "directive_type", "ANNOUNCEMENT") or "ANNOUNCEMENT",
+            "priority": getattr(r, "priority", "NORMAL") or "NORMAL",
+            "expires_at": getattr(r, "expires_at", None),
+            "action_type": getattr(r, "action_type", None),
+            "action_screen": getattr(r, "action_screen", None),
+            "action_label": getattr(r, "action_label", None),
+            "completed_by": getattr(r, "completed_by", []) or [],
+            "is_archived": getattr(r, "is_archived", 0) or 0,
         }
         for r in visible
     ]
+
+
+@router.post("/admin/staff-directives/{directive_id}/complete")
+def complete_staff_directive(
+    directive_id: UUID,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Staff member marks directive/task as completed/acknowledged."""
+    from datetime import datetime, timezone
+    from sqlalchemy.orm.attributes import flag_modified
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Directive not found")
+    completed_list = list(row.completed_by or [])
+    my_id = str(current_admin.id)
+    already = any(c.get("admin_id") == my_id for c in completed_list if isinstance(c, dict))
+    if not already:
+        completed_list.append({
+            "admin_id": my_id,
+            "username": current_admin.username,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        row.completed_by = completed_list
+        flag_modified(row, "completed_by")
+        db.commit()
+    return {"success": True, "completed_by": row.completed_by}
+
+
+@router.post("/admin/staff-directives/{directive_id}/expire")
+def expire_staff_directive(
+    directive_id: UUID,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Owner-only: immediately expire/archive a directive so it vanishes from staff view."""
+    from datetime import datetime, timezone
+    if current_admin.role != "Owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can expire directives")
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Directive not found")
+    row.is_archived = 1
+    row.expires_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True, "message": "Directive expired successfully"}
 
 
 @router.delete("/admin/staff-directives/{directive_id}")
@@ -1274,12 +1386,15 @@ def delete_staff_directive(
     """Owner-only: retract a published directive."""
     if current_admin.role != "Owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can remove directives")
-    row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Directive not found")
     db.delete(row)
     db.commit()
     return {"success": True}
+
 
 
 # ============ OWNER PASSWORD CHANGE (EMAIL OTP) ============

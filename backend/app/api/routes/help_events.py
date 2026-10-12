@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, DateTime, Index
 import json
 
+from app.core.security import get_current_admin
 from app.database.session import Base, get_db
 
 router = APIRouter(prefix="/api/help", tags=["Help Analytics & Telemetry"])
@@ -71,6 +72,7 @@ def get_help_insights(
     days: int = Query(7, ge=1, le=90),
     app: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
 ):
     """
     Returns aggregated help insights for Admin Support Console:

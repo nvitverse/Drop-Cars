@@ -42,3 +42,14 @@ class StaffDirective(Base):
     created_by_admin_id = Column(UUID(as_uuid=True), nullable=True)
     created_by_username = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    # Futuristic Directives & Live Tasks Engine fields
+    directive_type = Column(String, default="ANNOUNCEMENT", server_default="ANNOUNCEMENT", nullable=False)  # ANNOUNCEMENT | TASK | URGENT_ALERT
+    priority = Column(String, default="NORMAL", server_default="NORMAL", nullable=False)  # NORMAL | HIGH | URGENT
+    expires_at = Column(TIMESTAMP(timezone=True), nullable=True)  # NULL = pinned / permanent
+    action_type = Column(String, nullable=True)  # NAVIGATE | LINK | NONE
+    action_screen = Column(String, nullable=True)  # e.g. '/orders?tab=live&sub=unassigned'
+    action_label = Column(String, nullable=True)  # e.g. 'Open Unassigned Bookings'
+    completed_by = Column(JSON, nullable=True)  # list of { admin_id, username, completed_at }
+    is_archived = Column(Integer, default=0, server_default="0", nullable=False)
+

@@ -7,6 +7,12 @@ app = FastAPI()
 app.include_router(router)
 client = TestClient(app)
 
+
+def test_insights_need_an_admin_login_but_events_do_not():
+    assert client.get("/api/help/insights?days=7").status_code in (401, 403)     # the dashboard is staff only
+    ok = client.post("/api/help/events", json={"app": "driver", "code": "DC_X", "action": "shown"})
+    assert ok.status_code == 201                                                    # the apps report anonymously
+
 def test_record_help_event_and_insights():
     # 1. Record sample events
     resp = client.post(
@@ -34,7 +40,9 @@ def test_record_help_event_and_insights():
     )
     assert resp2.status_code == 201
 
-    # 2. Query insights
+    # 2. Query insights (as a logged-in admin)
+    from app.core.security import get_current_admin
+    app.dependency_overrides[get_current_admin] = lambda: object()
     insights_resp = client.get("/api/help/insights?days=7&app=driver")
     assert insights_resp.status_code == 200
     data = insights_resp.json()
@@ -42,3 +50,4 @@ def test_record_help_event_and_insights():
     assert data["total_events"] >= 2
     assert len(data["top_codes"]) > 0
     assert data["top_codes"][0]["code"] == "DC_INSUFFICIENT_WALLET"
+    app.dependency_overrides.pop(get_current_admin, None)

@@ -19,7 +19,7 @@ import {
   TrendingDown,
   ArrowLeft,
 } from 'lucide-react-native';
-import axios from '@/services/api';
+import { apiService } from '@/services/api';
 import { Card, Pill, SectionHeader } from '@/components/ui';
 
 interface TopCode {
@@ -54,8 +54,8 @@ export default function HelpInsightsScreen() {
     try {
       setLoading(true);
       const appParam = selectedApp !== 'all' ? `&app=${selectedApp}` : '';
-      const res = await axios.get(`/api/help/insights?days=${selectedDays}${appParam}`);
-      setInsights(res.data);
+      const data = await apiService.makeRequest(`/help/insights?days=${selectedDays}${appParam}`);
+      setInsights(data);
     } catch {
       // Fallback mock data if server table is empty
       setInsights({
@@ -189,7 +189,6 @@ export default function HelpInsightsScreen() {
             {/* Top Doubt Situations */}
             <SectionHeader
               title="Top 10 Situations Prompting Calls"
-              actionLabel="Explainers"
             />
 
             {insights?.top_codes && insights.top_codes.length > 0 ? (
@@ -204,7 +203,7 @@ export default function HelpInsightsScreen() {
                     </View>
                     <Pill
                       label={`${item.call_rate_pct}% Call Rate`}
-                      color={item.call_rate_pct > 25 ? '#DC2626' : '#F59E0B'}
+                      variant={item.call_rate_pct > 25 ? 'danger' : 'warning'}
                     />
                   </View>
 

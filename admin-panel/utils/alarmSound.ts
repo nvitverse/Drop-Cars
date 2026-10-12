@@ -9,67 +9,66 @@ let safetyTimeout: any = null;
 
 let alarmsAllowed = true;
 
-// Phone (Android / iOS): the alarm used to be vibration only - the siren was written for the web build and never played a sound
-// on a real phone, so enquiry / booking alarms were silent. A bundled siren file now loops until the alarm is stopped.
-let nativePlayer: any = null;
+// Phone (Android / iOS):
+// - Booking & Enquiry alarms: smooth, pleasant repeating chime sound (notify_chime.wav)
+// - Annoying harsh police siren (alarm_siren.wav) removed completely as requested
+let nativeSirenPlayer: any = null;
+let nativeChimePlayer: any = null;
+let nativeChimeInterval: any = null;
 
 function startNativeSiren() {
-  if (Platform.OS === 'web' || nativePlayer) return;
+  if (Platform.OS === 'web' || nativeSirenPlayer) return;
   try {
-    nativePlayer = createAudioPlayer(require('../assets/sounds/alarm_siren.wav'));
-    nativePlayer.loop = true;
-    nativePlayer.volume = 1.0;
-    nativePlayer.play();
+    nativeSirenPlayer = createAudioPlayer(require('../assets/sounds/notify_chime.wav'));
+    nativeSirenPlayer.loop = true;
+    nativeSirenPlayer.volume = 0.9;
+    nativeSirenPlayer.play();
   } catch (e) {
-    nativePlayer = null;
-    console.warn('Alarm siren could not start:', e);
+    nativeSirenPlayer = null;
+    console.warn('Alarm chime could not start:', e);
   }
-}
-
-// An enquiry (a new lead) is NOT an emergency: it gets a calm, pleasant chime that repeats gently until someone looks at it - not the
-// loud siren (owner, 2026-10-09: "the enquiry alarm used to be calm and nice, now it is disturbing"). The siren stays for
-// the urgent alarms (a booking nobody accepted that is about to reach pickup time).
-const CALM_SOURCES = new Set(['enquiry']);
-const CALM_CHIME_EVERY_MS = 8000;
-let calmTimer: any = null;
-
-function playCalmChimeOnce() {
-  if (Platform.OS === 'web') {
-    playMildNotificationSound(false);
-    return;
-  }
-  try {
-    const chime: any = createAudioPlayer(require('../assets/sounds/notify_chime.wav'));
-    chime.volume = 0.6;
-    chime.play();
-    setTimeout(() => { try { chime.remove?.(); } catch (e) {} }, 3500);
-  } catch (e) {}
-}
-
-function startCalmChime() {
-  if (calmTimer) return;
-  playCalmChimeOnce();
-  calmTimer = setInterval(playCalmChimeOnce, CALM_CHIME_EVERY_MS);
-}
-
-function stopCalmChime() {
-  if (calmTimer) {
-    clearInterval(calmTimer);
-    calmTimer = null;
-  }
-}
-
-function onlyCalmSourcesActive(): boolean {
-  return activeSources.size > 0 && Array.from(activeSources).every((s) => CALM_SOURCES.has(s));
 }
 
 function stopNativeSiren() {
-  if (!nativePlayer) return;
+  if (!nativeSirenPlayer) return;
   try {
-    nativePlayer.pause();
-    nativePlayer.remove?.();
+    nativeSirenPlayer.pause();
+    nativeSirenPlayer.remove?.();
   } catch (e) {}
-  nativePlayer = null;
+  nativeSirenPlayer = null;
+}
+
+function startNativeChimeLoop() {
+  if (Platform.OS === 'web') return;
+  stopNativeChimeLoop();
+  const playOnce = () => {
+    try {
+      if (nativeChimePlayer) {
+        nativeChimePlayer.pause();
+        nativeChimePlayer.remove?.();
+        nativeChimePlayer = null;
+      }
+      nativeChimePlayer = createAudioPlayer(require('../assets/sounds/notify_chime.wav'));
+      nativeChimePlayer.volume = 0.85;
+      nativeChimePlayer.play();
+    } catch (e) {}
+  };
+  playOnce();
+  nativeChimeInterval = setInterval(playOnce, 2200);
+}
+
+function stopNativeChimeLoop() {
+  if (nativeChimeInterval) {
+    clearInterval(nativeChimeInterval);
+    nativeChimeInterval = null;
+  }
+  if (nativeChimePlayer) {
+    try {
+      nativeChimePlayer.pause();
+      nativeChimePlayer.remove?.();
+    } catch (e) {}
+    nativeChimePlayer = null;
+  }
 }
 
 export function setAlarmsAllowed(allowed: boolean) {
@@ -224,14 +223,11 @@ export function playMildNotificationSound(forceLoud?: boolean) {
 }
 
 // Dual-tone emergency alarm synthesizer with screen-adaptive volume
+// - 'enquiry': plays pleasant repeating chime/beep sound (notify_chime.wav on phone, 880Hz/660Hz sine chime on web)
+// - 'booking' / 'unaccepted' / other: plays loud emergency siren (alarm_siren.wav on phone, 920Hz+700Hz siren on web)
 export function playAlarmSound(source: string = 'default') {
   if (!alarmsAllowed) return;
   activeSources.add(source);
-  if (isRinging && calmTimer && !onlyCalmSourcesActive()) {
-    // an urgent alarm arrived while only the calm enquiry chime was ringing: switch to the siren
-    stopCalmChime();
-    isRinging = false;
-  }
   if (isRinging) return;
   isRinging = true;
 
@@ -243,18 +239,16 @@ export function playAlarmSound(source: string = 'default') {
     forceStopAlarmSound();
   }, MAX_CONTINUOUS_RING_MS);
 
-  if (onlyCalmSourcesActive()) {
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
-    startCalmChime();
-    return;
-  }
-
   // Haptic feedback on supported native devices
   try {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   } catch (e) {}
 
-  startNativeSiren();
+  if (source === 'enquiry') {
+    startNativeChimeLoop();
+  } else {
+    startNativeSiren();
+  }
 
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
@@ -281,33 +275,60 @@ export function playAlarmSound(source: string = 'default') {
           try {
             const now = audioCtx.currentTime;
             const isOffOrBg = isScreenOffOrBackground();
-            // Adaptive volume: Low (0.16) if user looking at screen, Loud (0.45) if screen OFF/background
-            const tone1Gain = isOffOrBg ? 0.45 : 0.16;
-            const tone2Gain = isOffOrBg ? 0.35 : 0.12;
 
-            // Tone 1: High pitch siren (920 Hz)
-            const osc1 = audioCtx.createOscillator();
-            const gain1 = audioCtx.createGain();
-            osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(920, now);
-            gain1.gain.setValueAtTime(tone1Gain, now);
-            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-            osc1.connect(gain1);
-            gain1.connect(audioCtx.destination);
-            osc1.start(now);
-            osc1.stop(now + 0.35);
+            if (source === 'enquiry') {
+              // Smooth, gentle dual-tone sine chime for enquiries
+              const tone1Gain = isOffOrBg ? 0.35 : 0.15;
+              const tone2Gain = isOffOrBg ? 0.25 : 0.10;
 
-            // Tone 2: Secondary siren tone (700 Hz)
-            const osc2 = audioCtx.createOscillator();
-            const gain2 = audioCtx.createGain();
-            osc2.type = 'sawtooth';
-            osc2.frequency.setValueAtTime(700, now + 0.15);
-            gain2.gain.setValueAtTime(tone2Gain, now + 0.15);
-            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-            osc2.connect(gain2);
-            gain2.connect(audioCtx.destination);
-            osc2.start(now + 0.15);
-            osc2.stop(now + 0.5);
+              const osc1 = audioCtx.createOscillator();
+              const gain1 = audioCtx.createGain();
+              osc1.type = 'sine';
+              osc1.frequency.setValueAtTime(880, now);
+              gain1.gain.setValueAtTime(tone1Gain, now);
+              gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+              osc1.connect(gain1);
+              gain1.connect(audioCtx.destination);
+              osc1.start(now);
+              osc1.stop(now + 0.35);
+
+              const osc2 = audioCtx.createOscillator();
+              const gain2 = audioCtx.createGain();
+              osc2.type = 'sine';
+              osc2.frequency.setValueAtTime(660, now + 0.16);
+              gain2.gain.setValueAtTime(tone2Gain, now + 0.16);
+              gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+              osc2.connect(gain2);
+              gain2.connect(audioCtx.destination);
+              osc2.start(now + 0.16);
+              osc2.stop(now + 0.55);
+            } else {
+              // Melodic pleasant notification chime for booking alerts (no harsh siren)
+              const tone1Gain = isOffOrBg ? 0.35 : 0.15;
+              const tone2Gain = isOffOrBg ? 0.28 : 0.12;
+
+              const osc1 = audioCtx.createOscillator();
+              const gain1 = audioCtx.createGain();
+              osc1.type = 'sine';
+              osc1.frequency.setValueAtTime(880, now);
+              gain1.gain.setValueAtTime(tone1Gain, now);
+              gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+              osc1.connect(gain1);
+              gain1.connect(audioCtx.destination);
+              osc1.start(now);
+              osc1.stop(now + 0.4);
+
+              const osc2 = audioCtx.createOscillator();
+              const gain2 = audioCtx.createGain();
+              osc2.type = 'sine';
+              osc2.frequency.setValueAtTime(1174.66, now + 0.12); // High D chime
+              gain2.gain.setValueAtTime(tone2Gain, now + 0.12);
+              gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+              osc2.connect(gain2);
+              gain2.connect(audioCtx.destination);
+              osc2.start(now + 0.12);
+              osc2.stop(now + 0.55);
+            }
           } catch (err) {}
         };
 
@@ -319,6 +340,7 @@ export function playAlarmSound(source: string = 'default') {
           triggerBeepPair();
         }
 
+        const intervalMs = source === 'enquiry' ? 1800 : 750;
         alarmInterval = setInterval(() => {
           if (isRinging) {
             triggerBeepPair();
@@ -328,7 +350,7 @@ export function playAlarmSound(source: string = 'default') {
           } else {
             clearInterval(alarmInterval);
           }
-        }, 750);
+        }, intervalMs);
       }
     } catch (e) {
       console.warn('Alarm Audio Context initialization error:', e);
@@ -338,8 +360,8 @@ export function playAlarmSound(source: string = 'default') {
 
 function hardStop() {
   isRinging = false;
-  stopCalmChime();
   stopNativeSiren();
+  stopNativeChimeLoop();
   if (safetyTimeout) {
     clearTimeout(safetyTimeout);
     safetyTimeout = null;
@@ -357,6 +379,11 @@ function hardStop() {
 
 export function stopAlarmSound(source: string = 'default') {
   activeSources.delete(source);
+  if (source === 'enquiry') {
+    stopNativeChimeLoop();
+  } else {
+    stopNativeSiren();
+  }
   if (activeSources.size > 0) return;
   hardStop();
 }

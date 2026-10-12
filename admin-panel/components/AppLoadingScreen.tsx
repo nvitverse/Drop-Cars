@@ -1,10 +1,16 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ShieldCheck } from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Image, Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native';
+
+let LOADING_IMAGE: any = null;
+try {
+  LOADING_IMAGE = require('../assets/images/loading-screen.webp');
+} catch (e) {
+  LOADING_IMAGE = null;
+}
 
 export default function AppLoadingScreen() {
   const { width, height } = useWindowDimensions();
+  const [imgError, setImgError] = useState(false);
   const spin = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -27,118 +33,44 @@ export default function AppLoadingScreen() {
   }, [spin, pulse]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] });
-  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] });
+
+  const top = height * 0.575 - 34;
 
   return (
-    <LinearGradient
-      colors={['#0B0F19', '#1E1B4B', '#0F172A']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.container, { width, height }]}
-    >
-      <View style={styles.centerBox}>
-        {/* Brand Shield & Title */}
-        <View style={styles.logoRow}>
-          <View style={styles.badgeWrap}>
-            <ShieldCheck size={28} color="#38BDF8" />
-          </View>
-          <View>
-            <Text style={styles.title}>DROP CARS</Text>
-            <Text style={styles.subtitle}>ADMIN CONSOLE</Text>
-          </View>
-        </View>
-
-        {/* Animated Ring Loader */}
-        <View style={styles.loaderWrap}>
-          <Animated.View style={[styles.glow, { opacity: glow, transform: [{ scale }] }]} />
-          <Animated.View style={[styles.ring, { transform: [{ rotate }] }]} />
-          <View style={styles.dot} />
-        </View>
-
-        <Text style={styles.loadingText}>Initializing workspace...</Text>
+    <View style={styles.container}>
+      {LOADING_IMAGE && !imgError && (
+        <Image
+          source={LOADING_IMAGE}
+          style={{ width, height, position: 'absolute' }}
+          resizeMode="cover"
+          onError={() => setImgError(true)}
+        />
+      )}
+      <View style={[styles.loaderWrap, { top }]} pointerEvents="none">
+        <Animated.View style={[styles.glow, { opacity: glow, transform: [{ scale }] }]} />
+        <Animated.View style={[styles.ring, { transform: [{ rotate }] }]} />
+        <View style={styles.dot} />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
-const SIZE = 52;
+const SIZE = 56;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 44,
-  },
-  badgeWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 22,
-    fontFamily: 'Inter-Black',
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-  },
-  subtitle: {
-    fontSize: 11,
-    fontFamily: 'Inter-Bold',
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 2.5,
-    marginTop: 2,
-  },
-  loaderWrap: {
-    width: SIZE + 16,
-    height: SIZE + 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  glow: {
-    position: 'absolute',
-    width: SIZE + 16,
-    height: SIZE + 16,
-    borderRadius: (SIZE + 16) / 2,
-    backgroundColor: '#38BDF8',
-  },
+  container: { flex: 1, backgroundColor: '#0B1E4A' },
+  loaderWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', height: SIZE + 12 },
+  glow: { position: 'absolute', width: SIZE + 12, height: SIZE + 12, borderRadius: (SIZE + 12) / 2, backgroundColor: '#3B82F6' },
   ring: {
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 3.5,
-    borderColor: 'rgba(56, 189, 248, 0.2)',
-    borderTopColor: '#38BDF8',
-    borderRightColor: '#818CF8',
+    borderWidth: 4,
+    borderColor: 'rgba(30, 58, 138, 0.25)',
+    borderTopColor: '#1E3A8A',
+    borderRightColor: '#2563EB',
   },
-  dot: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#38BDF8',
-  },
-  loadingText: {
-    fontSize: 12.5,
-    fontFamily: 'Inter-Medium',
-    color: 'rgba(255, 255, 255, 0.65)',
-    letterSpacing: 0.5,
-  },
+  dot: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#1E3A8A' },
 });

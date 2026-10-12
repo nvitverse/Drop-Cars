@@ -8,11 +8,12 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, UserPlus, Shield, Trash2, Package, UserCheck, Users, Wallet, X, History, ChevronRight, ClipboardCheck, FileCheck, UserCog, ShieldCheck, MessageSquare, Target, Megaphone, Mic, Square, Send, Radio, Trash, Pencil } from 'lucide-react-native';
+import { ArrowLeft, UserPlus, Shield, Trash2, Package, UserCheck, Users, Wallet, X, History, ChevronRight, ClipboardCheck, FileCheck, UserCog, ShieldCheck, MessageSquare, Target, Megaphone, Mic, Square, Send, Radio, Trash, Pencil, Phone, MessageCircle } from 'lucide-react-native';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { apiService } from '@/services/api';
 import Toast, { useToast } from '@/components/Toast';
@@ -549,6 +550,49 @@ export default function StaffManagementScreen() {
                     <Trash2 size={16} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
+
+                {/* Owner-to-Staff Quick Communication Action Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <TouchableOpacity
+                    style={[styles.staffActionBtn, { backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF', borderColor: isDark ? 'rgba(37,99,235,0.3)' : '#BFDBFE' }]}
+                    onPress={() => Linking.openURL(`tel:${member.phone}`)}
+                  >
+                    <Phone size={12} color="#2563EB" />
+                    <Text style={[styles.staffActionBtnText, { color: '#2563EB' }]}>Call</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.staffActionBtn, { backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#ECFDF5', borderColor: isDark ? 'rgba(16,185,129,0.3)' : '#A7F3D0' }]}
+                    onPress={() => {
+                      const clean = member.phone.replace(/\D/g, '').slice(-10);
+                      Linking.openURL(`https://wa.me/91${clean}`);
+                    }}
+                  >
+                    <MessageCircle size={12} color="#059669" />
+                    <Text style={[styles.staffActionBtnText, { color: '#059669' }]}>WhatsApp</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.staffActionBtn, { backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF', borderColor: isDark ? 'rgba(99,102,241,0.3)' : '#C7D2FE' }]}
+                    onPress={() => {
+                      setDirectiveTargetMode('specific');
+                      setDirectiveTargetIds([member.id]);
+                      setDirectiveModalVisible(true);
+                    }}
+                  >
+                    <Megaphone size={12} color="#4F46E5" />
+                    <Text style={[styles.staffActionBtnText, { color: '#4F46E5' }]}>Send Directive</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.staffActionBtn, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}
+                    onPress={() => router.push('/staff-daily-records' as any)}
+                  >
+                    <ClipboardCheck size={12} color={themeColors.textSecondary} />
+                    <Text style={[styles.staffActionBtnText, { color: themeColors.textSecondary }]}>Daily Logs</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <Text style={[styles.permLabel, { color: themeColors.textSecondary }]}>Can access:</Text>
                 <View style={styles.permRow}>
                   {[...PERMISSION_OPTIONS, ...extraPermKeys.map((k) => ({ key: k, label: k.replace(/_/g, ' '), icon: Shield }))].map((opt) => {
@@ -1053,6 +1097,20 @@ const styles = StyleSheet.create({
     width: 32, height: 32, borderRadius: 6,
     backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center',
   },
+  staffActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  staffActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
   permLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', marginBottom: 6, textTransform: 'uppercase' },
   permRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   permChip: {

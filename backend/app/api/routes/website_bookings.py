@@ -122,6 +122,12 @@ class WebsiteBookingCreate(BaseModel):
     # becomes the booking's quote instead of the backend's own rate card (see crud/website_quote.py). Kept loose (a plain dict): a
     # malformed quote must never make the whole booking fail - it is ignored and the backend tariff is used.
     quoted_fare: Optional[Dict[str, Any]] = None
+    quoted_total_amount: Optional[int] = None
+    quoted_cost_per_km: Optional[int] = None
+    quoted_driver_allowance: Optional[int] = None
+    quoted_permit_charges: Optional[int] = None
+    quoted_toll_charges: Optional[int] = None
+    quoted_trip_distance: Optional[float] = None
 
     @field_validator("pickup_drop_location", mode="before")
     def locations_from_list(cls, v):
@@ -193,10 +199,22 @@ async def create_website_booking(
             _calculate_fare_internal, db, payload.pickup_drop_location, payload.trip_type, payload.car_type
         )
         website_quote = None
-        if payload.quoted_fare:
+        quote_dict = payload.quoted_fare
+        if quote_dict is None and (payload.quoted_total_amount or payload.quoted_cost_per_km):
+            quote_dict = {
+                "per_km_rate": float(payload.quoted_cost_per_km or (rates.get("cost_per_km") if rates else 0) or 0),
+                "driver_bata": int(payload.quoted_driver_allowance or (rates.get("driver_allowance") if rates else 0) or 0),
+                "billable_km": float(payload.quoted_trip_distance or fare.get("total_km") or 0),
+                "total_fare": int(payload.quoted_total_amount or fare.get("total_amount") or 0),
+                "toll_amount": int(payload.quoted_toll_charges or 0),
+                "permit_amount": int(payload.quoted_permit_charges or 0),
+                "include_taxes": True,
+                "include_tolls": bool(payload.quoted_toll_charges and payload.quoted_toll_charges > 0),
+            }
+        if quote_dict:
             from app.crud.website_quote import WebsiteQuotedFare, apply_website_quote
             try:
-                website_quote = apply_website_quote(fare, WebsiteQuotedFare(**payload.quoted_fare))
+                website_quote = apply_website_quote(fare, WebsiteQuotedFare(**quote_dict))
             except Exception as e:  # noqa: BLE001
                 logger.warning("website quoted_fare ignored: %s", type(e).__name__)
         if website_quote:

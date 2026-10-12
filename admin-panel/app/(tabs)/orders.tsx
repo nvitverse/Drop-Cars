@@ -24,7 +24,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, UserX, Wallet, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users } from 'lucide-react-native';
+import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, UserX, Wallet, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users, BellRing } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import EnquiriesScreen from '../enquiries';
@@ -125,6 +125,12 @@ interface Order {
   } | null;
   toll_charge_update?: boolean;
   updated_toll_charges?: number;
+  toll_charges?: number;
+  include_toll?: boolean;
+  include_gst?: boolean;
+  gst_amount?: number;
+  total_booking_amount?: number;
+  end_date_time?: string;
   cost_per_km?: number;
   extra_cost_per_km?: number;
   driver_allowance?: number;
@@ -600,6 +606,33 @@ export default function OrdersScreen() {
   const [advanceInput, setAdvanceInput] = useState('');
   const [savingAdvance, setSavingAdvance] = useState(false);
 
+  // 1-Tap Manual Notify Drivers State & Cooldown Tracking
+  const [notifyingOrderId, setNotifyingOrderId] = useState<number | string | null>(null);
+  const [notifiedCooldownMap, setNotifiedCooldownMap] = useState<Record<string | number, number>>({});
+
+  const handleNotifyDriversOnCard = async (order: Order, e?: any) => {
+    e?.stopPropagation?.();
+    if (!order?.id) return;
+    const now = Date.now();
+    const last = notifiedCooldownMap[order.id] || 0;
+    if (now - last < 60000) {
+      const waitSec = Math.ceil((60000 - (now - last)) / 1000);
+      showToast(`Cooldown: Please wait ${waitSec}s before re-alerting`, 'info');
+      return;
+    }
+    setNotifyingOrderId(order.id);
+    try {
+      const res: any = await apiService.notifyOrderDrivers(order.id);
+      const count = res?.detail?.count;
+      setNotifiedCooldownMap((prev) => ({ ...prev, [order.id]: Date.now() }));
+      showToast(count ? `🔔 Alert sent to ${count} driver${count === 1 ? '' : 's'}` : '🔔 Drivers alerted', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Could not send the alert', 'error');
+    } finally {
+      setNotifyingOrderId(null);
+    }
+  };
+
   const handleOpenEditAdvance = (order: Order, e?: any) => {
     e?.stopPropagation?.();
     setEditingAdvanceOrder(order);
@@ -717,6 +750,14 @@ export default function OrdersScreen() {
       startT = (parts[1] || '').slice(0, 5);
     }
 
+    let endD = '';
+    let endT = '';
+    if (order.end_date_time) {
+      const endParts = order.end_date_time.split(/T|\s/);
+      endD = endParts[0] || '';
+      endT = (endParts[1] || '').slice(0, 5);
+    }
+
     router.push({
       pathname: '/create-booking',
       params: {
@@ -733,11 +774,25 @@ export default function OrdersScreen() {
         extra_cost_per_km: order.extra_cost_per_km != null ? String(order.extra_cost_per_km) : '',
         driver_allowance: order.driver_allowance != null ? String(order.driver_allowance) : '',
         extra_driver_allowance: order.extra_driver_allowance != null ? String(order.extra_driver_allowance) : '',
+        permit_charges: order.permit_charges != null ? String(order.permit_charges) : '',
+        extra_permit_charges: order.extra_permit_charges != null ? String(order.extra_permit_charges) : '',
+        hill_charges: order.hill_charges != null ? String(order.hill_charges) : '',
+        toll_charges: order.toll_charges != null ? String(order.toll_charges) : '',
+        include_toll: order.toll_charges != null && Number(order.toll_charges) > 0 ? 'true' : (order.include_toll ? 'true' : 'false'),
+        night_charges: order.night_charges != null ? String(order.night_charges) : '',
+        waiting_time: order.waiting_time != null ? String(order.waiting_time) : '',
+        include_gst: order.include_gst ? 'true' : 'false',
+        gst_amount: order.gst_amount != null ? String(order.gst_amount) : '',
         advance_received: order.advance_received != null ? String(order.advance_received) : '',
         trip_distance: order.trip_distance != null ? String(order.trip_distance) : '',
+        total_booking_amount: order.total_booking_amount != null ? String(order.total_booking_amount) : (order.vendor_price != null ? String(order.vendor_price) : ''),
         start_date: startD,
         start_time: startT,
+        end_date: endD,
+        end_time: endT,
         fare_type: order.fare_type || '',
+        pick_near_city: Array.isArray(order.pick_near_city) ? JSON.stringify(order.pick_near_city) : '',
+        vendor_fees_percent: order.vendor_fees_percent != null ? String(order.vendor_fees_percent) : (order.platform_fees_percent != null ? String(order.platform_fees_percent) : ''),
       }
     });
   };
@@ -1561,6 +1616,13 @@ export default function OrdersScreen() {
                 {
                   text: 'Edit & Post New',
                   onPress: () => {
+                    let startD = '';
+                    let startT = '';
+                    if (item.start_date_time) {
+                      const parts = item.start_date_time.split(/T|\s/);
+                      startD = parts[0] || '';
+                      startT = (parts[1] || '').slice(0, 5);
+                    }
                     router.push({
                       pathname: '/create-booking',
                       params: {
@@ -1571,6 +1633,23 @@ export default function OrdersScreen() {
                         trip_type: item.trip_type || 'oneway',
                         car_type: item.car_type || 'SEDAN_4_PLUS_1',
                         pickup_notes: item.pickup_notes || `Recreated from #${item.id}`,
+                        cost_per_km: item.cost_per_km != null ? String(item.cost_per_km) : '',
+                        extra_cost_per_km: item.extra_cost_per_km != null ? String(item.extra_cost_per_km) : '',
+                        driver_allowance: item.driver_allowance != null ? String(item.driver_allowance) : '',
+                        extra_driver_allowance: item.extra_driver_allowance != null ? String(item.extra_driver_allowance) : '',
+                        permit_charges: item.permit_charges != null ? String(item.permit_charges) : '',
+                        extra_permit_charges: item.extra_permit_charges != null ? String(item.extra_permit_charges) : '',
+                        hill_charges: item.hill_charges != null ? String(item.hill_charges) : '',
+                        toll_charges: item.toll_charges != null ? String(item.toll_charges) : '',
+                        include_toll: item.toll_charges != null && Number(item.toll_charges) > 0 ? 'true' : (item.include_toll ? 'true' : 'false'),
+                        include_gst: item.include_gst ? 'true' : 'false',
+                        gst_amount: item.gst_amount != null ? String(item.gst_amount) : '',
+                        advance_received: item.advance_received != null ? String(item.advance_received) : '',
+                        trip_distance: item.trip_distance != null ? String(item.trip_distance) : '',
+                        total_booking_amount: item.total_booking_amount != null ? String(item.total_booking_amount) : (item.vendor_price != null ? String(item.vendor_price) : ''),
+                        start_date: startD,
+                        start_time: startT,
+                        fare_type: item.fare_type || '',
                       },
                     });
                   },
@@ -1635,6 +1714,39 @@ export default function OrdersScreen() {
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>Remove Driver</Text>
                       </TouchableOpacity>
                     )}
+
+                    {/* 1-Tap Manual Notify Drivers Button */}
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 9,
+                        paddingVertical: 5,
+                        borderRadius: 6,
+                        backgroundColor: isDark ? '#78350F' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: '#F59E0B',
+                        opacity: notifyingOrderId === item.id ? 0.7 : 1,
+                      }}
+                      onPress={(e) => handleNotifyDriversOnCard(item, e)}
+                      disabled={notifyingOrderId === item.id}
+                      activeOpacity={0.8}
+                    >
+                      <BellRing size={12} color="#D97706" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
+                        {notifyingOrderId === item.id ? 'Alerting...' : 'Notify'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#312E81' : '#EEF2FF', borderWidth: 1, borderColor: '#6366F1' }}
+                      onPress={(e) => { e.stopPropagation(); handleEditFullBooking(item); }}
+                      activeOpacity={0.8}
+                    >
+                      <SlidersHorizontal size={12} color="#4F46E5" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>Full form</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderWidth: 1, borderColor: themeColors.border }}

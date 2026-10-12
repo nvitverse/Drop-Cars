@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import AppLoadingScreen from '@/components/AppLoadingScreen';
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -23,5 +23,5 @@ export default function IndexScreen() {
     }
   };
 
-  return <LoadingSpinner />;
+  return <AppLoadingScreen />;
 }

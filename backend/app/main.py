@@ -294,6 +294,8 @@ from app.api.routes import unaccepted_desk as _unaccepted_desk
 app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
 from app.api.routes import portal as _portal
 app.include_router(_portal.router, tags=["Web execution portal"])
+from app.api.routes import help_events as _help_events      # Antigravity round 4: help / error telemetry + Admin Help Insights
+app.include_router(_help_events.router)
 from app.api.routes import document_models as _doc_models
 app.include_router(_doc_models.router, prefix="/api", tags=["Document Models"])
 app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])
@@ -383,6 +385,30 @@ async def ensure_admin_token_version_column() -> None:
         print(f"admin token_version migration failed (continuing): {e}")
     finally:
         db.close()
+
+
+@app.on_event("startup")
+async def ensure_staff_directive_columns() -> None:
+    """Lightweight migration: add timeline expiry, directive_type, and actionable task fields to staff_directive."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    statements = [
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS directive_type VARCHAR NOT NULL DEFAULT 'ANNOUNCEMENT'",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS priority VARCHAR NOT NULL DEFAULT 'NORMAL'",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_type VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_screen VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_label VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS completed_by JSON",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0",
+    ]
+    for stmt in statements:
+        try:
+            db.execute(text(stmt))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+    db.close()
 
 
 @app.on_event("startup")

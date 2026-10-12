@@ -51,6 +51,9 @@ import {
   RefreshCw,
   Zap,
   CreditCard,
+  Clock,
+  ArrowRight,
+  Trash2,
 } from 'lucide-react-native';
 import { apiService } from '../../services/api';
 import { enquiriesApi } from '../../services/enquiriesApi';
@@ -73,6 +76,14 @@ type StaffDirective = {
   target_admin_ids: string[] | null;
   created_by_username: string;
   created_at: string;
+  directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+  priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+  expires_at?: string | null;
+  action_type?: string | null;
+  action_screen?: string | null;
+  action_label?: string | null;
+  completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+  is_archived?: number;
 };
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -836,54 +847,256 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />}
       >
 
-        {/* 1. Priority Directive from NV / Management (Shown at Top for Staff) */}
-        {!isOwner && myDirectives.length > 0 && (
+        {/* 1. Futuristic Priority Directive & Tasks Card from NV / Management */}
+        {myDirectives.length > 0 && (
           <View
             style={{
               marginHorizontal: 16,
               marginTop: 10,
-              marginBottom: 8,
-              padding: 14,
-              borderRadius: 14,
-              backgroundColor: isDark ? '#1E1B4B40' : '#EEF2FF',
+              marginBottom: 10,
+              padding: 15,
+              borderRadius: 16,
+              backgroundColor: isDark
+                ? (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#450A0A50' : myDirectives[0].directive_type === 'TASK' ? '#3B200540' : '#1E1B4B45')
+                : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#FEF2F2' : myDirectives[0].directive_type === 'TASK' ? '#FFFBEB' : '#EEF2FF'),
               borderWidth: 1.5,
-              borderColor: isDark ? '#6366F150' : '#C7D2FE',
+              borderColor: isDark
+                ? (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#EF444460' : myDirectives[0].directive_type === 'TASK' ? '#F59E0B60' : '#6366F160')
+                : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#FCA5A5' : myDirectives[0].directive_type === 'TASK' ? '#FDE68A' : '#C7D2FE'),
               ...shadows.card,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#6366F120', alignItems: 'center', justifyContent: 'center' }}>
-                  <Megaphone size={15} color="#6366F1" />
+            {/* Top Row: Type Pill, Countdown Badge, and Urgency */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: myDirectives[0].directive_type === 'URGENT_ALERT' ? '#EF444425' : myDirectives[0].directive_type === 'TASK' ? '#F59E0B25' : '#6366F125',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Megaphone
+                    size={14}
+                    color={myDirectives[0].directive_type === 'URGENT_ALERT' ? '#DC2626' : myDirectives[0].directive_type === 'TASK' ? '#D97706' : '#6366F1'}
+                  />
                 </View>
-                <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#C7D2FE' : '#3730A3' }}>
-                  Message from Management / NV
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: 'Inter-Bold',
+                    fontWeight: '800',
+                    color: isDark ? themeColors.text : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#991B1B' : myDirectives[0].directive_type === 'TASK' ? '#92400E' : '#3730A3'),
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {myDirectives[0].directive_type === 'TASK'
+                    ? '🎯 Assigned Task from NV'
+                    : myDirectives[0].directive_type === 'URGENT_ALERT'
+                    ? '🚨 Urgent Alert from NV'
+                    : '📢 Directive from NV / Management'}
                 </Text>
               </View>
-              <View style={{ backgroundColor: '#6366F1', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>IMPORTANT</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {/* Expiry / Timeline Badge */}
+                <View
+                  style={{
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : '#FFFFFF',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2.5,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Clock size={10} color={themeColors.textSecondary} />
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>
+                    {(() => {
+                      if (!myDirectives[0].expires_at) return 'Pinned';
+                      const diff = new Date(myDirectives[0].expires_at).getTime() - Date.now();
+                      if (diff <= 0) return 'Expired';
+                      const hrs = Math.floor(diff / (1000 * 60 * 60));
+                      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                      if (hrs > 24) return `${Math.floor(hrs / 24)}d left`;
+                      if (hrs > 0) return `${hrs}h ${mins}m left`;
+                      return `${mins}m left`;
+                    })()}
+                  </Text>
+                </View>
+
+                {/* Priority Chip */}
+                {myDirectives[0].priority === 'URGENT' && (
+                  <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>URGENT</Text>
+                  </View>
+                )}
               </View>
             </View>
 
+            {/* Directive Message Body */}
             {!!myDirectives[0].message && (
-              <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.text, fontWeight: '600', marginBottom: 6 }}>
+              <Text
+                style={{
+                  fontSize: 13.5,
+                  lineHeight: 20,
+                  color: themeColors.text,
+                  fontWeight: '600',
+                  marginBottom: 8,
+                }}
+              >
                 {myDirectives[0].message}
               </Text>
             )}
 
+            {/* Voice Note Player if attached */}
             {!!myDirectives[0].voice_note_url && (
-              <View style={{ marginTop: 6, marginBottom: 4 }}>
+              <View style={{ marginTop: 4, marginBottom: 8 }}>
                 <VoiceNoteButton url={myDirectives[0].voice_note_url} />
               </View>
             )}
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
-                Posted {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </Text>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6366F1' }}>
-                Follow Instructions
-              </Text>
+            {/* Action Row: Interactive Buttons for Staff & Owner */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              {/* Left Side: Clickable Destination Action Button */}
+              {!!myDirectives[0].action_screen ? (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: colors.primary,
+                  }}
+                  onPress={() => {
+                    const screen = myDirectives[0].action_screen;
+                    if (screen) router.push(screen as any);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                    {myDirectives[0].action_label || 'Go to Action'}
+                  </Text>
+                  <ArrowRight size={13} color="#FFFFFF" strokeWidth={2.5} />
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                  Posted {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              )}
+
+              {/* Right Side: Staff "Mark Done" OR Owner "Expire Now" */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {!isOwner ? (
+                  (() => {
+                    const isDone = Array.isArray(myDirectives[0].completed_by) && myDirectives[0].completed_by.length > 0;
+                    return (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5.5,
+                          borderRadius: 7,
+                          backgroundColor: isDone ? (isDark ? '#064E3B' : '#ECFDF5') : (isDark ? '#1E293B' : '#F1F5F9'),
+                          borderWidth: 1,
+                          borderColor: isDone ? '#10B981' : themeColors.border,
+                        }}
+                        onPress={async () => {
+                          const dirId = myDirectives[0].id;
+                          setMyDirectives((prev) =>
+                            prev.map((d, idx) =>
+                              idx === 0
+                                ? {
+                                    ...d,
+                                    completed_by: [
+                                      ...(d.completed_by || []),
+                                      { admin_id: 'me', username: adminUsername, completed_at: new Date().toISOString() },
+                                    ],
+                                  }
+                                : d
+                            )
+                          );
+                          Alert.alert('Acknowledged', 'Marked as completed! Management can see your status.');
+                          try {
+                            await apiService.completeStaffDirective(dirId);
+                          } catch {
+                            // Non-fatal, local completion preserved
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <CheckCircle2 size={13} color={isDone ? '#10B981' : themeColors.textSecondary} />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDone ? '#10B981' : themeColors.textSecondary }}>
+                          {isDone ? 'Completed ✓' : 'Mark as Done'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()
+                ) : (
+                  // Owner Controls: 1-Tap Expire & Dismiss
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 7,
+                      backgroundColor: isDark ? '#450A0A' : '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: '#EF4444',
+                    }}
+                    onPress={() => {
+                      Alert.alert(
+                        'Expire Directive',
+                        'Expire this directive immediately? It will disappear from all staff dashboards.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Expire Now',
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                await apiService.expireStaffDirective(myDirectives[0].id);
+                                setMyDirectives((prev) => prev.slice(1));
+                                Alert.alert('Success', 'Directive expired and dismissed from dashboard.');
+                              } catch (e: any) {
+                                Alert.alert('Error', e?.message || 'Failed to expire directive');
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Trash2 size={12} color="#DC2626" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>Expire Now</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -920,6 +1133,33 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>Shift Ready</Text>
               </View>
             </View>
+
+            <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
+              Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => setShowWelcomeModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#10B981',
+                paddingVertical: 10,
+                borderRadius: 10,
+                elevation: 2,
+              }}
+            >
+              <Zap size={15} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                Start Shift (Go Online)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* 1.8. Today at a Glance (AI-Assisted Operations Digest) */}
         {dailyDigest && (
           <View
@@ -989,33 +1229,6 @@ export default function DashboardScreen() {
                 />
               )}
             </View>
-          </View>
-        )}
-
-
-            <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
-              Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.
-            </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => setShowWelcomeModal(true)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: '#10B981',
-                paddingVertical: 10,
-                borderRadius: 10,
-                elevation: 2,
-              }}
-            >
-              <Zap size={15} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
-                Start Shift (Go Online)
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
 

@@ -774,3 +774,37 @@ def summarize_booking_chat(
     messages_payload = [{"sender": m.sender_side, "text": m.text or ""} for m in msgs]
     result = summarize_thread(db, thread_key=f"order:{order_id}", last_message_id=last_id, messages=messages_payload)
     return {"order_id": order_id, "last_message_id": last_id, **result}
+
+
+class TrashMoveIn(BaseModel):
+    type: str = Field(..., description="SUPPORT or BOOKING")
+    key: str = Field(..., description="Thread key or order id")
+    reason: Optional[str] = "SOLVED"
+
+
+class TrashRestoreIn(BaseModel):
+    type: str = Field(..., description="SUPPORT or BOOKING")
+    key: str = Field(..., description="Thread key or order id")
+
+
+@router.post("/admin/trash/move")
+def admin_trash_move_chat(
+    body: TrashMoveIn,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    from app.crud.chat_trash import move_to_trash
+    by = getattr(current_admin, "username", "admin")
+    row = move_to_trash(db, thread_type=body.type, thread_key=body.key, by=by, reason=body.reason or "SOLVED")
+    return {"status": "SUCCESS", "message": "Moved to trash", "thread_type": row.thread_type, "thread_key": row.thread_key}
+
+
+@router.post("/admin/trash/restore")
+def admin_trash_restore_chat(
+    body: TrashRestoreIn,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    from app.crud.chat_trash import restore
+    ok = restore(db, thread_type=body.type, thread_key=body.key)
+    return {"status": "SUCCESS" if ok else "NOT_FOUND", "restored": ok}
