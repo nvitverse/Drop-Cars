@@ -289,3 +289,8 @@ Cloud Run logs showed: `POST /users/cardetails/signup` = a 200 (car saved, 7-60 
 
 ## 2026-10-12e - Account creation errors (Claude)
 Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signup` 400 x29 + 422 x6, `cardriver/signup` 400 x11 + 422 x12, `verify-email-otp` 400 x8, reset-otp 400 x27. Mostly people retrying (the first try worked, or the number already has an account). Changes: the 429 now says how many seconds are left and to look in Spam; "already registered" messages now tell the person to log in / use Forgot password; a fleet owner sending the same duty driver again gets success (same idea as the add-car retry); every 4xx / 422 is logged with its reason from now on.
+
+## 2026-10-13 (Claude) - documents, expiry rule, Driver logo - LIVE
+- Backend rev 00332 (commits 4a6fff5 + expiry-day rule): date repair in the document reader (O/0, l/1), typed date accepted when printed on the document, one-digit slips -> NEEDS_REVIEW, second-chance OCR (crop + rotations, untested against real photos: no Tesseract on the dev PC), new cars selectable (get_available_cars no longer needs ONLINE), switch-off text records who/when/why, cars and drivers stop ON their document expiry date (owner rule).
+- Driver OTA 783103af: BrandLogo (real logo) on login / signup / language / duty sign-in, signup lists all problems in one alert. Published from the clean tree C:\gtmp\drv_src, not AG's round-4 code.
+- verify_live_routes: 692/692.
