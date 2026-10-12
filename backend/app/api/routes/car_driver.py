@@ -95,6 +95,19 @@ def signup_car_driver(
     # (not `.id`) caveat too - current_user here is a VehicleOwnerDetails
     # row despite the type annotation, see car_details.py's longer note.
     driver_form.vehicle_owner_id = current_user.vehicle_owner_id
+    # The same fleet owner sending the same mobile number again is a retry of a driver that is already saved: answer with that driver
+    # (not "already registered"), so the owner is not stuck after a lost reply.
+    from app.models.car_driver import CarDriver as _CarDriver
+    _again = db.query(_CarDriver).filter(_CarDriver.primary_number == driver_form.primary_number,
+                                         _CarDriver.vehicle_owner_id == current_user.vehicle_owner_id).first()
+    if _again is not None:
+        return {
+            "message": "This driver is already registered with your fleet",
+            "driver_id": str(_again.id),
+            "license_img_url": _again.licence_front_img or "",
+            "profile_img_url": _again.profile_img,
+            "status": "success",
+        }
     
     try:
         db_driver = create_car_driver(db, driver_form)

@@ -98,11 +98,14 @@ def send_email_otp(
     # Rate limit: only 1 OTP per email per 60 seconds
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
     recent = db.execute(
-        sa_text("SELECT id FROM email_otps WHERE email = :e AND created_at > :c LIMIT 1"),
+        sa_text("SELECT id, created_at FROM email_otps WHERE email = :e AND created_at > :c ORDER BY created_at DESC LIMIT 1"),
         {"e": email, "c": cutoff}
     ).first()
+    recent_at = recent.created_at if recent else None
     if recent:
-        raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code.")
+        _age = (datetime.now(timezone.utc) - (recent_at if getattr(recent_at, "tzinfo", None) else recent_at.replace(tzinfo=timezone.utc))).total_seconds() if recent_at else 0
+        _left = max(1, 60 - int(_age))
+        raise HTTPException(status_code=429, detail=f"A code was sent to {email} a moment ago - it can take up to a minute to arrive, so please also look in Spam / Promotions. You can ask for another one in {_left} seconds.")
 
     # Generate OTP
     code = ''.join(random.choices(string.digits, k=6))

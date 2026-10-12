@@ -16,7 +16,7 @@ def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentia
     if existing_user:
         raise HTTPException(
             status_code=400, 
-            detail=f"Mobile number {user_in.primary_number} is already registered. Please use a different number."
+            detail=f"Mobile number {user_in.primary_number} already has a Drop Cars account. Please log in with it (use Forgot password if you do not remember the password), or sign up with a different number."
         )
 
     # Check for duplicate secondary number (only if provided)
@@ -39,7 +39,7 @@ def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentia
     if existing_aadhar:
         raise HTTPException(
             status_code=400,
-            detail=f"Aadhar number {user_in.aadhar_number} is already registered. Please use a different number."
+            detail=f"This Aadhaar number is already linked to a Drop Cars account. If it is yours, please log in (use Forgot password if needed). Otherwise check the number and try again."
         )
 
     # Check for duplicate email (if provided)
@@ -52,7 +52,7 @@ def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentia
         if existing_email:
             raise HTTPException(
                 status_code=400,
-                detail=f"Email address {clean_email} is already registered. Please use a different email or log in."
+                detail=f"E-mail {clean_email} already has a Drop Cars account. Please log in, or use a different e-mail."
             )
 
     # Check for duplicate PAN number (if provided)

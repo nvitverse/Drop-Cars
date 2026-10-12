@@ -17,7 +17,7 @@ def create_car_driver(db: Session, driver_data: CarDriverForm) -> CarDriver:
     if existing_primary:
         raise HTTPException(
             status_code=400, 
-            detail=f"Driver with primary number {driver_data.primary_number} is already registered. Please use a different number."
+            detail=f"A driver with mobile number {driver_data.primary_number} already has a Drop Cars account (maybe under another fleet). Please check the number, or ask the driver to log in."
         )
 
     # Check for duplicate secondary number
@@ -34,7 +34,7 @@ def create_car_driver(db: Session, driver_data: CarDriverForm) -> CarDriver:
     if existing_license:
         raise HTTPException(
             status_code=400, 
-            detail=f"Driver with license number {driver_data.licence_number} is already registered. Please use a different license number."
+            detail=f"Licence number {driver_data.licence_number} is already registered for another driver. Please check the number you typed."
         )
 
     # Hash password

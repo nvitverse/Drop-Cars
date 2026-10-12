@@ -47,3 +47,34 @@ def test_the_vendor_email_screen_works_with_the_vendor_row(pg_session):
     pg_session.add(v)
     pg_session.flush()
     assert get_vendor_email(db=pg_session, vendor_id=v) == {"email": "v@example.com", "email_verified": True}
+
+
+def test_resending_the_email_code_too_soon_says_how_long_to_wait(pg_session):
+    from fastapi import HTTPException
+    from sqlalchemy import text
+    from app.api.routes.vehicle_owner import send_email_otp
+    email = f"t{uuid.uuid4().hex[:8]}@example.com"
+    pg_session.execute(text("INSERT INTO email_otps (id, role, primary_number, email, code, purpose, attempts, expires_at, created_at) "
+                            "VALUES (gen_random_uuid(), 'vehicle_owner', '', :e, '123456', 'signup_verify', 0, NOW() + interval '10 minutes', NOW())"), {"e": email})
+    with pytest.raises(HTTPException) as e:
+        send_email_otp(email=email, db=pg_session)
+    assert e.value.status_code == 429 and "Spam" in e.value.detail and "seconds" in e.value.detail and email in e.value.detail
+
+
+def test_the_same_fleet_owner_adding_the_same_duty_driver_again_is_success(pg_session):
+    from app.api.routes.car_driver import signup_car_driver
+    from app.models.vehicle_owner import VehicleOwnerCredentials
+    from app.models.car_driver import CarDriver
+    n = "9" + str(uuid.uuid4().int)[:9]
+    o = VehicleOwnerCredentials(primary_number=n, hashed_password="x")
+    pg_session.add(o)
+    pg_session.flush()
+    dn = "8" + str(uuid.uuid4().int)[:9]
+    d = CarDriver(vehicle_owner_id=o.id, full_name="Ravi Kumar", primary_number=dn, hashed_password="x", licence_number="TN" + str(uuid.uuid4().int)[:12],
+                  address="a", city="c", pincode="600001", licence_front_img="https://x/lic_" + dn)
+    pg_session.add(d)
+    pg_session.flush()
+    form = SimpleNamespace(is_owner_driver=False, password="secret12", primary_number=dn, vehicle_owner_id=None)
+    out = signup_car_driver(driver_form=form, licence_front_img=_img(), licence_back_img=None, profile_img=_img(), aadhar_front_img=None, aadhar_back_img=None,
+                            aadhar_number=None, current_user=SimpleNamespace(vehicle_owner_id=o.id), db=pg_session)
+    assert out["status"] == "success" and out["driver_id"] == str(d.id)
