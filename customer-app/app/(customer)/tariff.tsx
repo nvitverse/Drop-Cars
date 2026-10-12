@@ -77,7 +77,7 @@ export default function TariffScreen() {
           const currentRate = rate.perKm;
           const currentBata = rate.driverBeta;
           const minKm = isRound ? MIN_BILLED_KM.ROUNDTRIP : MIN_BILLED_KM.ONEWAY;
-          const inputKm = parseInt(calcKm) || 130;
+          const inputKm = parseInt(calcKm, 10) || minKm;
           const billedKm = Math.max(inputKm, minKm);
           const totalFare = (billedKm * currentRate) + currentBata;
 

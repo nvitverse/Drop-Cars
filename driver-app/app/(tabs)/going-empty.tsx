@@ -118,8 +118,13 @@ export default function GoingEmptyScreen() {
       return;
     }
 
+    const parsedPrice = parseFloat(pricePerSeat);
+    if (!pricePerSeat || isNaN(parsedPrice) || parsedPrice <= 0) {
+      Alert.alert(t('quickDashboard.errorTitle'), 'Please enter a valid price per seat');
+      return;
+    }
+
     const seats = parseInt(availableSeats, 10) || 1;
-    const price = parseFloat(pricePerSeat) || 200;
 
     const newPost: CarpoolPost = {
       id: `ge_${Date.now().toString().slice(-4)}`,
@@ -128,7 +133,7 @@ export default function GoingEmptyScreen() {
       intermediateStops: stopsList,
       departureTime,
       availableSeats: seats,
-      pricePerSeat: price,
+      pricePerSeat: parsedPrice,
       vehicleNumber: 'TN 09 AB 1001',
       vehicleType: 'Commercial Cab (Insured)',
       isAutoAccept,

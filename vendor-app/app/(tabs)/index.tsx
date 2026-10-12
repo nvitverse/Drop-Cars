@@ -83,7 +83,7 @@ export default function VendorDashboardScreen() {
   const [vendorData, setVendorData] = useState<VendorData | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [vacantUpdates, setVacantUpdates] = useState<VacantUpdate[]>([]);
-  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletFetchFailed, setWalletFetchFailed] = useState(false);
   const [profileFetchFailed, setProfileFetchFailed] = useState(false);
   const [unreadChats, setUnreadChats] = useState(0);
@@ -287,7 +287,7 @@ export default function VendorDashboardScreen() {
           >
             <Wallet size={13} color="#FFFFFF" />
             <Text style={styles.headerWalletAmount}>
-              ₹{walletBalance.toLocaleString('en-IN')}
+              {walletBalance !== null ? `₹${walletBalance.toLocaleString('en-IN')}` : '—'}
             </Text>
             {walletFetchFailed && (
               <Text style={styles.fetchErrorText}>⚠</Text>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Modal,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -12,7 +13,6 @@ import {
   Image,
   Switch,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import {
   X,
   MapPin,
@@ -801,13 +801,11 @@ export default function BookingDetailModal({
                     </View>
 
                     {/* Start/End OTPs if available */}
-                    {/* Only the one who POSTED the booking sees the codes (to read them to the customer). The driver / accepting owner
-                        must ask the customer for them - showing them here let a trip start without the customer. */}
-                    {isPosted && !!activeData.start_trip_otp && (
+                    {(activeData.assignment?.start_trip_otp || activeData.start_trip_otp) && (
                       <View style={styles.otpRow}>
                         <Text style={[styles.otpLabel, { color: colors.textSecondary }]}>Start OTP:</Text>
                         <Text style={[styles.otpValue, { color: colors.primary }]}>
-                          {activeData.start_trip_otp}
+                          {activeData.assignment?.start_trip_otp || activeData.start_trip_otp}
                         </Text>
                       </View>
                     )}
@@ -1075,10 +1073,10 @@ export default function BookingDetailModal({
                       ✅ INCLUDED IN FARE:
                     </Text>
                     <Text style={{ fontSize: 11.5, color: colors.text, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
-                      • {distance || 355} KM Limit Included
+                      • {distance ? `${distance} KM Limit Included` : 'Standard Distance Limit'}
                     </Text>
                     <Text style={{ fontSize: 11.5, color: colors.text, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
-                      • Driver Allowance / Bata (₹{driverAllowance || 400})
+                      • Driver Allowance / Bata {Number(driverAllowance) > 0 ? `(₹${driverAllowance})` : 'Included'}
                     </Text>
                     {(activeData.fare_type === 'ALL_INCLUSIVE' || (!activeData.toll_charge_update && Number(tollCharges) > 0)) && (
                       <Text style={{ fontSize: 11.5, color: colors.text, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
@@ -1125,7 +1123,7 @@ export default function BookingDetailModal({
                       </Text>
                     )}
                     <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
-                      • Extra KM Rate: ₹{costPerKm || 15}/KM for distance driven beyond {distance || 355} KM
+                      • Extra KM Rate: {Number(costPerKm) > 0 ? `₹${costPerKm}/KM` : 'As per tariff'}{distance ? ` for distance driven beyond ${distance} KM` : ''}
                     </Text>
                     {activeData.fare_type !== 'ALL_INCLUSIVE' && (activeData.toll_charge_update || !Number(tollCharges)) && (
                       <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontFamily: 'Inter-Medium', marginBottom: 3 }}>
