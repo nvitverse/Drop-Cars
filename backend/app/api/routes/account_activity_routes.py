@@ -71,7 +71,7 @@ def get_activity(kind: str, entity_id: str, db: Session = Depends(get_db), curre
 
 @admin_router.patch("/{kind}/{entity_id}/active")
 def set_active(kind: str, entity_id: str, body: ActiveBody, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
-    row = act.set_manual_active(db, kind, entity_id, body.active, body.reason)
+    row = act.set_manual_active(db, kind, entity_id, body.active, body.reason, by=getattr(current_admin, "username", None) or getattr(current_admin, "name", None) or "Admin")
     log_admin_action(
         db, admin_id=str(current_admin.id), admin_username=getattr(current_admin, "username", "Admin"),
         admin_role=getattr(current_admin, "role", None), action="ACCOUNT_SET_ACTIVE" if body.active else "ACCOUNT_SET_INACTIVE",

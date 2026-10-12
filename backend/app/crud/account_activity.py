@@ -96,8 +96,9 @@ def refresh_auto_inactive(db) -> dict:
 KINDS = {"car", "driver", "partner", "vendor"}
 
 
-def set_manual_active(db, kind: str, entity_id, active: bool, reason: Optional[str]):
-    """Switch an account off (reason required) or back on. Returns the entity."""
+def set_manual_active(db, kind: str, entity_id, active: bool, reason: Optional[str], by: Optional[str] = None):
+    """Switch an account off (reason required) or back on. Returns the entity. `by` = the staff member; the stored text then says WHO
+    switched it off, WHEN and WHY (the owner and every other admin see it)."""
     from fastapi import HTTPException
     import uuid as _uuid
     if kind not in KINDS:
@@ -122,7 +123,12 @@ def set_manual_active(db, kind: str, entity_id, active: bool, reason: Optional[s
         row = db.query(M).filter(M.vendor_id == eid).first()
     if row is None:
         raise HTTPException(status_code=404, detail=f"{kind} not found")
-    row.manual_inactive_reason = None if active else reason.strip()[:500]
+    if active:
+        row.manual_inactive_reason = None
+    else:
+        from datetime import datetime, timedelta, timezone
+        stamp = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).strftime("%d %b %Y %H:%M")
+        row.manual_inactive_reason = (reason.strip()[:400] + (f" (by {by.strip()}, {stamp} IST)" if (by or "").strip() else f" ({stamp} IST)"))[:500]
     if active and kind in ("car", "driver"):
         row.auto_inactive_reason = None   # turning it back on also clears the rating switch-off until the next daily sweep re-checks
     db.add(row)

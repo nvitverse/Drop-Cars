@@ -359,9 +359,35 @@ _DATE_RE = re.compile(
 )
 
 
+_CONFUSED = str.maketrans({"O": "0", "D": "0", "Q": "0", "I": "1", "L": "1", "|": "1", "!": "1", "Z": "2", "S": "5", "B": "8", "G": "6"})
+_DATE_SHAPED = re.compile(r'(?<![A-Z0-9])([0-9OIL|!DQZSBG]{1,2})\s?([\/\-\.,:])\s?([0-9OIL|!DQZSBG]{1,2})\s?([\/\-\.,:])\s?([0-9OIL|!DQZSBG]{4})(?![A-Z0-9])')
+
+
+def _fix_date_confusions(up: str) -> str:
+    """Tesseract reads 'O' for 0, 'l' / 'I' for 1, 'S' for 5 ... inside dates (10-O3-2O27). Repair ONLY text that has the shape of a date
+    (digits-or-lookalikes, a separator, ... a 4 character year); the result has the SAME length so positions stay valid."""
+    def _fix(m):
+        out = []
+        for ch in m.group(0):
+            out.append(ch.translate(_CONFUSED) if (ch.isalpha() or ch in "|!") else ch)
+        return "".join(out).replace(",", ".").replace(":", ".")
+    return _DATE_SHAPED.sub(_fix, up)
+
+
+def all_dates_in_text(text: str) -> List[date]:
+    """Every readable date on the document (any role) - used to check that the date the owner typed really is printed on it."""
+    return [d for _, d in _dates_with_pos(text)]
+
+
+def _near_miss(a: date, b: date) -> bool:
+    """True when two dates differ by about one misread character (2026 / 2028, 03 / 08) - an OCR slip, not a different date."""
+    x, y = a.strftime("%d%m%Y"), b.strftime("%d%m%Y")
+    return sum(1 for p, q in zip(x, y) if p != q) <= 1
+
+
 def _dates_with_pos(text: str) -> List[Tuple[int, date]]:
     out: List[Tuple[int, date]] = []
-    up = text.upper()
+    up = _fix_date_confusions(text.upper())
     for m in _DATE_RE.finditer(up):
         try:
             if m.group('dmy'):
@@ -389,7 +415,7 @@ def find_expiry(text: str) -> Tuple[Optional[date], bool]:
     ds = _dates_with_pos(text)
     if not ds:
         return None, False
-    up = text.upper()
+    up = _fix_date_confusions(text.upper())
     linked: List[date] = []
     for pos, dt in ds:
         window = up[max(0, pos - 40):pos]
@@ -431,8 +457,87 @@ def _preprocess_variants(image_bytes: bytes):
     yield Image.fromarray(th)
 
 
+def _document_crop(img):
+    """The document itself, straightened: finds the biggest 4-corner shape (the card / sheet on a table) and warps it flat. Returns None
+    when there is no clear one - the caller then simply keeps the whole photo."""
+    try:
+        h, w = img.shape[:2]
+        gray = cv2.GaussianBlur(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (5, 5), 0)
+        edges = cv2.dilate(cv2.Canny(gray, 40, 140), np.ones((3, 3), np.uint8), iterations=2)
+        cnts, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        best = None
+        for c in sorted(cnts, key=cv2.contourArea, reverse=True)[:5]:
+            if cv2.contourArea(c) < 0.25 * h * w:
+                break
+            approx = cv2.approxPolyDP(c, 0.02 * cv2.arcLength(c, True), True)
+            if len(approx) == 4:
+                best = approx.reshape(4, 2).astype("float32")
+                break
+        if best is None:
+            return None
+        s_ = best.sum(axis=1)
+        d_ = np.diff(best, axis=1).ravel()
+        rect = np.array([best[np.argmin(s_)], best[np.argmin(d_)], best[np.argmax(s_)], best[np.argmax(d_)]], dtype="float32")
+        wd = int(max(np.linalg.norm(rect[0] - rect[1]), np.linalg.norm(rect[3] - rect[2])))
+        ht = int(max(np.linalg.norm(rect[0] - rect[3]), np.linalg.norm(rect[1] - rect[2])))
+        if wd < 300 or ht < 200:
+            return None
+        dst = np.array([[0, 0], [wd - 1, 0], [wd - 1, ht - 1], [0, ht - 1]], dtype="float32")
+        return cv2.warpPerspective(img, cv2.getPerspectiveTransform(rect, dst), (wd, ht))
+    except Exception as e:  # noqa: BLE001
+        logger.debug("document crop skipped: %s", e)
+        return None
+
+
+def _extra_variants(image_bytes: bytes):
+    """Second-chance views for a photo the normal passes could not read: the straightened document, and the page turned 90 / 180 / 270 degrees
+    (phones often save the picture sideways or upside down). Yields (label, PIL image)."""
+    if not (HAS_PIL and HAS_OPENCV):
+        return
+    img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return
+    bases = [("whole", img)]
+    crop = _document_crop(img)
+    if crop is not None:
+        bases.insert(0, ("crop", crop))
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    for label, base in bases:
+        h, w = base.shape[:2]
+        sc = 1800.0 / max(h, w)
+        if sc > 1.05 or sc < 0.8:
+            base = cv2.resize(base, None, fx=sc, fy=sc, interpolation=cv2.INTER_CUBIC if sc > 1 else cv2.INTER_AREA)
+        g = clahe.apply(cv2.cvtColor(base, cv2.COLOR_BGR2GRAY))
+        if label == "crop":
+            yield "crop-0", Image.fromarray(g)
+        for rot_name, code in (("90", cv2.ROTATE_90_CLOCKWISE), ("180", cv2.ROTATE_180), ("270", cv2.ROTATE_90_COUNTERCLOCKWISE)):
+            yield f"{label}-{rot_name}", Image.fromarray(cv2.rotate(g, code))
+
+
+def _word_quality(im) -> Tuple[float, str]:
+    """(score, text): score = how many words Tesseract is SURE about - used to pick the right orientation / crop."""
+    import pytesseract
+    data = pytesseract.image_to_data(im, config="--oem 3 --psm 6", output_type=pytesseract.Output.DICT, timeout=25)
+    words, good = [], 0
+    for txt, conf in zip(data.get("text", []), data.get("conf", [])):
+        txt = (txt or "").strip()
+        if not txt:
+            continue
+        words.append(txt)
+        try:
+            if float(conf) >= 60 and len(txt) >= 3:
+                good += 1
+        except ValueError:
+            pass
+    return float(good), " ".join(words)
+
+
 def read_document_text(image_bytes: bytes) -> str:
-    """Best text we can get: EasyOCR when installed, else Tesseract over pre-processed variants (merged)."""
+    """Best text we can get: EasyOCR when installed, else Tesseract over pre-processed variants (merged). When the normal passes read
+    little (a sideways / upside-down / skewed photo), the straightened document and the other orientations are tried too and the one
+    Tesseract is most sure about is added."""
+    import time
+    started = time.monotonic()
     text = extract_ocr_text(image_bytes) if HAS_EASYOCR else ""
     if len(text) >= 80:
         return text
@@ -447,6 +552,24 @@ def read_document_text(image_bytes: bytes) -> str:
                     logger.warning("tesseract pass failed: %s", e)
             if sum(len(c) for c in chunks) > 400:
                 break
+        readable = len(re.sub(r'[^A-Za-z0-9]', '', "".join(chunks)))
+        if readable < 150:
+            best_score, best_text, best_label = -1.0, "", ""
+            for label, im in _extra_variants(image_bytes):
+                if time.monotonic() - started > 45:      # stay well inside the request time
+                    break
+                try:
+                    score, txt = _word_quality(im)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("tesseract extra pass %s failed: %s", label, e)
+                    continue
+                if score > best_score:
+                    best_score, best_text, best_label = score, txt, label
+                if score >= 25:                         # clearly right - stop trying more
+                    break
+            if best_text:
+                logger.info("document read by second-chance pass '%s' (%d sure words)", best_label, int(best_score))
+                chunks.append(best_text)
     except Exception as e:  # noqa: BLE001
         logger.error("document OCR unavailable: %s", e)
     return "\n".join(c for c in chunks if c)
@@ -591,15 +714,30 @@ def verify_uploaded_document(
             exp_typed = datetime.strptime(expected_expiry_date, "%Y-%m-%d").date()
         except ValueError:
             exp_typed = None
+    # a typed date that is printed on the document (and not past) outranks whichever date the reader guessed to be the expiry
+    if exp_typed and exp_typed >= today and not ai and exp_typed in set(all_dates_in_text(text)):
+        detected_expiry, expiry_trusted = exp_typed, True
     for label_date in (exp_typed, detected_expiry if expiry_trusted else None):
         if label_date and label_date < today:
             _lab = profile["label"] if profile else "document"
             return _result("INVALID", f"Your {_lab} expired on {label_date.strftime('%d %b %Y')}. Upload the renewed {_lab} and enter its new expiry date.", base, 0.93, confident=True,
                            extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
-        return _result("INVALID",
-                       f"The date you entered ({exp_typed.strftime('%d %b %Y')}) does not match the date on the {profile['label'] if profile else 'document'} ({detected_expiry.strftime('%d %b %Y')}). Enter the date printed on the document, or upload the correct document.",
-                       base, 0.75, extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True, confident=True)
+        # The typed date may well be printed on the document even if it is not the one picked as "the expiry" (a licence carries several
+        # dates; a policy has start AND end): accept it when the photo really contains it. Otherwise it is a mismatch - but one misread
+        # character (2026 read as 2028) is the reader's slip, so that goes to a person instead of rejecting the owner.
+        printed = set(all_dates_in_text(text)) if not ai else set()
+        if exp_typed in printed:
+            detected_expiry = exp_typed
+        else:
+            lab = profile['label'] if profile else 'document'
+            msg = (f"The date you entered ({exp_typed.strftime('%d %b %Y')}) does not match the date on the {lab} "
+                   f"({detected_expiry.strftime('%d %b %Y')}). Enter the date printed on the document, or upload the correct document.")
+            if not ai and _near_miss(detected_expiry, exp_typed):
+                return _result("NEEDS_REVIEW", msg + " (It may be a reading slip - a person will check.)", base, 0.6,
+                               extracted_expiry_date=detected_expiry.isoformat(), entered_expiry_date=exp_typed.isoformat(), date_mismatch=True)
+            return _result("INVALID", msg, base, 0.75, extracted_expiry_date=detected_expiry.isoformat(),
+                           entered_expiry_date=exp_typed.isoformat(), date_mismatch=True, confident=True)
 
     # 5. typed values vs photo
     entered_aadhaar = re.sub(r'\D', '', expected_aadhaar_number) if expected_aadhaar_number else None

@@ -192,11 +192,13 @@ def get_car_detail_by_id(db: Session, car_id: UUID) -> Optional[CarDetails]:
 
 
 def get_available_cars(db: Session, vehicle_owner_id: str) -> List[CarDetails]:
-    """Get all available cars with ONLINE status for a fleet owner"""
+    """Every car the owner can pick for a booking - NOT only the ones an admin has switched ONLINE. A newly added car sits in PROCESSING
+    until someone flips it, and that left "Select Car" empty. What decides is the document dates (expired / INVALID / switched off by
+    Drop Cars -> the assign endpoint refuses with the reason), never "not verified yet". BLOCKED cars stay out. Same rule as drivers."""
     from app.models.car_details import CarStatusEnum
     return db.query(CarDetails).filter(
         CarDetails.vehicle_owner_id == vehicle_owner_id,
-        CarDetails.car_status.in_([CarStatusEnum.ONLINE, CarStatusEnum.DRIVING])
+        CarDetails.car_status != CarStatusEnum.BLOCKED,
     ).all()
 
 def get_all_cars(db: Session, vehicle_owner_id: str) -> List[CarDetails]:
