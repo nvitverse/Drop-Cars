@@ -167,6 +167,32 @@ def posted_fare_split(db: Session, request, tariff_cfg: dict | None = None) -> d
     )
 
 
+def _commission_percent(db: Session) -> int:
+    try:
+        from app.utils.commission import get_commission_rates
+        r = get_commission_rates(db, "OUTSTATION", "STANDARD")
+        return int(r.get("vendor", 0)) + int(r.get("admin", 0))
+    except Exception:  # noqa: BLE001
+        return 10
+
+
+def _all_inclusive_percent(db: Session) -> int:
+    try:
+        from app.utils.commission import get_fee_settings
+        return int(get_fee_settings(db).get("platform_all_inclusive_pct", 15))
+    except Exception:  # noqa: BLE001
+        return 15
+
+
+def _tariff_bata(db: Session, car_type: str) -> int:
+    try:
+        from app.crud import driver_tariff
+        v = (driver_tariff.load(db).get("vehicles") or {}).get(str(getattr(car_type, "value", car_type))) or {}
+        return int(v.get("bata") if v.get("bata") is not None else driver_tariff.DEFAULT_BATA)
+    except Exception:  # noqa: BLE001
+        return 300
+
+
 def approve_customer_booking_request(db: Session, request: CustomerBookingRequest, decided_by: str) -> Order:
     """Turn a PENDING request into a real NewOrder + master Order (which itself
     fires the Telegram alert and vehicle-owner push fan-out - see
@@ -214,18 +240,18 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         vendor_price_val = orig_total_amount or (
             estimated_price_val + posted_extra_driver_allowance + posted_extra_permit_charges + posted_extra_cost_per_km * dist
         )
-        platform_fee = 10
+        platform_fee = _commission_percent(db)                 # Admin > System Config (commission_rates), not a number typed here
     else:
         posted_cost_per_km = 0
         posted_extra_cost_per_km = 0
-        posted_driver_allowance = 300
+        posted_driver_allowance = _tariff_bata(db, request.car_type)       # the driver tariff's bata for this vehicle (Admin > Tariffs > Driver)
         posted_extra_driver_allowance = 0
         posted_permit_charges = _pick(request.admin_permit_charges, request.quoted_permit_charges)
         posted_extra_permit_charges = _pick(request.admin_extra_permit_charges, request.quoted_extra_permit_charges)
         fare_type_str = "ALL_INCLUSIVE"
         vendor_price_val = orig_total_amount
-        estimated_price_val = int(round((orig_total_amount or 0) * 0.85)) if orig_total_amount else (_pick(request.admin_driver_amount, request.quoted_driver_amount) or 0)
-        platform_fee = 15
+        platform_fee = _all_inclusive_percent(db)                  # the platform's cut of an all-inclusive booking (System Config platform_all_inclusive_pct)
+        estimated_price_val = int(round((orig_total_amount or 0) * (100 - platform_fee) / 100)) if orig_total_amount else (_pick(request.admin_driver_amount, request.quoted_driver_amount) or 0)
 
     trip_type_enum = _get_trip_type_enum(request.trip_type)
     car_type_enum = CarTypeEnum(request.car_type)
