@@ -59,7 +59,14 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    """True only for a matching bcrypt hash. A row whose stored value is not a hash at all (the placeholder 'owner_pass' on owner-linked driver rows,
+    an empty value ...) is simply "not a match": it used to raise UnknownHashError and the driver's sign-in answered 500."""
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):             # passlib's UnknownHashError is a ValueError
+        return False
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()

@@ -94,6 +94,22 @@ def signup_car_details(
     # broke this route with a ForeignKeyViolation - caught immediately by
     # the same live test before it could reach production traffic.
     car_form.vehicle_owner_id = current_user.vehicle_owner_id
+    # The same owner sending the same vehicle number again is a retry of a car that is already saved (the phone lost the answer, or the app
+    # showed an error after the car had been created): answer with that car instead of "already registered", so the driver is not stuck.
+    from app.models.car_details import CarDetails as _CarDetails
+    _norm = lambda n: "".join(ch for ch in str(n or "").upper() if ch.isalnum())
+    _mine = [c for c in db.query(_CarDetails).filter(_CarDetails.vehicle_owner_id == current_user.vehicle_owner_id).all() if _norm(c.car_number) == _norm(car_form.car_number)]
+    if _mine:
+        c = _mine[0]
+        return {
+            "message": "This car is already registered with your account",
+            "car_id": str(c.id),
+            "image_urls": {k: v for k, v in {
+                "rc_front_img_url": c.rc_front_img_url, "rc_back_img_url": c.rc_back_img_url, "insurance_img_url": c.insurance_img_url,
+                "fc_img_url": c.fc_img_url, "car_img_url": c.car_img_url, "permit_img_url": c.permit_img_url, "pollution_img_url": c.pollution_img_url,
+            }.items() if v},
+            "status": "success",
+        }
     print(car_form.car_type)
     try:
         print("Working 1")

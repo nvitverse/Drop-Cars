@@ -1094,6 +1094,7 @@ def get_documents_needing_review(db: Session) -> List[dict]:
     attention right now" list for staff, so a re-upload that failed a
     second time had nowhere to surface."""
     from app.utils.gcs import generate_signed_url_from_gcs
+    from concurrent.futures import ThreadPoolExecutor
 
     items: List[dict] = []
 
@@ -1117,7 +1118,7 @@ def get_documents_needing_review(db: Session) -> List[dict]:
                     "entity_name": o.full_name,
                     "document_type": doc_type,
                     "document_name": label,
-                    "image_url": generate_signed_url_from_gcs(img) if img else None,
+                    "image_url": img or None,
                     "uploaded_at": o.created_at.isoformat() if o.created_at else None,
                 })
 
@@ -1159,7 +1160,7 @@ def get_documents_needing_review(db: Session) -> List[dict]:
                     "entity_name": f"{c.car_name} ({c.car_number})" if c.car_name else str(c.car_number),
                     "document_type": doc_type,
                     "document_name": label,
-                    "image_url": generate_signed_url_from_gcs(img) if img else None,
+                    "image_url": img or None,
                     "uploaded_at": c.created_at.isoformat() if c.created_at else None,
                 })
 
@@ -1181,7 +1182,7 @@ def get_documents_needing_review(db: Session) -> List[dict]:
                     "entity_name": d.full_name,
                     "document_type": doc_type,
                     "document_name": label,
-                    "image_url": generate_signed_url_from_gcs(img) if img else None,
+                    "image_url": img or None,
                     "uploaded_at": d.created_at.isoformat() if d.created_at else None,
                 })
 
@@ -1198,11 +1199,20 @@ def get_documents_needing_review(db: Session) -> List[dict]:
                 "entity_name": v.full_name,
                 "document_type": "aadhar",
                 "document_name": "Aadhar Card",
-                "image_url": generate_signed_url_from_gcs(v.aadhar_front_img) if v.aadhar_front_img else None,
+                "image_url": v.aadhar_front_img or None,
                 "uploaded_at": v.created_at.isoformat() if v.created_at else None,
             })
 
     items.sort(key=lambda i: i["uploaded_at"] or "", reverse=True)
+    # every picture needs its own signed link; doing them one after another made this list take minutes (the Admin App got a 504). Sign them side by side.
+    def _sign(raw):
+        try:
+            return generate_signed_url_from_gcs(raw) if raw else None
+        except Exception:  # noqa: BLE001
+            return None
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for it, url in zip(items, pool.map(_sign, [i.get("image_url") for i in items])):
+            it["image_url"] = url
     return items
 
 

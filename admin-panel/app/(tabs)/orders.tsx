@@ -1741,20 +1741,20 @@ export default function OrdersScreen() {
 
                     <TouchableOpacity
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#312E81' : '#EEF2FF', borderWidth: 1, borderColor: '#6366F1' }}
-                      onPress={(e) => { e.stopPropagation(); handleEditFullBooking(item); }}
+                      onPress={(e) => { e.stopPropagation(); openFullCustomize(item); }}
                       activeOpacity={0.8}
                     >
                       <SlidersHorizontal size={12} color="#4F46E5" />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>Full form</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>Customize</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderWidth: 1, borderColor: themeColors.border }}
-                      onPress={(e) => { e.stopPropagation(); openFullCustomize(item); }}
+                      onPress={(e) => { e.stopPropagation(); handleEditFullBooking(item); }}
                       activeOpacity={0.8}
                     >
                       <Edit3 size={12} color={themeColors.text} />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text }}>Edit</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.text }}>Full form</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity

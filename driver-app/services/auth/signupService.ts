@@ -781,7 +781,6 @@ export const addCarDetails = async (carData: CarDetailsData, onUploadProgress?: 
       'rc_front_img_url', 
       'rc_back_img_url', 
       'insurance_img_url', 
-      'fc_img_url', 
       'car_img_url'
     ];
     
@@ -827,7 +826,7 @@ export const addCarDetails = async (carData: CarDetailsData, onUploadProgress?: 
       console.error('🔍 422 Validation Error Details:', errorDetails);
       throw new Error(`Validation error: ${errorDetails}. Check all required fields.`);
     } else if (error.response?.status === 400) {
-      throw new Error(`Bad request: ${error.response.data?.message || 'Invalid data provided'}`);
+      throw new Error(String(error.response.data?.detail || error.response.data?.message || 'Invalid data provided'));
     } else if (error.response?.status === 500) {
       throw new Error('Server error - please try again later or contact support.');
     } else if (error.response?.data?.message) {

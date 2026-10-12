@@ -588,7 +588,7 @@ def get_vendor_email(
     vendor_id: str = Depends(get_current_vendor),
 ):
     from app.models.vendor import VendorCredentials
-    creds = db.query(VendorCredentials).filter(VendorCredentials.id == vendor_id).first()
+    creds = vendor_id if isinstance(vendor_id, VendorCredentials) else db.query(VendorCredentials).filter(VendorCredentials.id == vendor_id).first()
     return {
         "email": getattr(creds, "email", None),
         "email_verified": bool(getattr(creds, "email_verified", False)),

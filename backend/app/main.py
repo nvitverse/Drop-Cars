@@ -387,6 +387,30 @@ async def ensure_admin_token_version_column() -> None:
         db.close()
 
 
+from fastapi.exceptions import RequestValidationError as _RVE
+from starlette.exceptions import HTTPException as _StarletteHTTPException
+
+
+@app.exception_handler(_StarletteHTTPException)
+async def _log_and_answer_http_exception(request, exc):
+    """Same answer as before; a 4xx/5xx now also leaves one log line (method, path, status, reason) so 'why can't drivers add a car' is answerable."""
+    from fastapi.exception_handlers import http_exception_handler
+    if exc.status_code in (400, 403, 409, 422) or exc.status_code >= 500:
+        print(f"HTTP {exc.status_code} {request.method} {request.url.path}: {str(exc.detail)[:300]}")
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(_RVE)
+async def _log_and_answer_validation_error(request, exc):
+    from fastapi.exception_handlers import request_validation_exception_handler
+    try:
+        fields = ", ".join(f"{'.'.join(str(x) for x in e.get('loc', [])[1:])}:{e.get('type')}" for e in exc.errors()[:8])
+    except Exception:  # noqa: BLE001
+        fields = "?"
+    print(f"HTTP 422 {request.method} {request.url.path}: invalid or missing -> {fields}")
+    return await request_validation_exception_handler(request, exc)
+
+
 @app.on_event("startup")
 async def ensure_staff_directive_columns() -> None:
     """Lightweight migration: add timeline expiry, directive_type, and actionable task fields to staff_directive."""
