@@ -30,7 +30,8 @@ def test_cities_that_are_switched_off_or_unknown_are_still_refused(pg_session):
 
 
 def test_the_check_endpoint_answers_with_the_city(pg_session):
-    from app.api.routes.cities import check_local_serviceable
-    out = check_local_serviceable(place="Kasi Theatre", db=pg_session)
+    from app.api.routes.cities import check_local_serviceable as _decorated
+    check_local_serviceable = getattr(_decorated, "__wrapped__", _decorated)      # skip the rate limiter in a direct call
+    out = check_local_serviceable(request=None, place="Kasi Theatre", db=pg_session)
     assert out["serviceable"] is True and out["city"] == "Chennai" and "Chennai" in out["cities"]
-    assert check_local_serviceable(place="Jayanagar", db=pg_session)["serviceable"] is False
+    assert check_local_serviceable(request=None, place="Jayanagar", db=pg_session)["serviceable"] is False

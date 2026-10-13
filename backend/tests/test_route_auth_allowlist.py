@@ -83,6 +83,7 @@ PUBLIC_BY_DESIGN = {
     "GET /api/public/gst-business-info",
     "GET /api/cities/public",
     "GET /api/cities/local-serviceable",
+    "GET /api/cities/local-serviceable/check",
     "GET /api/orders/rental_hrs_data",
     "GET /api/users/cardetails/car-models/public",
     "GET /api/geocode/search",

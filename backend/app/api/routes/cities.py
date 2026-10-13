@@ -1,3 +1,5 @@
+from fastapi import Request
+from app.core.limiter import limiter
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Dict
@@ -34,7 +36,8 @@ def list_local_serviceable_cities(db: Session = Depends(get_db)):
 
 
 @router.get("/local-serviceable/check")
-def check_local_serviceable(place: str, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def check_local_serviceable(request: Request, place: str, db: Session = Depends(get_db)):
     """Is Local Drop available for this pickup? Takes any place - a neighbourhood ("Vadapalani"), a landmark ("Kasi Theatre"),
     "West Jafferkhanpet, Chennai" - and says which city it is in. The apps used to compare the typed text with the city NAMES,
     so only the word "Chennai" itself passed."""
