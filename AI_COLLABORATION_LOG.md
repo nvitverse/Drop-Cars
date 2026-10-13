@@ -294,3 +294,7 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - Backend rev 00332 (commits 4a6fff5 + expiry-day rule): date repair in the document reader (O/0, l/1), typed date accepted when printed on the document, one-digit slips -> NEEDS_REVIEW, second-chance OCR (crop + rotations, untested against real photos: no Tesseract on the dev PC), new cars selectable (get_available_cars no longer needs ONLINE), switch-off text records who/when/why, cars and drivers stop ON their document expiry date (owner rule).
 - Driver OTA 783103af: BrandLogo (real logo) on login / signup / language / duty sign-in, signup lists all problems in one alert. Published from the clean tree C:\gtmp\drv_src, not AG's round-4 code.
 - verify_live_routes: 692/692.
+
+## 2026-10-13 (Claude) - payment reconcile starvation fix - LIVE rev 00333 (commit 354b70c)
+- crud/payment_reconcile.py took the 25 OLDEST unpaid (abandoned) CREATED orders each run; with >25 abandoned orders in the 3-day window a newer PAID order was never reached (driver Nandhakumar 8220162270 paid for Trusted, still Standard + wallet 0). Now newest first, 40 lookups per run, unpaid orders re-asked less often (30 min / 3 h), purpose also read from txn.notes. Tests: tests/test_payment_reconcile_newest_first.py.
+- NOT confirmed for that driver (production DB not reachable from the dev PC: no authorized network; log reads were blocked). If he is still Standard after ~10 minutes, record his payment in Admin App > Fleet Subscriptions with Mark as Trusted.
