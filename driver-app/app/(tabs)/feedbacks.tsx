@@ -5,11 +5,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   FlatList,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, Gift, Sparkles, MessageSquare, Award, TrendingUp, ShieldCheck } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

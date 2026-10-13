@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, BackHandler, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, BackHandler, Alert } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, MapPin, Receipt } from 'lucide-react-native';

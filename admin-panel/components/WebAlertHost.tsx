@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert as RNAlert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert as RNAlert, Platform, StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/context/ThemeContext';
 

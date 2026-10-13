@@ -3,11 +3,11 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   Alert,
   Dimensions,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, Check } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

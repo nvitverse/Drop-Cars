@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react-native';
 
 export interface ReplyTemplate {

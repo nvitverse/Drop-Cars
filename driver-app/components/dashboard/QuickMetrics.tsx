@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { MapPin, Wallet, Plus } from 'lucide-react-native';
 import AppText from '@/components/AppText';
 import { colors } from '@/theme/tokens';

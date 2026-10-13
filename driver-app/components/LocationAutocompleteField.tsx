@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TextInput, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCitySuggestions, scheduleAutoOnlineLookup, PlacePrediction } from '@/services/citySuggestionsDriver';
 

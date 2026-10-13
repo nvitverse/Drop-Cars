@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Image, StyleSheet, Dimensions, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { View, Image, StyleSheet, Dimensions, ScrollView, Text } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,

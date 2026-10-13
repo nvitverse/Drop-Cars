@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { WifiOff, RefreshCw } from 'lucide-react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useTheme } from '@/hooks/useTheme';

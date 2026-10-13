@@ -2,11 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Animated,
   Dimensions,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { CheckCircle } from 'lucide-react-native';
 import { useLanguage } from '@/contexts/LanguageContext';
 

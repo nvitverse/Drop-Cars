@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  TouchableOpacity,
   TextInput,
   ScrollView,
   StyleSheet,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, Send, Phone, User, ShieldCheck, MapPin, Clock } from 'lucide-react-native';
 import AppText from '@/components/AppText';

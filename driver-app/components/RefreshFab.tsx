@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, TouchableOpacity } from 'react-native';
+import { Animated, Easing, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Zap } from 'lucide-react-native';
 import { clearRequestCache } from '@/utils/requestCache';
 

@@ -1,6 +1,7 @@
 import FreshRefreshControl from '@/components/FreshRefreshControl';
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ActivityIndicator, FlatList, StyleSheet, RefreshControl } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IndianRupee, TrendingUp } from 'lucide-react-native';
 import { useRouter } from 'expo-router';

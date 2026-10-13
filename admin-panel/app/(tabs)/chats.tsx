@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   FlatList,
   TextInput,
@@ -15,6 +14,7 @@ import {
   StatusBar as RNStatusBar,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

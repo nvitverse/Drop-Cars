@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Inbox, ArrowRight, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 

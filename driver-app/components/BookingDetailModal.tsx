@@ -4,7 +4,6 @@ import {
   Text,
   Modal,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   TextInput,
@@ -13,6 +12,7 @@ import {
   Image,
   Switch,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import {
   X,
   MapPin,

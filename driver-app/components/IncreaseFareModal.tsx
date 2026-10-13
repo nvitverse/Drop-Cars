@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -11,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { TrendingUp, X, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react-native';

@@ -2,9 +2,9 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { Crown, Sparkles, CheckCircle2, X } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

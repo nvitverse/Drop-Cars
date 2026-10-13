@@ -2,12 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   Dimensions,
   Platform,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { KeyboardAvoidingView, useNavInsetWhenClosed } from '@/components/KeyboardSafe';
 import { BlurView } from 'expo-blur';

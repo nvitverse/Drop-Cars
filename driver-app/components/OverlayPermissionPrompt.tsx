@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, AppState } from 'react-native';
+import { View, Text, StyleSheet, Platform, AppState } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import * as SecureStore from '@/utils/secureStore';
 import { hasOverlayPermission, requestOverlayPermission } from '@/services/bubble/bubbleOverlay';

@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   Animated,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { X, Play } from 'lucide-react-native';
 
 interface DemoModeIndicatorProps {

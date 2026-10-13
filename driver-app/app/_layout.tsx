@@ -107,12 +107,12 @@ export default function RootLayout() {
                   <CarDriverProvider>
                   <GlobalSessionListener />
                   <KeyboardSafeView>
-                  <Stack screenOptions={{ headerShown: false }}>
+                  <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
                     <Stack.Screen name="index" />
-                    <Stack.Screen name="login" />
+                    <Stack.Screen name="login" options={{ animation: 'fade' }} />
                     <Stack.Screen name="signup" />
                     <Stack.Screen name="quick-login" />
-                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 260 }} />
                     <Stack.Screen name="car-driver" />
                     <Stack.Screen name="bubble-tap" />
                     <Stack.Screen name="+not-found" />

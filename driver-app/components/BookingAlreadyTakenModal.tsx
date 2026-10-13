@@ -2,11 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Animated,
   Easing,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, AlertCircle, Check } from 'lucide-react-native';

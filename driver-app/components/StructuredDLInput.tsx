@@ -4,9 +4,9 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { ChevronDown, CreditCard } from 'lucide-react-native';
 

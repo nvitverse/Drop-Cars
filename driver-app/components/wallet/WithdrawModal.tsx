@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   View,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   StyleSheet,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, IndianRupee, ShieldAlert, ArrowRight, Info, CheckCircle2, Clock } from 'lucide-react-native';

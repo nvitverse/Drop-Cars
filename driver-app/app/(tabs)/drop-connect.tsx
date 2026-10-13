@@ -5,7 +5,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -16,6 +15,7 @@ import {
   Easing,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateRangeCalendarModal from '@/components/DateRangeCalendarModal';
 import DropMarketSwitcher from '@/components/DropMarketSwitcher';

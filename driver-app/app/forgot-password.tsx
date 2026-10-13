@@ -4,12 +4,12 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { LinearGradient } from 'expo-linear-gradient';

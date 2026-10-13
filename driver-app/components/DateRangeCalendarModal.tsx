@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Calendar, ChevronLeft, ChevronRight, X, Check } from 'lucide-react-native';

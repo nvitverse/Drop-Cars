@@ -6,7 +6,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   RefreshControl,
   TextInput,
@@ -14,6 +13,7 @@ import {
   Image,
   AppState,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import * as SecureStore from '@/utils/secureStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,6 +66,7 @@ import ttsService from '@/services/notifications/ttsService';
 import RouteRequestModal, { RouteRequestData } from '@/components/RouteRequestModal';
 import AutoAssignHudModal from '@/components/AutoAssignHudModal';
 import { Calendar } from 'lucide-react-native';
+import ReAnimated, { FadeInDown } from 'react-native-reanimated';
 
 interface Booking {
   booking_id: string;
@@ -2166,8 +2167,9 @@ export default function DashboardScreen() {
                           const orderIdStr = String(order.order_id);
                           const isBubbleFocused = highlightedBookingId === orderIdStr;
                           return (
-                            <View
+                            <ReAnimated.View
                               key={orderIdStr}
+                              entering={FadeInDown.duration(300).delay(Math.min(filteredOrders.indexOf(order), 6) * 45)}
                               onLayout={(e) => { bookingCardOffsets.current[orderIdStr] = e.nativeEvent.layout.y; }}
                               style={isBubbleFocused ? {
                                 borderWidth: 2, borderColor: colors.primary, borderRadius: 8, marginBottom: 4,
@@ -2237,7 +2239,7 @@ export default function DashboardScreen() {
                               }}
                               onAddMoneyPress={(amount) => router.push({ pathname: '/(tabs)/wallet', params: { amount: String(amount) } })}
                             />
-                            </View>
+                            </ReAnimated.View>
                           );
                         })
                     ) : (

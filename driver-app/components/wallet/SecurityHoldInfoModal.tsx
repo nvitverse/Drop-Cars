@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, ShieldCheck, CheckCircle2, Clock, AlertTriangle, IndianRupee } from 'lucide-react-native';
 import AppText from '@/components/AppText';

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { classifyTopic, TopicDef } from '@/utils/chatTopics';
 

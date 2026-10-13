@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { Text, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { CustomDatePickerModal } from './DateTimePickerModals';
 
 // Single tap-to-pick date field ("YYYY-MM-DD" in, "YYYY-MM-DD" out) for places that used to be a raw

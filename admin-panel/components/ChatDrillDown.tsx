@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
-import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { classifyTopic } from '@/utils/chatTopics';
 import type { ChatRowLike, MainCategory } from '@/components/ChatCategories';

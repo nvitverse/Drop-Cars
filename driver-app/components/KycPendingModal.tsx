@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { ShieldAlert, X, ChevronRight, FileCheck, AlertTriangle, ArrowUpRight, Clock } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

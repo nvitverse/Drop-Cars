@@ -3,7 +3,8 @@
 //   POST /orders/orders/{id}/release-priority        (open to everyone now, drivers are notified)
 //   POST /orders/orders/{id}/update-priority         (reserve for Trusted Partners until a time, drivers are notified)
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ShieldCheck, Users } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';

@@ -7,13 +7,13 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   RefreshControl,
   TextInput,
   ActivityIndicator,
   Alert,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Search, UserCheck, Mail, Phone, UsersRound, Building2, Sparkles } from 'lucide-react-native';

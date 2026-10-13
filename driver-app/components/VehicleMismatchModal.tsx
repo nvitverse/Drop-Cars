@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { useRouter } from 'expo-router';
 import { X, CheckCircle, Car as CarIcon, Plus, ArrowLeft, Users, AlertTriangle, MessageCircle, Clock } from 'lucide-react-native';

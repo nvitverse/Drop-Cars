@@ -2,7 +2,8 @@
 // 1x / 1.5x / 2x speed, elapsed / total time. Only one voice note plays at a
 // time - starting one pauses whichever was playing.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, GestureResponderEvent, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, GestureResponderEvent, ActivityIndicator } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Play, Pause } from 'lucide-react-native';
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 

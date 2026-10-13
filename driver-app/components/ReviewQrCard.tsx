@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Share, TouchableOpacity } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Share } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '@/contexts/ThemeContext';
 import axiosDriver from '@/app/api/axiosDriver';

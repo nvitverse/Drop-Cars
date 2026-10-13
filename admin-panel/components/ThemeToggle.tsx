@@ -1,5 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { StyleSheet, ViewStyle } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Sun, Moon } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   useWindowDimensions,
   TextInput,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, Camera, Upload, CheckCircle2, RefreshCw, Calendar, User, CreditCard } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';

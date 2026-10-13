@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   RefreshControl,
   TextInput,
   Linking,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, MapPin, Phone, Clock } from 'lucide-react-native';
 import { apiService } from '@/services/api';

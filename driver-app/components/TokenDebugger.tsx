@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { registerForPushNotificationsAsync, testForegroundNotification } from '@/services/notifications/notificationService';
 
 export default function TokenDebugger() {

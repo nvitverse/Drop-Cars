@@ -143,6 +143,7 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          animation: 'fade',            // tabs cross-fade instead of snapping
           tabBarHideOnKeyboard: true,   // the bar must not ride up above the keyboard now that the screen lifts for it
           tabBarStyle: {
             backgroundColor: colors.surface,

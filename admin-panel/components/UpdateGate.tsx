@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import * as Updates from 'expo-updates';
 

@@ -6,7 +6,6 @@ import {
   Easing,
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ViewStyle,
   StyleProp,
@@ -15,6 +14,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';

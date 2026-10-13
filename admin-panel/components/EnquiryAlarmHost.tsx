@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   Platform,
   AppState,
   AppStateStatus,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';

@@ -5,13 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   Switch,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
   Platform,
   StatusBar as RNStatusBar,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {

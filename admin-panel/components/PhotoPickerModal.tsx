@@ -2,9 +2,9 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { Camera, Image as ImageIcon, X, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';

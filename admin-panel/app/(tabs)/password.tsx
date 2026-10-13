@@ -3,12 +3,12 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   Alert,
   ScrollView,
   ActivityIndicator,
   StyleSheet,
-  } from 'react-native';
+} from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { searchUserDetails, resetUserPassword } from '../../services/api';
 import { User, Phone, Lock, Search, RefreshCw, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Shield, Eye, EyeOff } from 'lucide-react-native';

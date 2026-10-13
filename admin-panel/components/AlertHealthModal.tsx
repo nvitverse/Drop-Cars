@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Platform,
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, CheckCircle2, AlertTriangle, XCircle, Bell, RefreshCw, Smartphone, Radio, PlayCircle, Settings } from 'lucide-react-native';
 import { alertHealth, AlertHealthState } from '@/services/alertHealth';

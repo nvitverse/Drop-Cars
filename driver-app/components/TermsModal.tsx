@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Dimensions,
   Platform,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { ShieldCheck, X, Check, FileText, AlertTriangle, ExternalLink, ChevronDown, ChevronUp, Scale, Car, IndianRupee, Lock, Phone, Users, Clock } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

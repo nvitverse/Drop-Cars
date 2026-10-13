@@ -2,10 +2,10 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { Sparkles, Clock, ShieldCheck, Zap, X, Wallet, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';

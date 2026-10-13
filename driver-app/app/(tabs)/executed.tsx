@@ -6,11 +6,11 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   RefreshControl,
   Alert,
   TextInput,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Hand, Zap, UserX, CheckCircle2 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';

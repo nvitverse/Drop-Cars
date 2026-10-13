@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   RefreshControl,
   Alert,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock, CheckCircle, XCircle, RefreshCw, ArrowRight, Building2, Wallet } from 'lucide-react-native';
 import { apiService } from '@/services/api';

@@ -3,7 +3,8 @@
 //   per km  driver rate | extra      bata  driver bata | extra      permit  driver permit | extra
 // Backend: GET / PUT /api/admin/driver-tariff (Owner only), see backend/app/crud/driver_tariff.py
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Plus, Trash2 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';

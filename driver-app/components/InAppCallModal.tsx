@@ -4,10 +4,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Linking,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { Phone, Mic, MicOff, Volume2, VolumeX, PhoneOff, MessageSquare, ShieldCheck } from 'lucide-react-native';
 

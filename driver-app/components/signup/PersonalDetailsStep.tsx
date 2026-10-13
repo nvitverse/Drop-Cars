@@ -3,11 +3,11 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { User, Phone, MapPin, ArrowRight, Lock, Hash, Eye, EyeOff } from 'lucide-react-native';
 import { useLanguage } from '@/contexts/LanguageContext';
 

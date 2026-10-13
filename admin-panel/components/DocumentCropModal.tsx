@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Image,
   ActivityIndicator,
@@ -10,6 +9,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { X, RotateCw, ZoomIn, ZoomOut, Check, Crop as CropIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';

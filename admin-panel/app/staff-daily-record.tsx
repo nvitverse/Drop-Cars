@@ -5,10 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, CheckCircle2, Target, ShieldAlert, ShieldCheck, ToggleLeft, Wallet, UserPlus, Settings2, UserMinus, Trash2, Package } from 'lucide-react-native';

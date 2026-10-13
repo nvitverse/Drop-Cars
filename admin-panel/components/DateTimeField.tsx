@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Calendar, Clock } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { CustomDatePickerModal, CustomTimePickerModal } from './DateTimePickerModals';
