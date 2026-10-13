@@ -7,7 +7,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
-import { AlertOctagon, RefreshCw } from 'lucide-react-native';
+import { AlertOctagon, RefreshCw, Download } from 'lucide-react-native';
+import * as Updates from 'expo-updates';
 
 interface Props {
   children: ReactNode;
@@ -18,6 +19,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  updateNote?: string;
 }
 
 export class GlobalErrorBoundary extends Component<Props, State> {
@@ -40,6 +42,21 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
+  // The newest live update may already contain the fix for this very error: fetch it and restart into it.
+  private handleUpdate = async () => {
+    try {
+      const check = await Updates.checkForUpdateAsync();
+      if (check.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+        return;
+      }
+      this.setState({ updateNote: 'You already have the newest version.' });
+    } catch (e: any) {
+      this.setState({ updateNote: `Could not check for an update: ${String(e?.message || e)}` });
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
@@ -59,11 +76,21 @@ export class GlobalErrorBoundary extends Component<Props, State> {
             </Text>
 
             <View style={styles.codeBox}>
-              <Text style={styles.codeLabel}>CRASH REFERENCE</Text>
+              <Text style={styles.codeLabel}>WHAT WENT WRONG (send this to Drop Cars support)</Text>
               <Text style={styles.codeValue}>
-                {this.state.error?.name || 'ERR-ADMIN-UI'}
+                {this.state.error?.name || 'ERR-ADMIN-UI'}: {String(this.state.error?.message || '').slice(0, 300)}
               </Text>
             </View>
+
+            <TouchableOpacity
+              style={[styles.restartBtn, { backgroundColor: '#2563EB', marginBottom: 12 }]}
+              onPress={this.handleUpdate}
+              activeOpacity={0.8}
+            >
+              <Download size={17} color="#FFFFFF" />
+              <Text style={styles.restartBtnText}>Check for update and restart</Text>
+            </TouchableOpacity>
+            {this.state.updateNote ? <Text style={[styles.subtitle, { marginBottom: 12 }]}>{this.state.updateNote}</Text> : null}
 
             <TouchableOpacity
               style={styles.restartBtn}

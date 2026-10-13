@@ -13,6 +13,7 @@ import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
 import UpdateGate from '@/components/UpdateGate';
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 
 import { ThemeProvider } from '@/context/ThemeContext';
 import { StaffDutyProvider } from '@/context/StaffDutyContext';
@@ -64,6 +65,9 @@ export default function RootLayout() {
         <ThemeProvider>
           <StaffDutyProvider>
             <CommandCenterProvider>
+              {/* A screen that fails to draw shows what went wrong + a "Check for update" button, instead of closing the whole app
+                  (UpdateGate sits OUTSIDE it so a fix that is already published still downloads while this box is showing). */}
+              <GlobalErrorBoundary>
               <KeyboardSafeView>
                 {/* Screens glide in from the right and the previous one eases away (instead of snapping); the tab shell and login just fade. */}
                 <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 260, gestureEnabled: true }}>
@@ -72,6 +76,7 @@ export default function RootLayout() {
                   <Stack.Screen name="+not-found" />
                 </Stack>
               </KeyboardSafeView>
+              </GlobalErrorBoundary>
               <StatusBar style="auto" />
               <WebAlertHost />
               {/* Alarms paused temporarily as requested to work freely in other sections */}
