@@ -33,6 +33,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { fetchDashboardData } from '@/services/orders/dashboardService';
+import { useFocusEffect } from '@react-navigation/native';
 import axiosInstance from '@/app/api/axiosInstance';
 import { fetchDocumentStatuses, DocumentStatusResponse } from '@/services/documents/documentStatusService';
 import DocumentStatusIcon from '@/components/DocumentStatusIcon';
@@ -85,6 +86,37 @@ export default function MyCarsScreen() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // A car added a moment ago must be in the list when this screen opens: the list came from a copy loaded earlier, so a new car only
+  // appeared after a manual pull-to-refresh (driver complaint 2026-10-13). Refresh every time the screen comes into view.
+  const firstFocus = React.useRef(true);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (firstFocus.current) { firstFocus.current = false; return; }
+      refreshData().catch(() => {});
+      fetchDocumentStatuses().then(setDocumentStatuses).catch(() => {});
+      loadAvailableCars();
+    }, []),
+  );
+
+  // The owner removes a car he added - no approval. Nothing is deleted: Drop Cars keeps the record and old bookings keep its details.
+  const handleRemoveCar = (car: any) => {
+    Alert.alert(
+      'Remove this car?',
+      `${car.car_name || 'This car'} (${car.car_number}) will leave your fleet and you will not be able to assign it.\n\nDrop Cars keeps its record and its old bookings. You can add it again later.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            await axiosInstance.post(`/api/users/cardetails/${car.id}/remove`, { reason: 'Removed by owner' });
+            await refreshData();
+          } catch (e: any) {
+            Alert.alert('Could not remove', String(e?.response?.data?.detail || 'Please try again.'));
+          }
+        } },
+      ],
+    );
   };
 
   // Fetch document statuses on component mount
@@ -688,6 +720,10 @@ export default function MyCarsScreen() {
                   <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', color: colors.textSecondary }}>
                     {isExpanded ? 'Hide details' : 'View details'}
                   </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => handleRemoveCar(car)} style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 14 }}>
+                  <Text style={{ color: '#DC2626', fontSize: 12.5, fontFamily: 'Inter-SemiBold' }}>Remove this car</Text>
                 </TouchableOpacity>
 
                 {/* Expanded Details Section */}

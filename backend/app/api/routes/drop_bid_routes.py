@@ -303,6 +303,7 @@ def submit_drop_bid_offer(
         assigned_driver = db.query(CarDriver).filter(
             CarDriver.id == payload.driver_id,
             CarDriver.vehicle_owner_id == current_driver.vehicle_owner_id,
+            CarDriver.removed_at.is_(None),
         ).first()
         if assigned_driver:
             target_driver_id = assigned_driver.id
@@ -312,6 +313,7 @@ def submit_drop_bid_offer(
     car = db.query(CarDetails).filter(
         CarDetails.id == payload.car_id,
         CarDetails.vehicle_owner_id == current_driver.vehicle_owner_id,
+        CarDetails.removed_at.is_(None),
     ).first()
     if not car:
         raise HTTPException(status_code=404, detail="That car isn't in your fleet.")

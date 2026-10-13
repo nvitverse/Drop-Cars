@@ -360,6 +360,9 @@ class CarListItem(BaseModel):
     car_number: str
     year_of_the_car: Optional[str] = None
     car_status: str  # ONLINE, DRIVING, BLOCKED, PROCESSING
+    removed_at: Optional[datetime] = None      # the fleet owner removed this car (record kept)
+    removed_by: Optional[str] = None
+    removed_reason: Optional[str] = None
     vehicle_owner_name: Optional[str] = None
     # Human-friendly registration id (e.g. "2600042") - the owner's real
     # display identifier. Prefer this over vehicle_owner_id (an internal

@@ -90,6 +90,7 @@ def vehicle_match_status(db: Session, vehicle_owner_id: str, required_car_type) 
     values = list(compatible_car_types(required_car_type))
     cars = db.query(CarDetails).filter(
         CarDetails.vehicle_owner_id == vehicle_owner_id,
+        CarDetails.removed_at.is_(None),
         CarDetails.car_type.in_(values),
     ).all()
     if not cars:
@@ -144,10 +145,10 @@ def create_substitution_request(db: Session, order_id: int, vehicle_owner_id: st
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise ValueError("Booking not found")
-    car = db.query(CarDetails).filter(CarDetails.id == car_id, CarDetails.vehicle_owner_id == vehicle_owner_id).first()
+    car = db.query(CarDetails).filter(CarDetails.id == car_id, CarDetails.vehicle_owner_id == vehicle_owner_id, CarDetails.removed_at.is_(None)).first()
     if not car:
         raise ValueError("That car isn't in your fleet")
-    driver = db.query(CarDriver).filter(CarDriver.id == driver_id, CarDriver.vehicle_owner_id == vehicle_owner_id).first()
+    driver = db.query(CarDriver).filter(CarDriver.id == driver_id, CarDriver.vehicle_owner_id == vehicle_owner_id, CarDriver.removed_at.is_(None)).first()
     if not driver:
         raise ValueError("That driver isn't in your fleet")
     if not is_car_verified(car):

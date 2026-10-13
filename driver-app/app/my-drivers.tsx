@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDashboard } from '@/contexts/DashboardContext';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ArrowLeft,
   Users,
@@ -63,6 +64,32 @@ export default function MyDriversScreen() {
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
+  // Refresh when the screen comes back into view (a driver added a moment ago must be in the list, not only after a manual refresh)
+  const firstFocus = React.useRef(true);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (firstFocus.current) { firstFocus.current = false; return; }
+      refreshAvailableDrivers().catch(() => {});
+    }, []),
+  );
+  // The owner removes a duty driver he added - no approval. The record stays with Drop Cars; the driver can no longer log in.
+  const handleRemoveDriver = (driver: any) => {
+    Alert.alert(
+      'Remove this driver?',
+      `${driver.full_name} will leave your fleet and can no longer log in or be assigned.\n\nDrop Cars keeps the record and the old bookings he drove. You can add him again later.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            await axiosInstance.post(`/api/users/cardriver/${driver.id}/remove`, { reason: 'Removed by owner' });
+            await refreshAvailableDrivers();
+          } catch (e: any) {
+            Alert.alert('Could not remove', String(e?.response?.data?.detail || 'Please try again.'));
+          }
+        } },
+      ],
+    );
+  };
   const [documentStatuses, setDocumentStatuses] = useState<DocumentStatusResponse[]>([]);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<{
@@ -446,6 +473,12 @@ export default function MyDriversScreen() {
                     {isExpanded ? <ChevronUp size={20} color="#64748B" /> : <ChevronDown size={20} color="#64748B" />}
                   </View>
                 </TouchableOpacity>
+
+                {!isSelfDriver && (
+                  <TouchableOpacity onPress={() => handleRemoveDriver(driver)} style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 14 }}>
+                    <Text style={{ color: '#DC2626', fontSize: 12.5, fontFamily: 'Inter-SemiBold' }}>Remove this driver</Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* Expanded Details Section */}
                 {isExpanded && (

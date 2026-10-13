@@ -101,6 +101,10 @@ def signup_car_driver(
     _again = db.query(_CarDriver).filter(_CarDriver.primary_number == driver_form.primary_number,
                                          _CarDriver.vehicle_owner_id == current_user.vehicle_owner_id).first()
     if _again is not None:
+        if _again.removed_at is not None:             # removed earlier by this owner, being added back
+            from app.crud.fleet_removal import restore
+            restore(_again)
+            db.commit()
         return {
             "message": "This driver is already registered with your fleet",
             "driver_id": str(_again.id),
@@ -259,6 +263,9 @@ def signin_car_driver(
             detail="This account has been permanently blocked. Contact support if you believe this is a mistake."
         )
 
+    if getattr(driver, "removed_at", None) is not None:
+        raise HTTPException(status_code=403, detail="You were removed from this fleet. Ask a fleet owner to add you, or contact Drop Cars.")
+
     # Check if driver is blocked
     if driver.driver_status == AccountStatusEnum.BLOCKED:
         raise HTTPException(
@@ -324,6 +331,8 @@ def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Session = 
         raise HTTPException(status_code=404, detail="NOT_REGISTERED")
     if getattr(driver, "permanently_blocked", False):
         raise HTTPException(status_code=403, detail="This account has been permanently blocked. Contact support if you believe this is a mistake.")
+    if getattr(driver, "removed_at", None) is not None:
+        raise HTTPException(status_code=403, detail="You were removed from this fleet. Ask a fleet owner to add you, or contact Drop Cars.")
     if driver.driver_status == AccountStatusEnum.BLOCKED:
         raise HTTPException(status_code=403, detail="Account is blocked. Please contact your fleet owner.")
 
@@ -1140,3 +1149,23 @@ def get_all_drivers_document_status(
         ))
     
     return driver_statuses
+
+
+
+class RemoveDriverBody(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.post("/cardriver/{driver_id}/remove")
+def remove_my_driver(driver_id: str, body: RemoveDriverBody = RemoveDriverBody(), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """The fleet owner removes a duty driver he added - no approval needed. The record stays for Drop Cars and for old bookings;
+    the driver can no longer log in. (Moving a driver to ANOTHER fleet is the OTP swap, which needs the driver's own OTP.)"""
+    import uuid as _uuid
+    from app.crud.fleet_removal import remove_driver
+    try:
+        did = _uuid.UUID(str(driver_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid driver id")
+    by = getattr(current_user, "full_name", None) or str(getattr(current_user, "primary_number", "owner"))
+    remove_driver(db, current_user.vehicle_owner_id, did, by, body.reason)
+    return {"success": True, "message": "Driver removed from your fleet. Drop Cars keeps the record."}

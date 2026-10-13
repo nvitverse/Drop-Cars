@@ -2383,6 +2383,9 @@ def list_all_cars(
                 car_number=car["car_number"],
                 year_of_the_car=car["year_of_the_car"],
                 car_status=car["car_status"],
+                removed_at=car.get("removed_at"),
+                removed_by=car.get("removed_by"),
+                removed_reason=car.get("removed_reason"),
                 vehicle_owner_name=car["vehicle_owner_name"],
                 vehicle_owner_reg_id=car.get("vehicle_owner_reg_id"),
                 created_at=car["created_at"]

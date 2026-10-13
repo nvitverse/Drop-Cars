@@ -35,7 +35,7 @@ def _check_duplicate_car_number(db: Session, car_number: str) -> None:
     existing_car = db.query(CarDetails).filter(
         CarDetails.car_number == car_number
     ).first()
-    if existing_car:
+    if existing_car and existing_car.removed_at is None:
         raise HTTPException(
             status_code=400,
             detail=f"Car with registration number {car_number} is already registered. Please use a different number."
@@ -50,6 +50,11 @@ def create_car_details(db: Session, car_data: CarDetailsForm) -> CarDetails:
     threshold. Older cars can still register under the regular SEDAN type.
     Not enforced for admin-created cars (see create_car_admin)."""
     _check_duplicate_car_number(db, car_data.car_number)
+    # The previous owner removed this car: it moves to whoever adds it now (the same owner gets his old record back)
+    _gone = db.query(CarDetails).filter(CarDetails.car_number == car_data.car_number, CarDetails.removed_at.isnot(None)).first()
+    if _gone is not None:
+        from app.crud.fleet_removal import take_over_removed_car
+        return take_over_removed_car(db, _gone, car_data.vehicle_owner_id, car_data.car_name, car_data.car_type.value if hasattr(car_data.car_type, 'value') else car_data.car_type, car_data.year_of_the_car)
 
     # car_data.car_type is app.schemas.car_details.CarTypeEnum (a distinct
     # class from this file's CarTypeEnum, despite the identical name/values)
@@ -199,11 +204,13 @@ def get_available_cars(db: Session, vehicle_owner_id: str) -> List[CarDetails]:
     return db.query(CarDetails).filter(
         CarDetails.vehicle_owner_id == vehicle_owner_id,
         CarDetails.car_status != CarStatusEnum.BLOCKED,
+        CarDetails.removed_at.is_(None),
     ).all()
 
 def get_all_cars(db: Session, vehicle_owner_id: str) -> List[CarDetails]:
     """Get all available cars with ONLINE status for a fleet owner"""
     from app.models.car_details import CarStatusEnum
     return db.query(CarDetails).filter(
-        CarDetails.vehicle_owner_id == vehicle_owner_id
+        CarDetails.vehicle_owner_id == vehicle_owner_id,
+        CarDetails.removed_at.is_(None),      # a car the owner removed stays on file for staff but is not in his list
     ).all()

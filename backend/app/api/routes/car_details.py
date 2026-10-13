@@ -16,6 +16,7 @@ from app.utils.gcs import upload_image_to_gcs, delete_gcs_file_by_url
 from app.core.security import get_current_user
 from app.models.vehicle_owner import VehicleOwnerCredentials
 from typing import List, Optional
+from pydantic import BaseModel
 from app.schemas.document_status import DocumentStatusListResponse, UpdateDocumentStatusRequest, UpdateDocumentRequest, DocumentUpdateResponse
 from app.models.common_enums import DocumentStatusEnum
 
@@ -101,6 +102,10 @@ def signup_car_details(
     _mine = [c for c in db.query(_CarDetails).filter(_CarDetails.vehicle_owner_id == current_user.vehicle_owner_id).all() if _norm(c.car_number) == _norm(car_form.car_number)]
     if _mine:
         c = _mine[0]
+        if c.removed_at is not None:                 # he removed it earlier and is adding it back: it returns with its old documents
+            from app.crud.fleet_removal import restore
+            restore(c)
+            db.commit()
         return {
             "message": "This car is already registered with your account",
             "car_id": str(c.id),
@@ -232,6 +237,24 @@ def extract_document_expiry(
         import logging
         logging.getLogger(__name__).error("extract-expiry OCR failed for doc_type=%s: %s", doc_type, e, exc_info=True)
         return {"expiry_date": None}
+
+class RemoveBody(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.post("/cardetails/{car_id}/remove")
+def remove_my_car(car_id: str, body: RemoveBody = RemoveBody(), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """The fleet owner removes a car he added - no approval needed. The record is kept for Drop Cars and for old bookings."""
+    import uuid as _uuid
+    from app.crud.fleet_removal import remove_car
+    try:
+        cid = _uuid.UUID(str(car_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid car id")
+    by = getattr(current_user, "full_name", None) or str(getattr(current_user, "primary_number", "owner"))
+    remove_car(db, current_user.vehicle_owner_id, cid, by, body.reason)
+    return {"success": True, "message": "Car removed from your fleet. Drop Cars keeps its record."}
+
 
 @router.get("/cardetails/all", response_model=List[CarDetailsOut])
 def get_all_cars(

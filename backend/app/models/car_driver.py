@@ -47,6 +47,11 @@ class CarDriver(Base):
     # crud/document_expiry.py). Nullable - not every existing driver has
     # this entered yet; the reminder simply skips rows with no date set.
     licence_expiry_date = Column(Date, nullable=True)
+    # Removed by the fleet owner (no approval needed). The row is KEPT: Drop Cars staff still see it and every booking that used it still
+    # shows the car / driver details. Hidden from the owner's own lists and from new assignments (crud/fleet_removal.py).
+    removed_at = Column(TIMESTAMP(timezone=True), nullable=True, index=True)
+    removed_by = Column(String, nullable=True)
+    removed_reason = Column(String, nullable=True)
     # Aadhaar (front/back + number) - collected when the owner adds a duty
     # driver (same fields the fleet-owner signup already has). Nullable so
     # every existing driver row is unaffected.

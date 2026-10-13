@@ -371,6 +371,12 @@ def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(secur
             detail="Driver not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if getattr(driver, "removed_at", None) is not None:      # removed from the fleet by his owner
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You were removed from this fleet.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     return driver
 

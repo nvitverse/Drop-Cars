@@ -77,6 +77,12 @@ class CarDetails(Base):
     permit_expiry_date = Column(Date, nullable=True)
     pollution_expiry_date = Column(Date, nullable=True)
 
+    # Removed by the fleet owner (no approval needed). The row is KEPT: Drop Cars staff still see it and every booking that used it still
+    # shows the car / driver details. Hidden from the owner's own lists and from new assignments (crud/fleet_removal.py).
+    removed_at = Column(TIMESTAMP(timezone=True), nullable=True, index=True)
+    removed_by = Column(String, nullable=True)
+    removed_reason = Column(String, nullable=True)
+
     car_status = Column(
         SqlEnum(CarStatusEnum, name="car_status_enum"),
         default=CarStatusEnum.PROCESSING,

@@ -232,10 +232,11 @@ def get_drivers_by_vehicleOwner_id(db: Session, vehicle_owner_id: str) -> List[C
     try:
         vo_uuid = uuid.UUID(str(vehicle_owner_id))
         return db.query(CarDriver).filter(
-            (CarDriver.vehicle_owner_id == vo_uuid) | (CarDriver.vehicle_owner_id == str(vehicle_owner_id))
+            (CarDriver.vehicle_owner_id == vo_uuid) | (CarDriver.vehicle_owner_id == str(vehicle_owner_id)),
+            CarDriver.removed_at.is_(None),
         ).all()
     except Exception:
-        return db.query(CarDriver).filter(CarDriver.vehicle_owner_id == vehicle_owner_id).all()
+        return db.query(CarDriver).filter(CarDriver.vehicle_owner_id == vehicle_owner_id, CarDriver.removed_at.is_(None)).all()
 
 
 def get_available_drivers(db: Session, vehicle_owner_id: str) -> List[CarDriver]:
@@ -252,6 +253,7 @@ def get_available_drivers(db: Session, vehicle_owner_id: str) -> List[CarDriver]
         CarDriver.vehicle_owner_id == vehicle_owner_id,
         CarDriver.driver_status != AccountStatusEnum.BLOCKED,
         CarDriver.permanently_blocked.isnot(True),
+        CarDriver.removed_at.is_(None),
     ).all()
     _rank = {AccountStatusEnum.ONLINE: 0, AccountStatusEnum.DRIVING: 1}
     rows.sort(key=lambda d: (0 if d.is_owner_driver else 1, _rank.get(d.driver_status, 2)))
@@ -303,5 +305,6 @@ def get_all_drivers(db: Session, vehicle_owner_id: str) -> List[CarDriver]:
     """Get all available drivers with ONLINE status for a fleet owner"""
     from app.models.car_driver import AccountStatusEnum
     return db.query(CarDriver).filter(
-        CarDriver.vehicle_owner_id == vehicle_owner_id
+        CarDriver.vehicle_owner_id == vehicle_owner_id,
+        CarDriver.removed_at.is_(None),
     ).all()

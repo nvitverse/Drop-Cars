@@ -36,6 +36,9 @@ interface CarItem {
   created_at: string;
   rating_avg?: number | null;
   rating_count?: number | null;
+  removed_at?: string | null;       // the fleet owner removed this car (the record is kept)
+  removed_by?: string | null;
+  removed_reason?: string | null;
 }
 
 type StatusFilter = 'all' | 'ONLINE' | 'DRIVING' | 'BLOCKED' | 'PROCESSING';
@@ -313,6 +316,11 @@ export default function CarsScreen() {
                 </View>
               )}
               <Text style={[styles.ownerName, { color: themeColors.textMuted }]} numberOfLines={1}>Owner: {item.vehicle_owner_name}</Text>
+              {!!item.removed_at && (
+                <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '700', marginTop: 2 }}>
+                  REMOVED by {item.removed_by || 'owner'} on {new Date(item.removed_at).toLocaleDateString()}{item.removed_reason ? ` - ${item.removed_reason}` : ''}
+                </Text>
+              )}
             </View>
 
             <View style={styles.rightActions}>

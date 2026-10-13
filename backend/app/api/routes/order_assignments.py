@@ -248,7 +248,7 @@ async def accept_order(
         # per car they own, per pickup date (prevents over-committing more
         # trips than they can realistically staff on a given day).
         from sqlalchemy import func
-        car_count = db.query(CarDetails).filter(CarDetails.vehicle_owner_id == vehicle_owner_id).count()
+        car_count = db.query(CarDetails).filter(CarDetails.vehicle_owner_id == vehicle_owner_id, CarDetails.removed_at.is_(None)).count()
         if car_count > 0 and order.start_date_time is not None:
             same_day_accepted = (
                 db.query(OrderAssignment)

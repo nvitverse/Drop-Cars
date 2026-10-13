@@ -377,6 +377,24 @@ async def ensure_sos_alerts_and_swap_columns() -> None:
 
 
 @app.on_event("startup")
+async def ensure_fleet_removal_columns() -> None:
+    """car_details / car_driver: removed_at, removed_by, removed_reason (soft removal by the fleet owner; create_all does not add columns)."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        for tbl in ('car_details', 'car_driver'):
+            db.execute(text(f'ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ'))
+            db.execute(text(f'ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS removed_by VARCHAR'))
+            db.execute(text(f'ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS removed_reason VARCHAR'))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"fleet removal columns migration failed (continuing): {e}")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
 async def ensure_payment_claim_scan_column() -> None:
     """payment_claims.screenshot_scan was added after the table first shipped (create_all does not add columns)."""
     from sqlalchemy import text
