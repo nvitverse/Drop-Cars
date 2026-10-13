@@ -725,6 +725,7 @@ export default function DashboardScreen() {
     money: [
       { key: 'payouts', label: 'Payouts', hint: 'Withdrawals to approve', icon: Wallet, color: '#059669', count: payoutsPending, route: '/payout-requests', perm: 'finance' },
       { key: 'payclaims', label: 'Payment reports', hint: 'Paid by UPI / bank - check UTR, credit', icon: CreditCard, color: '#D97706', count: paymentClaimsPending, route: '/payment-claims', perm: 'finance' },
+      { key: 'dupcheck', label: 'Duplicate credits check', hint: 'Money added twice by mistake', icon: Receipt, color: '#DC2626', count: null, route: '/wallet-duplicates', perm: 'finance' },
       { key: 'gst', label: 'GST invoices', hint: 'Invoices and monthly filing', icon: Receipt, color: '#0369A1', count: null, route: '/gst-invoices', perm: 'finance' },
     ],
     setup: [

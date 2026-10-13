@@ -166,6 +166,7 @@ def adjust_wallet(
     direction: str,
     amount: int,
     notes: str = None,
+    confirm_duplicate: bool = False,
 ):
     """
     Manually credit or debit a wallet.
@@ -181,6 +182,14 @@ def adjust_wallet(
         raise HTTPException(status_code=400, detail="amount must be a positive whole number")
 
     target_uuid = _uuid(target_id)
+
+    # The same credit / debit twice in a day is almost always a double entry (a driver asks twice, staff add it twice): refuse
+    # unless the admin confirms it is a second, separate payment.
+    if not confirm_duplicate and role in ("vehicle_owner", "vendor"):
+        from app.crud.wallet_duplicates import find_recent_identical_adjust, duplicate_message, window_hours
+        _prev = find_recent_identical_adjust(db, role, target_uuid, direction, amount)
+        if _prev is not None:
+            raise HTTPException(status_code=409, detail=duplicate_message(direction, amount, _prev, window_hours(db)))
 
     if role == "vehicle_owner":
         owner = db.query(VehicleOwnerDetails).filter(

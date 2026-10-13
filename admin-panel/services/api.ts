@@ -1868,11 +1868,33 @@ class ApiService {
     direction: 'credit' | 'debit';
     amount: number;
     notes?: string;
+    confirm_duplicate?: boolean;
   }): Promise<{ role: string; id: string; new_wallet_balance: number; direction: string; amount: number }> {
-    return this.makeRequest('/admin/wallet/adjust', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
+    try {
+      return await this.makeRequest('/admin/wallet/adjust', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      // The same credit / debit was already done in the last day: ask before doubling it (a driver asks twice, staff add it twice)
+      if (!params.confirm_duplicate && msg.includes('[DUPLICATE]')) {
+        const again = await new Promise<boolean>((resolve) => {
+          Alert.alert('Same amount already done', msg.replace('[DUPLICATE]', '').trim(), [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Yes, add again', style: 'destructive', onPress: () => resolve(true) },
+          ], { cancelable: true, onDismiss: () => resolve(false) });
+        });
+        if (again) return this.adjustWallet({ ...params, confirm_duplicate: true });
+        throw new Error('Not done - it would have doubled the earlier entry.');
+      }
+      throw e;
+    }
+  }
+
+  // Money that looks added twice (read-only audit)
+  async getWalletDuplicateAudit(days = 14, search?: string): Promise<{ groups: any[]; days: number; checked_entries: number; possible_extra_total: number }> {
+    return this.makeRequest(`/admin/wallet/duplicate-audit?days=${days}${search ? `&search=${encodeURIComponent(search)}` : ''}`, { method: 'GET' });
   }
 
   // Full transaction history for one account - every credit/debit/refund.

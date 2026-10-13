@@ -4406,6 +4406,7 @@ class WalletAdjustRequest(BaseModel):
     direction: str   # 'credit' | 'debit'
     amount: int      # whole rupees, positive
     notes: Optional[str] = None
+    confirm_duplicate: bool = False   # True = "yes, this really is a second, separate payment"
 
 
 @router.post("/admin/wallet/search")
@@ -4447,6 +4448,7 @@ def admin_wallet_adjust(
             direction=body.direction,
             amount=body.amount,
             notes=body.notes,
+            confirm_duplicate=body.confirm_duplicate,
         )
         from app.crud.admin_activity_log import log_admin_action
         log_admin_action(
@@ -4460,6 +4462,19 @@ def admin_wallet_adjust(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Wallet adjustment failed: {str(e)}")
+
+
+@router.get("/admin/wallet/duplicate-audit")
+def admin_wallet_duplicate_audit(
+    days: int = Query(14, ge=1, le=120),
+    search: Optional[str] = Query(None, description="part of a name or phone number"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Money that looks added twice (same reference credited twice = definite; same amount and reason within a day = possible). Read-only."""
+    require_payment_release_permission(current_admin)
+    from app.crud.wallet_duplicates import audit
+    return audit(db, days=days, search=search)
 
 
 def _serialize_ledger_row(row) -> dict:
