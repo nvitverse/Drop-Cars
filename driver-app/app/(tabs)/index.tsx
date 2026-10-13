@@ -2760,7 +2760,7 @@ export default function DashboardScreen() {
                                 {tripServiceFilter === 'ALL' ? 'All Services' :
                                  tripServiceFilter === 'ONEWAY' ? 'One Way' :
                                  tripServiceFilter === 'MULTICITY' ? 'Multi-City' :
-                                 tripServiceFilter === 'ROUNDTRIP' ? 'Round Trip' : 'Hourly / Local'}
+                                 tripServiceFilter === 'ROUNDTRIP' ? 'Round Trip' : 'Local Drop / Hourly'}
                               </Text>
                             </View>
                             <ChevronDown size={16} color={colors.textSecondary} style={{ transform: [{ rotate: showTripServiceDropdownFilter ? '180deg' : '0deg' }] }} />
@@ -2780,7 +2780,7 @@ export default function DashboardScreen() {
                               { key: 'ONEWAY', label: 'One Way', icon: MapPin },
                               { key: 'MULTICITY', label: 'Multi-City (One Way)', icon: MapPin },
                               { key: 'ROUNDTRIP', label: 'Round Trip', icon: ArrowLeftRight },
-                              { key: 'HOURLY_LOCAL', label: 'Hourly / Local', icon: Clock },
+                              { key: 'HOURLY_LOCAL', label: 'Local Drop / Hourly', icon: Clock },
                             ].map((cat) => {
                               const isSel = tripServiceFilter === cat.key;
                               const Icon = cat.icon;

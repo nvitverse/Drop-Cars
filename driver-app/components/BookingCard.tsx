@@ -121,8 +121,12 @@ function getCategoryBadgeInfo(tripTypeStr: string, isMulticity: boolean = false)
   if (t.includes('round') || t.includes('two')) {
     return { bg: '#F3E8FF', border: '#C084FC', text: '#7E22CE', icon: '🔁', label: 'ROUND TRIP' };
   }
-  if (t.includes('local') || t.includes('hourly') || t.includes('package')) {
-    return { bg: '#FEF3C7', border: '#FCD34D', text: '#B45309', icon: '⏱️', label: 'LOCAL' };
+  if (t.includes('local')) {
+    // Short in-city trips (e.g. Jafferkhanpet -> Chennai Airport): shown in the same New list, clearly marked
+    return { bg: '#FEF3C7', border: '#FCD34D', text: '#B45309', icon: '📍', label: 'LOCAL DROP' };
+  }
+  if (t.includes('hourly') || t.includes('package')) {
+    return { bg: '#FEF3C7', border: '#FCD34D', text: '#B45309', icon: '⏱️', label: 'HOURLY' };
   }
   if (t.includes('empty') || t.includes('pool') || t.includes('return')) {
     return { bg: '#ECFDF5', border: '#6EE7B7', text: '#047857', icon: '🚖', label: 'DROP CONNECT' };

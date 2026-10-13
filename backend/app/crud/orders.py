@@ -45,7 +45,8 @@ def _new_booking_push_text(trip_type_str: str, locations, formatted: str, car_ty
     (Used to show only the pickup time, so drivers could not see the route or trip type at a glance.)"""
     route = _notification_route_summary(locations if isinstance(locations, dict) else {}).replace(" -> ", " → ") or fallback_city or "your area"
     car = str(getattr(car_type, "value", car_type) or "").replace("_", " ").title()
-    title = f"🚖 {trip_type_str} • {route}"
+    trip_label = "Local Drop" if str(trip_type_str).strip().lower() == "local" else trip_type_str
+    title = f"🚖 {trip_label} • {route}"
     # Multi-line body: Android shows line 1 collapsed and the rest when the card is expanded
     line2 = " • ".join([p for p in (f"🚗 {car}" if car else "", f"₹{price}" if price else "") if p])
     return title, f"📅 {formatted}" + ("\n" + line2 if line2 else "")
