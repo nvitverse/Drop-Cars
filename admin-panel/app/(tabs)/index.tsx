@@ -685,6 +685,16 @@ export default function DashboardScreen() {
     loadData(true);
   }, []);
 
+  // Payment reports waiting (UPI / bank payments with a UTR). Must stay ABOVE the `if (loading) return` below - a hook after an early
+  // return changes the hook count between renders and crashes the screen when it first loads.
+  useEffect(() => {
+    let alive = true;
+    const run = () => apiService.getPaymentClaims('PENDING').then((r) => { if (alive) setPaymentClaimsPending((r?.claims || []).length); }).catch(() => {});
+    run();
+    const id = setInterval(run, 120000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -742,14 +752,6 @@ export default function DashboardScreen() {
     allRows.money[0],
     allRows.money[1],
   ].filter((r) => (isOwner || !r.perm || canSee(r.perm)) && (r.count ?? 0) > 0);
-
-  useEffect(() => {
-    let alive = true;
-    const run = () => apiService.getPaymentClaims('PENDING').then((r) => { if (alive) setPaymentClaimsPending((r?.claims || []).length); }).catch(() => {});
-    run();
-    const id = setInterval(run, 120000);
-    return () => { alive = false; clearInterval(id); };
-  }, []);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
