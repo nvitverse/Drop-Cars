@@ -298,3 +298,8 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 ## 2026-10-13 (Claude) - payment reconcile starvation fix - LIVE rev 00333 (commit 354b70c)
 - crud/payment_reconcile.py took the 25 OLDEST unpaid (abandoned) CREATED orders each run; with >25 abandoned orders in the 3-day window a newer PAID order was never reached (driver Nandhakumar 8220162270 paid for Trusted, still Standard + wallet 0). Now newest first, 40 lookups per run, unpaid orders re-asked less often (30 min / 3 h), purpose also read from txn.notes. Tests: tests/test_payment_reconcile_newest_first.py.
 - NOT confirmed for that driver (production DB not reachable from the dev PC: no authorized network; log reads were blocked). If he is still Standard after ~10 minutes, record his payment in Admin App > Fleet Subscriptions with Mark as Trusted.
+
+## 2026-10-13 night (Claude) - Local Drop, city check, duplicate guard, Admin crash hotfix - LIVE
+- Admin Home crash on open (my hook after the early loading return) fixed + republished (commit cac7cfc).
+- Local Drop in Admin Create Booking (rates by car, km limit, extra km rate; backend crud/local_drop.py applies the extra-km rate at trip close). Neighbourhood/landmark pickups resolve to their city (backend /api/cities/local-serviceable/check, Admin). Vendor App fixes (city check, Hourly package-hours picker) are in vendor-app/ but need a native build (no OTA for Vendor).
+- Manual wallet adjust refuses an identical credit/debit within 24h unless confirmed; Admin screen "Duplicate credits check" (backend crud/wallet_duplicates.py).
