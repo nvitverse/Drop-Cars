@@ -377,6 +377,21 @@ async def ensure_sos_alerts_and_swap_columns() -> None:
 
 
 @app.on_event("startup")
+async def ensure_payment_claim_scan_column() -> None:
+    """payment_claims.screenshot_scan was added after the table first shipped (create_all does not add columns)."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        db.execute(text('ALTER TABLE payment_claims ADD COLUMN IF NOT EXISTS screenshot_scan TEXT'))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"payment_claims scan column migration failed (continuing): {e}")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
 async def ensure_admin_token_version_column() -> None:
     """Lightweight migration: add admin.token_version if missing (create_all does not add columns)."""
     from sqlalchemy import text

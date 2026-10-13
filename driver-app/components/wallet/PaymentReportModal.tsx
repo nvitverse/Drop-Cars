@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
-import { CheckCircle2, Clock, X, XCircle } from 'lucide-react-native';
+import { CheckCircle2, Clock, ImageUp, X, XCircle } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { appendFileToFormData } from '@/utils/formDataFile';
 import { useTheme } from '@/contexts/ThemeContext';
 import axiosInstance from '@/app/api/axiosInstance';
 
@@ -29,6 +31,9 @@ export default function PaymentReportModal({ visible, onClose, defaultAmount, de
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claims, setClaims] = useState<Claim[]>([]);
+  const [shot, setShot] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<string | null>(null);
 
   const loadClaims = useCallback(async () => {
     try {
@@ -44,8 +49,37 @@ export default function PaymentReportModal({ visible, onClose, defaultAmount, de
     setUtr('');
     setNote('');
     setError(null);
+    setShot(null);
+    setReadNote(null);
     loadClaims();
   }, [visible, defaultAmount, defaultPurpose, loadClaims]);
+
+  // Pick the payment screenshot: we read the UTR and amount out of it so nothing has to be typed (the person can still correct them)
+  const pickScreenshot = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+      if (res.canceled || !res.assets?.[0]) return;
+      const a = res.assets[0];
+      const file = { uri: a.uri, name: a.uri.split('/').pop() || 'payment.jpg', type: a.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg' };
+      setShot(file);
+      setReading(true);
+      setReadNote(null);
+      setError(null);
+      const fd = new FormData();
+      await appendFileToFormData(fd, 'screenshot', file.uri, file.name, file.type);
+      const r = await axiosInstance.post('/api/wallet/payment-claims/scan', fd);
+      const d = r.data || {};
+      if (d.utr) setUtr(String(d.utr));
+      if (d.amount) setAmount(String(Math.round(Number(d.amount))));
+      setReadNote(d.utr || d.amount
+        ? `Read from your screenshot${d.utr ? `: UTR ${d.utr}` : ''}${d.amount ? `, Rs ${Math.round(Number(d.amount))}` : ''}. Please check they are right.${d.success === false ? ' (The screenshot does not look like a completed payment.)' : ''}`
+        : 'We could not read the numbers from this screenshot - please type the UTR below.');
+    } catch (e: any) {
+      setReadNote('We could not read this screenshot - please type the UTR below.');
+    } finally {
+      setReading(false);
+    }
+  };
 
   const submit = async () => {
     const amt = parseInt(amount, 10);
@@ -54,10 +88,24 @@ export default function PaymentReportModal({ visible, onClose, defaultAmount, de
     setBusy(true);
     setError(null);
     try {
-      const res = await axiosInstance.post('/api/wallet/payment-claims', { amount: amt, utr: utr.trim(), purpose, method: 'UPI', note: note.trim() || undefined });
+      let res;
+      if (shot) {
+        const fd = new FormData();
+        fd.append('amount', String(amt));
+        fd.append('utr', utr.trim());
+        fd.append('purpose', purpose);
+        fd.append('method', 'UPI');
+        if (note.trim()) fd.append('note', note.trim());
+        await appendFileToFormData(fd, 'screenshot', shot.uri, shot.name, shot.type);
+        res = await axiosInstance.post('/api/wallet/payment-claims/with-screenshot', fd);
+      } else {
+        res = await axiosInstance.post('/api/wallet/payment-claims', { amount: amt, utr: utr.trim(), purpose, method: 'UPI', note: note.trim() || undefined });
+      }
       Alert.alert('Payment reported', res.data?.message || 'We will check it and credit it soon.');
       setUtr('');
       setNote('');
+      setShot(null);
+      setReadNote(null);
       await loadClaims();
     } catch (e: any) {
       setError(String(e?.response?.data?.detail || 'Could not send the report. Check your internet and try again.'));
@@ -81,6 +129,11 @@ export default function PaymentReportModal({ visible, onClose, defaultAmount, de
             Money sent straight to our UPI ID is not matched to your account automatically. Tell us the amount and the transaction ID (UTR) from your payment app - we check our bank and credit it, usually within a few hours.
           </Text>
           <ScrollView keyboardShouldPersistTaps="handled">
+            <TouchableOpacity onPress={pickScreenshot} disabled={reading} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: 10, paddingVertical: 14, marginBottom: 8 }}>
+              {reading ? <ActivityIndicator color={colors.primary} /> : <ImageUp size={20} color={colors.primary} />}
+              <Text style={{ color: colors.primary, fontSize: 14, fontFamily: 'Inter-SemiBold' }}>{shot ? 'Change screenshot' : 'Upload payment screenshot (we read the UTR for you)'}</Text>
+            </TouchableOpacity>
+            {readNote ? <Text style={{ fontSize: 12.5, color: colors.textSecondary, marginBottom: 12, lineHeight: 17 }}>{readNote}</Text> : null}
             <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>What was it for?</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               {PURPOSES.map((p) => (

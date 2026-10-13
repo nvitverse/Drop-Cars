@@ -7,12 +7,13 @@
                POST /api/admin/payment-claims/{id}/approve   credit the wallet (and switch the Trusted plan on when it was for the plan)
                POST /api/admin/payment-claims/{id}/reject    with a reason the person is shown
 Razorpay stays the preferred way (it confirms itself); this is the safety net so manual money is never lost or unexplained."""
+import json
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -53,8 +54,29 @@ class DecideBody(BaseModel):
     credit_amount: Optional[int] = Field(None, ge=1, le=200000, description="Approve for a different amount than claimed (e.g. the bank shows less)")
 
 
-def _out(c: PaymentClaim, owner_name: Optional[str] = None, owner_phone: Optional[str] = None) -> dict:
-    return {
+def _scan_of(c: PaymentClaim) -> Optional[dict]:
+    try:
+        return json.loads(c.screenshot_scan) if c.screenshot_scan else None
+    except ValueError:
+        return None
+
+
+def _shot_link(url: Optional[str]) -> Optional[str]:
+    """The stored screenshot is private: staff get a short-lived link."""
+    if not url:
+        return None
+    try:
+        from app.utils.gcs import generate_signed_url_from_gcs
+        return generate_signed_url_from_gcs(url, expiry_minutes=30)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _out(c: PaymentClaim, owner_name: Optional[str] = None, owner_phone: Optional[str] = None, for_admin: bool = False) -> dict:
+    from app.utils.payment_screenshot import compare_with_claim
+    scan = _scan_of(c)
+    extra = {"scan": scan, "checks": compare_with_claim(scan, c.utr, c.amount), "screenshot_link": _shot_link(c.screenshot_url)} if for_admin else {"has_screenshot": bool(c.screenshot_url)}
+    return {**extra,
         "id": str(c.id), "amount": c.amount, "utr": c.utr, "method": c.method, "purpose": c.purpose, "note": c.note,
         "screenshot_url": c.screenshot_url, "status": c.status, "decision_note": c.decision_note, "decided_by": c.decided_by,
         "decided_at": c.decided_at.isoformat() if c.decided_at else None, "credited_amount": c.credited_amount,
@@ -69,13 +91,13 @@ def manual_upi(db: Session = Depends(get_db), vehicle_owner_id: str = Depends(ge
             "note": "Online payment (Razorpay) is faster: it confirms by itself. Use this only if online payment is not working."}
 
 
-@owner_router.post("/wallet/payment-claims")
-def create_claim(body: ClaimBody, db: Session = Depends(get_db), vehicle_owner_id: str = Depends(get_current_vehicleOwner_id)):
-    utr = re.sub(r"\s", "", body.utr or "").upper()
+def _create(db: Session, vehicle_owner_id: str, amount: int, utr_raw: str, purpose_raw: str, method_raw: str, note: Optional[str],
+            screenshot_url: Optional[str] = None, scan: Optional[dict] = None) -> dict:
+    utr = re.sub(r"\s", "", utr_raw or "").upper()
     if not _UTR.match(utr):
         raise HTTPException(status_code=400, detail="The reference number looks wrong. Copy the 12-digit UPI transaction ID / UTR from your payment app (letters and numbers only).")
-    purpose = body.purpose.upper() if body.purpose.upper() in PURPOSES else "OTHER"
-    method = "BANK" if body.method.upper() == "BANK" else "UPI"
+    purpose = purpose_raw.upper() if purpose_raw.upper() in PURPOSES else "OTHER"
+    method = "BANK" if method_raw.upper() == "BANK" else "UPI"
     existing = db.query(PaymentClaim).filter(PaymentClaim.utr == utr).first()
     if existing:
         if str(existing.vehicle_owner_id) == str(vehicle_owner_id):
@@ -84,17 +106,59 @@ def create_claim(body: ClaimBody, db: Session = Depends(get_db), vehicle_owner_i
     pending = db.query(PaymentClaim).filter(PaymentClaim.vehicle_owner_id == vehicle_owner_id, PaymentClaim.status == "PENDING").count()
     if pending >= MAX_PENDING_PER_PERSON:
         raise HTTPException(status_code=429, detail="You already have several payment reports waiting. We will check them soon.")
-    c = PaymentClaim(vehicle_owner_id=vehicle_owner_id, amount=body.amount, utr=utr, method=method, purpose=purpose,
-                     note=(body.note or "").strip() or None, screenshot_url=body.screenshot_url, status="PENDING")
+    c = PaymentClaim(vehicle_owner_id=vehicle_owner_id, amount=amount, utr=utr, method=method, purpose=purpose,
+                     note=(note or "").strip() or None, screenshot_url=screenshot_url, screenshot_scan=json.dumps(scan) if scan else None, status="PENDING")
     db.add(c)
     db.commit()
     db.refresh(c)
     try:
         from app.crud.portal_trips import notify_admins
-        notify_admins(db, "\U0001F4B8 Payment report", f"Rs {body.amount} paid by UPI/bank, UTR {utr}, for {purpose.replace('_', ' ').title()}. Please check and approve.")
+        notify_admins(db, "\U0001F4B8 Payment report", f"Rs {amount} paid by UPI/bank, UTR {utr}, for {purpose.replace('_', ' ').title()}. Please check and approve.")
     except Exception:  # noqa: BLE001
         pass
     return {"success": True, "claim": _out(c), "message": "Thank you. We will check your payment and credit it - usually within a few hours."}
+
+
+@owner_router.post("/wallet/payment-claims")
+def create_claim(body: ClaimBody, db: Session = Depends(get_db), vehicle_owner_id: str = Depends(get_current_vehicleOwner_id)):
+    return _create(db, vehicle_owner_id, body.amount, body.utr, body.purpose, body.method, body.note, body.screenshot_url)
+
+
+MAX_SHOT_BYTES = 8 * 1024 * 1024
+
+
+@owner_router.post("/wallet/payment-claims/scan")
+async def scan_screenshot(screenshot: UploadFile = File(...), db: Session = Depends(get_db), vehicle_owner_id: str = Depends(get_current_vehicleOwner_id)):
+    """Read the UTR / amount out of a payment screenshot so the person does not have to type them (nothing is saved)."""
+    data = await screenshot.read()
+    if not data or len(data) > MAX_SHOT_BYTES:
+        raise HTTPException(status_code=400, detail="Please choose a screenshot smaller than 8 MB.")
+    from app.utils.payment_screenshot import read_payment_screenshot
+    return read_payment_screenshot(data, _setting(db, "manual_upi_id", DEFAULT_UPI))
+
+
+@owner_router.post("/wallet/payment-claims/with-screenshot")
+async def create_claim_with_screenshot(
+    amount: int = Form(..., ge=1, le=200000), utr: str = Form(...), purpose: str = Form("WALLET"), method: str = Form("UPI"), note: Optional[str] = Form(None),
+    screenshot: UploadFile = File(...), db: Session = Depends(get_db), vehicle_owner_id: str = Depends(get_current_vehicleOwner_id),
+):
+    """Same as the plain report, plus the screenshot: it is stored (staff open it) and read again here, so staff see ticks for
+    'UTR matches / amount matches / paid to our UPI ID / shows completed' - what the person typed is checked against what the picture says."""
+    data = await screenshot.read()
+    if not data or len(data) > MAX_SHOT_BYTES:
+        raise HTTPException(status_code=400, detail="Please choose a screenshot smaller than 8 MB.")
+    from app.utils.payment_screenshot import read_payment_screenshot
+    scan = read_payment_screenshot(data, _setting(db, "manual_upi_id", DEFAULT_UPI))
+    url = None
+    try:
+        import io
+        from starlette.datastructures import Headers
+        from app.utils.gcs import upload_image_to_gcs
+        url = upload_image_to_gcs(UploadFile(file=io.BytesIO(data), filename=screenshot.filename or "payment.jpg",
+                                             headers=Headers({"content-type": screenshot.content_type or "image/jpeg"})), folder="payment_claims")
+    except Exception:  # noqa: BLE001
+        url = None                                   # the claim still goes through; staff just see no picture
+    return _create(db, vehicle_owner_id, amount, utr, purpose, method, note, url, scan)
 
 
 @owner_router.get("/wallet/payment-claims")
@@ -118,7 +182,7 @@ def list_claims(status: str = "PENDING", db: Session = Depends(get_db), current_
     if rows:
         for d in db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id.in_({c.vehicle_owner_id for c in rows})).all():
             names[str(d.vehicle_owner_id)] = getattr(d, "full_name", None)
-    return {"claims": [_out(c, names.get(str(c.vehicle_owner_id)), getattr(people.get(str(c.vehicle_owner_id)), "primary_number", None)) for c in rows]}
+    return {"claims": [_out(c, names.get(str(c.vehicle_owner_id)), getattr(people.get(str(c.vehicle_owner_id)), "primary_number", None), for_admin=True) for c in rows]}
 
 
 def _admin_name(a) -> str:

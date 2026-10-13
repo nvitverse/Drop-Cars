@@ -22,6 +22,7 @@ class PaymentClaim(Base):
     purpose = Column(String(30), nullable=False, default="WALLET")  # WALLET | SUBSCRIPTION_MONTHLY | SUBSCRIPTION_YEARLY | OTHER
     note = Column(Text, nullable=True)
     screenshot_url = Column(String, nullable=True)
+    screenshot_scan = Column(Text, nullable=True)                 # JSON: UTR / amount / paid-to read from the screenshot (the text itself is not kept)
     status = Column(String(12), nullable=False, default="PENDING", index=True)   # PENDING | APPROVED | REJECTED
     decided_by = Column(String, nullable=True)
     decided_at = Column(TIMESTAMP(timezone=True), nullable=True)

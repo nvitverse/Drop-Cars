@@ -72,3 +72,25 @@ def test_approving_a_plan_payment_switches_the_trusted_plan_on(pg_session):
     out = pc.approve_claim(c["id"], pc.DecideBody(), db=pg_session, current_admin=SimpleNamespace(id=uuid.uuid4(), username="Priya", role="Owner"))
     pg_session.refresh(det)
     assert det.tier == "PREFERRED" and out["plan_message"]
+
+
+def test_a_claim_with_a_screenshot_scan_shows_ticks_to_staff(pg_session):
+    o = _owner(pg_session)
+    utr = _utr()
+    scan = {"utr": utr, "amount": 210.0, "success": True, "payee_ids": ["86-1@okbizaxis"], "payee_matches_ours": True, "read": True}
+    out = pc._create(pg_session, str(o.id), 210, utr, "WALLET", "UPI", None, "https://example/none.jpg", scan)
+    admin = SimpleNamespace(id=uuid.uuid4(), username="Priya", role="Owner")
+    rows = pc.list_claims(status="PENDING", db=pg_session, current_admin=admin)["claims"]
+    mine = next(c for c in rows if c["id"] == out["claim"]["id"])
+    assert mine["checks"] == {"utr_matches": True, "amount_matches": True, "paid_to_our_upi": True, "shows_completed": True}
+    assert mine["scan"]["utr"] == utr
+
+
+def test_a_typed_utr_that_differs_from_the_screenshot_is_flagged(pg_session):
+    o = _owner(pg_session)
+    typed = _utr()
+    scan = {"utr": "999999999999", "amount": 500.0, "success": True, "payee_ids": [], "payee_matches_ours": None, "read": True}
+    out = pc._create(pg_session, str(o.id), 210, typed, "WALLET", "UPI", None, None, scan)
+    rows = pc.list_claims(status="PENDING", db=pg_session, current_admin=SimpleNamespace(id=uuid.uuid4(), username="P", role="Owner"))["claims"]
+    mine = next(c for c in rows if c["id"] == out["claim"]["id"])
+    assert mine["checks"]["utr_matches"] is False and mine["checks"]["amount_matches"] is False

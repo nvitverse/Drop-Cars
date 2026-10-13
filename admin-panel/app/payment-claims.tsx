@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,9 @@ import { useTheme } from '@/context/ThemeContext';
  */
 type Claim = {
   id: string; amount: number; utr: string; method: string; purpose: string; note?: string | null; status: string;
+  scan?: { utr?: string | null; amount?: number | null; success?: boolean | null } | null;
+  checks?: { utr_matches: boolean | null; amount_matches: boolean | null; paid_to_our_upi: boolean | null; shows_completed: boolean | null };
+  screenshot_link?: string | null;
   person_name?: string | null; person_phone?: string | null; created_at?: string | null; decision_note?: string | null; decided_by?: string | null; credited_amount?: number | null;
 };
 const PURPOSE_LABEL: Record<string, string> = { WALLET: 'Wallet top-up', SUBSCRIPTION_MONTHLY: 'Trusted plan - monthly', SUBSCRIPTION_YEARLY: 'Trusted plan - yearly', OTHER: 'Other' };
@@ -117,6 +120,30 @@ export default function PaymentClaimsScreen() {
                 <Text style={{ color: colors.textSecondary, marginTop: 6 }}>For: {PURPOSE_LABEL[c.purpose] || c.purpose}  ·  {c.method}</Text>
                 <Text selectable style={{ color: colors.text, marginTop: 2 }}>UTR: <Text style={{ fontWeight: '700' }}>{c.utr}</Text></Text>
                 {c.note ? <Text style={{ color: colors.textSecondary, marginTop: 2 }}>Note: {c.note}</Text> : null}
+                {c.screenshot_link ? (
+                  <TouchableOpacity onPress={() => Linking.openURL(c.screenshot_link!)} style={{ marginTop: 8 }}>
+                    <Image source={{ uri: c.screenshot_link }} resizeMode="cover" style={{ width: 120, height: 160, borderRadius: 8, borderWidth: 1, borderColor: colors.border }} />
+                    <Text style={{ color: colors.primary, fontSize: 12, marginTop: 2 }}>Open screenshot</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {c.checks ? (
+                  <View style={{ marginTop: 8, gap: 2 }}>
+                    {([
+                      ['utr_matches', 'UTR on the screenshot matches what was typed', c.scan?.utr ? `screenshot says ${c.scan.utr}` : 'could not read the UTR'],
+                      ['amount_matches', 'Amount on the screenshot matches', c.scan?.amount ? `screenshot says Rs ${c.scan.amount}` : 'could not read the amount'],
+                      ['paid_to_our_upi', 'Paid to our UPI ID', 'could not see the receiver'],
+                      ['shows_completed', 'Shows "completed / successful"', 'could not tell'],
+                    ] as const).map(([k, label, unknown]) => {
+                      const v = (c.checks as any)[k] as boolean | null;
+                      return (
+                        <Text key={k} style={{ fontSize: 12.5, color: v === true ? '#16A34A' : v === false ? '#DC2626' : colors.textSecondary }}>
+                          {v === true ? '✔ ' : v === false ? '✖ ' : '• '}{label}{v === null ? ` (${unknown})` : ''}
+                        </Text>
+                      );
+                    })}
+                    <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>These ticks only save you time - always confirm the UTR in the bank statement (a screenshot can be edited).</Text>
+                  </View>
+                ) : null}
                 {c.created_at ? <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>Reported {new Date(c.created_at).toLocaleString()}</Text> : null}
                 {c.status !== 'PENDING' ? <Text style={{ color: colors.textSecondary, marginTop: 6 }}>{c.status === 'APPROVED' ? `Credited Rs ${c.credited_amount ?? c.amount}` : 'Rejected'} by {c.decided_by}: {c.decision_note}</Text> : (
                   <View style={{ marginTop: 10 }}>
