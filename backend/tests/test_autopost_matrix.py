@@ -64,3 +64,14 @@ def test_all_inclusive_posting_follows_the_settings_not_typed_in_numbers(pg_sess
     db.flush()
     o = _run(db, "S12 all-inclusive 5000 (settings: 20%, bata 350)", **base)
     assert (o.estimated_price, o.platform_fees_percent, o.driver_allowance) == (4000, 20, 350)
+
+
+def test_a_quoted_night_charge_reaches_the_driver_card_and_the_order(pg_session, quiet):
+    """The driver's estimate already counted the quoted night charge, but the order dropped it and the card did not list it."""
+    from app.models.orders import Order
+    db = pg_session
+    r = _request(db, quoted_cost_per_km=15, quoted_trip_distance=200, quoted_total_amount=200 * 15 + 300 + 300, quoted_driver_amount=200 * 15 + 300 + 300, quoted_night_charges=300)
+    master, o = _post(db, r)
+    assert db.query(Order).filter(Order.id == master.id).one().night_charges == 300
+    assert any("Night" in str(i.get("label")) and i.get("included") for i in (o.charge_items or []))
+    assert o.estimated_price == 200 * 15 + 300 + 300

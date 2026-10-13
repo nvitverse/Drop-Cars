@@ -40,6 +40,7 @@ import DashboardSkeleton from '@/components/DashboardSkeleton';
 import KycPendingModal from '@/components/KycPendingModal';
 import TrustedIntroModal from '@/components/TrustedIntroModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import BookingAcceptedGuide from '@/components/BookingAcceptedGuide';
 
 import BookingAlreadyTakenModal from '@/components/BookingAlreadyTakenModal';
 import ActionableErrorModal, { ErrorType } from '@/components/ActionableErrorModal';
@@ -609,6 +610,14 @@ export default function DashboardScreen() {
     } finally {
       setAssignmentsLoading(false);
     }
+  };
+
+  // "Booking accepted - what next?" (assign a driver, start / end the trip). Drivers did not know the steps.
+  const [guide, setGuide] = useState<{ visible: boolean; justAccepted: boolean }>({ visible: false, justAccepted: false });
+  const openGuideAfterAccept = async () => {
+    try { if (await AsyncStorage.getItem('dropcars_hide_accept_guide') === '1') return false; } catch { /* show it */ }
+    setGuide({ visible: true, justAccepted: true });
+    return true;
   };
 
   const handleAssignDriver = (ride: ActiveRide) => {
@@ -1891,11 +1900,13 @@ export default function DashboardScreen() {
         setUpcomingSubTab('unassigned');
         await fetchActiveRidesData();
 
-        Alert.alert(
-          'Booking Accepted',
-          'Booking accepted successfully! Assign driver & car in Unassigned.',
-          [{ text: 'OK' }]
-        );
+        if (!(await openGuideAfterAccept())) {
+          Alert.alert(
+            'Booking Accepted',
+            'Booking accepted successfully! Assign driver & car in Unassigned.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
         console.log('❌ Accept order response:', acceptResponse);
         setActionableError({
@@ -2303,6 +2314,10 @@ export default function DashboardScreen() {
                         );
                       })}
                     </View>
+
+                    <TouchableOpacity onPress={() => setGuide({ visible: true, justAccepted: false })} style={{ alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 6, marginBottom: 4 }}>
+                      <Text style={{ color: colors.primary, fontSize: 12.5, fontFamily: 'Inter-SemiBold' }}>How do I assign a driver and start the trip?</Text>
+                    </TouchableOpacity>
 
                     {activeRidesLoading ? (
                       <View style={dynamicStyles.loadingContainer}>
@@ -3148,6 +3163,12 @@ export default function DashboardScreen() {
           actually rendered anywhere, so drivers got zero visible feedback
           when a booking accept failed for any of these reasons. */}
       {/* KYC/wallet/document/generic accept-booking errors */}
+      <BookingAcceptedGuide
+        visible={guide.visible}
+        justAccepted={guide.justAccepted}
+        onClose={() => setGuide((g) => ({ ...g, visible: false }))}
+        onNeverShow={() => { AsyncStorage.setItem('dropcars_hide_accept_guide', '1').catch(() => {}); setGuide((g) => ({ ...g, visible: false })); }}
+      />
       <ActionableErrorModal
         visible={actionableError.visible}
         errorType={actionableError.errorType}

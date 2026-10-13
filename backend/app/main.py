@@ -18,6 +18,7 @@ import app.models.admin
 import app.models.worker_management
 import app.models.document_model  # document_models table must be known before create_all()
 import app.models.chat_trash  # chat_trash table must be known before create_all()
+import app.models.payment_claim  # payment_claims table must be known before create_all()
 import app.models.billing  # billing_brands / billing_documents tables
 import app.models.unaccepted_case  # unaccepted_cases table
 import app.models.portal_trip  # portal_trips table (web execution portal)
@@ -283,6 +284,9 @@ app.include_router(own_fleet_router.router, prefix="/api", tags=["Own Fleet"])
 
 from app.api.routes import quality as quality_router
 app.include_router(quality_router.router, prefix="/api", tags=["Ratings & Quality"])
+from app.api.routes import payment_claims as _payment_claims
+app.include_router(_payment_claims.owner_router, prefix="/api", tags=["Payment claims"])
+app.include_router(_payment_claims.admin_router, prefix="/api", tags=["Payment claims"])
 from app.api.routes import account_activity_routes as _activity_routes
 app.include_router(_activity_routes.admin_router, prefix="/api", tags=["Active / Inactive"])
 app.include_router(_activity_routes.owner_router, prefix="/api/users", tags=["Active / Inactive"])

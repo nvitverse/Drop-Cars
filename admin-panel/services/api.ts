@@ -254,6 +254,19 @@ class ApiService {
     });
   }
 
+  // Payment reports: partners who paid by UPI / bank directly and sent the UTR
+  async getPaymentClaims(status: string = 'PENDING'): Promise<{ claims: any[] }> {
+    return this.makeRequest(`/admin/payment-claims?status=${encodeURIComponent(status)}`, { method: 'GET' });
+  }
+
+  async approvePaymentClaim(id: string, body: { note?: string; credit_amount?: number } = {}): Promise<any> {
+    return this.makeRequest(`/admin/payment-claims/${id}/approve`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async rejectPaymentClaim(id: string, body: { note: string }): Promise<any> {
+    return this.makeRequest(`/admin/payment-claims/${id}/reject`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
   async getRbacRoles(): Promise<{ roles: any; available_permissions: string[] }> {
     return this.makeRequest('/admin/rbac/roles', { method: 'GET' });
   }

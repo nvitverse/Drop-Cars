@@ -295,6 +295,7 @@ export default function DashboardScreen() {
   const [docsNeedingReview, setDocsNeedingReview] = useState<number | null>(null);
   const [substitutionRequestsCount, setSubstitutionRequestsCount] = useState<number | null>(null);
   const [fleetOverdueCount, setFleetOverdueCount] = useState<number | null>(null);
+  const [paymentClaimsPending, setPaymentClaimsPending] = useState<number | null>(null);   // partners who paid by UPI/bank and sent the UTR
 
   // Staff-only "Today's messages" card.
   const [myTarget, setMyTarget] = useState<{
@@ -713,6 +714,7 @@ export default function DashboardScreen() {
     ],
     money: [
       { key: 'payouts', label: 'Payouts', hint: 'Withdrawals to approve', icon: Wallet, color: '#059669', count: payoutsPending, route: '/payout-requests', perm: 'finance' },
+      { key: 'payclaims', label: 'Payment reports', hint: 'Paid by UPI / bank - check UTR, credit', icon: CreditCard, color: '#D97706', count: paymentClaimsPending, route: '/payment-claims', perm: 'finance' },
       { key: 'gst', label: 'GST invoices', hint: 'Invoices and monthly filing', icon: Receipt, color: '#0369A1', count: null, route: '/gst-invoices', perm: 'finance' },
     ],
     setup: [
@@ -738,7 +740,16 @@ export default function DashboardScreen() {
     ...allRows.bookings.slice(0, 3),
     allRows.people[1],
     allRows.money[0],
+    allRows.money[1],
   ].filter((r) => (isOwner || !r.perm || canSee(r.perm)) && (r.count ?? 0) > 0);
+
+  useEffect(() => {
+    let alive = true;
+    const run = () => apiService.getPaymentClaims('PENDING').then((r) => { if (alive) setPaymentClaimsPending((r?.claims || []).length); }).catch(() => {});
+    run();
+    const id = setInterval(run, 120000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';

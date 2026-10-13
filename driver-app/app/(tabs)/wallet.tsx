@@ -29,6 +29,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import WithdrawModal from '@/components/wallet/WithdrawModal';
 import SecurityHoldInfoModal from '@/components/wallet/SecurityHoldInfoModal';
 import LedgerDetailSheet from '@/components/wallet/LedgerDetailSheet';
+import PaymentReportModal from '@/components/wallet/PaymentReportModal';
 
 let RazorpayCheckout: any = null;
 try {
@@ -90,6 +91,8 @@ export default function WalletScreen() {
   // Razorpay amount input modal state
   const [showAmountModal, setShowAmountModal] = useState(false);
   const [razorpayAmount, setRazorpayAmount] = useState('');
+  const [showReport, setShowReport] = useState(false);          // "I paid by UPI / bank" - report it so staff can credit it
+  const [manualUpi, setManualUpi] = useState('7200217986-1@okbizaxis');   // replaced by the Admin-set one below
   const [processingRazorpay, setProcessingRazorpay] = useState(false);
   // Shown INSIDE the modal instead of Alert.alert(), which on web renders
   // behind a custom <Modal> and looks like "nothing happened" until the
@@ -185,8 +188,20 @@ export default function WalletScreen() {
     }
   }, [addAmountParam]);
 
+  useEffect(() => {
+    axiosInstance.get('/api/wallet/manual-upi').then((r) => { if (r.data?.upi_id) setManualUpi(String(r.data.upi_id)); }).catch(() => {});
+  }, []);
+
+  // Razorpay said no: say WHY in plain words and what to do next (a driver paid the manual UPI ID after a bank decline and nothing recorded it)
+  const showPaymentFailedHelp = (reason?: string) => {
+    const r = String(reason || '').toLowerCase();
+    const why = r.includes('bank') || r.includes('declin') ? 'Your bank declined the payment.' : r.includes('insufficient') ? 'The account did not have enough balance.' : r.includes('timeout') || r.includes('processing') ? 'The bank took too long to confirm.' : (reason || 'The payment could not be completed.');
+    Alert.alert('Payment did not go through', `${why}\n\nNo money should be kept: if your bank or wallet shows a deduction, it comes back by itself in 3-7 working days.\n\nTry again with UPI (GPay / PhonePe), which works best. If you paid in any other way (direct UPI / bank), tap "I already paid" so we can credit it.`,
+      [{ text: 'Try again', style: 'cancel' }, { text: 'I already paid', onPress: () => setShowReport(true) }]);
+  };
+
   const handleUPICopy = () => {
-    const upiId = '7200217986-1@okbizaxis';
+    const upiId = manualUpi;
     try {
       Clipboard.setString(upiId);
       Alert.alert(t('wallet.copiedTitle'), t('wallet.copiedBody'));
@@ -289,11 +304,11 @@ export default function WalletScreen() {
           handlePaymentFailure(error);
           
           if (error.error?.code === 'BAD_REQUEST_ERROR') {
-            Alert.alert('Payment Failed', error.error?.description || 'Invalid payment details');
+            showPaymentFailedHelp(error.error?.description || 'Invalid payment details');
           } else if (error.error?.code === 'NETWORK_ERROR') {
             Alert.alert('Network Error', 'Please check your internet connection and try again');
           } else if (error.error?.code !== 'PAYMENT_CANCELLED') {
-            Alert.alert('Payment Failed', error.error?.description || 'Payment could not be processed');
+            showPaymentFailedHelp(error.error?.description || 'Payment could not be processed');
           }
         });
     } catch (error: any) {
@@ -1027,7 +1042,7 @@ export default function WalletScreen() {
                   onPress={handleUPICopy}
                   activeOpacity={0.7}
                 >
-                  <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.primary, textAlign: 'center' }}>7200217986-1@okbizaxis</Text>
+                  <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.primary, textAlign: 'center' }}>{manualUpi}</Text>
                   <Copy color={colors.primary} size={18} style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
                 <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.textSecondary }}>Drop Cars</Text>
@@ -1040,9 +1055,16 @@ export default function WalletScreen() {
                 <Copy color="#FFFFFF" size={18} />
                 <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Inter-SemiBold', marginLeft: 8 }}>{t('wallet.copyUpiId')}</Text>
               </TouchableOpacity>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginTop: 12, lineHeight: 17 }}>Online payment (Add Money) confirms by itself and is the fastest. Use this only if it does not work - and after paying, tell us below, otherwise we cannot know it is yours.</Text>
+              <TouchableOpacity onPress={() => { setShowQRModal(false); setShowReport(true); }} style={{ marginTop: 10, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 6, paddingVertical: 12, width: '100%', alignItems: 'center' }}>
+                <Text style={{ color: colors.primary, fontSize: 15, fontFamily: 'Inter-SemiBold' }}>I have paid - report my payment</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
+
+        <PaymentReportModal visible={showReport} onClose={() => setShowReport(false)} defaultAmount={razorpayAmount || undefined}
+          defaultPurpose={subscribePlanParam === 'MONTHLY' ? 'SUBSCRIPTION_MONTHLY' : subscribePlanParam === 'YEARLY' ? 'SUBSCRIPTION_YEARLY' : undefined} />
 
         {/* Razorpay Amount Input Modal */}
         <Modal

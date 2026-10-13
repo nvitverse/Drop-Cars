@@ -266,6 +266,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
 
     toll_val = _pick(request.admin_toll_charges, request.quoted_toll_charges) or 0
     hill_val = _pick(request.admin_hill_charges, request.quoted_hill_charges) or 0
+    night_val = _pick(request.admin_night_charges, request.quoted_night_charges) or 0
     effective_pickup_notes = (
         getattr(request, "pickup_notes", None) or
         getattr(request, "notes", None) or
@@ -286,6 +287,8 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         auto_charge_items.append({"label": "Toll Charges", "included": False})
     if hill_val and hill_val > 0:
         auto_charge_items.append({"label": f"Hill / Ghat Charges (Rs {hill_val})", "amount": hill_val, "included": True})
+    if night_val and night_val > 0:
+        auto_charge_items.append({"label": f"Night Charges (Rs {night_val})", "amount": night_val, "included": True})
     if getattr(request, 'gst_included', False):
         gst_amt = getattr(request, 'gst_amount', None)
         auto_charge_items.append({"label": f"GST Included{f' (Rs {gst_amt})' if gst_amt else ''}", "amount": gst_amt, "included": True})
@@ -337,7 +340,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         new_order=new_order,
         max_time_to_assign_order=assign_minutes,
         toll_charge_update=False,
-        night_charges=request.admin_night_charges,
+        night_charges=night_val,          # admin's figure, else the quoted one (the estimate already counted it; the order used to drop a quoted night charge)
         customer_phone_reveal_at=getattr(request, 'customer_phone_reveal_at', None),
     )
 
