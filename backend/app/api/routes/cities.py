@@ -33,6 +33,17 @@ def list_local_serviceable_cities(db: Session = Depends(get_db)):
     return get_serviceable_city_names(db)
 
 
+@router.get("/local-serviceable/check")
+def check_local_serviceable(place: str, db: Session = Depends(get_db)):
+    """Is Local Drop available for this pickup? Takes any place - a neighbourhood ("Vadapalani"), a landmark ("Kasi Theatre"),
+    "West Jafferkhanpet, Chennai" - and says which city it is in. The apps used to compare the typed text with the city NAMES,
+    so only the word "Chennai" itself passed."""
+    from app.utils.serviceable_cities import city_entry_for_place, get_serviceable_city_names
+    hit = city_entry_for_place(db, place)
+    ok = bool(hit and hit.get("serviceable"))
+    return {"serviceable": ok, "city": hit.get("city") if hit else None, "cities": get_serviceable_city_names(db)}
+
+
 # --- Online fallback: "Search Online" button when local (fuzzy) search
 # comes up empty. One Geocoding call per tap, never per-keystroke, and the
 # resolved city is saved to the shared list so nobody has to look it up again.

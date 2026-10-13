@@ -953,6 +953,11 @@ class ApiService {
     return this.makeRequest('/cities/local-serviceable');
   }
 
+  // Which city is this pickup in, and is Local Drop on there? Works for neighbourhoods / landmarks (Vadapalani, Kasi Theatre), not just city names.
+  async checkLocalServiceable(place: string): Promise<{ serviceable: boolean; city: string | null; cities: string[] }> {
+    return this.makeRequest(`/cities/local-serviceable/check?place=${encodeURIComponent(place)}`, { method: 'GET' });
+  }
+
   // Refund Requests
   async getRefundRequests(): Promise<Array<{
     id: string;

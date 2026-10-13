@@ -38,7 +38,7 @@ const TRIP_TYPES: { label: string; value: TripType }[] = [
   { label: 'Oneway', value: 'oneway' },
   { label: 'Round Trip', value: 'roundtrip' },
   { label: 'Multi City', value: 'multicity' },
-  { label: 'Local', value: 'local' },
+  { label: 'Local Drop', value: 'local' },
   { label: 'Hourly', value: 'hourly' },
 ];
 
@@ -111,7 +111,7 @@ const TRIP_TYPE_SUBTITLES: Record<TripType, string> = {
   oneway: 'Single pickup to drop, one direction',
   roundtrip: 'Pickup, wait, and return with the same car',
   multicity: 'Multiple stops across different cities',
-  local: 'Within-city day use, serviceable cities only',
+  local: 'Short city trips (e.g. Chennai to Airport / Mahabalipuram) - per km, driver allowance included',
   hourly: 'Time & km based package pricing',
 };
 
@@ -391,6 +391,19 @@ export default function CreateBookingScreen() {
 
   // Pricing (km-based trip types)
   const [costPerKm, setCostPerKm] = useState('15');
+  // Local Drop: km limit (default 50) and the rate for every km beyond it (blank = same as the normal per-km rate)
+  const [localKmLimit, setLocalKmLimit] = useState('50');
+  // The server's answer for the typed Local pickup ({place, ok}); the typed text is usually a neighbourhood, not the city name
+  const [localCityCheck, setLocalCityCheck] = useState<{ place: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    const place = (stops[0] || '').trim();
+    if (tripType !== 'local' || place.length < 3) return;
+    const timer = setTimeout(() => {
+      apiService.checkLocalServiceable(place).then((r) => setLocalCityCheck({ place, ok: !!r.serviceable })).catch(() => {});
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [tripType, stops[0]]);
+  const [localExtraKmRate, setLocalExtraKmRate] = useState('');
   const [extraCostPerKm, setExtraCostPerKm] = useState('0');
   const [driverAllowance, setDriverAllowance] = useState('300');
   const [extraDriverAllowance, setExtraDriverAllowance] = useState('100');
@@ -470,6 +483,12 @@ export default function CreateBookingScreen() {
   const getDefaultsForCarType = (selectedCar: string, currentTrip: string = tripType) => {
     const t = (selectedCar || '').toUpperCase();
     const isRound = currentTrip === 'roundtrip' || currentTrip === 'multicity';
+    if (currentTrip === 'local') {
+      // Local Drop: one per-km rate with the driver's allowance included (no separate bata, nothing extra for the vendor)
+      const rate = t.includes('HYCROSS') || t.includes('HI_CROSS') || t.includes('HIGH_CROSS') ? '50' : t.includes('CRYSTA') ? '40'
+        : t.includes('INNOVA') || t.includes('SUV') ? '35' : (t.includes('SEDAN') || t.includes('ETIOS') || t.includes('HATCHBACK')) ? '25' : '';
+      return { cost_per_km: rate, extra_cost_per_km: '0', driver_allowance: '0', extra_driver_allowance: '0' };
+    }
     
     if (t.includes('CRYSTA')) {
       return {
@@ -1447,10 +1466,11 @@ export default function CreateBookingScreen() {
       if (tripType === 'multicity' && locs.length < 3) return 'Multi City needs at least 3 stops';
       if (!costPerKm.trim() || !driverAllowance.trim()) return 'Enter driver fare per km and driver allowance';
       if (tripType === 'local') {
-        const pickupCity = stops[0]?.trim().toLowerCase();
-        const ok = localServiceableCities.some((c) => c.toLowerCase() === pickupCity);
+        const pickupPlace = (stops[0] || '').trim().toLowerCase();
+        const ok = localServiceableCities.some((c) => pickupPlace.includes(c.toLowerCase()))
+          || (localCityCheck != null && localCityCheck.place.toLowerCase() === pickupPlace && localCityCheck.ok);
         if (!ok) {
-          return `Local Bookings aren't enabled for "${stops[0]}" yet. Available: ${localServiceableCities.join(', ') || 'none configured'}`;
+          return `Local Drop isn't enabled for "${stops[0]}" yet (or we could not tell which city it is in - try adding the city, e.g. "${stops[0]}, Chennai"). Available: ${localServiceableCities.join(', ') || 'none configured'}`;
         }
       }
     } else {
@@ -1501,6 +1521,8 @@ export default function CreateBookingScreen() {
       hill_charges: includeHill ? (Number(hillCharges) || 0) : 0,
       toll_charges: includeToll ? (Number(tollCharges) || 0) : 0,
       night_charges: 0,
+      local_km_limit: tripType === 'local' ? (Number(localKmLimit) > 0 ? Number(localKmLimit) : 50) : undefined,
+      local_extra_km_rate: tripType === 'local' && Number(localExtraKmRate) > 0 ? Number(localExtraKmRate) : undefined,
       pickup_notes: (() => {
         const parts: string[] = [];
         if (pickupNotes.trim()) parts.push(pickupNotes.trim());
@@ -2272,6 +2294,36 @@ export default function CreateBookingScreen() {
                 <Text style={[styles.cardGroupLabel, { color: themeColors.textSecondary, marginTop: 0, marginBottom: 0 }]}>{tripType === 'multicity' ? 'Stops' : 'Locations'}</Text>
                 {tripType === 'local' && tip('Local booking cities', `Local bookings can be posted only for these cities: ${localServiceableCities.join(', ') || 'none configured yet'}.`)}
               </View>
+              {tripType === 'local' && (
+                <View style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 12, marginBottom: 12, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>Local Drop pricing</Text>
+                  <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginBottom: 10 }}>
+                    Pickup and drop in the same city or nearby (e.g. Chennai to Airport or Mahabalipuram). Driver allowance is included in the per-km rate; toll and parking are extra, paid on actuals.
+                  </Text>
+                  <View style={styles.priceGrid}>
+                    <View style={styles.priceCell}>
+                      <Text style={styles.priceLabel}>Rate per km (₹) *</Text>
+                      <TextInput style={styles.priceInput} value={costPerKm} onChangeText={(v) => setCostPerKm(stripLeadingZero(v))} keyboardType="numeric" placeholder="25" placeholderTextColor={colors.textMuted} />
+                    </View>
+                    <View style={styles.priceCell}>
+                      <Text style={styles.priceLabel}>Km limit</Text>
+                      <TextInput style={styles.priceInput} value={localKmLimit} onChangeText={(v) => setLocalKmLimit(v.replace(/\D/g, ''))} keyboardType="numeric" placeholder="50" placeholderTextColor={colors.textMuted} />
+                    </View>
+                    <View style={styles.priceCell}>
+                      <Text style={styles.priceLabel}>Extra km rate (₹/km)</Text>
+                      <TextInput style={styles.priceInput} value={localExtraKmRate} onChangeText={(v) => setLocalExtraKmRate(v.replace(/\D/g, ''))} keyboardType="numeric" placeholder={costPerKm || 'same as rate'} placeholderTextColor={colors.textMuted} />
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginTop: 4 }}>
+                    Defaults: Sedan ₹25, SUV ₹35, Innova ₹35, Crysta ₹40, Hycross ₹50 per km - change them for this booking if needed. Leave the extra km rate blank to charge the same rate beyond the limit.
+                  </Text>
+                  {Number(fare?.total_km) > Number(localKmLimit || 50) ? (
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginTop: 6 }}>
+                      This route is {Math.round(Number(fare.total_km))} km - beyond the {localKmLimit || 50} km limit. Raise the limit, or post it as Oneway.
+                    </Text>
+                  ) : null}
+                </View>
+              )}
               {stops.map((s, idx) => {
                 const label = idx === 0 ? 'Pickup Location' : idx === stops.length - 1 ? (tripType === 'roundtrip' ? 'Return to Pickup' : 'Drop Location') : `Stop ${idx}`;
                 const isItemDragging = draggingIndex === idx;
@@ -2923,8 +2975,8 @@ export default function CreateBookingScreen() {
                 );
               })() : (
                 <View>
-                  {/* Km limit: one editable row. Shows the real route km once the locations are filled. */}
-                  {hasMinKm && (
+                  {/* Km limit: one editable row. Shows the real route km once the locations are filled. (Local Drop has its own km limit card above, and no minimum km.) */}
+                  {hasMinKm && tripType !== 'local' && (
                     <View style={styles.inlineField}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                         <Text style={[styles.priceLabel, { marginBottom: 0 }]}>

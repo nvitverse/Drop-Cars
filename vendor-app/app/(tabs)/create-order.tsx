@@ -1153,14 +1153,22 @@ const handleEndTimeChange = (event: any, selectedTime?: Date) => {
     }
     
     if (formData.trip_type === 'Local') {
-      const pickupCity = formData.pickup_drop_location['0']?.trim();
-      const isServiceable = localServiceableCities.some(
-        (c) => c.toLowerCase() === pickupCity?.toLowerCase()
-      );
+      // The pickup is usually a neighbourhood or landmark (Vadapalani, Kasi Theatre, West Jafferkhanpet), not the city name itself:
+      // the server says which city it is in. (It used to compare the typed text with the city names, so only "Chennai" passed.)
+      const pickupPlace = formData.pickup_drop_location['0']?.trim() || '';
+      let isServiceable = localServiceableCities.some((c) => pickupPlace.toLowerCase().includes(c.toLowerCase()));
+      if (!isServiceable) {
+        try {
+          const res = await publicApi.get('/cities/local-serviceable/check', { params: { place: pickupPlace } });
+          isServiceable = !!res.data?.serviceable;
+        } catch (e) {
+          isServiceable = false;
+        }
+      }
       if (!isServiceable) {
         Alert.alert(
           'Not Available Here',
-          `Local Bookings aren't enabled for "${pickupCity}" yet. Available cities: ${localServiceableCities.join(', ') || 'none configured'}`
+          `Local Drop is not enabled for "${pickupPlace}" yet (or we could not tell which city it is in - try "${pickupPlace}, Chennai"). Available cities: ${localServiceableCities.join(', ') || 'none configured'}`
         );
         return;
       }
@@ -2469,6 +2477,65 @@ const handleEndTimeChange = (event: any, selectedTime?: Date) => {
       </Modal>
 
 
+
+      {/* Package Hours Picker (Hourly Rental). The button always set showPackageHoursPicker, but this modal was missing, so choosing hours did nothing. */}
+      <Modal
+        visible={showPackageHoursPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPackageHoursPicker(false)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPackageHoursPicker(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.bottomSheetContainer}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalHeaderTitle}>Package Hours</Text>
+                <Text style={styles.modalHeaderSubtitle}>Hours and the km included in the package</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPackageHoursPicker(false)} style={styles.modalCloseIcon}>
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10, marginTop: 14, paddingBottom: 12 }}>
+                {packageHoursOptions.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                    <Text style={{ color: '#64748B', marginBottom: 10 }}>Could not load the packages.</Text>
+                    <TouchableOpacity onPress={fetchPackageHours} style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, backgroundColor: '#1D4ED8' }}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : packageHoursOptions.map((opt) => {
+                  const isActive = formData.package_hours?.hours === opt.hours && formData.package_hours?.km_range === opt.km_range;
+                  return (
+                    <TouchableOpacity
+                      key={`${opt.hours}-${opt.km_range}`}
+                      style={[styles.enhancedModalOptionCard, isActive && styles.enhancedModalOptionCardActive]}
+                      onPress={() => {
+                        handleInputChange('package_hours', { hours: opt.hours, km_range: opt.km_range });
+                        setShowPackageHoursPicker(false);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.optionIconBox, isActive && styles.optionIconBoxActive]}>
+                        <Timer size={22} color={isActive ? '#FFFFFF' : '#1D4ED8'} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.optionTitleText, isActive && styles.optionTitleTextActive]}>{opt.hours} hrs</Text>
+                        <Text style={styles.optionSubtitleText}>{opt.km_range} km included</Text>
+                      </View>
+                      <View style={[styles.radioBadge, isActive && styles.radioBadgeActive]}>
+                        {isActive && <Check size={14} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Car & Vehicle Preferences Modal */}
       <Modal

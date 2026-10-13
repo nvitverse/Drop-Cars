@@ -1611,6 +1611,10 @@ from app.schemas.new_orders import OnewayConfirmRequest, RoundTripConfirmRequest
 
 class AdminOnewayConfirmRequest(OnewayConfirmRequest):
     vendor_id: Optional[UUID] = None
+    # Local Drop (short in-city trips, e.g. Chennai -> Mahabalipuram): per-km fare with driver allowance included, a km limit, and a
+    # different rate for every km beyond it. Both stored on the booking; the bill at trip close applies them (crud/local_drop.py).
+    local_km_limit: Optional[int] = None
+    local_extra_km_rate: Optional[int] = None
     # "Allocate manually" (admin only): give the booking straight to this fleet
     # owner instead of broadcasting it. allocate_on_credit lets a low wallet
     # through - the commission is then debited at trip completion.
@@ -1797,6 +1801,10 @@ def admin_oneway_confirm(
         low = _admin_fleet_low_balance(db, fleet_owner, payload, _est, _vend, payload.cost_per_km, fare["total_km"])
         if low is not None:
             return low
+        _items = [item.model_dump() for item in payload.charge_items] if payload.charge_items else None
+        if payload.trip_type == _OrderType.LOCAL and payload.local_km_limit:
+            from app.crud.local_drop import local_drop_item
+            _items = (_items or []) + [local_drop_item(payload.local_km_limit, payload.local_extra_km_rate, payload.cost_per_km + (payload.extra_cost_per_km or 0))]
         new_order, master_order_id = create_oneway_order(
             db, skip_broadcast=fleet_owner is not None, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum(payload.trip_type.value), car_type=CarTypeEnum(payload.car_type),
             location_links=payload.location_links, pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,
@@ -1811,7 +1819,7 @@ def admin_oneway_confirm(
             calculated_trip_distance=fare.get("calculated_km"), car_make_year_requirement=payload.car_make_year_requirement,
             carrier_required=bool(payload.carrier_required), priority_for_paid=bool(payload.priority_for_paid) if payload.priority_for_paid is not None else True,
             priority_cutoff_at=payload.priority_cutoff_at, fare_type=payload.fare_type or "ITEMIZED",
-            charge_items=[item.model_dump() for item in payload.charge_items] if payload.charge_items else None, advance_received=payload.advance_received,
+            charge_items=_items, advance_received=payload.advance_received,
             total_booking_amount=payload.total_booking_amount, extra_amount=payload.extra_amount, waiting_hours_included=payload.waiting_hours_included,
             # "10% CC" toggle (2026-09-04) - see crud/end_records.py's
             # update_end_trip_record for where this actually skips taking

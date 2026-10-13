@@ -718,8 +718,17 @@ async def update_end_trip_record(
             )
         except Exception as _bd_err:
             print(f"closing breakdown failed (bill unaffected): {_bd_err}")
-        closed_vendor_price = ((cost_per_km+extra_cost_per_km)*updated_km) + (driver_allowance+extra_driver_allowance) + (permit_charges+extra_permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
-        closed_driver_price = ((cost_per_km)*updated_km) + (driver_allowance) + (permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge
+        # Local Drop: km beyond the booking's limit are charged at its own extra-km rate (0 when the booking has none)
+        from app.crud.local_drop import local_drop_extra_amount
+        _local_extra = local_drop_extra_amount(new_order.charge_items, updated_km, int(cost_per_km or 0) + int(extra_cost_per_km or 0))
+        closed_vendor_price = ((cost_per_km+extra_cost_per_km)*updated_km) + (driver_allowance+extra_driver_allowance) + (permit_charges+extra_permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge + _local_extra
+        closed_driver_price = ((cost_per_km)*updated_km) + (driver_allowance) + (permit_charges) + (hill_charges) + (toll_charges) + (night_charges) + waiting_charge + _local_extra
+        if _local_extra:
+            try:
+                order.closing_breakdown = {**(order.closing_breakdown or {}), "lines": list((order.closing_breakdown or {}).get("lines", [])) + [{"key": "local_extra_km", "label": "Local Drop: extra km beyond the limit (rate difference)", "amount": _local_extra}],
+                                           "itemised_total": int((order.closing_breakdown or {}).get("itemised_total", 0)) + _local_extra}
+            except Exception as _le:
+                print(f"local drop breakdown line failed (bill unaffected): {_le}")
 
         # All-Inclusive Commission Rule: vendor_profit = Extra Amount, admin_profit = 5% of Total Booking Amount
         from app.utils.commission import enum_value as _ev
