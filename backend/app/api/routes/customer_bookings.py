@@ -43,6 +43,8 @@ def _get_trip_type_enum(trip_type_str: str) -> OrderTypeEnum:
         return OrderTypeEnum.HOURLY_RENTAL
     elif trip_type_str == "Multy City":
         return OrderTypeEnum.MULTY_CITY
+    elif trip_type_str == "Local":
+        return OrderTypeEnum.LOCAL
     else:
         raise HTTPException(status_code=400, detail=f"Invalid trip type: {trip_type_str}")
 
@@ -52,7 +54,7 @@ def _calculate_fare_internal(db: Session, pickup_drop_location: dict, trip_type_
     # Get platform default rates
     rates = get_rate_card_for_car_type(db, car_type_str)
     
-    if trip_type in (OrderTypeEnum.ONEWAY, OrderTypeEnum.MULTY_CITY):
+    if trip_type in (OrderTypeEnum.ONEWAY, OrderTypeEnum.MULTY_CITY, OrderTypeEnum.LOCAL):
         # Oneway calculation
         fare = calculate_oneway_fare(
             pickup_drop_location=pickup_drop_location,
@@ -82,6 +84,12 @@ def _calculate_fare_internal(db: Session, pickup_drop_location: dict, trip_type_
             night_charges=rates["night_charges"],
             trip_type=trip_type
         )
+    if trip_type == OrderTypeEnum.LOCAL:
+        # Local Drop: 5% GST on the km fare is compulsory and shown in the price; toll and parking are extra, paid on actuals.
+        from app.crud.local_drop import gst_on_km_fare
+        gst = gst_on_km_fare(fare["base_km_amount"] + int(round(fare["total_km"] * rates["extra_cost_per_km"])))
+        fare = {**fare, "gst_amount": gst, "gst_included": True, "total_amount": fare["total_amount"] + gst, "customer_amount": fare["customer_amount"] + gst,
+                "taxes_note": "Price includes 5% GST. Toll and parking are extra, paid on actuals."}
     return fare, rates
 
 
@@ -180,6 +188,8 @@ def create_booking_request(
             quoted_driver_amount=fare["driver_amount"],
             quoted_trip_distance=fare["total_km"],
             quoted_trip_time=fare["trip_time"],
+            gst_included=bool(fare.get("gst_included")),
+            gst_amount=fare.get("gst_amount") or None,
             
             status="PENDING",
             is_paid=False

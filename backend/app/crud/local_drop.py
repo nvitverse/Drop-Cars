@@ -17,8 +17,25 @@ def local_drop_item(km_limit: int, extra_km_rate: Optional[int], rate_per_km: in
     extra = int(extra_km_rate) if extra_km_rate not in (None, "") and int(extra_km_rate) > 0 else rate
     return {
         "key": ITEM_KEY, "included": True, "km_limit": limit, "extra_km_rate": extra, "rate_per_km": rate,
-        "label": f"Local Drop: up to {limit} km at Rs {rate}/km (driver allowance included). Extra km Rs {extra}/km. Toll and parking extra, on actuals.",
+        "label": f"Local Drop: up to {limit} km at Rs {rate}/km (driver allowance included). Extra km Rs {extra}/km. Toll and parking extra, on actuals. 5% GST is added.",
     }
+
+
+GST_PERCENT = 5
+GST_LABEL = "GST on KM Fare (5%)"
+
+
+def with_compulsory_gst(charge_items: Optional[List[Any]]) -> List[Any]:
+    """Local bookings always carry 5% GST on the km fare (owner rule 2026-10-14); toll and parking stay extra, on actuals. The GST charge item is what
+    marks a booking as GST-included everywhere else (tax invoice, GST amount), so adding it here is the whole rule."""
+    items = list(charge_items or [])
+    if not any(isinstance(i, dict) and i.get("included") and "gst" in str(i.get("label", "")).lower() for i in items):
+        items.append({"label": GST_LABEL, "included": True})
+    return items
+
+
+def gst_on_km_fare(km_fare: float) -> int:
+    return int(round(float(km_fare or 0) * GST_PERCENT / 100.0))
 
 
 MIN_KEY = "local_min_km"

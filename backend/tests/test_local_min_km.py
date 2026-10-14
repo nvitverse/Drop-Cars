@@ -86,8 +86,12 @@ def test_a_short_local_trip_is_billed_for_the_minimum_at_close(pg_session, clien
     new = db.query(NewOrder).filter(NewOrder.order_id == db.query(Order).filter(Order.id == first).first().source_order_id).first()
     assert any(i.get("key") == "local_min_km" and i["min_km"] == 20 for i in new.charge_items)
     assert new.trip_distance == 20
+    assert new.gst_included is True and any("gst" in str(i.get("label", "")).lower() and i.get("included") for i in new.charge_items)   # GST is compulsory on Local
     done = close(first, 8)
     assert done.closing_breakdown["itemised_total"] == 20 * 25        # the customer's total also carries the Rs 30 convenience fee
+    gst_line = [l for l in done.closing_breakdown["lines"] if l["key"] == "gst"]
+    assert gst_line and gst_line[0]["amount"] == 25                   # 5% of the Rs 500 km fare (toll / parking are not in it)
+    assert done.closed_vendor_price == 500 + 25 + 30 and done.gst_amount == 25
     assert done.closing_breakdown["km_billed"] == 20 and done.closing_breakdown["min_km_floor"] == 20
     # longer than the minimum: billed on the real km
     second = post()
@@ -97,3 +101,16 @@ def test_a_short_local_trip_is_billed_for_the_minimum_at_close(pg_session, clien
     new3 = db.query(NewOrder).filter(NewOrder.order_id == db.query(Order).filter(Order.id == third).first().source_order_id).first()
     assert any(i.get("key") == "local_min_km" and i["min_km"] == 10 for i in new3.charge_items)
     assert close(third, 6).closing_breakdown["itemised_total"] == 10 * 25
+
+
+def test_a_customer_quote_for_a_local_drop_includes_the_gst_and_says_toll_is_extra(pg_session, monkeypatch):
+    from app.api.routes.customer_bookings import _calculate_fare_internal
+    monkeypatch.setattr("app.crud.new_orders.get_distance_km_between_locations", lambda a, b: (12.0, "25 min"))
+    fare, rates = _calculate_fare_internal(pg_session, {"0": "Jafferkhanpet", "1": "Chennai Airport"}, "Local", "SEDAN_4_PLUS_1")
+    km_fare = fare["base_km_amount"] + round(fare["total_km"] * rates["extra_cost_per_km"])
+    assert fare["total_km"] == 20 and fare["gst_included"] is True
+    assert fare["gst_amount"] == round(km_fare * 0.05) and fare["customer_amount"] >= km_fare + fare["gst_amount"]
+    assert "toll" in fare["taxes_note"].lower() and "parking" in fare["taxes_note"].lower()
+    # other trip types are untouched
+    one, _ = _calculate_fare_internal(pg_session, {"0": "Chennai", "1": "Madurai"}, "Oneway", "SEDAN_4_PLUS_1")
+    assert "gst_amount" not in one

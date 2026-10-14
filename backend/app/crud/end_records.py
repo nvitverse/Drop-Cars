@@ -781,12 +781,18 @@ async def update_end_trip_record(
                 _rates = get_commission_rates(db, _cat, _tier)
                 _driver_fare = closed_driver_price
                 _fees = get_fee_settings(db)
+                # Local Drop: 5% GST on the km fare actually billed, paid by the customer together with the fare (toll and parking stay extra)
+                _gst_close = 0
+                if order.trip_type == OrderTypeEnum.LOCAL and (getattr(order, "gst_included", False) or getattr(new_order, "gst_included", False)):
+                    from app.crud.local_drop import gst_on_km_fare
+                    _gst_close = gst_on_km_fare((int(cost_per_km or 0) + int(extra_cost_per_km or 0)) * updated_km + _local_extra)
+                    order.gst_amount = _gst_close
                 _split = compute_split(
                     _cls, driver_fare=_driver_fare, base_fare=cost_per_km * updated_km,
                     extras=max(0, closed_vendor_price - closed_driver_price),
                     cc_total_pct=_rates["vendor"] + _rates["admin"], cc_on=not commission_waived, fees=_fees,
                     cc_min=(0 if _cat == "LOCAL" else int(_fees.get("commission_min", 200))),
-                    pct_override=getattr(order, "commission_percent", None),
+                    pct_override=getattr(order, "commission_percent", None), gst_amount=_gst_close,
                 )
                 commision_amount = 0 if commission_waived else (getattr(order, "commission_percent", None) if getattr(order, "commission_percent", None) is not None else (_rates["vendor"] + _rates["admin"]))
                 closed_driver_price = _driver_fare
@@ -877,6 +883,9 @@ async def update_end_trip_record(
                         _bd["extra_km"] = _ai_extra["extra_km"]
                     _pkg = int(closed_vendor_price) - _conv - sum(l["amount"] for l in _extra_lines)
                     _lines = [{"key": "package", "label": "All-inclusive package (agreed amount)", "amount": _pkg}] + _extra_lines
+                _gst_line = int((_split or {}).get("gst_amount", 0) or 0) if _split else 0
+                if _gst_line:
+                    _lines.append({"key": "gst", "label": "GST 5% on the km fare", "amount": _gst_line})
                 if _conv:
                     _lines.append({"key": "convenience", "label": "Convenience fee", "amount": _conv})
                 _bd["lines"] = _lines

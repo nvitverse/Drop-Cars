@@ -1052,7 +1052,15 @@ export default function CreateBookingScreen() {
   useEffect(() => {
     if (includeGst && !gstTouched) setGstAmount(String(autoGst));
   }, [includeGst, gstTouched, autoGst]);
+  // Local Drop: 5% GST on the km fare is compulsory (the server adds it whatever is sent) - the box is ticked and cannot be cleared.
+  useEffect(() => {
+    if (tripType === 'local' && !includeGst) setIncludeGst(true);
+  }, [tripType, includeGst]);
   const toggleGst = () => {
+    if (tripType === 'local') {
+      Alert.alert('GST is compulsory', 'Every Local Drop carries 5% GST on the km fare. Toll and parking are extra, paid on actuals.');
+      return;
+    }
     setGstTouched(false);
     setIncludeGst((v) => !v);
   };
@@ -2299,7 +2307,7 @@ export default function CreateBookingScreen() {
                 <View style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 12, marginBottom: 12, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF' }}>
                   <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>Local Drop pricing</Text>
                   <Text style={{ fontSize: 11.5, color: themeColors.textSecondary, marginBottom: 10 }}>
-                    Pickup and drop in the same city or nearby (e.g. Chennai to Airport or Mahabalipuram). Driver allowance is included in the per-km rate; toll and parking are extra, paid on actuals.
+                    Pickup and drop in the same city or nearby (e.g. Chennai to Airport or Mahabalipuram). Driver allowance is included in the per-km rate; 5% GST on the km fare is added (compulsory); toll and parking are extra, paid on actuals.
                   </Text>
                   <View style={styles.priceGrid}>
                     <View style={styles.priceCell}>

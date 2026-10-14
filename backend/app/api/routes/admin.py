@@ -1806,7 +1806,8 @@ def admin_oneway_confirm(
             from app.crud.local_drop import local_drop_item
             _items = (_items or []) + [local_drop_item(payload.local_km_limit, payload.local_extra_km_rate, payload.cost_per_km + (payload.extra_cost_per_km or 0))]
         if payload.trip_type == _OrderType.LOCAL:
-            from app.crud.local_drop import local_min_item
+            from app.crud.local_drop import local_min_item, with_compulsory_gst
+            _items = with_compulsory_gst(_items)        # GST is compulsory on a Local booking whatever the form said
             from app.utils.fare_rules import get_fare_rules
             # the km the admin typed on the form (if any) is this booking's minimum; otherwise the Fare Rules setting (default 20)
             _items = (_items or []) + [local_min_item(int(payload.km_override) if payload.km_override else get_fare_rules()["local_drop_min_km"])]

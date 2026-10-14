@@ -37,6 +37,10 @@ class FareBreakdownOut(BaseModel):
     driver_amount: int
     customer_amount: int
     remark_trip_min_km: int
+    # Local Drop only: 5% GST is part of the price (compulsory); toll and parking are extra, on actuals
+    gst_amount: int = 0
+    gst_included: bool = False
+    taxes_note: Optional[str] = None
 
 
 class CustomerQuoteResponse(BaseModel):
