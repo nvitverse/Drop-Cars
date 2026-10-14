@@ -216,7 +216,7 @@ def list_threads(request: Request, db: Session = Depends(get_db)):
             # Admin Trash: a finished trip is Trash from its completion day; staff can also trash any booking chat by hand
             "trashed_at": (
                 (_trash._aware(manual_trash[str(o.id)].trashed_at).isoformat() if str(o.id) in manual_trash else None)
-                or ((_trash._aware(done_at).isoformat() if done_at else None) if (role == "ADMIN" and finished) else None)
+                or ((_trash._aware(done_at).isoformat() if done_at else None) if finished else None)
             ),
         })
     out.sort(key=lambda t: (t["last_at"] or t["start_date_time"] or ""), reverse=True)

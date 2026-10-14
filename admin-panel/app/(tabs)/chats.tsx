@@ -245,6 +245,32 @@ const timeLabel = (iso?: string | null) => {
   return `${date}, ${time}`;
 };
 
+// WhatsApp-style day chips ("Today", "Yesterday", "13 Oct 2026") between messages of different days
+const dayChipLabel = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const today = new Date();
+  const y = new Date();
+  y.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+const withDayChips = (msgs: any[]): any[] => {
+  const out: any[] = [];
+  let last = '';
+  for (const m of msgs) {
+    const key = m?.created_at ? new Date(m.created_at).toDateString() : '';
+    if (key && key !== last) {
+      out.push({ __day: dayChipLabel(m.created_at), id: `day-${key}` });
+      last = key;
+    }
+    out.push(m);
+  }
+  return out;
+};
+
 const isMsgRead = (m: any) => Boolean(m?.read || m?.read_at || m?.is_read || m?.seen || m?.status === 'READ');
 
 // Ready replies for the Chats inbox (support threads and booking chats)
@@ -1195,11 +1221,17 @@ export default function AdminChatsScreen() {
 
             <FlatList
               ref={listRef}
-              data={messages}
-              keyExtractor={(item) => String(item.id)}
+              data={withDayChips(messages)}
+              keyExtractor={(item: any) => String(item.id)}
               contentContainerStyle={{ padding: 14, gap: 10 }}
               onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-              renderItem={({ item }) => (
+              renderItem={({ item }: any) => item.__day ? (
+                <View style={{ alignItems: 'center', marginVertical: 4 }}>
+                  <View style={{ backgroundColor: themeColors.surfaceAlt || themeColors.surface, borderColor: themeColors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 3 }}>
+                    <Text style={{ color: themeColors.textMuted, fontSize: 11.5, fontWeight: '600' }}>{item.__day}</Text>
+                  </View>
+                </View>
+              ) : (
                 <View style={[styles.bubbleRow, item.mine ? styles.bubbleRowMine : styles.bubbleRowOther]}>
                   <View
                     style={[

@@ -50,6 +50,7 @@ interface Thread {
   last_text: string | null;
   last_at: string | null;
   unread: number;
+  trashed_at?: string | null;   // the trip is over - its chat leaves the main list the same day
 }
 
 interface ChatMessage {
@@ -87,6 +88,7 @@ export default function ChatsScreen() {
   // Segment Tab: 'ALL' | 'BOT' | 'BOOKINGS'
   const [activeTab, setActiveTab] = useState<'ALL' | 'BOT' | 'BOOKINGS'>('ALL');
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [showFinished, setShowFinished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -366,7 +368,7 @@ export default function ChatsScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACTIVE BOOKING THREADS</Text>
               </View>
 
-              {threads.length === 0 ? (
+              {threads.filter((x) => showFinished || !x.trashed_at).length === 0 ? (
                 <View style={styles.center}>
                   <MessageCircle size={36} color={colors.textSecondary} />
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>No active trip chats</Text>
@@ -375,7 +377,7 @@ export default function ChatsScreen() {
                   </Text>
                 </View>
               ) : (
-                threads.map((item) => (
+                threads.filter((x) => showFinished || !x.trashed_at).map((item) => (
                   <TouchableOpacity
                     key={String(item.order_id)}
                     style={[styles.row, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}
@@ -406,6 +408,13 @@ export default function ChatsScreen() {
                   </TouchableOpacity>
                 ))
               )}
+              {threads.some((x) => !!x.trashed_at) ? (
+                <TouchableOpacity onPress={() => setShowFinished((v) => !v)} style={{ alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 18 }}>
+                  <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>
+                    {showFinished ? 'Hide finished trips' : `Finished trips (${threads.filter((x) => !!x.trashed_at).length}) - tap to show`}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           )}
         </ScrollView>

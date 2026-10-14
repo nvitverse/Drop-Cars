@@ -124,6 +124,7 @@ export interface ConversationItem {
   // it from the "+" new-chat sheet) - only these show on the main list; a
   // trip with no activity yet is still reachable from "+" as a contact.
   has_activity?: boolean;
+  finished?: boolean;   // the trip is over: its chat moves to "Finished trips" the same day
 }
 
 export const timeLabel = (iso?: string | null) => {
@@ -389,6 +390,7 @@ export default function ChatsTabScreen() {
   // the main list immediately, without waiting for the next server refresh
   // to report real message activity.
   const [activatedIds, setActivatedIds] = useState<Set<string>>(new Set());
+  const [showFinished, setShowFinished] = useState(false);
   // While the Help Bot is waiting for the driver to pick which trip a
   // question is about (see isTripTariffIntent) - a plain text reply in this
   // state gets ignored by the normal send flow so it doesn't get treated as
@@ -558,6 +560,7 @@ export default function ChatsTabScreen() {
           unread_count: t.unread || 0,
           is_online: t.assignment_status === 'DRIVING' || t.assignment_status === 'ASSIGNED',
           has_activity: Boolean(t.last_text),
+          finished: t.assignment_status === 'COMPLETED' || !!t.trashed_at,
         });
       }
 
@@ -655,6 +658,7 @@ export default function ChatsTabScreen() {
   const mainListConversations = useMemo(() => {
     let list = conversations.filter(
       (c) => c.type !== 'AI_BOT' && c.type !== 'DISPATCH' && (c.has_activity || activatedIds.has(c.id) || c.unread_count > 0)
+        && (showFinished || !c.finished)      // a trip that is over leaves the main list (see "Finished trips" below)
     );
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -667,7 +671,8 @@ export default function ChatsTabScreen() {
       );
     }
     return [...list].sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime());
-  }, [conversations, searchQuery, activatedIds]);
+  }, [conversations, searchQuery, activatedIds, showFinished]);
+  const finishedCount = useMemo(() => conversations.filter((c) => c.finished && c.has_activity).length, [conversations]);
 
   // Open Chat Thread
   const openChat = async (convo: ConversationItem) => {
@@ -1400,6 +1405,15 @@ export default function ChatsTabScreen() {
             </TouchableOpacity>
           );
         }}
+        ListFooterComponent={
+          finishedCount > 0 ? (
+            <TouchableOpacity onPress={() => setShowFinished((v) => !v)} style={{ alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 18 }}>
+              <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>
+                {showFinished ? 'Hide finished trips' : `Finished trips (${finishedCount}) - tap to show`}
+              </Text>
+            </TouchableOpacity>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={[styles.emptyContainer, {
             backgroundColor: colors.surface,
