@@ -253,7 +253,7 @@ export default function ChatScreen() {
         )}
         <View style={styles.metaRow}>
           <Text style={{ color: m.mine ? 'rgba(255,255,255,0.75)' : colors.textSecondary, fontSize: 10 }}>
-            {new Date(m.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(m.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, {new Date(m.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}
           </Text>
           {m.mine && (m.read ? <CheckCheck size={13} color="#A7F3D0" /> : <Check size={13} color="rgba(255,255,255,0.75)" />)}
         </View>

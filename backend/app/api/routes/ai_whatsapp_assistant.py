@@ -261,6 +261,29 @@ async def chat_assistant_route(
     fails, the rule-based assistant below answers exactly as before. A reply the LLM marks `needs_human` comes back with
     category UNRECOGNIZED, which the apps already turn into "connect to Drop Cars support"."""
     message = str(payload.get("message", "")).strip()
+    help_unsure = None
+    if message and not re.fullmatch(r"[0-9.# ]{1,3}|(option|opt)\s*[0-9]", message.lower()) and str(payload.get("audience", "")).lower() != "vendor":
+        # Driver Help Center first: forgiving of typing mistakes / Tanglish / any of the 5 languages, explains the caller's own wallet entries,
+        # and costs nothing. A confident answer is returned straight away; an unsure one becomes "Did you mean ...?" below.
+        try:
+            from app.utils import ai_llm as _ai, help_center
+            _role, _caller = await asyncio.to_thread(_ai.identify, request, db)
+            if _role in ("OWNER", "DRIVER"):
+                hc = await asyncio.to_thread(help_center.answer, db, _role, _caller, message, payload.get("app_language") or payload.get("language"))
+                if hc and hc.get("confident"):
+                    try:
+                        db.add(AIAutomationLog(
+                            category="HELP_CENTER", action_type="HELP_REPLY", entity_type="partner", entity_id="PARTNER-CHAT-USER", entity_name="Driver / Partner",
+                            summary=f"Help Center: {message[:60]}", confidence_score=0.9,
+                            details_json={"user_query": message, "topic": hc.get("topic"), "language": hc.get("language")},
+                        ))
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+                    return {"success": True, "query": message, "reply": hc["reply"], "category": "HELP_CENTER", "suggestions": hc["suggestions"], "topic": hc.get("topic")}
+                help_unsure = hc
+        except Exception as _e:  # noqa: BLE001
+            logger.warning("help center failed (continuing with the normal assistant): %s", _e)
     if message:
         from app.utils import ai_llm
         # bare menu shortcuts ("1".."9") are the rule bot's - answer those there
@@ -289,7 +312,11 @@ async def chat_assistant_route(
         role = None
     if role == "VENDOR" or str(payload.get("audience", "")).lower() == "vendor":
         payload = {**payload, "audience": "vendor"}
-    return await _rule_based_assistant(payload, db)
+    result = await _rule_based_assistant(payload, db)
+    # nothing matched anywhere: instead of a dead end, offer "Did you mean ...?" choices (and a person)
+    if help_unsure and isinstance(result, dict) and result.get("category") == "UNRECOGNIZED":
+        return {"success": True, "query": message, "reply": help_unsure["reply"], "category": "HELP_CENTER_SUGGEST", "suggestions": help_unsure["suggestions"]}
+    return result
 
 
 _VENDOR_TEXT = {

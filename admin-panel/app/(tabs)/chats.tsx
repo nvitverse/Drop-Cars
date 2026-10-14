@@ -236,9 +236,13 @@ const timeLabel = (iso?: string | null) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   const today = new Date();
-  return d.toDateString() === today.toDateString()
-    ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (d.toDateString() === today.toDateString()) return `Today, ${time}`;
+  const y = new Date();
+  y.setDate(today.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return `Yesterday, ${time}`;
+  const date = d.toLocaleDateString('en-IN', d.getFullYear() === today.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${date}, ${time}`;
 };
 
 const isMsgRead = (m: any) => Boolean(m?.read || m?.read_at || m?.is_read || m?.seen || m?.status === 'READ');

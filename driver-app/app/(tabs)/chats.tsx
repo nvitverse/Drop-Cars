@@ -376,7 +376,7 @@ export function generateAiResponse(query: string): BotResponse {
 export default function ChatsTabScreen() {
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
-  const { t } = useLanguage();
+  const { t, language: appLanguage } = useLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -974,6 +974,7 @@ export default function ChatsTabScreen() {
           const aiRes = await axiosInstance.post('/api/ai/chat-assistant', {
             message: textToSend,
             language: detectLanguage(textToSend),
+            app_language: appLanguage,        // the language chosen in the app: the Help Center answers in it (and in the language the person types)
             // the last few turns, so the assistant remembers what was just discussed
             history: chatMessages.slice(-8).filter((m) => !!m.text).map((m) => ({ role: m.sender === 'ME' ? 'user' : 'assistant', text: String(m.text).slice(0, 500) })),
           });
@@ -1079,6 +1080,7 @@ export default function ChatsTabScreen() {
           const aiRes = await axiosInstance.post('/api/ai/chat-assistant', {
             message: textToSend,
             language: detectLanguage(textToSend),
+            app_language: appLanguage,        // the language chosen in the app: the Help Center answers in it (and in the language the person types)
             // the last few turns, so the assistant remembers what was just discussed
             history: chatMessages.slice(-8).filter((m) => !!m.text).map((m) => ({ role: m.sender === 'ME' ? 'user' : 'assistant', text: String(m.text).slice(0, 500) })),
           });
