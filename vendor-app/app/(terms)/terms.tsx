@@ -15,8 +15,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Shield, FileText } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gradients } from '../../constants/theme';
+import { getCurrentApiBaseUrl } from '../../config/environment';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { TERMS_ACCEPTED_KEY } from '../../utils/vendorSession';
 
-const API_BASE_URL = 'https://drop-cars-api-207918408785.asia-south2.run.app/api';
+const API_BASE_URL = `${getCurrentApiBaseUrl()}/api`;
+
+interface TermsContent { version: number; title: string; body: string }
+
+// "1. WHAT DROP CARS IS" style lines become headings; everything else is body text.
+const isHeading = (line: string) => /^\d{1,2}\.\s+\S/.test(line) && line.length < 70 && !line.trim().endsWith('.');
 
 interface NotificationResponse {
   id: string;
@@ -30,7 +38,26 @@ export default function TermsAndConditionsScreen() {
   const [accepted, setAccepted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
+  const [terms, setTerms] = useState<TermsContent | null>(null);
+  const [termsError, setTermsError] = useState(false);
   const router = useRouter();
+  const { language } = useLanguage();
+
+  // The text is edited by the office (Admin App > App content > Vendor terms), in the vendor's own language when it exists.
+  const loadTerms = React.useCallback(async () => {
+    setTermsError(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/public/app-content/vendor_terms?lang=${language}`);
+      if (!res.ok) throw new Error('bad status');
+      const d = await res.json();
+      setTerms({ version: Number(d.version) || 1, title: String(d.title || 'Terms & Conditions'), body: String(d.body || '') });
+    } catch {
+      setTerms(null);
+      setTermsError(true);
+    }
+  }, [language]);
+
+  useEffect(() => { loadTerms(); }, [loadTerms]);
 
   useEffect(() => {
     registerForPushNotifications();
@@ -138,6 +165,12 @@ export default function TermsAndConditionsScreen() {
       Alert.alert('Required', 'Please accept the terms and conditions to continue.');
       return;
     }
+    if (!terms) {
+      Alert.alert('Terms not loaded', 'We could not load the terms. Please check your internet and tap Try again.');
+      return;
+    }
+    // Remember which version was accepted: terms come back only when the office publishes a new version, not at every sign-in.
+    await AsyncStorage.setItem(TERMS_ACCEPTED_KEY, String(terms.version)).catch(() => {});
 
     await checkNotificationStatus();
   };
@@ -166,44 +199,33 @@ export default function TermsAndConditionsScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Welcome to Our App</Text>
-        
-        <View style={styles.termsSection}>
-          <Text style={styles.termsTitle}>1. Acceptance of Terms</Text>
-          <Text style={styles.termsText}>
-            By accessing and using this application, you accept and agree to be bound by the terms and provision of this agreement.
-          </Text>
-
-          <Text style={styles.termsTitle}>2. User Responsibilities</Text>
-          <Text style={styles.termsText}>
-            You are responsible for maintaining the confidentiality of your account and password and for restricting access to your device.
-          </Text>
-
-          <Text style={styles.termsTitle}>3. Privacy Policy</Text>
-          <Text style={styles.termsText}>
-            Your privacy is important to us. Our Privacy Policy explains how we collect, use, and protect your personal information.
-          </Text>
-
-          <Text style={styles.termsTitle}>4. Service Usage</Text>
-          <Text style={styles.termsText}>
-            You agree not to use the service for any illegal purpose or in any way that might harm, disable, or impair the service.
-          </Text>
-
-          <Text style={styles.termsTitle}>5. Modifications</Text>
-          <Text style={styles.termsText}>
-            We reserve the right to modify these terms at any time. We will notify you of any changes by posting the new terms on the app.
-          </Text>
-
-          <Text style={styles.termsTitle}>6. Termination</Text>
-          <Text style={styles.termsText}>
-            We may terminate or suspend your account immediately, without prior notice, for any reason whatsoever.
-          </Text>
-
-          <Text style={styles.termsTitle}>7. Governing Law</Text>
-          <Text style={styles.termsText}>
-            These terms shall be governed and construed in accordance with the laws of your country, without regard to its conflict of law provisions.
-          </Text>
-        </View>
+        {terms ? (
+          <>
+            <Text style={styles.sectionTitle}>{terms.title}</Text>
+            <View style={styles.termsSection}>
+              {terms.body.split('\n').map((line, i) => {
+                const text = line.trim();
+                if (!text) return null;
+                // first line is the document title, already shown above
+                if (i === 0 && text === terms.title.toUpperCase()) return null;
+                return isHeading(text)
+                  ? <Text key={i} style={styles.termsTitle}>{text}</Text>
+                  : <Text key={i} style={styles.termsText}>{text}</Text>;
+              })}
+            </View>
+          </>
+        ) : termsError ? (
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Text style={styles.termsText}>We could not load the terms. Please check your internet connection.</Text>
+            <TouchableOpacity style={[styles.continueButton, { marginTop: 16, paddingHorizontal: 28 }]} onPress={loadTerms}>
+              <Text style={styles.continueButtonText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+          </View>
+        )}
 
         <View style={styles.acceptanceContainer}>
           <TouchableOpacity
@@ -224,7 +246,7 @@ export default function TermsAndConditionsScreen() {
         <TouchableOpacity
           style={[styles.continueButton, (!accepted || loading) && styles.continueButtonDisabled]}
           onPress={handleContinue}
-          disabled={!accepted || loading}
+          disabled={!accepted || loading || !terms}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />

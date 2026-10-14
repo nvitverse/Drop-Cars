@@ -181,9 +181,11 @@ export default function VendorDashboardScreen() {
 
   const fetchWalletBalance = async () => {
     try {
-      const response = await api.get('/wallet/balance');
-      if (response.data && typeof response.data.current_balance === 'number') {
-        setWalletBalance(response.data.current_balance);
+      // /wallet/balance is the DRIVER wallet (it answered 'No wallet found' for every vendor, so the pill never showed a number);
+      // the vendor's own balance is /transfer/balance.
+      const response = await api.get('/transfer/balance');
+      if (response.data && typeof response.data.wallet_balance === 'number') {
+        setWalletBalance(response.data.wallet_balance);
       }
       setWalletFetchFailed(false);
     } catch (err) {

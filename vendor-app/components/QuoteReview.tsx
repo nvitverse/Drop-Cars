@@ -6,12 +6,12 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Modal,
   Dimensions,
   TextInput,
   FlatList,
   // Add this import,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 

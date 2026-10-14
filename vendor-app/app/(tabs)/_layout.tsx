@@ -2,27 +2,34 @@ import React, { useEffect } from 'react';
 import { syncNotificationSounds } from '../../services/soundChannelSync';
 import { View, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LayoutDashboard, Package, Plus, Menu as MenuIcon } from 'lucide-react-native';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   // Uploaded notification sounds (play even when the app is closed).
   useEffect(() => {
     syncNotificationSounds().catch(() => {});
   }, []);
 
+  // The bar's height follows the phone's own bottom inset (gesture bar / 3-button bar), so on phones where the app draws edge to edge the
+  // labels are never hidden behind the system navigation buttons.
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 26 : 10);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: '#1D4ED8',
         tabBarInactiveTintColor: '#64748B',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#E2E8F0',
-          height: Platform.OS === 'ios' ? 88 : 76,
+          height: 62 + bottomInset,
           paddingTop: 6,
-          paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+          paddingBottom: bottomInset,
           shadowColor: '#0F172A',
           shadowOffset: { width: 0, height: -3 },
           shadowOpacity: 0.08,

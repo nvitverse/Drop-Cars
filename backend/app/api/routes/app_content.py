@@ -23,7 +23,7 @@ from app.utils.app_content_defaults import DEFAULTS, LANGS
 
 router = APIRouter(tags=["AppContent"])
 
-KEYS = ("driver_onboarding", "driver_terms", "driver_fee_info", "bot_knowledge")
+KEYS = ("driver_onboarding", "driver_terms", "driver_fee_info", "bot_knowledge", "vendor_terms")
 ICONS = {"check-circle", "file-text", "map-pin", "clock", "indian-rupee", "shield", "shield-check", "users", "alert-triangle",
          "car", "phone", "star", "lock", "route", "heart", "navigation", "wallet", "bell", "camera", "id-card"}
 COLORS = {"emerald", "blue", "purple", "red", "indigo", "amber", "teal", "rose"}
@@ -156,6 +156,18 @@ def _terms_html(title: str, version: int, body: str, lang: str) -> str:
     )
 
 
+@router.get("/public/support-contact")
+def public_support_contact(response: Response, db: Session = Depends(get_db)):
+    """The office phone / e-mail every app shows when someone needs help (platform settings support_phone / support_email - Admin editable).
+    One place, so no app has to carry a made-up number."""
+    ph = _placeholders(db)
+    phone = ph["support_phone"]
+    digits = re.sub(r"[^0-9]", "", phone)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return {"phone": phone, "phone_dial": ("+" + digits) if digits else "", "email": ph["support_email"],
+            "whatsapp": digits if len(digits) >= 10 else ""}
+
+
 @router.get("/public/terms/driver", response_class=HTMLResponse)
 def public_terms_page(lang: str = Query("en"), db: Session = Depends(get_db)):
     """The full Terms & Conditions as a plain web page (linked from the Driver App). Always shows the admin-edited text."""
@@ -231,7 +243,7 @@ def admin_put(key: str, body: ContentIn, db: Session = Depends(get_db), current_
                 "description": _clean_lang_map(s.get("description"), MAX_FIELD),
             })
         new = {"version": version, "steps": clean_steps}
-    elif key in ("driver_terms", "driver_fee_info"):
+    elif key in ("driver_terms", "driver_fee_info", "vendor_terms"):
         body_map = _clean_lang_map(c.get("body"), MAX_TERMS)
         if not body_map.get("en"):
             raise HTTPException(status_code=400, detail="The English text is required.")

@@ -25,9 +25,8 @@ const { width, height } = Dimensions.get('window');
 export default function SignUp() {
   const { role } = useLocalSearchParams<{ role?: string }>();
   const [currentStep, setCurrentStep] = useState(1);
-  const [accountType, setAccountType] = useState<'VENDOR' | 'B2B'>(
-    (role || '').toUpperCase() === 'B2B' ? 'B2B' : 'VENDOR'
-  );
+  // B2B partners are not opened yet (nothing on the server stores a company name); everyone registers as a vendor.
+  const [accountType, setAccountType] = useState<'VENDOR' | 'B2B'>('VENDOR');
   const [formData, setFormData] = useState({
     full_name: '',
     company_name: '',
@@ -61,7 +60,7 @@ export default function SignUp() {
         setAadharImage(image);
       }
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? "Target" : 'Failed to pick image');
+      Alert.alert('Could not open photos', error instanceof Error && error.message ? error.message : 'Please allow photo access and try again.');
     }
   };
 
@@ -200,8 +199,8 @@ export default function SignUp() {
         </Text>
       </View>
 
-      {/* Account Type Selector */}
-      <View style={{ flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 20 }}>
+      {/* Account Type Selector - hidden until B2B partners are opened (their company name was collected here but never saved) */}
+      <View style={{ display: 'none', flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 20 }}>
         <TouchableOpacity
           style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 8, backgroundColor: accountType === 'VENDOR' ? '#FFFFFF' : 'transparent' }}
           onPress={() => setAccountType('VENDOR')}

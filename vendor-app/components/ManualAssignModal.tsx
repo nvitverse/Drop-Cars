@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   TextInput,
   StyleSheet,
   ActivityIndicator,
   Alert,
   Clipboard,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { UserCheck, X, Clipboard as ClipboardIcon, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react-native';
 import api from '../app/api/api';

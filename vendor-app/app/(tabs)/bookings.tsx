@@ -12,10 +12,10 @@ import {
   Dimensions,
   Platform,
   TextInput,
-  Modal,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Car, Clock, MapPin, DollarSign, TrendingUp, Users, Search, ListFilter as Filter, X, CircleCheck as CheckCircle, Circle as XCircle, User, Calendar, ArrowLeft, Zap } from 'lucide-react-native';

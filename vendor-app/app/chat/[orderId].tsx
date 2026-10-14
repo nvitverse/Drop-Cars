@@ -14,12 +14,11 @@ import {
   Platform,
   Alert,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
 } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
-import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
+import Modal, { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';

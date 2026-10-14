@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { Alert } from 'react-native';
 import { getCurrentApiBaseUrl } from '../../config/environment';
 
@@ -18,8 +18,10 @@ const api = axios.create({
   },
 });
 
+// Called from an axios interceptor (not a component), so it uses the imperative router - a hook here threw "Invalid hook call" and the user was
+// left on a screen full of failed requests instead of the sign-in page.
+let signingOut = false;
 const removeAccessToken = async () => {
-  const router = useRouter();
   try {
     await AsyncStorage.removeItem('accessToken');
     console.log('Access token removed successfully');
@@ -34,7 +36,6 @@ api.interceptors.request.use(
   async (config) => {
     try {
       const token = await AsyncStorage.getItem('accessToken');
-      console.log("Token from AsyncStorage:", token);
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
       }
@@ -89,12 +90,17 @@ api.interceptors.response.use(
       // console.warn('Unauthorized access - maybe redirect to login');
       // console.log(error.response?.detail);
       const errorDetail = error.response.data?.detail || 'Unauthorized access';
-      if(errorDetail == "Force Logout Action Raised"){
-        Alert.alert('Force Logout', 'Admin Raised Force Logout, Please Login with your credentials');
-      }else{
-      Alert.alert('Session Expired', 'Please Login with your credentials');
+      if (!signingOut) {
+        if(errorDetail == "Force Logout Action Raised"){
+          Alert.alert('Force Logout', 'Admin Raised Force Logout, Please Login with your credentials');
+        }else{
+          Alert.alert('Session Expired', 'Please Login with your credentials');
+        }
       }
-      removeAccessToken();
+      if (!signingOut) {
+        signingOut = true;
+        removeAccessToken().finally(() => { setTimeout(() => { signingOut = false; }, 3000); });
+      }
     }
     return Promise.reject(attachDetailedErrorMessage(error));
   }

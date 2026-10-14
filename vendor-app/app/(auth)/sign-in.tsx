@@ -18,6 +18,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Eye, EyeOff, Phone, Lock, ArrowRight, Shield, Building, Car, Briefcase } from 'lucide-react-native';
 import { useVendorAuth } from '../../hooks/useVendorAuth';
 import { gradients } from '../../constants/theme';
+import { normaliseStatus, routeForActiveVendor } from '@/utils/vendorSession';
+
+// B2B (hotel / agency) partners are not opened yet: the tab only switched colours and the sign-up dropped the company name. Flip to true when that exists.
+const B2B_ENABLED = false;
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,20 +52,17 @@ export default function SignIn() {
       
       if (result) {
         await AsyncStorage.setItem('accountRoleMode', accountRoleMode);
-        const accountStatus = result.vendor.account_status;
-        console.log('Account Status:', accountStatus, 'Role:', accountRoleMode);
-        if (accountStatus === 'Active') {
-          router.replace('/(terms)/terms');
-        } else if (accountStatus === 'Pending') {
-          router.push('/(auth)/account-status?status=Pending&message=Your account is currently inactive and requires verification. It will be activated within 24 hours after verification.');
-        } else if (accountStatus === 'Blocked') {
-          router.push('/(auth)/account-status?status=Pending&message=Your account is currently inactive and requires verification. It will be activated within 24 hours after verification.');
+        const accountStatus = normaliseStatus(result.vendor.account_status);
+        if (accountStatus === 'ACTIVE') {
+          router.replace((await routeForActiveVendor()) as any);
+        } else if (accountStatus === 'PENDING') {
+          router.replace('/(auth)/account-status?status=Pending');
         } else {
-          router.push('/(auth)/account-status?status=INACTIVE&message=Your account status is BLOCKED. Please contact support for assistance.');
+          router.replace('/(auth)/account-status?status=INACTIVE');
         }
       }
     } catch (error) {
-      Alert.alert('Sign In Failed', 'Invalid credentials. Please check your phone number and password and try again.');
+      // signIn() already told the person what went wrong (wrong password, not registered...); a second pop-up here just repeated it.
     }
   };
 
@@ -99,7 +100,7 @@ export default function SignIn() {
             </Text>
 
             {/* Account Role Selector Tabs */}
-            <View style={styles.roleTabContainer}>
+            <View style={[styles.roleTabContainer, !B2B_ENABLED && { display: 'none' }]}>
               <TouchableOpacity
                 style={[styles.roleTab, accountRoleMode === 'VENDOR' && styles.roleTabActive]}
                 onPress={() => setAccountRoleMode('VENDOR')}

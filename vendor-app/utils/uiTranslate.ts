@@ -7,7 +7,7 @@ import hi from '@/locales/hi.json';
 type Dict = Record<string, string>;
 export type UiLang = 'en' | 'ta' | 'te' | 'kn' | 'hi';
 
-const bundled: Record<string, Dict> = { ta: ta as Dict, te: te as Dict, kn: kn as Dict, hi: hi as Dict };
+const bundled: Record<string, Dict> = { ta: ta as unknown as Dict, te: te as unknown as Dict, kn: kn as unknown as Dict, hi: hi as unknown as Dict };
 let overrides: Record<string, Dict> = {};
 
 let current: UiLang = 'en';

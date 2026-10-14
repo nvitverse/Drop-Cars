@@ -658,6 +658,51 @@ def update_vendor_payment_details(
     }
 
 
+@router.get("/vendor/payment-details")
+def get_vendor_payment_details(
+    db: Session = Depends(get_db),
+    current_vendor=Depends(get_current_vendor),
+):
+    """What the vendor saved for payouts (the app pre-fills the form and shows where the next payout will go)."""
+    from app.models.vendor_details import VendorDetails
+    details = db.query(VendorDetails).filter(VendorDetails.vendor_id == current_vendor.id).first()
+    if not details:
+        raise HTTPException(status_code=404, detail="Vendor details not found")
+    return {
+        "bank_account_number": details.bank_account_number,
+        "bank_ifsc": details.bank_ifsc,
+        "bank_account_holder_name": details.bank_account_holder_name,
+        "upi_id": details.upi_id,
+    }
+
+
+@router.get("/vendor/payout-info")
+def get_vendor_payout_info(
+    db: Session = Depends(get_db),
+    current_vendor=Depends(get_current_vendor),
+):
+    """One call for the Payouts screen: balance, what must stay in the wallet (platform setting), what can be redeemed, and whether a
+    request is already waiting (only one at a time)."""
+    from app.crud.vendor_wallet import get_vendor_wallet_balance
+    from app.crud.payout_requests import min_retained_balance
+    from app.models.payout_request import PayoutRequest, PayoutRequestStatusEnum
+    from app.models.vendor_details import VendorDetails
+    balance = int(get_vendor_wallet_balance(db, str(current_vendor.id)) or 0)
+    keep = int(min_retained_balance(db))
+    pending = db.query(PayoutRequest).filter(
+        PayoutRequest.vendor_id == str(current_vendor.id), PayoutRequest.status == PayoutRequestStatusEnum.PENDING
+    ).first()
+    details = db.query(VendorDetails).filter(VendorDetails.vendor_id == current_vendor.id).first()
+    has_destination = bool(details and (details.upi_id or (details.bank_account_number and details.bank_ifsc)))
+    return {
+        "balance": balance,
+        "keep_in_wallet": keep,
+        "max_redeemable": max(balance - keep, 0),
+        "pending_request": ({"id": pending.id, "amount": pending.amount, "requested_at": pending.requested_at.isoformat() if pending.requested_at else None} if pending else None),
+        "payment_details_saved": has_destination,
+    }
+
+
 # --- Payout requests (Wallet > Request Payout) - vendor side, mirrors the
 # fleet-owner flow in app/api/routes/wallet.py ---
 from app.schemas.payout_request import CreatePayoutRequest, PayoutRequestOut

@@ -5,6 +5,7 @@ import { View, StyleSheet, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Car } from 'lucide-react-native';
 import LanguageSelectScreen, { HAS_SEEN_LANGUAGE_SELECT_KEY } from '@/components/LanguageSelectScreen';
+import { fetchVendorStatus, routeForActiveVendor } from '@/utils/vendorSession';
 
 export default function Index() {
   // Shown once, on the very first launch, before the normal auth-check
@@ -37,17 +38,22 @@ export default function Index() {
   const checkAuthStatus = async () => {
     try {
       const userSession = await AsyncStorage.getItem('accessToken');
-      if (userSession) {
-        const session = true;
-        console.log("Session:", session);
-        if (session) {
-          console.log("Check Login")
-          router.replace('/(tabs)');
-        } else {
-          router.replace('/(auth)/sign-in');
-        }
-      } else {
+      if (!userSession) {
         router.replace('/(auth)/sign-in');
+        return;
+      }
+      // A stored token is not enough: a vendor who is still waiting for approval (or was switched off) must land on the status page,
+      // not on a home screen whose every request fails.
+      const me = await fetchVendorStatus();
+      if (!me) {
+        // offline / server busy: let a previously approved vendor in; the screens show their own retry
+        router.replace('/(tabs)');
+      } else if (me.status === 'ACTIVE') {
+        router.replace((await routeForActiveVendor()) as any);
+      } else if (me.status === 'PENDING') {
+        router.replace('/(auth)/account-status?status=Pending');
+      } else {
+        router.replace('/(auth)/account-status?status=INACTIVE');
       }
     } catch (error) {
       router.replace('/(auth)/sign-in');

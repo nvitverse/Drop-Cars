@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Modal,
   Animated,
   StatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircleCheck as CheckCircle, Copy, ArrowLeft, Timer, UserCheck } from 'lucide-react-native';
@@ -273,7 +273,8 @@ const OrderSuccess: React.FC<OrderSuccessProps> = ({ visible, onClose, orderData
             <View style={styles.actionContainer}>
               {/* Send this booking straight to one driver by ID (backend: POST /orders/{id}/manual-assign). The modal and
                   its styles existed but nothing ever opened it, so the feature was unreachable. */}
-              {!!orderData.order_id && (
+              {/* Hidden for vendors: POST /orders/{id}/manual-assign is an ADMIN-only endpoint; a vendor tapping this got a 401 and was signed out. */}
+              {false && !!orderData.order_id && (
                 <TouchableOpacity
                   style={styles.manualAssignButton}
                   onPress={() => setShowManualAssignModal(true)}

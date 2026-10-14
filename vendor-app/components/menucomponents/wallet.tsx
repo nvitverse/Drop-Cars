@@ -43,9 +43,14 @@ export default function WalletHistoryScreen() {
       setTransactions(data);
       setFilteredTransactions(data);
 
-      // Set current balance from the most recent transaction
-      if (data.length > 0) {
-        setCurrentBalance(data[0].balance_after);
+      // The balance comes from the wallet itself (the same number as the Dashboard); it used to be guessed from the newest
+      // transaction, which showed 0 for a wallet that had been credited outside the ledger.
+      try {
+        const bal = await api.get('/transfer/balance');
+        if (typeof bal.data?.wallet_balance === 'number') setCurrentBalance(bal.data.wallet_balance);
+        else if (data.length > 0) setCurrentBalance(data[0].balance_after);
+      } catch {
+        if (data.length > 0) setCurrentBalance(data[0].balance_after);
       }
     } catch (error) {
       console.error('Error fetching wallet history:', error);
@@ -158,17 +163,24 @@ export default function WalletHistoryScreen() {
           >
             <ArrowLeft size={24} color="#374151" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Wallet History</Text>
+          <Text style={styles.headerTitle}>Wallet & Statement</Text>
           <View style={styles.headerSpacer} />
         </View>
-        
+
         <View style={styles.titleContainer}>
-          <Text style={styles.subtitle}>All Transactions</Text>
+          <Text style={styles.subtitle}>Balance</Text>
           <View style={styles.balanceContainer}>
             <IndianRupee size={16} color="#10b981" />
-            <Text style={styles.currentBalance}>{currentBalance}</Text>
+            <Text style={styles.currentBalance}>{currentBalance.toLocaleString('en-IN')}</Text>
           </View>
         </View>
+        <TouchableOpacity
+          style={{ marginBottom: 12, minHeight: 44, borderRadius: 12, backgroundColor: '#1D4ED8', alignItems: 'center', justifyContent: 'center' }}
+          onPress={() => router.push('/(menu)/payouts' as any)}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Withdraw money / Bank details</Text>
+        </TouchableOpacity>
         
         {/* Search Bar */}
         <View style={styles.searchContainer}>

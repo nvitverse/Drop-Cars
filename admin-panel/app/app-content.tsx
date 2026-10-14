@@ -8,7 +8,7 @@ import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Bot, 
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
 
-type Tab = 'cards' | 'terms' | 'fees' | 'bot' | 'ai';
+type Tab = 'cards' | 'terms' | 'vterms' | 'fees' | 'bot' | 'ai';
 type LangMap = Record<string, string>;
 type Card = { icon: string; color: string; title: LangMap; subtitle: LangMap; description: LangMap };
 
@@ -31,6 +31,8 @@ export default function AppContentScreen() {
   const [cards, setCards] = useState<Card[]>([]);
   const [termsTitle, setTermsTitle] = useState<LangMap>({});
   const [termsBody, setTermsBody] = useState<LangMap>({});
+  const [vTermsTitle, setVTermsTitle] = useState<LangMap>({});
+  const [vTermsBody, setVTermsBody] = useState<LangMap>({});
   const [feeTitle, setFeeTitle] = useState<LangMap>({});
   const [feeBody, setFeeBody] = useState<LangMap>({});
   const [botText, setBotText] = useState('');
@@ -42,10 +44,12 @@ export default function AppContentScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [o, t, b, s, f]: any[] = await Promise.all([
+      const [o, t, b, s, f, v]: any[] = await Promise.all([
         apiService.getAppContent('driver_onboarding'), apiService.getAppContent('driver_terms'), apiService.getAppContent('bot_knowledge'),
-        apiService.getSystemSettings(), apiService.getAppContent('driver_fee_info'),
+        apiService.getSystemSettings(), apiService.getAppContent('driver_fee_info'), apiService.getAppContent('vendor_terms'),
       ]);
+      setVTermsTitle(v.content?.title || {});
+      setVTermsBody(v.content?.body || {});
       setFeeTitle(f.content?.title || {});
       setFeeBody(f.content?.body || {});
       setMeta({ icons: o.icons || [], colors: o.colors || [], placeholders: o.placeholders || [] });
@@ -54,7 +58,7 @@ export default function AppContentScreen() {
       setTermsTitle(t.content?.title || {});
       setTermsBody(t.content?.body || {});
       setBotText(b.content?.text || '');
-      setIsDefault({ driver_onboarding: o.is_default, driver_terms: t.is_default, driver_fee_info: f.is_default, bot_knowledge: b.is_default });
+      setIsDefault({ driver_onboarding: o.is_default, driver_terms: t.is_default, driver_fee_info: f.is_default, bot_knowledge: b.is_default, vendor_terms: v.is_default });
       setAi({
         ai_bot_enabled: Number(s?.ai_bot_enabled ?? 1) === 1,
         ai_bot_daily_limit: String(s?.ai_bot_daily_limit ?? 30),
@@ -70,12 +74,12 @@ export default function AppContentScreen() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const key = tab === 'cards' ? 'driver_onboarding' : tab === 'terms' ? 'driver_terms' : tab === 'fees' ? 'driver_fee_info' : 'bot_knowledge';
+  const key = tab === 'cards' ? 'driver_onboarding' : tab === 'terms' ? 'driver_terms' : tab === 'vterms' ? 'vendor_terms' : tab === 'fees' ? 'driver_fee_info' : 'bot_knowledge';
 
   const save = async () => {
     setSaving(true);
     try {
-      const content = tab === 'cards' ? { steps: cards } : tab === 'terms' ? { title: termsTitle, body: termsBody } : tab === 'fees' ? { title: feeTitle, body: feeBody } : { text: botText };
+      const content = tab === 'cards' ? { steps: cards } : tab === 'terms' ? { title: termsTitle, body: termsBody } : tab === 'vterms' ? { title: vTermsTitle, body: vTermsBody } : tab === 'fees' ? { title: feeTitle, body: feeBody } : { text: botText };
       const res: any = await apiService.saveAppContent(key, content, bump && tab !== 'bot');
       Alert.alert('Saved', bump && tab !== 'bot' ? `Saved as version ${res.version}. Drivers will see it again on their next login.` : 'Saved. Drivers get the new text the next time they open the app.');
       setBump(false);
@@ -123,7 +127,7 @@ export default function AppContentScreen() {
 
   const Tabs = () => (
     <View style={[styles.tabs, { borderColor: c.border }]}>
-      {([['cards', 'Cards', LayoutList], ['terms', 'Terms', FileText], ['fees', 'Fees', FileText], ['bot', 'Bot', Bot], ['ai', 'AI', Sparkles]] as const).map(([k, label, Icon]) => (
+      {([['cards', 'Cards', LayoutList], ['terms', 'Terms', FileText], ['vterms', 'Vendor', FileText], ['fees', 'Fees', FileText], ['bot', 'Bot', Bot], ['ai', 'AI', Sparkles]] as const).map(([k, label, Icon]) => (
         <TouchableOpacity key={k} onPress={() => setTab(k)} style={[styles.tab, tab === k && { backgroundColor: '#6366F1' }]}>
           <Icon size={15} color={tab === k ? '#FFF' : c.textSecondary} />
           <Text style={[styles.tabText, { color: tab === k ? '#FFF' : c.textSecondary }]}>{label}</Text>
@@ -211,6 +215,20 @@ export default function AppContentScreen() {
                 <Text style={[styles.label, { color: c.textSecondary }]}>Terms text ({lang.toUpperCase()})</Text>
                 <TextInput value={termsBody[lang] || ''} onChangeText={(v) => setTermsBody((p) => ({ ...p, [lang]: v }))} style={[inputStyle, { minHeight: 380, textAlignVertical: 'top' }]} multiline placeholderTextColor={c.textSecondary} />
                 {!termsBody[lang] && lang !== 'en' && <Text style={styles.warn}>No {lang.toUpperCase()} text yet - drivers in this language will read the English terms.</Text>}
+              </>
+            )}
+
+            {tab === 'vterms' && (
+              <>
+                <Text style={[styles.help, { color: c.textSecondary }]}>
+                  The Terms a VENDOR reads and accepts in the Vendor App after the first sign-in. Start each section with its number and title on its own line (for example "5. PAYOUTS") and leave a blank line between sections. {'{commission_min}'}, {'{convenience_fee}'}, {'{min_driver_hold}'}, {'{support_phone}'}, {'{support_email}'} are filled from your live settings. Tick "Ask everyone to accept again" when you change the meaning of a rule. Have a lawyer read any legal change before publishing.
+                </Text>
+                <LangPicker />
+                <Text style={[styles.label, { color: c.textSecondary }]}>Window title ({lang.toUpperCase()})</Text>
+                <TextInput value={vTermsTitle[lang] || ''} onChangeText={(v) => setVTermsTitle((p) => ({ ...p, [lang]: v }))} style={inputStyle} placeholderTextColor={c.textSecondary} />
+                <Text style={[styles.label, { color: c.textSecondary }]}>Terms text ({lang.toUpperCase()})</Text>
+                <TextInput value={vTermsBody[lang] || ''} onChangeText={(v) => setVTermsBody((p) => ({ ...p, [lang]: v }))} style={[inputStyle, { minHeight: 380, textAlignVertical: 'top' }]} multiline placeholderTextColor={c.textSecondary} />
+                {!vTermsBody[lang] && lang !== 'en' && <Text style={styles.warn}>No {lang.toUpperCase()} text yet - vendors in this language will read the English terms.</Text>}
               </>
             )}
 

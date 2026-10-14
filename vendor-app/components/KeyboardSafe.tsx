@@ -106,9 +106,15 @@ export function KeyboardSafeView({ children, style }: { children: React.ReactNod
 /** Drop-in replacement for react-native's Modal: same props, but its content lifts above the keyboard on Android. */
 export default function KeyboardSafeModal(props: ModalProps) {
   const { children, ...rest } = props;
+  const nav = useNavInsetWhenClosed();
+  // A see-through modal (bottom sheet / dialog over a dim backdrop) draws under the phone's navigation bar, so its last row of buttons ended up
+  // behind the bar. Lift its content by the bar's height and dim the strip below it the same way. A modal that handles the bar itself
+  // (statusBarTranslucent + useNavInsetWhenClosed) and full-screen modals (their own SafeAreaView) are left alone.
+  const lift = rest.transparent && !rest.statusBarTranslucent && nav > 0 ? nav : 0;
   return (
     <RNModal {...rest}>
-      <KeyboardSafeView>{children}</KeyboardSafeView>
+      <KeyboardSafeView style={lift ? { paddingBottom: lift } : undefined}>{children}</KeyboardSafeView>
+      {lift > 0 && <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: lift, backgroundColor: 'rgba(0,0,0,0.5)' }} />}
     </RNModal>
   );
 }

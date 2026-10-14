@@ -7,13 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Modal,
   Animated,
   Dimensions,
   Platform,
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import publicApi from '../api/api';
 import DateTimePicker from '@react-native-community/datetimepicker';

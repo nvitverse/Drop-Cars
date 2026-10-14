@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { AlertTriangle, Clock, HelpCircle, UserCheck } from 'lucide-react-native';
 

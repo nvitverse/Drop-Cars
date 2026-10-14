@@ -1,271 +1,125 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  ScrollView,
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, AppState } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { Linking, Alert } from 'react-native';
-import { Clock, CircleCheck as CheckCircle, Phone, Mail, ArrowLeft, Shield, FileText, RefreshCw, MessageCircle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Clock, ShieldOff, Phone, Mail, MessageCircle, RefreshCw, LogOut, FileCheck, BellRing, Rocket } from 'lucide-react-native';
+import { useSupportContact } from '@/utils/supportContact';
+import { fetchVendorStatus, routeForActiveVendor } from '@/utils/vendorSession';
 
-const { width, height } = Dimensions.get('window');
+const POLL_MS = 30000;
 
-interface AccountStatusProps {
-  status: 'INACTIVE' | 'PENDING';
-  message?: string;
-}
-
+// Shown while a new vendor account waits for approval (PENDING) or after the office switched it off (INACTIVE).
+// It checks the real status by itself every 30 s and the moment the account is approved it opens the app - no calling the office to ask.
 export default function AccountStatusScreen() {
-  const { status = 'INACTIVE', message } = useLocalSearchParams();
-  const handleGoBack = () => {
-    router.back();
-  };
+  const { status = 'Pending' } = useLocalSearchParams<{ status?: string }>();
+  const isPending = String(status).toUpperCase() === 'PENDING';
+  const { contact, call, whatsapp, mail } = useSupportContact();
+  const [checking, setChecking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [name, setName] = useState<string>('');
+  const leaving = useRef(false);
 
-const handleContactSupport = (value : string) => {
-  // Check if it's an email
-  const isEmail = value.includes("@");
-
-  if (isEmail) {
-    // Open email app
-    Linking.openURL(`mailto:${value}`);
-  } else {
-    // Open phone dialer
-    Linking.openURL(`tel:${value}`);
-  }
-};
-
-
-  const handleRefresh = () => {
-    // Implement refresh functionality
-    console.log('Refresh status');
-  };
-
-  const isInactive = status === 'INACTIVE';
-  const isPending = status === 'PENDING';
-  console.log('Account status:', isInactive);
-  console.log('Account status:', isPending);
-
-
-  // Dynamic colors based on status
-  const getStatusColors = () => {
-    if (isInactive) {
-      return {
-        primary: ['#3b2a23ff', '#e91c1ce0'] as const, // Deep red gradient for danger
-        secondary: '#82645eff',
-        accent: 'rgba(220, 38, 38, 0.1)'
-      };
-    } else {
-      return {
-        primary: ['#2d3f7fff', '#0c171eff'] as const, // Amber gradient for pending/waiting
-        secondary: '#78b636ff',
-        accent: 'rgba(85, 72, 50, 0.1)'
-      };
+  const check = useCallback(async (manual = false) => {
+    if (leaving.current) return;
+    if (manual) { setChecking(true); setNote(null); }
+    const me = await fetchVendorStatus();
+    if (manual) setChecking(false);
+    if (!me) {
+      if (manual) setNote('Could not reach the server. Please check your internet and try again.');
+      return;
     }
+    if (me.name) setName(me.name);
+    if (me.status === 'ACTIVE') {
+      leaving.current = true;
+      router.replace((await routeForActiveVendor()) as any);
+    } else if (manual) {
+      setNote(me.status === 'PENDING' ? 'Still being checked. We will let you in as soon as it is approved.' : 'This account is switched off. Please contact support.');
+    }
+  }, []);
+
+  useEffect(() => {
+    check(false);
+    const id = setInterval(() => check(false), POLL_MS);
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') check(false); });
+    return () => { clearInterval(id); sub.remove(); };
+  }, [check]);
+
+  const signOut = async () => {
+    await AsyncStorage.multiRemove(['accessToken', 'vendorData']).catch(() => {});
+    router.replace('/(auth)/sign-in');
   };
 
-  const colors = getStatusColors();
+  const steps = isPending
+    ? [
+        { icon: FileCheck, title: 'We check your details', text: 'Our team verifies your Aadhaar and mobile number.' },
+        { icon: BellRing, title: 'You get a notification', text: 'It is usually done within 24 hours. This page also checks by itself.' },
+        { icon: Rocket, title: 'Start posting bookings', text: 'As soon as you are approved the app opens - nothing more to do.' },
+      ]
+    : [
+        { icon: Phone, title: 'Talk to us', text: 'Call or WhatsApp support and tell us your registered mobile number.' },
+        { icon: FileCheck, title: 'We look into it', text: 'We will tell you what is needed and switch the account back on.' },
+      ];
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={colors.primary}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.background}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <ArrowLeft size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Account Status</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-            {/* <RefreshCw size={20} color="#FFFFFF" /> */}
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Status Icon Container */}
-          <View style={styles.iconContainer}>
-            <View style={styles.iconWrapper}>
-              {isPending ? (
-                <Clock size={64} color="#FFFFFF" />
-              ) : (
-                <Shield size={64} color="#FFFFFF" />
-              )}
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.statusBadgeText}>
-                {!isInactive ? 'PENDING' : 'BLOCKED'}
-              </Text>
-            </View>
+      <LinearGradient colors={isPending ? ['#1E3A8A', '#312E81'] : ['#7F1D1D', '#431407']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.background}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.iconWrap}>{isPending ? <Clock size={54} color="#FFFFFF" /> : <ShieldOff size={54} color="#FFFFFF" />}</View>
+          <View style={[styles.badge, { backgroundColor: isPending ? '#F59E0B' : '#EF4444' }]}>
+            <Text style={styles.badgeText}>{isPending ? 'WAITING FOR APPROVAL' : 'ACCOUNT SWITCHED OFF'}</Text>
           </View>
-
-          {/* Status Title */}
-          <Text style={styles.statusTitle}>
-            {!isInactive ? 'Verification Pending' : 'Account BLOCKED'}
+          <Text style={styles.title}>{isPending ? `Welcome${name ? ', ' + name.split(' ')[0] : ''}!` : 'Your account is not active'}</Text>
+          <Text style={styles.message}>
+            {isPending
+              ? 'Your account is created. We are checking your details; you can start posting bookings as soon as it is approved.'
+              : 'The office has switched this account off, so you cannot post bookings right now. Please contact support to know why and how to turn it back on.'}
           </Text>
 
-          {/* Status Message */}
-          <Text style={styles.statusMessage}>
-            {message || (
-              isPending 
-                ? 'We\'re reviewing your account details. Activation typically completes within 24 hours.'
-                : 'Your account is currently inactive and requires immediate attention. Please contact support for reactivation.'
-            )}
-          </Text>
-
-          {/* Progress Indicator for Pending */}
-          {isPending && (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { backgroundColor: colors.secondary }]} />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{isPending ? 'What happens next' : 'What to do'}</Text>
+            {steps.map((s, i) => (
+              <View key={s.title} style={[styles.stepRow, i === steps.length - 1 && { marginBottom: 0 }]}>
+                <View style={styles.stepIcon}><s.icon size={18} color="#FFFFFF" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>{s.title}</Text>
+                  <Text style={styles.stepText}>{s.text}</Text>
+                </View>
               </View>
-              <Text style={styles.progressText}>Processing your verification...</Text>
-            </View>
-          )}
-
-          {/* Status Details Card */}
-          {/* <View style={styles.statusCard}>
-            <Text style={styles.cardTitle}>
-              {isPending ? 'What happens next?' : 'Account Details'}
-            </Text>
-            
-            {isPending ? (
-              <>
-                <View style={styles.detailRow}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>1</Text>
-                  </View>
-                  <View style={styles.stepContent}>
-                    <Text style={styles.stepTitle}>Document Review</Text>
-                    <Text style={styles.stepDescription}>
-                      Our team is verifying your submitted documents
-                    </Text>
-                  </View>
-                  <CheckCircle size={20} color="#10B981" />
-                </View>
-                
-                <View style={styles.detailRow}>
-                  <View style={[styles.stepNumber, styles.stepNumberActive]}>
-                    <Text style={[styles.stepNumberText, { color: '#D97706' }]}>2</Text>
-                  </View>
-                  <View style={styles.stepContent}>
-                    <Text style={styles.stepTitle}>Identity Verification</Text>
-                    <Text style={styles.stepDescription}>
-                      Confirming your identity - typically takes 24 hours
-                    </Text>
-                  </View>
-                  <Clock size={20} color={colors.secondary} />
-                </View>
-                
-                <View style={styles.detailRow}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>3</Text>
-                  </View>
-                  <View style={styles.stepContent}>
-                    <Text style={styles.stepTitle}>Account Activation</Text>
-                    <Text style={styles.stepDescription}>
-                      Automatic activation within 24 hours
-                    </Text>
-                  </View>
-                  <Clock size={20} color="#9CA3AF" />
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.detailRow}>
-                  <Shield size={20} color={colors.secondary} />
-                  <View style={styles.stepContent}>
-                    <Text style={styles.detailText}>
-                      Account Under Review
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.detailRow}>
-                  <FileText size={20} color={colors.secondary} />
-                  <View style={styles.stepContent}>
-                    <Text style={styles.detailText}>
-                      Aadhar is Under Review
-                    </Text>
-                  </View>
-                </View>
-              </>
-            )}
-          </View> */}
-
-          {/* Contact Support Card */}
-          <View style={styles.contactCard}>
-            <Text style={styles.contactTitle}>Need Assistance?</Text>
-
-            <View style={styles.contactMethods}>
-              <TouchableOpacity style={styles.contactMethod}onPress={() => handleContactSupport("+919876543210")}>
-                <View style={styles.contactIcon}>
-                  <Phone size={20} color={colors.secondary} />
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactLabel}>Phone Support</Text>
-                  <Text style={styles.contactValue}>+91 98765 43210</Text>
-                  <Text style={styles.contactNote}>Available 24/7</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.contactMethod} onPress={() => handleContactSupport("dropcars.in@gmail.com")}>
-                <View style={styles.contactIcon}>
-                  <Mail size={20} color={colors.secondary} />
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactLabel}>Email Support</Text>
-                  <Text style={styles.contactValue}>dropcars.in@gmail.com</Text>
-                  <Text style={styles.contactNote}>Response within 2 hours</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* <TouchableOpacity style={styles.contactMethod} onPress={handleContactSupport}>
-                <View style={styles.contactIcon}>
-                  <MessageCircle size={20} color={colors.secondary} />
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactLabel}>Live Chat</Text>
-                  <Text style={styles.contactValue}>Start Conversation</Text>
-                  <Text style={styles.contactNote}>Instant response</Text>
-                </View>
-              </TouchableOpacity> */}
-            </View>
+            ))}
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            {/* <TouchableOpacity 
-              style={styles.primaryButton}
-              onPress={handleContactSupport}
-            >
-              <LinearGradient
-                colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isPending ? 'Contact Support' : 'Get Help'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity> */}
-            
-            <TouchableOpacity 
-              style={styles.secondaryButton}
-              onPress={handleGoBack}
-            >
-              <Text style={styles.secondaryButtonText}>Return to App</Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => check(true)} disabled={checking} activeOpacity={0.85}>
+            {checking ? <ActivityIndicator color="#1E3A8A" /> : <RefreshCw size={18} color="#1E3A8A" />}
+            <Text style={styles.primaryBtnText}>{checking ? 'Checking...' : 'Check status now'}</Text>
+          </TouchableOpacity>
+          {!!note && <Text style={styles.note}>{note}</Text>}
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Need help?</Text>
+            <View style={styles.contactRow}>
+              <TouchableOpacity style={styles.contactBtn} onPress={call} activeOpacity={0.8}>
+                <Phone size={18} color="#34D399" />
+                <Text style={styles.contactLabel}>Call</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.contactBtn} onPress={() => whatsapp('Hello, I need help with my Drop Cars vendor account.')} activeOpacity={0.8}>
+                <MessageCircle size={18} color="#34D399" />
+                <Text style={styles.contactLabel}>WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.contactBtn} onPress={() => mail('Vendor account help')} activeOpacity={0.8}>
+                <Mail size={18} color="#34D399" />
+                <Text style={styles.contactLabel}>Email</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.contactValue}>{contact.phone}</Text>
+            <Text style={styles.contactSub}>{contact.email}</Text>
           </View>
+
+          <TouchableOpacity style={styles.signOut} onPress={signOut} activeOpacity={0.7}>
+            <LogOut size={16} color="#E5E7EB" />
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
     </View>
@@ -273,257 +127,28 @@ const handleContactSupport = (value : string) => {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-  },
-  backButton: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(10px)',
-  },
-  refreshButton: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(10px)',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  iconWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    backdropFilter: 'blur(10px)',
-  },
-  statusBadge: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  statusTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  statusMessage: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 30,
-    opacity: 0.9,
-    paddingHorizontal: 20,
-  },
-  progressContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  progressBar: {
-    width: '80%',
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  progressFill: {
-    width: '60%',
-    height: '100%',
-    borderRadius: 2,
-  },
-  progressText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    opacity: 0.8,
-  },
-  statusCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    backdropFilter: 'blur(10px)',
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 20,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  stepNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  stepNumberActive: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
-  stepNumberText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  stepContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  stepDescription: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    lineHeight: 20,
-  },
-  detailText: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    lineHeight: 22,
-  },
-  contactCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 30,
-    backdropFilter: 'blur(10px)',
-  },
-  contactTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  contactSubtitle: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 24,
-    opacity: 0.8,
-  },
-  contactMethods: {
-    gap: 16,
-  },
-  contactMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 16,
-  },
-  contactIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    marginBottom: 4,
-  },
-  contactValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  contactNote: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.7,
-  },
-  actionButtons: {
-    gap: 16,
-    marginTop: 10,
-  },
-  primaryButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  buttonGradient: {
-    paddingVertical: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16,
-  },
-  primaryButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 64, paddingBottom: 40, alignItems: 'center' },
+  iconWrap: { width: 108, height: 108, borderRadius: 54, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  badge: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginBottom: 16 },
+  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
+  title: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  message: { color: '#E5E7EB', fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 22, maxWidth: 420 },
+  card: { width: '100%', maxWidth: 460, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 18, padding: 16, marginBottom: 16 },
+  cardTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginBottom: 12 },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  stepIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  stepTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  stepText: { color: '#D1D5DB', fontSize: 13, lineHeight: 18, marginTop: 2 },
+  primaryBtn: { width: '100%', maxWidth: 460, minHeight: 50, borderRadius: 14, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 },
+  primaryBtnText: { color: '#1E3A8A', fontSize: 15, fontWeight: '800' },
+  note: { color: '#FDE68A', fontSize: 13, textAlign: 'center', marginBottom: 14, maxWidth: 420 },
+  contactRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  contactBtn: { flex: 1, minHeight: 56, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  contactLabel: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
+  contactValue: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  contactSub: { color: '#D1D5DB', fontSize: 12.5, textAlign: 'center', marginTop: 2 },
+  signOut: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 18, marginTop: 4 },
+  signOutText: { color: '#E5E7EB', fontSize: 14, fontWeight: '600' },
 });

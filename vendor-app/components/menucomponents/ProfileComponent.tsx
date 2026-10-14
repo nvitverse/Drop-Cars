@@ -9,11 +9,11 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
-  Modal,
   TextInput,
   Platform,
   StatusBar,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -321,15 +321,15 @@ export default function ProfileComponent() {
             value={data.business_name || 'Tap to add'}
             onPress={() => { setBusinessNameInput(data.business_name || ''); setShowBusinessNameModal(true); }}
             actionIcon={Edit3} dimValue={!data.business_name} />
-          <InfoRow icon={MapPin}   color="#059669" label="Address"      value={data.address || '�'} />
+          <InfoRow icon={MapPin}   color="#059669" label="Address"      value={data.address || '-'} />
           <InfoRow icon={Calendar} color="#D97706" label="Member Since" value={formatDate(data.created_at)} isLast />
         </SectionCard>
 
         {/* Contact */}
         <SectionCard title="Contact & Security">
           <InfoRow icon={Phone}     color="#0284C7" label="Primary Number"           value={'+91 ' + data.primary_number} />
-          <InfoRow icon={Phone}     color="#64748B" label="Secondary Number"         value={data.secondary_number || '�'} />
-          <InfoRow icon={CreditCard} color="#059669" label="GPay Number"             value={data.gpay_number || '�'} />
+          <InfoRow icon={Phone}     color="#64748B" label="Secondary Number"         value={data.secondary_number || '-'} />
+          <InfoRow icon={CreditCard} color="#059669" label="GPay Number"             value={data.gpay_number || '-'} />
           <InfoRow icon={Mail}      color="#DB2777" label="Email (password reset)"
             value={myEmail || 'Tap to add'}
             onPress={() => { setEmailInput(myEmail || ''); setEmailOtpSent(false); setEmailOtpCode(''); setShowEmailModal(true); }}

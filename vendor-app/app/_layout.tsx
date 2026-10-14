@@ -6,6 +6,9 @@ import { setupNotificationListeners } from '@/services/notificationListeners';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { KeyboardSafeView } from '@/components/KeyboardSafe';
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
+import UpdateGate from '@/components/UpdateGate';
 
 // react-native-web's Alert.alert is a no-op - patch it before any screen can
 // call Alert.alert (sign-in errors, validation, etc. all rely on it). No-op
@@ -27,12 +30,18 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <LanguageProvider>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-      <WebAlertHost />
-    </LanguageProvider>
+    <GlobalErrorBoundary>
+      <LanguageProvider>
+        {/* KeyboardSafeView lifts the whole screen above the keyboard once, so no typing box is ever hidden (same as the Admin App). */}
+        <KeyboardSafeView>
+          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </KeyboardSafeView>
+        <StatusBar style="auto" />
+        <WebAlertHost />
+        <UpdateGate />
+      </LanguageProvider>
+    </GlobalErrorBoundary>
   );
 }

@@ -37,6 +37,8 @@ export const currentEnv = ENV[getCurrentEnv() as keyof typeof ENV];
 
 // Helper function to get API base URL for current environment
 export const getCurrentApiBaseUrl = (): string => {
+  // Local testing only: EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 npx expo start --web (never set in a build)
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
   // Always the deployed Cloud Run backend - same localhost-redirect bug
   // fixed in the Admin App and Customer App: there is no local backend
   // server in this project's normal workflow, so pointing localhost at a

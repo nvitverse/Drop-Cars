@@ -18,6 +18,7 @@ import api from '../../app/api/api'; // Adjust the path as necessary
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Package, DollarSign, TrendingUp, Calendar,ArrowRight, Settings, CircleHelp as HelpCircle, Info, LogOut, Bell, Shield, Star, Phone, Mail, Globe, FileText, CreditCard, Clock, Award, ChevronRight, Wallet, RefreshCw, MapPin } from 'lucide-react-native';
 import { gradients, colors } from '../../constants/theme';
+import { useSupportContact } from '../../utils/supportContact';
 
 interface VendorData {
   id: string;
@@ -69,19 +70,10 @@ export default function MenuScreen() {
     fetchVendorData();
   };
 
-  const handleCall = () => {
-    const phoneNumber = '+918300448959';
-    Linking.openURL(`tel:${phoneNumber}`).catch(() => {
-      Alert.alert('Error', 'Unable to open dial pad');
-    });
-  };
-
-  const handleEmail = () => {
-    const email = 'dropcars.in@gmail.com';
-    Linking.openURL(`mailto:${email}`).catch(() => {
-      Alert.alert('Error', 'Unable to open the Gmail');
-    });
-  };
+  // One office number / e-mail for the whole app: the platform settings (Admin editable), not numbers typed into each screen.
+  const { contact, call: callSupport, whatsapp: whatsappSupport, mail: mailSupport } = useSupportContact();
+  const handleCall = () => callSupport();
+  const handleEmail = () => mailSupport('Vendor App help');
 
   const handleWebSite = () => {
     const weblink = 'www.dropcars.in';
@@ -92,8 +84,7 @@ export default function MenuScreen() {
 
   const removeAccessToken = async () => {
     try {
-      await AsyncStorage.removeItem('accessToken');
-      console.log('Access token removed successfully');
+      await AsyncStorage.multiRemove(['accessToken', 'vendorData']);
     } catch (error) {
       console.error('Error removing access token:', error);
     }
@@ -129,6 +120,27 @@ export default function MenuScreen() {
       icon: DollarSign,
       iconColor: '#60A5FA',
       action: () => router.push('/(menu)/wallet'),
+    },
+    {
+      id: 'payouts',
+      title: 'Withdraw money',
+      subtitle: 'Bank / UPI details and payout requests',
+      icon: Wallet,
+      iconColor: '#059669',
+      action: () => router.push('/(menu)/payouts' as any),
+    },
+    {
+      id: 'help',
+      title: 'Help & support',
+      subtitle: `Call or WhatsApp us - ${contact.phone}`,
+      icon: HelpCircle,
+      iconColor: '#F59E0B',
+      action: () =>
+        Alert.alert('Help & support', `Our office: ${contact.phone}`, [
+          { text: 'Call', onPress: callSupport },
+          { text: 'WhatsApp', onPress: () => whatsappSupport('Hello, I need help with my Drop Cars vendor account.') },
+          { text: 'Close', style: 'cancel' },
+        ]),
     },
     {
       id: 'settings',
@@ -272,7 +284,7 @@ export default function MenuScreen() {
                 </View>
                 <View style={styles.supportContent}>
                   <Text style={styles.supportLabel}>Call Support</Text>
-                  <Text style={styles.supportValue}>+91 83004 48959</Text>
+                  <Text style={styles.supportValue}>{contact.phone}</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
@@ -285,7 +297,7 @@ export default function MenuScreen() {
                 </View>
                 <View style={styles.supportContent}>
                   <Text style={styles.supportLabel}>Email Support</Text>
-                  <Text style={styles.supportValue}>dropcars.in@gmail.com</Text>
+                  <Text style={styles.supportValue}>{contact.email}</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>

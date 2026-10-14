@@ -48,6 +48,21 @@ export interface AuthResponse {
   vendor: Vendor;
 }
 
+// FastAPI sends `detail` as text, or as a list of {loc, msg} for form errors - never show "[object Object]".
+const detailToText = (detail: any, fallback: string): string => {
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map((d: any) => {
+      const field = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : null;
+      const label = typeof field === 'string' ? field.replace(/_/g, ' ') : '';
+      return label ? `${label}: ${d?.msg || ''}` : String(d?.msg || d);
+    }).join('\n');
+  }
+  return fallback;
+};
+
+const isNetworkFailure = (err: unknown) => err instanceof TypeError || /network request failed|failed to fetch|network error/i.test(String((err as any)?.message || ''));
+
 export const useVendorAuth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,8 +107,9 @@ export const useVendorAuth = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        Alert.alert('Sign up Failed', errorData.detail || 'Please check your details and try again.');
-        throw new Error(errorData.detail || 'Signup failed');
+        const text = detailToText(errorData.detail, 'Please check your details and try again.');
+        Alert.alert('Sign up Failed', text);
+        throw new Error(text);
       }
 
       const result: AuthResponse = await response.json();
@@ -105,6 +121,7 @@ export const useVendorAuth = () => {
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Signup failed';
+      if (isNetworkFailure(err)) Alert.alert('No connection', 'We could not reach the server. Please check your internet and try again.');
       setError(errorMessage);
       return null;
     } finally {
@@ -146,9 +163,9 @@ export const useVendorAuth = () => {
           'Sign in Failed',
           response.status === 401
             ? 'Incorrect password. Please try again.'
-            : (errorData.detail || 'Please check your credentials and try again.')
+            : detailToText(errorData.detail, 'Please check your credentials and try again.')
         );
-        throw new Error(errorData.detail || 'Signin failed');
+        throw new Error(detailToText(errorData.detail, 'Signin failed'));
       }
 
       const result: AuthResponse = await response.json();
@@ -160,6 +177,7 @@ export const useVendorAuth = () => {
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Signin failed';
+      if (isNetworkFailure(err)) Alert.alert('No connection', 'We could not reach the server. Please check your internet and try again.');
       setError(errorMessage);
       return null;
     } finally {

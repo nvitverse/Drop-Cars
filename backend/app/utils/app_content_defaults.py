@@ -517,9 +517,12 @@ BOT_KNOWLEDGE = {
     ),
 }
 
+from app.utils.vendor_terms_default import VENDOR_TERMS  # noqa: E402
+
 DEFAULTS = {
     "driver_onboarding": DRIVER_ONBOARDING,
     "driver_terms": DRIVER_TERMS,
     "driver_fee_info": DRIVER_FEE_INFO,
     "bot_knowledge": BOT_KNOWLEDGE,
+    "vendor_terms": VENDOR_TERMS,
 }

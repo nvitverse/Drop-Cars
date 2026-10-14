@@ -12,7 +12,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Bell, Shield, MessageCircle, CheckCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://drop-cars-api-207918408785.asia-south2.run.app/api';
+import { getCurrentApiBaseUrl } from '../../config/environment';
+const API_BASE_URL = `${getCurrentApiBaseUrl()}/api`;
 
 interface NotificationPermissionRequest {
   permission1: boolean;
