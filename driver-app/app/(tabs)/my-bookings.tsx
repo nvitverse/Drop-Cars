@@ -21,6 +21,7 @@ import { Briefcase, MapPin, Calendar, IndianRupee, Plus, ChevronRight, Eye, Car,
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import axiosDriver from '@/app/api/axiosDriver';
+import { requestNoShow } from '@/services/driver/carDriverService';
 import { useEnsureDriverSession } from '@/hooks/useEnsureDriverSession';
 import BookingDetailModal from '@/components/BookingDetailModal';
 import RidesBookingsSwitcher from '@/components/RidesBookingsSwitcher';
@@ -130,6 +131,26 @@ export default function MyBookingsScreen() {
   const [cancellingItem, setCancellingItem] = useState<BookingItem | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
   const [submittingCancel, setSubmittingCancel] = useState<boolean>(false);
+
+  // The customer cancelled / is not there: NOT a driver cancellation, so no penalty. Drop Cars (or the vendor who posted it) confirms the
+  // no-show; until then the held amount stays safe.
+  const handleAskNoShow = async () => {
+    if (!cancellingItem) return;
+    const orderId = cancellingItem.order_id || cancellingItem.id;
+    setSubmittingCancel(true);
+    try {
+      const why = cancelReason.trim() && cancelReason.trim() !== 'Customer Request' ? cancelReason.trim() : 'Customer cancelled / not available';
+      await requestNoShow(Number(orderId), why);
+      Alert.alert('Sent to Drop Cars', 'Drop Cars (or the person who posted the booking) will confirm the no-show. You pay no penalty and your held amount stays safe until then.');
+      setCancellingItem(null);
+      setCancelReason('');
+      fetchBookings();
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message || 'Please try again.');
+    } finally {
+      setSubmittingCancel(false);
+    }
+  };
 
   const handleConfirmCancel = async () => {
     if (!cancellingItem) return;
@@ -723,6 +744,21 @@ export default function MyBookingsScreen() {
 
             {cancellingItem && (
               <ScrollView showsVerticalScrollIndicator={false}>
+                {/* The customer is the reason: no penalty - ask Drop Cars to confirm a no-show instead of cancelling */}
+                <View style={{ backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#10B981', borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', color: '#047857' }}>Customer cancelled or not there?</Text>
+                  <Text style={{ fontSize: 12, color: '#065F46', marginTop: 4, lineHeight: 16 }}>
+                    Don't cancel - ask Drop Cars to confirm a no-show. No penalty, and your held amount stays safe.
+                  </Text>
+                  <TouchableOpacity
+                    style={{ marginTop: 8, backgroundColor: '#059669', paddingVertical: 10, borderRadius: 6, alignItems: 'center' }}
+                    onPress={handleAskNoShow}
+                    disabled={submittingCancel}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Bold', fontSize: 13 }}>Ask Drop Cars to confirm no-show</Text>
+                  </TouchableOpacity>
+                </View>
+
                 {/* ₹500 Penalty Warning Card */}
                 <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#EF4444', borderRadius: 6, padding: 12, marginBottom: 14 }}>
                   <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', color: '#DC2626' }}>
@@ -736,7 +772,7 @@ export default function MyBookingsScreen() {
                 <Text style={{ fontSize: 12.5, fontFamily: 'Inter-Bold', color: colors.text, marginBottom: 6 }}>
                   Select or Enter Reason for Cancellation:
                 </Text>
-                {['Vehicle Breakdown / Emergency', 'Driver Unavailable', 'Location / Route Distance Issue', 'Customer Request'].map((r) => (
+                {['Vehicle Breakdown / Emergency', 'Driver Unavailable', 'Location / Route Distance Issue'].map((r) => (
                   <TouchableOpacity
                     key={r}
                     style={{

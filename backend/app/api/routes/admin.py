@@ -7291,6 +7291,16 @@ def remove_driver_with_penalty_endpoint(
 
     db.commit()
 
+    # The office removed the driver on purpose, so no approval wait: the booking is shown to every other driver straight away.
+    try:
+        from app.crud.trip_exceptions import announce_repost
+        order.repost_hold_until = None
+        announce_repost(db, order)
+        db.commit()
+    except Exception as _e:
+        db.rollback()
+        print(f"repost announce after removal failed for order {order.id}: {_e}")
+
     log_admin_action(
         db,
         admin_id=str(current_admin.id),
