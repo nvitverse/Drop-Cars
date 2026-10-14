@@ -8,10 +8,10 @@ import {
   SafeAreaView,
   Platform,
   Alert,
-  Modal,
   StatusBar,
   Animated,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';

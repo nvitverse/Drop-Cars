@@ -7,8 +7,8 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Modal,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';

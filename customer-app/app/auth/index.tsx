@@ -246,9 +246,13 @@ export default function AuthScreen() {
       showAlert('Error', 'Please enter your full name');
       return;
     }
+    if (!phone || String(phone).replace(/\D/g, '').length < 10) {
+      showAlert('Error', 'Please enter your 10-digit mobile number');      // never register with an invented number
+      return;
+    }
     setLoading(true);
     setStatusMessage('');
-    const res = await registerWithEmail(password, fullName, phone || '9876543210');
+    const res = await registerWithEmail(password, fullName, phone);
     setLoading(false);
     if (res.success) {
       router.replace('/(customer)');

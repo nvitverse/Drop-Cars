@@ -9,12 +9,12 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   Switch,
   Animated,
   Easing,
   Linking,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateRangeCalendarModal from '@/components/DateRangeCalendarModal';

@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Modal,
   ScrollView,
   Linking,
   Alert,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -967,6 +967,7 @@ export default function BookingCard({
     // line (vendor / car) draw over it
     modalHeaderText: {
       fontSize: 18,
+      lineHeight: 24,            // explicit: with a large phone font size the next line used to be drawn over the title
       fontFamily: 'Inter-Bold',
       color: '#FFFFFF',
     },
@@ -1571,7 +1572,7 @@ export default function BookingCard({
                 <Text style={dynamicStyles.modalHeaderText}>
                   Booking Details {formatBookingId(booking.order_id || (booking as any).id)}
                 </Text>
-                <Text style={{ fontSize: 11.5, color: '#E2E8F0', fontFamily: 'Inter-Medium', marginTop: 2 }}>
+                <Text style={{ fontSize: 11.5, lineHeight: 16, color: '#E2E8F0', fontFamily: 'Inter-Medium', marginTop: 4 }}>
                   {(booking as any).vendor_name || 'Drop Cars'} • {formatCarType(carType)}
                 </Text>
               </View>

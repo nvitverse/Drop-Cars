@@ -17,7 +17,8 @@ import {
   Send,
   X,
 } from 'lucide-react-native';
-import { View, Text, Modal, TextInput, ScrollView, Platform, useColorScheme } from 'react-native';
+import { View, Text, TextInput, ScrollView, Platform, useColorScheme } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

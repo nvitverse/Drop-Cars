@@ -354,7 +354,7 @@ export function parseBookingVoiceCommand(text: string): ParsedBookingVoiceDraft 
     doc_type: isEstimate ? 'ESTIMATE' : 'INVOICE',
     customer: {
       name: customerName,
-      phone: customerPhone || '9876543210',
+      phone: customerPhone || '',
     },
     trip: {
       pickup,

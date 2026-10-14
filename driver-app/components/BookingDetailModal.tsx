@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Modal,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   Image,
   Switch,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import {
   X,
@@ -801,11 +801,13 @@ export default function BookingDetailModal({
                     </View>
 
                     {/* Start/End OTPs if available */}
-                    {(activeData.assignment?.start_trip_otp || activeData.start_trip_otp) && (
+                    {/* Only the one who POSTED the booking sees the codes (to read them to the customer). The driver / accepting owner
+                        must ask the customer for them - showing them here let a trip start without the customer. */}
+                    {isPosted && !!activeData.start_trip_otp && (
                       <View style={styles.otpRow}>
                         <Text style={[styles.otpLabel, { color: colors.textSecondary }]}>Start OTP:</Text>
                         <Text style={[styles.otpValue, { color: colors.primary }]}>
-                          {activeData.assignment?.start_trip_otp || activeData.start_trip_otp}
+                          {activeData.start_trip_otp}
                         </Text>
                       </View>
                     )}
@@ -1233,6 +1235,7 @@ const styles = StyleSheet.create({
   },
   bookingIdText: {
     fontSize: 18,
+    lineHeight: 24,
     fontFamily: 'Inter-Bold',
   },
   statusBadge: {
@@ -1246,6 +1249,7 @@ const styles = StyleSheet.create({
   },
   tripTypeTag: {
     fontSize: 13,
+    lineHeight: 18,
     fontFamily: 'Inter-Medium',
     marginTop: 2,
   },

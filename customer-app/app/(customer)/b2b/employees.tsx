@@ -5,10 +5,10 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  Modal,
   Alert,
   Platform,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import {
   UserCog,

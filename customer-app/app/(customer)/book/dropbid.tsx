@@ -9,10 +9,10 @@ import {
   Platform,
   StatusBar,
   FlatList,
-  Modal,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';

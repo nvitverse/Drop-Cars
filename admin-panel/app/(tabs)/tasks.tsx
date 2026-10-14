@@ -115,7 +115,7 @@ export default function TasksScreen() {
     { label: 'KYC Document Queue', screen: '/documents-review-queue', btnText: 'Review Documents' },
     { label: 'Payout Requests', screen: '/payout-requests', btnText: 'Check Payouts' },
     { label: 'Website Approvals', screen: '/website-booking-approvals', btnText: 'Approve Bookings' },
-    { label: 'Trip Feedbacks', screen: '/(tabs)/profile-reviews', btnText: 'Check Reviews' },
+    { label: 'Trip Feedbacks', screen: '/(tabs)/orders?tab=completed', btnText: 'Check Reviews' },
   ];
 
   const TIMELINE_PRESETS = [

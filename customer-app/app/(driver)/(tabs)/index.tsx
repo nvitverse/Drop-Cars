@@ -6,9 +6,9 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
-  Modal,
   TextInput,
 } from 'react-native';
+import Modal from '@/components/KeyboardSafe';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
