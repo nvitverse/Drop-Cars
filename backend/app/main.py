@@ -1325,7 +1325,7 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"support chat purge failed (continuing): {_e}")
-        result = {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": completed or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
+        result = {"deadline_warned": warned or 0, "cancelled": cancelled or 0, "completed": 0, "no_start_alerted": alerted or 0, "urgent_notified": urgent_notified or 0, "expired": expired or 0, "auto_approved": auto_approved or 0}
         try:
             from app.utils import system_health as _sh
             _sh.record_sweep(True, result)

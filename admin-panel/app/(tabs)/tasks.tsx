@@ -229,13 +229,24 @@ export default function TasksScreen() {
     }
     setSubmittingDirective(true);
     try {
+      const selectedAction = ACTION_PRESETS[actionPresetIndex];
       await apiService.createStaffDirective({
         message: newDirectiveMessage.trim(),
         target_admin_ids: null, // broadcast to all
+        directive_type: directiveType,
+        priority: directivePriority,
+        duration_hours: timelineDuration,
+        action_type: selectedAction.screen ? 'NAVIGATE' : undefined,
+        action_screen: selectedAction.screen || undefined,
+        action_label: selectedAction.btnText || undefined,
       });
       setNewDirectiveMessage('');
+      setActionPresetIndex(0);
+      setTimelineDuration(8);
+      setDirectiveType('ANNOUNCEMENT');
+      setDirectivePriority('NORMAL');
       setNewDirectiveModalVisible(false);
-      Alert.alert('Success', 'Instruction broadcasted to staff members.');
+      Alert.alert('Success', 'Directive posted with active timeline.');
       loadData();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to post instruction');
@@ -436,13 +447,36 @@ export default function TasksScreen() {
                 ]}
               >
                 <View style={styles.directiveTopRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={styles.vipBadge}>
                       <Text style={styles.vipBadgeText}>👑 {d.created_by_username || 'NV'}</Text>
                     </View>
+                    <View style={{ backgroundColor: d.directive_type === 'TASK' ? '#F59E0B20' : d.directive_type === 'URGENT_ALERT' ? '#EF444420' : '#6366F120', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: d.directive_type === 'TASK' ? '#D97706' : d.directive_type === 'URGENT_ALERT' ? '#DC2626' : '#6366F1' }}>
+                        {d.directive_type === 'TASK' ? 'TASK' : d.directive_type === 'URGENT_ALERT' ? 'URGENT' : 'DIRECTIVE'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.directiveTimeText, { color: themeColors.textSecondary }]}>
-                      {new Date(d.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {(() => {
+                        if (!d.expires_at) return 'Pinned';
+                        const diff = new Date(d.expires_at).getTime() - Date.now();
+                        if (diff <= 0) return 'Expired';
+                        const hrs = Math.floor(diff / (1000 * 60 * 60));
+                        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        return hrs > 0 ? `${hrs}h left` : `${mins}m left`;
+                      })()}
                     </Text>
+                    {isOwner && (
+                      <TouchableOpacity
+                        onPress={() => handleExpireDirective(d.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Trash2 size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -748,16 +782,108 @@ export default function TasksScreen() {
         onRequestClose={() => setNewDirectiveModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Crown size={20} color="#D97706" />
-              <Text style={[styles.modalTitle, { color: themeColors.text }]}>Broadcast Directive to Staff</Text>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border, maxWidth: 480 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Crown size={20} color="#D97706" />
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Directives & Tasks Command</Text>
+              </View>
             </View>
 
-            <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginBottom: 10 }}>
-              Instructions appear immediately on staff task dashboards:
+            {/* Directive Type Selector */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Select Type
             </Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {(['ANNOUNCEMENT', 'TASK', 'URGENT_ALERT'] as const).map((t) => {
+                const isSel = directiveType === t;
+                const label = t === 'TASK' ? '⚡ Action Task' : t === 'URGENT_ALERT' ? '🚨 Urgent Alert' : '📢 Announcement';
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: isSel ? (t === 'URGENT_ALERT' ? '#DC2626' : t === 'TASK' ? '#D97706' : colors.primary) : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1,
+                      borderColor: isSel ? 'transparent' : themeColors.border,
+                    }}
+                    onPress={() => {
+                      setDirectiveType(t);
+                      if (t === 'URGENT_ALERT') setDirectivePriority('URGENT');
+                      else setDirectivePriority('NORMAL');
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
+            {/* Timeline / Expiry Selector */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Active Timeline (Auto-Expire)
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {TIMELINE_PRESETS.map((p) => {
+                const isSel = timelineDuration === p.hours;
+                return (
+                  <TouchableOpacity
+                    key={p.label}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6.5,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: isSel ? (isDark ? '#312E81' : '#EEF2FF') : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1.5,
+                      borderColor: isSel ? colors.primary : themeColors.border,
+                    }}
+                    onPress={() => setTimelineDuration(p.hours)}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? colors.primary : themeColors.textSecondary }}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Action Destination Picker */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Interactive Button (Optional 1-Tap Target)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {ACTION_PRESETS.map((act, idx) => {
+                const isSel = actionPresetIndex === idx;
+                return (
+                  <TouchableOpacity
+                    key={act.label}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      backgroundColor: isSel ? colors.primary : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1,
+                      borderColor: isSel ? colors.primary : themeColors.border,
+                    }}
+                    onPress={() => setActionPresetIndex(idx)}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {act.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Directive Message Text
+            </Text>
             <TextInput
               style={[
                 styles.modalTextInput,
@@ -765,17 +891,24 @@ export default function TasksScreen() {
                   backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
                   color: themeColors.text,
                   borderColor: themeColors.border,
+                  minHeight: 75,
                 },
               ]}
-              placeholder="e.g. Please verify driver documents within 10 minutes and respond to new leads immediately."
+              placeholder={
+                directiveType === 'TASK'
+                  ? 'e.g. Please follow up on 5 pending unassigned bookings immediately.'
+                  : directiveType === 'URGENT_ALERT'
+                  ? 'e.g. System maintenance alert / Urgent peak rush protocol.'
+                  : 'e.g. Great work on morning dispatch! Keep response time under 5m.'
+              }
               placeholderTextColor={themeColors.textSecondary}
               value={newDirectiveMessage}
               onChangeText={setNewDirectiveMessage}
               multiline
-              numberOfLines={4}
+              numberOfLines={3}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
                 onPress={() => setNewDirectiveModalVisible(false)}
@@ -791,7 +924,7 @@ export default function TasksScreen() {
                 {submittingDirective ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Broadcast</Text>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Broadcast Live</Text>
                 )}
               </TouchableOpacity>
             </View>
