@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ShieldCheck, Calculator } from 'lucide-react-native';
 import { ScreenShell, useScreenTheme } from '@/components/SafeArea';
 import { TARIFF, MIN_BILLED_KM, StandardVehicleCategory } from '@/constants/bookingConfig';

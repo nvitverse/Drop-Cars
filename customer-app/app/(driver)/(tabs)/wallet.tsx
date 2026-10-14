@@ -5,11 +5,11 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   Modal,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';

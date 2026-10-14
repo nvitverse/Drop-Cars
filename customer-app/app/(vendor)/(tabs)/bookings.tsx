@@ -5,9 +5,9 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBooking } from '@/contexts/BookingContext';

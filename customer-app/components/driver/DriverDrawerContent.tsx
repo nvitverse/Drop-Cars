@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';

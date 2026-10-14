@@ -5,8 +5,8 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';

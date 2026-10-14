@@ -6,12 +6,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
   Linking,
   Alert,
   RefreshControl,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import api from '../../app/api/api'; // Adjust the path as necessary

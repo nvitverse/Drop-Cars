@@ -3,11 +3,11 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Bell, Shield, MessageCircle, CheckCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';

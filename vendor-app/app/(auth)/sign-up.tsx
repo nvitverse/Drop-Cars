@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   Platform,
@@ -11,6 +10,7 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { ANDROID_STATUS_BAR } from '@/utils/topInset';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert, ActivityIndicator, Linking, Modal, TextInput,
-  Platform, StatusBar,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  Alert,
+  ActivityIndicator,
+  Linking,
+  Modal,
+  TextInput,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   User, Phone, CreditCard, MapPin, Calendar, Building2,

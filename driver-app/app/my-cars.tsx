@@ -39,6 +39,8 @@ import { fetchDocumentStatuses, DocumentStatusResponse } from '@/services/docume
 import DocumentStatusIcon from '@/components/DocumentStatusIcon';
 import DocumentUpdateModal from '@/components/DocumentUpdateModal';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { animateLayout } from '@/utils/animateLayout';
+import FadeIn from '@/components/ui/FadeIn';
 
 export default function MyCarsScreen() {
   const { user } = useAuth();
@@ -629,8 +631,8 @@ export default function MyCarsScreen() {
               carStatus === 'ON_TRIP' ? '#8B5CF6' : '#F59E0B';
 
             return (
+              <FadeIn key={car.id}>
               <View
-                key={car.id}
                 style={[
                   dynamicStyles.carCard,
                   isExpanded && { borderColor: colors.primary + '60' },
@@ -639,7 +641,7 @@ export default function MyCarsScreen() {
                 {/* Header Row */}
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onPress={() => setExpandedCarId(isExpanded ? null : car.id)}
+                  onPress={() => { animateLayout(); setExpandedCarId(isExpanded ? null : car.id); }}
                   style={dynamicStyles.carHeader}
                 >
                   <View style={dynamicStyles.carHeaderLeft}>
@@ -697,7 +699,7 @@ export default function MyCarsScreen() {
                 {/* Document Health Row on Card */}
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onPress={() => setExpandedCarId(isExpanded ? null : car.id)}
+                  onPress={() => { animateLayout(); setExpandedCarId(isExpanded ? null : car.id); }}
                   style={dynamicStyles.docHealthSummary}
                 >
                   <View style={dynamicStyles.docHealthLeft}>
@@ -859,6 +861,7 @@ export default function MyCarsScreen() {
                   </>
                 )}
               </View>
+              </FadeIn>
             );
           })
         )}

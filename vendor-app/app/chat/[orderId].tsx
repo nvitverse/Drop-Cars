@@ -9,7 +9,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
   ActivityIndicator,
   Platform,
@@ -19,6 +18,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';

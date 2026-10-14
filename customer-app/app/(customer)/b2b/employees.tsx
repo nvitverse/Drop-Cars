@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   ScrollView,
   Modal,
   Alert,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import {
   UserCog,
   Plus,

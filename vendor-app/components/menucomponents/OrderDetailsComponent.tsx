@@ -6,7 +6,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
   Share,
@@ -14,8 +13,9 @@ import {
   Linking,
   TextInput,
   Switch,
-  Modal
+  Modal,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, User, Phone, Calendar, Clock, MapPin, Car, DollarSign, Route, FileText, Settings, Gauge, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Circle as XCircle, Users, CreditCard, Timer, Navigation, Info, X, RefreshCw, Eye, StickyNote, EyeOff, ShieldCheck, Copy, Zap, Key, Send, ChevronDown, ChevronUp } from 'lucide-react-native';

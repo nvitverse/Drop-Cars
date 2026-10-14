@@ -18,6 +18,7 @@ import { MapPin, Clock, IndianRupee, Car, User, Phone, RefreshCw, Navigation, Ch
 import { getFutureRidesForVehicleOwner, getCompletedOrdersForVehicleOwner, FutureRideView } from '@/services/vehicle/vehicleOwnerService';
 import { formatBookingId } from '@/utils/format';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { animateLayout } from '@/utils/animateLayout';
 
 interface RideData {
   id: string;
@@ -484,7 +485,7 @@ export default function RidesScreen() {
         {/* Fare Breakdown Button */}
         <TouchableOpacity
           style={[styles.seeMoreButton, { backgroundColor: colors.background, borderColor: colors.border }]}
-          onPress={() => setExpandedOrderId(isExpanded ? null : (ride.order_id || ride.id).toString())}
+          onPress={() => { animateLayout(); setExpandedOrderId(isExpanded ? null : (ride.order_id || ride.id).toString()); }}
         >
           <Text style={[styles.seeMoreText, { color: colors.primary }]}>
             {isExpanded ? t('rides.hideFareBreakdown') : t('rides.fareBreakdown')}

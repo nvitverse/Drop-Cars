@@ -2,7 +2,8 @@
 // THIS message - sent by the backend per message, filled from the booking's
 // own data - plus Reply (quote it), Forward/Share and Call.
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Share, Linking, Pressable } from 'react-native';
+import { Modal, View, Text, ScrollView, StyleSheet, Share, Linking, Pressable } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { CornerUpLeft, Share2, Phone, X, MessageSquareReply } from 'lucide-react-native';
 
 export interface ReplyOption {

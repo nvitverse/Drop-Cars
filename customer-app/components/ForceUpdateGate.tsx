@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Linking, Modal, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Constants from 'expo-constants';
 import axiosInstance from '@/app/api/axiosInstance';
 

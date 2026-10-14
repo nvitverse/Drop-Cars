@@ -123,7 +123,7 @@ export default function RootLayout() {
             <ServiceModeProvider>
               <TaxiFlowProvider>
                 <CarPoolProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
+                  <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="(customer)" />
                     <Stack.Screen name="auth" />

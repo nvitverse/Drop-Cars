@@ -5,11 +5,11 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   TextInput,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircleArrowUp as ArrowUpCircle, CircleArrowDown as ArrowDownCircle, Search, ListFilter as Filter, Calendar, ArrowLeft, IndianRupee } from 'lucide-react-native';
 import { useRouter } from 'expo-router';

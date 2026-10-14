@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   Alert,
@@ -15,6 +14,7 @@ import {
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import publicApi from '../api/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 

@@ -4,9 +4,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { AlertTriangle, Clock, HelpCircle, UserCheck } from 'lucide-react-native';
 
 interface AssignmentAlarmModalProps {

@@ -5,8 +5,8 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Bell, Check, Clock, Car } from 'lucide-react-native';
 import { DrawerActions } from '@react-navigation/native';

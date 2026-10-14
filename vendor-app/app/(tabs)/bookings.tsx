@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
   RefreshControl,
   Dimensions,
@@ -17,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Car, Clock, MapPin, DollarSign, TrendingUp, Users, Search, ListFilter as Filter, X, CircleCheck as CheckCircle, Circle as XCircle, User, Calendar, ArrowLeft, Zap } from 'lucide-react-native';
 import api from '../api/api';

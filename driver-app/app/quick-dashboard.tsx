@@ -56,6 +56,7 @@ import CustomerNumberCountdown from '@/components/CustomerNumberCountdown';
 import { getBookingStatusLabel } from '@/utils/bookingStatus';
 import { formatBookingId, formatCarType as cleanFormatCarType } from '@/utils/format';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { animateLayout } from '@/utils/animateLayout';
 // Removed test notification button
 interface DriverOrder {
   id: number;
@@ -1527,7 +1528,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
                       {/* Fare details */}
                       <TouchableOpacity
                         style={[styles.seeMoreButton, { backgroundColor: colors.background, borderColor: colors.border }]}
-                        onPress={() => setExpandedOrderId(expandedOrderId === order.order_id ? null : order.order_id)}
+                        onPress={() => { animateLayout(); setExpandedOrderId(expandedOrderId === order.order_id ? null : order.order_id); }}
                       >
                         <Text style={[styles.seeMoreText, { color: colors.primary }]}>
                           {expandedOrderId === order.order_id ? 'Hide fare details' : 'Fare details'}

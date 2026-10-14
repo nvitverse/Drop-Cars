@@ -46,6 +46,7 @@ import DocumentStatusIcon from '@/components/DocumentStatusIcon';
 import DocumentUpdateModal from '@/components/DocumentUpdateModal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import axiosInstance from '@/app/api/axiosInstance';
+import { animateLayout } from '@/utils/animateLayout';
 
 export default function MyDriversScreen() {
   const { user } = useAuth();
@@ -404,7 +405,7 @@ export default function MyDriversScreen() {
                 {/* Header Row */}
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onPress={() => setExpandedDriverId(isExpanded ? null : driver.id)}
+                  onPress={() => { animateLayout(); setExpandedDriverId(isExpanded ? null : driver.id); }}
                   style={styles.cardHeader}
                 >
                   <View style={styles.avatarCircle}>

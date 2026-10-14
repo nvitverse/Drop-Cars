@@ -1,5 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Info } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 

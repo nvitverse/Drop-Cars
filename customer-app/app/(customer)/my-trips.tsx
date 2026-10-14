@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Linking, ActivityIndicator, Platform, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Linking, ActivityIndicator, Platform, Alert, Modal } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { ShieldCheck, PhoneCall, AlertCircle, Inbox, MapPin, RefreshCw, Star, CheckCircle2, IndianRupee, FileText, Download, X } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';

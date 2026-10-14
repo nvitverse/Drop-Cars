@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
   RefreshControl,
   ActivityIndicator,
@@ -16,6 +15,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,

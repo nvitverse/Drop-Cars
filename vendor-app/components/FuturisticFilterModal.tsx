@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
   ScrollView,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import {
   X,
   SlidersHorizontal,

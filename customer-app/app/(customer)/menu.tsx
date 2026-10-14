@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   SafeAreaView,
@@ -10,6 +9,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useScreenTheme } from '@/components/SafeArea';

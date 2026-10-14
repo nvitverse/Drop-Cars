@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';

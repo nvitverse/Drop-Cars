@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   SafeAreaView,
   Alert,
@@ -11,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';

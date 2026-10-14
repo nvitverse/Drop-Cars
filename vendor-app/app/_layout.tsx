@@ -28,7 +28,7 @@ export default function RootLayout() {
 
   return (
     <LanguageProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   SafeAreaView,
@@ -13,6 +12,7 @@ import {
   Switch,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';

@@ -9,8 +9,17 @@
 //  - "Replying to ..." strip when the user picked Reply on a message.
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, PanResponder, Animated, Alert, ActivityIndicator, Vibration,
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  PanResponder,
+  Animated,
+  Alert,
+  ActivityIndicator,
+  Vibration,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Send, Mic, Lock, Trash2, Pause, Play, X, ChevronLeft, ChevronUp } from 'lucide-react-native';
 import {
   useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync,

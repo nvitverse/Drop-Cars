@@ -21,6 +21,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme, ACCENTS, ACCENT_KEYS, AccentKey } from '@/context/ThemeContext';
 import { radii, typography, spacing, shadows } from '@/constants/theme';
 import { ChevronRight, X, ArrowUpRight, ArrowDownRight, CheckCircle2 } from 'lucide-react-native';
+import EnterFade from '@/components/ui/FadeIn';
 
 /** 1. ScreenHero: Replaces the flat header with a subtle gradient wash, Title greeting, duty pill, and avatar */
 export function ScreenHero({
@@ -953,20 +954,22 @@ export function Card({
 }) {
   const { themeColors } = useTheme();
   const content = (
-    <View
-      style={[
-        {
-          backgroundColor: themeColors.surface,
-          borderRadius: 8,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: themeColors.border,
-          padding: 12,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
+    <EnterFade distance={6} duration={200}>
+      <View
+        style={[
+          {
+            backgroundColor: themeColors.surface,
+            borderRadius: 8,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: themeColors.border,
+            padding: 12,
+          },
+          style,
+        ]}
+      >
+        {children}
+      </View>
+    </EnterFade>
   );
   return onPress || onLongPress ? (
     <TouchableOpacity activeOpacity={0.7} onPress={onPress} onLongPress={onLongPress}>

@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   SafeAreaView,
   Linking,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { AlertOctagon, RefreshCw, PhoneCall, MessageCircle } from 'lucide-react-native';
 
 interface Props {

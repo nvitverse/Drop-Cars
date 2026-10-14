@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View,RefreshControl, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, RefreshControl, Text, StyleSheet, ScrollView, TextInput, Alert } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRightLeft, Wallet, Building2, Send, CircleAlert as AlertCircle,HistoryIcon, ChevronRight } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';

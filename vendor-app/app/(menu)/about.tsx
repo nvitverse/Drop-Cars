@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Users, Car, MapPin, Download, Clock, Shield, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';

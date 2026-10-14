@@ -4,13 +4,13 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Linking,
   ScrollView,
   TextInput,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { KeyboardAvoidingView } from '@/components/KeyboardSafe';
 import {
   PhoneCall,

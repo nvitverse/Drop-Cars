@@ -3,15 +3,16 @@ import { formatCarType } from '../utils/format';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   Alert,
   Modal,
   Dimensions,
   TextInput,
-  FlatList, // Add this import
+  FlatList,
+  // Add this import,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   MapPin,

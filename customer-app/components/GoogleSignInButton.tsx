@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   ActivityIndicator,
   View,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { Ionicons } from '@expo/vector-icons';
 
 interface GoogleSignInButtonProps {

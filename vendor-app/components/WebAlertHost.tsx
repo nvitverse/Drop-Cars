@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert as RNAlert, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert as RNAlert, Modal, Platform, StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 
 // react-native-web ships Alert.alert as a literal no-op ("static alert() {}") -
 // every Alert.alert(...) call in this app (sign-in errors, validation

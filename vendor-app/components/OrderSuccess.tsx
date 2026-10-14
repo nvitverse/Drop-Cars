@@ -2,13 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   Modal,
   Animated,
   StatusBar,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircleCheck as CheckCircle, Copy, ArrowLeft, Timer, UserCheck } from 'lucide-react-native';
 import { router } from 'expo-router';

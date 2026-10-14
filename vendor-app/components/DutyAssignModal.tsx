@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
   ScrollView,
   Alert,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { X, UserCheck, Send, CheckCircle2, Percent, Search, Wallet, AlertTriangle, CreditCard } from 'lucide-react-native';
 import api from '../app/api/api';
 

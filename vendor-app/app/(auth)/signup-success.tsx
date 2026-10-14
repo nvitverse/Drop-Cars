@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { router } from 'expo-router';
 import { 
   CheckCircle, 

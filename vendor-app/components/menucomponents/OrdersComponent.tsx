@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useRouter } from 'expo-router';
 import api from '../../app/api/api'; // Adjust the path as necessary
 import { formatCarType } from '../../utils/format';

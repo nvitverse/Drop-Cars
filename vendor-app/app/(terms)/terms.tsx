@@ -3,12 +3,12 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { LinearGradient } from 'expo-linear-gradient';

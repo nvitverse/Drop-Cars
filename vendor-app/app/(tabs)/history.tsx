@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  RefreshControl, 
-  TouchableOpacity, 
-  Alert, 
-  Modal 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  Alert,
+  Modal,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import api from '../api/api';
 import { 
   History as HistoryIcon, 

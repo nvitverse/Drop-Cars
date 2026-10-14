@@ -7,9 +7,9 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
-  TouchableOpacity,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';

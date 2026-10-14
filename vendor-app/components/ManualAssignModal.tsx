@@ -4,12 +4,12 @@ import {
   Text,
   Modal,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Alert,
   Clipboard,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { UserCheck, X, Clipboard as ClipboardIcon, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react-native';
 import api from '../app/api/api';
 

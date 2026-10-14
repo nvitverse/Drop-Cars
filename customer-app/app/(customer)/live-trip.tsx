@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   SafeAreaView,
   StatusBar,
@@ -10,6 +9,7 @@ import {
   Share,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';

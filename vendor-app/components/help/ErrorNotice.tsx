@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { AlertCircle, AlertTriangle, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { HelpSheet } from './HelpSheet';
