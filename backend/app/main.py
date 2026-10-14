@@ -991,6 +991,7 @@ async def ensure_website_booking_columns() -> None:
         db.execute(text('ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMPTZ'))
         db.execute(text('ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS refund_amount INTEGER'))
         db.execute(text('ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS refund_notes VARCHAR'))
+        db.execute(text("UPDATE new_orders SET pickup_notes = NULL WHERE pickup_notes = 'Website Booking'"))     # old auto-posts carried this label into the Driver App
         db.commit()
     except Exception as e:
         db.rollback()

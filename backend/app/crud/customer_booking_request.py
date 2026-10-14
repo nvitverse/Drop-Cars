@@ -271,7 +271,7 @@ def approve_customer_booking_request(db: Session, request: CustomerBookingReques
         getattr(request, "pickup_notes", None) or
         getattr(request, "notes", None) or
         getattr(request, "remarks", None) or
-        "Website Booking"
+        None      # drivers must not see "Website Booking" - they only need the trip itself
     )
 
     auto_charge_items = []
