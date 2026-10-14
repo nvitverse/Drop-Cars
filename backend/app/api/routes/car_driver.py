@@ -272,6 +272,8 @@ def signin_car_driver(
             status_code=403,
             detail="Account is blocked. Please contact your fleet owner."
         )
+    from app.crud.car_driver import activate_if_processing
+    activate_if_processing(db, driver)
 
     # Create access token with driver ID as payload. Driver tokens get a
     # 6-month expiry (not the 24h default) so the Driver App stays logged
@@ -335,6 +337,8 @@ def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Session = 
         raise HTTPException(status_code=403, detail="You were removed from this fleet. Ask a fleet owner to add you, or contact Drop Cars.")
     if driver.driver_status == AccountStatusEnum.BLOCKED:
         raise HTTPException(status_code=403, detail="Account is blocked. Please contact your fleet owner.")
+    from app.crud.car_driver import activate_if_processing
+    activate_if_processing(db, driver)
 
     driver.auth_provider = "firebase"
     driver.firebase_uid = payload["uid"]

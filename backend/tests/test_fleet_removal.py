@@ -106,3 +106,16 @@ def test_another_owner_adding_a_removed_car_takes_it_with_documents_reset(pg_ses
     assert got.id == car.id and str(got.vehicle_owner_id) == str(b.id) and got.removed_at is None and got.rc_front_status == DocumentStatusEnum.PENDING
     with pytest.raises(HTTPException):                                   # now it is live in B's account: nobody else can add it
         create_car_details(pg_session, SimpleNamespace(car_number=car.car_number, car_name="x", car_type=SimpleNamespace(value="SEDAN_4_PLUS_1"), vehicle_owner_id=a.id, year_of_the_car="2020"))
+
+
+def test_a_duty_driver_is_active_when_he_logs_in_not_held_in_processing(pg_session):
+    from app.crud.car_driver import activate_if_processing
+    from app.models.car_driver import AccountStatusEnum
+    o = _owner(pg_session)
+    d = _driver(pg_session, o)
+    d.driver_status = AccountStatusEnum.PROCESSING
+    pg_session.flush()
+    assert activate_if_processing(pg_session, d) is True and d.driver_status == AccountStatusEnum.OFFLINE
+    d.driver_status = AccountStatusEnum.BLOCKED
+    pg_session.flush()
+    assert activate_if_processing(pg_session, d) is False and d.driver_status == AccountStatusEnum.BLOCKED       # a blocked driver stays blocked

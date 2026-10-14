@@ -227,6 +227,18 @@ def search_drivers_and_owners_for_vendor(db: Session, query: str) -> List[dict]:
     return results
 
 
+def activate_if_processing(db: Session, driver: CarDriver) -> bool:
+    """A duty driver is ACTIVE the moment he can log in (same as a fleet owner: no waiting for approval). Documents are checked in the
+    background and only an expired / invalid one stops a driver (see crud/verification.py); PROCESSING used to hold him on a
+    "Under verification" screen for 24-48 hours for nothing. Blocked / removed accounts never get here."""
+    if driver.driver_status == AccountStatusEnum.PROCESSING:
+        driver.driver_status = AccountStatusEnum.OFFLINE
+        db.commit()
+        db.refresh(driver)
+        return True
+    return False
+
+
 def get_drivers_by_vehicleOwner_id(db: Session, vehicle_owner_id: str) -> List[CarDriver]:
     import uuid
     try:
