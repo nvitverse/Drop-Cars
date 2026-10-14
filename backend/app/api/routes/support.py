@@ -5,7 +5,7 @@ goes through booking_chat.py's per-order thread instead."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -121,7 +121,8 @@ def _notify_driver_owner_of_admin_reply(db: Session, thread_key: str, text: str)
 def _msg_out(m: SupportMessage, me: str) -> dict:
     return {
         "id": m.id, "mine": m.sender_side == me, "sender_name": m.sender_name,
-        "text": m.text, "voice_url": media_url(m.voice_url), "created_at": m.created_at.isoformat() if m.created_at else None,
+        "text": m.text, "voice_url": media_url(m.voice_url), "image_url": media_url(getattr(m, "image_url", None)),
+        "created_at": m.created_at.isoformat() if m.created_at else None,
         "read": m.read_at is not None,
     }
 
@@ -393,6 +394,72 @@ def send_support_message(payload: SupportMessagePayload, request: Request, db: S
         ),
         "id": m.id,
         "read": m.read_at is not None,
+    }
+
+
+AUTO_ASSISTANT = "Drop Cars Assistant (auto)"
+MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
+
+
+@router.post("/screenshot-help", status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user_flexible)])
+def send_screenshot_to_support(
+    request: Request,
+    file: UploadFile = File(...),
+    note: str = Form(""),
+    language: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """A driver / owner / vendor sends a screenshot (a chat, an error, a wallet line). It is saved in their Support chat for the staff, read
+    (utils/screenshot_help.py) and - only when the Help Center is sure what it is about - answered in the same chat in their language. When it
+    cannot tell, nothing is sent automatically and the staff get the screenshot with whatever was read."""
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Please send a picture (a screenshot or a photo).")
+    data = file.file.read(MAX_SCREENSHOT_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="The picture is empty.")
+    if len(data) > MAX_SCREENSHOT_BYTES:
+        raise HTTPException(status_code=413, detail="The picture is too big (8 MB at most).")
+    role, caller = _resolve_sender(request, db)
+    name = _sender_display_name(db, role, caller)
+    number = getattr(caller, "primary_number", None) or ""
+    thread_key = str(getattr(caller, "id", ""))
+    note = (note or "").strip()[:500]
+
+    from app.utils.gcs import upload_image_to_gcs
+    import io
+    file.file = io.BytesIO(data)
+    url = upload_image_to_gcs(file, folder="chat_media")
+
+    m = SupportMessage(
+        thread_key=thread_key, thread_role=role, thread_name=f"{name} ({number})" if number else name,
+        sender_side="DRIVER_OWNER", sender_name=name, text=("\U0001F4F7 " + (note or "Screenshot")), image_url=url,
+    )
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+
+    from app.utils import screenshot_help
+    try:
+        result = screenshot_help.analyse(db, role, caller, data, note, language or None)
+    except Exception:       # noqa: BLE001
+        result = {"source": "none", "read": "", "reply": None, "confident": False}
+
+    reply_id = None
+    if result.get("confident") and result.get("reply"):
+        reply = SupportMessage(
+            thread_key=thread_key, thread_role=role, thread_name=m.thread_name, sender_side="ADMIN", sender_name=AUTO_ASSISTANT,
+            text=result["reply"] + "\n\n(Automatic answer from your screenshot. If this does not solve it, reply here - a person will help.)",
+        )
+        db.add(reply)
+        db.commit()
+        db.refresh(reply)
+        reply_id = reply.id
+
+    seen = (result.get("read") or "").strip()
+    _notify_admins_of_support_message(db, name, "\U0001F4F7 " + (seen[:100] if seen else (note or "sent a screenshot")) + ("  (answered automatically)" if reply_id else "  (needs a person)"))
+    return {
+        "success": True, "id": m.id, "image_url": media_url(url), "read": result.get("read") or None, "source": result.get("source"),
+        "answered": bool(reply_id), "reply_id": reply_id, "reply": result.get("reply") if reply_id else None,
     }
 
 

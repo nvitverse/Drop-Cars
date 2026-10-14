@@ -1547,6 +1547,7 @@ async def ensure_trip_exception_columns() -> None:
         db.execute(text('ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS no_show_reason VARCHAR'))
         db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS repost_hold_until TIMESTAMPTZ'))
         db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS repost_announced_at TIMESTAMPTZ'))
+        db.execute(text('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS image_url VARCHAR'))
         db.commit()
     except Exception as e:
         db.rollback()

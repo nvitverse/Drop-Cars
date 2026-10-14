@@ -24,5 +24,7 @@ class SupportMessage(Base):
     # Set when this message is a voice note - the GCS URL of the recording.
     # `text` still holds a plain-text fallback ("🎤 Voice message").
     voice_url = Column(String, nullable=True)
+    # Set when this message is a screenshot / photo (chat media link, served through /api/conversations/media). `text` holds the caption.
+    image_url = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False, index=True)
     read_at = Column(TIMESTAMP(timezone=True), nullable=True)   # when the OTHER side opened it

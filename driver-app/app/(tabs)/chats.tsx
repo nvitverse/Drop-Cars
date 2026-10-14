@@ -13,6 +13,7 @@ import {
   Platform,
   Linking,
   Alert,
+  Image,
 } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
@@ -55,6 +56,7 @@ import {
   Square,
   Play,
   Pause,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -63,6 +65,7 @@ import VoiceNote from '@/components/chat/VoiceNote';
 import ChatComposer from '@/components/chat/ChatComposer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import axiosDriver from '@/app/api/axiosDriver';
+import * as ImagePicker from 'expo-image-picker';
 import axiosInstance from '@/app/api/axiosInstance';
 import { formatBookingId } from '@/utils/format';
 import {
@@ -92,6 +95,8 @@ export interface ChatMessage {
   // Set when this message is a voice note (booking chat / Support only,
   // not the Help Bot - a canned bot can't listen to audio).
   voice_url?: string;
+  // A screenshot / photo sent to Support (the system reads it and answers when it is sure; otherwise the staff reply).
+  image_url?: string;
 }
 
 export interface BotResponse {
@@ -441,7 +446,7 @@ export default function ChatsTabScreen() {
           incoming = Array.isArray(res.data?.messages)
             ? res.data.messages.map((m: any) => ({
                 id: `sup-${m.id}`, sender: m.mine ? 'ME' : 'OTHER', sender_name: m.sender_name || 'Drop Cars Support',
-                text: m.text, voice_url: m.voice_url || undefined, created_at: m.created_at || new Date().toISOString(),
+                text: m.text, voice_url: m.voice_url || undefined, image_url: m.image_url || undefined, created_at: m.created_at || new Date().toISOString(),
                 status: m.mine ? (m.read ? 'read' : 'sent') : 'read',
               }))
             : [];
@@ -750,6 +755,7 @@ export default function ChatsTabScreen() {
               sender_name: m.sender_name || 'Drop Cars Support',
               text: m.text,
               voice_url: m.voice_url || undefined,
+              image_url: m.image_url || undefined,
               created_at: m.created_at || new Date().toISOString(),
               status: m.mine ? (m.read ? 'read' : 'sent') : 'read',
             }));
@@ -881,6 +887,40 @@ export default function ChatsTabScreen() {
       Alert.alert('Error', 'Could not send the voice note. Please try again.');
     } finally {
       setUploadingVoice(false);
+    }
+  };
+
+  // A screenshot to Support (a chat, an error, a wallet line): saved for the staff, read by the system, answered here when it is sure.
+  const [uploadingShot, setUploadingShot] = useState(false);
+  const sendScreenshot = async () => {
+    if (!selectedConversation || selectedConversation.type !== 'DISPATCH') return;
+    try {
+      const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+      if (picked.canceled || !picked.assets?.[0]?.uri) return;
+      setUploadingShot(true);
+      const asset = picked.assets[0];
+      const formData = new FormData();
+      formData.append('file', { uri: asset.uri, name: 'screenshot.jpg', type: asset.mimeType || 'image/jpeg' } as any);
+      formData.append('note', inputText.trim());
+      const res = await axiosDriver.post('/api/support/screenshot-help', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const storageKey = `@chat_history_${selectedConversation.id}`;
+      const echo: ChatMessage = {
+        id: `sup-${res.data?.id ?? Date.now()}`,   // same id the next poll brings, so it is not shown twice
+        sender: 'ME', sender_name: 'You', text: inputText.trim() ? `📷 ${inputText.trim()}` : '📷 Screenshot', image_url: res.data?.image_url || asset.uri,
+        created_at: new Date().toISOString(), status: 'sent',
+      };
+      setInputText('');
+      const updated = [...chatMessages, echo];
+      setChatMessages(updated);
+      AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      if (!res.data?.answered) {
+        Alert.alert('Sent to Drop Cars', 'Your screenshot reached the support team. A person will reply here.');
+      }
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message || 'Please try again.');
+    } finally {
+      setUploadingShot(false);
     }
   };
 
@@ -1852,6 +1892,7 @@ export default function ChatsTabScreen() {
                         <View style={styles.userBubbleHeader}>
                           <Text style={styles.userBubbleTag}>⚡ DRIVER COMMAND</Text>
                         </View>
+                        {item.image_url ? <Image source={{ uri: item.image_url }} style={{ width: 210, height: 270, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" /> : null}
                         {item.voice_url ? (
                           <VoiceNote uri={item.voice_url} mine tint="#FFFFFF" />
                         ) : (
@@ -1889,6 +1930,7 @@ export default function ChatsTabScreen() {
                           {item.sender_name}
                         </Text>
                       )}
+                      {item.image_url ? <Image source={{ uri: item.image_url }} style={{ width: 210, height: 270, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" /> : null}
                       {item.voice_url ? (
                         <VoiceNote uri={item.voice_url} mine={false} tint={colors.primary} />
                       ) : (
@@ -2000,6 +2042,11 @@ export default function ChatsTabScreen() {
                 placeholder="Message Dispatch Desk"
                 onSendText={(t) => sendMessage(t)}
                 onSendVoice={(uri) => sendVoiceUri(uri)}
+                leftAccessory={
+                  <TouchableOpacity onPress={sendScreenshot} disabled={uploadingShot} activeOpacity={0.7} style={{ paddingHorizontal: 10, justifyContent: 'center', minHeight: 44 }} accessibilityLabel="Send a screenshot to Drop Cars">
+                    {uploadingShot ? <ActivityIndicator size="small" color={colors.primary} /> : <ImageIcon size={22} color={colors.primary} />}
+                  </TouchableOpacity>
+                }
               />
             ) : (
             /* Futuristic Cyber Input Bar */

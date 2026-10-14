@@ -13,6 +13,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   Linking,
+  Image,
 } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import Modal from '@/components/KeyboardSafe';
@@ -77,6 +78,7 @@ interface Msg {
   sender_name?: string;
   text: string;
   voice_url?: string;
+  image_url?: string;      // a screenshot sent by the driver / owner / vendor - tap to open it full size
   created_at: string;
   read?: boolean;
 }
@@ -1243,6 +1245,11 @@ export default function AdminChatsScreen() {
                   >
                     {!item.mine && item.sender_name ? (
                       <Text style={[styles.senderLabel, { color: themeColors.primary }]}>{item.sender_name}</Text>
+                    ) : null}
+                    {item.image_url ? (
+                      <TouchableOpacity activeOpacity={0.85} onPress={() => Linking.openURL(item.image_url as string).catch(() => {})}>
+                        <Image source={{ uri: item.image_url }} style={{ width: 220, height: 280, borderRadius: 10, marginBottom: 6 }} resizeMode="cover" />
+                      </TouchableOpacity>
                     ) : null}
                     {item.voice_url ? (
                       <VoiceMessageBubble uri={item.voice_url} mine={item.mine} tint={item.mine ? '#FFFFFF' : themeColors.primary} />
