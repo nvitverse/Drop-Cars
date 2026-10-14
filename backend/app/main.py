@@ -296,6 +296,8 @@ app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estima
 app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
 from app.api.routes import vendor_billing as _vendor_billing
 app.include_router(_vendor_billing.router, prefix="/api", tags=["Vendor invoices"])
+from app.api.routes import trip_exceptions as _trip_exceptions
+app.include_router(_trip_exceptions.router, prefix="/api", tags=["Trip exceptions"])
 from app.api.routes import unaccepted_desk as _unaccepted_desk
 app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
 from app.api.routes import portal as _portal
@@ -1163,7 +1165,7 @@ async def _run_assignment_sweep() -> dict:
     (Cloud Scheduler) so the container can scale to zero between requests."""
     db = SessionLocal()
     try:
-        from app.crud.order_assignments import cancel_timed_out_pending_assignments, complete_no_start_assignments, cancel_expired_unaccepted_orders, send_urgent_booking_reminders, send_assignment_deadline_warnings
+        from app.crud.order_assignments import cancel_timed_out_pending_assignments, cancel_expired_unaccepted_orders, send_urgent_booking_reminders, send_assignment_deadline_warnings
         from app.crud.customer_booking_request import auto_approve_expired_booking_requests
         # process_drop_bid_timeouts (app/crud/drop_bid_engine.py) intentionally
         # NOT called here - found 2026-09-04 while extending Drop Bid. It was
@@ -1186,9 +1188,15 @@ async def _run_assignment_sweep() -> dict:
         cancelled = await cancel_timed_out_pending_assignments(db)
         if cancelled:
             print(f"Auto-cancelled {cancelled} timed-out assignment(s)")
-        completed = await complete_no_start_assignments(db)
-        if completed:
-            print(f"Auto-completed {completed} no-start assignment(s) (24h past pickup)")
+        # A trip is NEVER closed by a timer (owner rule 2026-10-14): when it was not started after pickup the office is alerted once
+        # and decides - manual close, cancel with refund, or no-show. A booking waiting for repost approval goes out when its time is up.
+        from app.crud.trip_exceptions import alert_no_start_assignments, announce_due_reposts
+        alerted = await alert_no_start_assignments(db)
+        if alerted:
+            print(f"Alerted the office about {alerted} trip(s) not started after pickup")
+        announced = await announce_due_reposts(db)
+        if announced:
+            print(f"Put {announced} reposted booking(s) back in front of drivers")
         urgent_notified = await send_urgent_booking_reminders(db)
         if urgent_notified:
             print(f"Sent {urgent_notified} urgent-reminder push(es) for bookings nearing their deadline")
@@ -1524,6 +1532,25 @@ async def ensure_hybrid_auth_columns() -> None:
     except Exception as e:
         db.rollback()
         print(f"hybrid auth columns migration failed (continuing): {e}")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+async def ensure_trip_exception_columns() -> None:
+    """Lightweight migration for crud/trip_exceptions.py (no-start alert, no-show request, repost approval hold)."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        db.execute(text('ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS no_start_alerted_at TIMESTAMP'))
+        db.execute(text('ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS no_show_requested_at TIMESTAMP'))
+        db.execute(text('ALTER TABLE order_assignments ADD COLUMN IF NOT EXISTS no_show_reason VARCHAR'))
+        db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS repost_hold_until TIMESTAMPTZ'))
+        db.execute(text('ALTER TABLE orders ADD COLUMN IF NOT EXISTS repost_announced_at TIMESTAMPTZ'))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"trip exception columns migration failed (continuing): {e}")
     finally:
         db.close()
 

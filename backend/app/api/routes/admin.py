@@ -2252,7 +2252,13 @@ def admin_force_complete_order_route(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
-    """Admin Force Complete: Allows Admin to manually mark any booking as COMPLETED and settle."""
+    """RETIRED 2026-10-14. This only flipped the booking to COMPLETED - it never settled the money, so the driver's held commission
+    stayed stuck and nobody was paid. Closing a trip by hand is POST /admin/orders/{id}/manual-close (same closing code as the Driver
+    App, with the wallet settlement); correcting a closed trip's km is POST /admin/orders/{id}/correct-km."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="This old shortcut did not settle any money. Use Close trip (it settles the wallets) from the booking, or Needs attention.",
+    )
     from app.crud.orders import admin_force_complete_order
     try:
         order = admin_force_complete_order(db, order_id, end_km=request.end_km, final_fare=request.final_fare, note=request.note)
@@ -7360,6 +7366,8 @@ class SystemSettingsUpdateSchema(BaseModel):
     min_app_build_customer: Optional[int] = None
     min_app_build_vendor: Optional[int] = None
     vendor_invoicing_enabled: Optional[int] = None
+    no_start_alert_after_minutes: Optional[int] = None
+    repost_approval_minutes: Optional[int] = None
     multicity_waiting_rate_per_hour: Optional[float] = None
     multicity_waiting_free_minutes: Optional[int] = None
     fleet_payment_channels: Optional[str] = None

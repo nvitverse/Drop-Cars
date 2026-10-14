@@ -55,6 +55,7 @@ import { printOrDownloadEstimation, shareQuotationViaWhatsApp } from '@/utils/in
 import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import WhatsAppActionModal from '@/components/WhatsAppActionModal';
 import MagicDriverAssignModal from '@/components/MagicDriverAssignModal';
+import CorrectKmModal from '@/components/CorrectKmModal';
 import { openWhatsApp } from '@/utils/whatsapp';
 
 export default function TripDetailScreen() {
@@ -120,6 +121,7 @@ export default function TripDetailScreen() {
   const [newFareInput, setNewFareInput] = useState('');
 
   const [showForceCompleteModal, setShowForceCompleteModal] = useState(false);
+  const [showCorrectKm, setShowCorrectKm] = useState(false);
   const [submittingForceComplete, setSubmittingForceComplete] = useState(false);
   const [forceClosingKm, setForceClosingKm] = useState('');
   const [forceClosingFare, setForceClosingFare] = useState('');
@@ -1025,6 +1027,19 @@ export default function TripDetailScreen() {
           </View>
         )}
 
+        {/* A completed trip: correct the km and settle the commission difference (preview first) */}
+        {currentStatus === 'COMPLETED' && (
+          <View style={[styles.governanceCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={[styles.governanceTitle, { color: themeColors.text }]}>Trip is completed</Text>
+            <Text style={{ fontSize: 12.5, color: themeColors.textSecondary, marginBottom: 10, lineHeight: 18 }}>
+              Wrong km? Correct it here. You first see the new bill and the wallet difference; the extra commission is taken from (or returned to) the driver's wallet only if you confirm it.
+            </Text>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#1D4ED8' }]} onPress={() => setShowCorrectKm(true)} activeOpacity={0.85}>
+              <Text style={styles.actionBtnText}>Correct km & settle</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Card 7: Operational Governance Section */}
         {!isFinalized && (
           <View style={[styles.governanceCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
@@ -1614,6 +1629,18 @@ export default function TripDetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <CorrectKmModal
+        visible={showCorrectKm}
+        orderId={order?.id ?? order?._id ?? null}
+        isDark={isDark}
+        onClose={() => setShowCorrectKm(false)}
+        onDone={async (res) => {
+          setShowCorrectKm(false);
+          showToast(res.wallet_adjusted ? 'Km corrected and the wallets were adjusted' : 'Km corrected (wallets not changed)', 'success');
+          await loadOrderDetails();
+        }}
+      />
 
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
     </SafeAreaView>

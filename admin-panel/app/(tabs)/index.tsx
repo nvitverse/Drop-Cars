@@ -1708,6 +1708,13 @@ export default function DashboardScreen() {
                   route: '/billing-editor?type=INVOICE',
                 },
                 {
+                  label: 'Needs Attention',
+                  sub: 'Trips not started, no-show requests, penalised bookings waiting to go out again - you decide, nothing closes by itself',
+                  icon: AlertTriangle,
+                  color: '#B45309',
+                  route: '/needs-attention',
+                },
+                {
                   label: 'Unaccepted Bookings',
                   sub: 'Posted but nobody accepted - snooze, share, hand to a vendor, or cancel',
                   icon: AlertTriangle,

@@ -63,6 +63,8 @@ SYSTEM_SETTING_DEFAULTS = {
     "min_app_build_driver": "0",                # an installed Driver App with a build number below this must update (0 = off)
     "min_app_build_customer": "0",              # same for the Customer App
     "min_app_build_vendor": "0",                # same for the Vendor App
+    "no_start_alert_after_minutes": "120",      # minutes after pickup before the office is alerted that a driver has not started the trip (nothing is closed automatically)
+    "repost_approval_minutes": "10",            # a booking that comes back after its driver was penalised waits this long for the office to approve it (0 = straight out)
     "vendor_invoicing_enabled": "1",            # 1 = vendors can make estimates / invoices in their own name; 0 = switched off for everyone
     "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only
     "urgent_reminder_max_count": "1",           # drivers get this many "closing soon" pushes per booking (was one per minute)

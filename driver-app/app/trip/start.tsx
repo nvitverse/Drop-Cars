@@ -15,7 +15,8 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, Upload, ArrowLeft, CheckCircle, KeyRound, Gauge } from 'lucide-react-native';
-import { startTrip } from '@/services/driver/carDriverService';
+import { startTrip, requestNoShow } from '@/services/driver/carDriverService';
+import KeyboardSafeModal from '@/components/KeyboardSafe';
 import { startTripLocationSharing } from '@/services/locationService';
 import * as ImagePicker from 'expo-image-picker';
 import LoadingOverlay from '@/components/LoadingOverlay';
@@ -30,6 +31,9 @@ export default function StartTripScreen() {
   const [odometerPhoto, setOdometerPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [odometerShown, setOdometerShown] = useState(false);
+  const [noShowOpen, setNoShowOpen] = useState(false);
+  const [noShowReason, setNoShowReason] = useState('');
+  const [noShowBusy, setNoShowBusy] = useState(false);
   const router = useRouter();
   const { t } = useLanguage();
   const params = useLocalSearchParams<{
@@ -59,6 +63,19 @@ export default function StartTripScreen() {
     } catch (error) {
       Alert.alert(t('tripStart.photoErrorTitle'), t('tripStart.photoErrorBody'));
     }
+  };
+
+  const sendNoShow = async () => {
+    if (noShowReason.trim().length < 3) { Alert.alert(t('tripStart.noShowTitle'), t('tripStart.noShowPlaceholder')); return; }
+    setNoShowBusy(true);
+    try {
+      await requestNoShow(Number(params.order_id), noShowReason);
+      setNoShowOpen(false);
+      setNoShowReason('');
+      Alert.alert(t('tripStart.noShowTitle'), t('tripStart.noShowSent'));
+    } catch (e: any) {
+      Alert.alert(t('tripStart.noShowTitle'), e?.message || 'Could not send. Please try again.');
+    } finally { setNoShowBusy(false); }
   };
 
   const handleStartTrip = async () => {
@@ -312,7 +329,29 @@ export default function StartTripScreen() {
             <Text style={styles.startButtonText}>🚀 {t('tripStart.startTripButton')}</Text>
           )}
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => setNoShowOpen(true)} style={{ alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 8 }} activeOpacity={0.7}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13.5, fontWeight: '700', textDecorationLine: 'underline', textAlign: 'center' }}>{t('tripStart.noShowLink')}</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <KeyboardSafeModal visible={noShowOpen} transparent animationType="fade" onRequestClose={() => setNoShowOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>{t('tripStart.noShowTitle')}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 6, lineHeight: 19 }}>{t('tripStart.noShowBody')}</Text>
+            <TextInput value={noShowReason} onChangeText={setNoShowReason} placeholder={t('tripStart.noShowPlaceholder')} placeholderTextColor={colors.textSecondary} multiline
+              style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 12, minHeight: 70, color: colors.text, textAlignVertical: 'top' }} />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity onPress={() => setNoShowOpen(false)} style={{ flex: 1, minHeight: 46, borderRadius: 10, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>X</Text>
+              </TouchableOpacity>
+              <TouchableOpacity disabled={noShowBusy} onPress={sendNoShow} style={{ flex: 2.4, minHeight: 46, borderRadius: 10, backgroundColor: '#B45309', alignItems: 'center', justifyContent: 'center', opacity: noShowBusy ? 0.6 : 1 }}>
+                {noShowBusy ? <ActivityIndicator color="white" size="small" /> : <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>{t('tripStart.noShowSend')}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </KeyboardSafeModal>
     </SafeAreaView>
   );
 }

@@ -217,6 +217,10 @@ class VendorOrderDetailResponse(BaseModel):
     # get_vendor_order_details for which codes are returned.
     start_trip_otp: Optional[str] = None
     end_trip_otp: Optional[str] = None
+    # No-show: the poster can close a booking as a customer no-show while its trip has not started (crud/trip_exceptions.py).
+    can_no_show: bool = False
+    no_show_requested: bool = False
+    no_show_reason: Optional[str] = None
     # Was required UUID - made Optional 2026-09-04 (full schema-vs-model
     # audit) to match AdminOrderDetailResponse's sibling fix earlier this
     # session, even though this endpoint is vendor-scoped (a vendor only

@@ -90,6 +90,12 @@ export const startTrip = async (orderId: number, startKm?: number, imgUri?: stri
   }
 };
 
+/** The customer cancelled / is not there: recorded and sent to the office and the poster - only they can confirm it. */
+export const requestNoShow = async (orderId: number, reason: string) => {
+  const response = await axiosDriver.post(`/api/orders/driver/${orderId}/no-show-request`, { reason: reason.trim() });
+  return response.data;
+};
+
 export const endTrip = async (orderId: number, endKm?: number, contact?: string, imgUri?: string, tollCharges?: number, tollChargeUpdate?: boolean, waitingTime?: number, cashCollection?: number, otp?: string, extraChargesCollected?: { label: string; amount: number }[], distanceReason?: string) => {
   try {
     console.log('🏁 Ending trip for order:', orderId);

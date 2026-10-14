@@ -107,6 +107,12 @@ class OrderAssignment(Base):
     # stay open - this is detection/reporting, not real enforcement.
     tracking_left_at = Column(TIMESTAMP, nullable=True)
 
+    # Trip exceptions the office must decide on (crud/trip_exceptions.py): the trip was not started after pickup (one alert, never an
+    # automatic close) and the driver's request to mark the customer as a no-show / cancelled.
+    no_start_alerted_at = Column(TIMESTAMP, nullable=True)
+    no_show_requested_at = Column(TIMESTAMP, nullable=True)
+    no_show_reason = Column(String, nullable=True)
+
     # GPS-spoof fraud detection flag (speed > 140 km/h between pings)
     is_location_flagged = Column(Boolean, nullable=False, default=False, server_default="false")
     location_flag_reason = Column(String, nullable=True)

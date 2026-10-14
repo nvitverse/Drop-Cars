@@ -364,6 +364,36 @@ const cancelRecreateInput = () => {
     }
   };
 
+  // The customer did not turn up / cancelled after a driver was assigned: only the poster (or the office) can close it as a no-show.
+  // The driver's held amount goes back to them in full; the driver cannot do this himself.
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  const confirmNoShow = () => {
+    if (!orderDetails) return;
+    Alert.alert(
+      'Customer no-show?',
+      'The booking will be closed as a customer no-show and the driver\'s held amount is returned to them. This cannot be undone.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Yes, close it',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setNoShowBusy(true);
+              const res = await api.post(`/orders/vendor/${orderDetails.id}/no-show`, {});
+              Alert.alert('Done', res?.data?.message || 'Closed as no-show.', [{ text: 'OK', onPress: () => fetchOrderDetails() }]);
+            } catch (err: any) {
+              const detail = err?.response?.data?.detail;
+              Alert.alert('Could not close it', typeof detail === 'string' ? detail : 'Please try again.');
+            } finally {
+              setNoShowBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const makePhoneCall = (phoneNumber: string) => {
       Linking.openURL(`tel:${phoneNumber}`).catch(() => {
         Alert.alert('Error', 'Unable to open dial pad');
@@ -1260,6 +1290,26 @@ const cancelRecreateInput = () => {
             <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>Make invoice</Text>
           </TouchableOpacity>
         </View>
+
+        {(orderDetails as any).can_no_show && (
+          <View style={{ marginTop: 16, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FCD34D', backgroundColor: '#FFFBEB' }}>
+            <Text style={{ fontWeight: '800', fontSize: 14.5, color: '#92400E' }}>
+              {(orderDetails as any).no_show_requested ? 'The driver says the customer did not show up' : 'Customer did not show up / cancelled?'}
+            </Text>
+            {!!(orderDetails as any).no_show_reason && <Text style={{ color: '#78350F', fontSize: 13, marginTop: 4 }}>"{(orderDetails as any).no_show_reason}"</Text>}
+            <Text style={{ color: '#92400E', fontSize: 12.5, marginTop: 4, lineHeight: 18 }}>
+              Only you can confirm it. The driver's held amount is returned to them in full.
+            </Text>
+            <TouchableOpacity
+              onPress={confirmNoShow}
+              disabled={noShowBusy}
+              activeOpacity={0.85}
+              style={{ marginTop: 10, minHeight: 46, borderRadius: 10, backgroundColor: '#B45309', alignItems: 'center', justifyContent: 'center', opacity: noShowBusy ? 0.7 : 1 }}
+            >
+              {noShowBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Mark customer no-show</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {orderDetails.trip_status === 'PENDING' && (
           <TouchableOpacity

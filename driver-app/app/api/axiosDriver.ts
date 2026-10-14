@@ -244,7 +244,7 @@ axiosDriver.interceptors.response.use(
       error.message = 'Something went wrong on our end. Please try again in a moment.';
     } else if (error.response?.status === 429) {
       const d429 = error.response?.data?.detail;
-      error.message = typeof d429 === 'string' && d429 ? d429 : 'Please wait a minute and try again.';
+      error.message = typeof d429 === 'string' && d429 ? d429 : 'Too many tries in a short time. Please wait a few minutes and try again, or call Drop Cars support.';
     } else if (error.response?.status) {
       error.message = `Request could not be completed (${error.response.status}). Please try again.`;
     }

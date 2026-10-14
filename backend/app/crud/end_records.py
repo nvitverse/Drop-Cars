@@ -463,8 +463,13 @@ async def update_end_trip_record(
     cash_collection: int | None = None,
     extra_charges_collected: list | None = None,
     distance_reason: str | None = None,
+    recalc: bool = False,
 ) -> dict:
-    """Update end trip record and calculate fare"""
+    """Update end trip record and calculate fare.
+
+    recalc=True is the office correcting the km of a trip that is ALREADY closed (crud/km_correction.py): the whole fare / commission
+    maths runs exactly as at close - same rules, same split - but nothing is saved or moved: the new figures are returned and the
+    session is rolled back."""
     # Get the trip record, locked for the rest of this transaction - two
     # concurrent end-trip calls for the same order (e.g. a client retry
     # after a slow response, while the first request is still in flight)
@@ -478,7 +483,7 @@ async def update_end_trip_record(
     if not trip_record:
         raise ValueError("Trip record not found")
 
-    if trip_record.end_km > 0:
+    if trip_record.end_km > 0 and not recalc:
         raise ValueError("Trip already ended")
     # print("Hello")
     # Update trip record
@@ -684,7 +689,7 @@ async def update_end_trip_record(
         # time. Scale both to the ACTUAL day count so an overrun trip bills
         # correctly instead of quietly absorbing the extra day for free.
         if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
-            actual_days = max(1, _actual_trip_days(order.start_date_time, datetime.utcnow()))
+            actual_days = max(1, _actual_trip_days(order.start_date_time, (trip_record.updated_at or datetime.utcnow()) if recalc else datetime.utcnow()))
             min_km_key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
             min_km_total = _min_rules[min_km_key] * actual_days   # floor applies from day 1, not only on overrun days
             if updated_km < min_km_total:
@@ -883,6 +888,16 @@ async def update_end_trip_record(
         print("Admin profit", admin_profit)
         print("Driver profit", driver_profit)
         print("Vendor profit", vendor_profit)
+    if recalc:
+        _figures = {
+            "total_km": total_km,
+            "closed_vendor_price": int(order.closed_vendor_price or 0), "closed_driver_price": order.closed_driver_price,
+            "driver_profit": int(order.driver_profit or 0), "vendor_profit": int(order.vendor_profit or 0), "admin_profit": int(order.admin_profit or 0),
+            "commision_amount": order.commision_amount, "closing_breakdown": order.closing_breakdown,
+        }
+        db.rollback()                       # nothing of the simulated close is kept
+        return _figures
+
     order.trip_status = "COMPLETED"  # Update order status to completed
 
     # Push completed status and odometer KM to website for live sync

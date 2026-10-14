@@ -496,22 +496,19 @@ async def cancel_timed_out_pending_assignments(db: Session) -> int:
                     db, pickup_at, bool(getattr(order, "is_urgent", False)), accept_time=now
                 )
                 order.max_time_to_assign_order = order.created_at + timedelta(minutes=fresh_minutes)
-                try:
-                    from app.crud.notification import send_new_booking_notification_sync
-                    from app.crud.orders import _new_booking_push_text
-                    _dt = order.start_date_time
-                    _fmt = format_pickup_time_ist(_dt)
-                    _tt = order.trip_type.value if hasattr(order.trip_type, "value") else str(order.trip_type)
-                    _t, _m = _new_booking_push_text(_tt, order.pickup_drop_location, _fmt, order.car_type, order.vendor_price or order.estimated_price or 0)
-                    send_new_booking_notification_sync(
-                        db,
-                        f"🔁 Available again • {_t.replace('🚖 ', '')}",
-                        _m,
-                        ordered_city=order.pick_near_city,
-                        order_id=order.id,
-                    )
-                except Exception as e:
-                    print(f"Repost re-notify failed for order {order.id} (booking still reposted): {e}")
+                # Owner rule 2026-10-14: it goes back to ALL drivers, but the office is asked first. It stays hidden for
+                # repost_approval_minutes (default 10, never more than half the time left) unless approved sooner.
+                from app.crud.trip_exceptions import start_repost_hold, announce_repost, route_text
+                if start_repost_hold(db, order):
+                    try:
+                        from app.crud.notification import send_push_notification_to_admin
+                        await send_push_notification_to_admin(
+                            db, f"Booking #{order.id} is coming back - approve?",
+                            f"{route_text(order)}: its driver was penalised (no driver & car in time). It goes back to all drivers automatically in a few minutes - open Needs attention to send it now or cancel it.")
+                    except Exception as e:
+                        print(f"Repost approval push failed for order {order.id}: {e}")
+                else:
+                    announce_repost(db, order)
             else:
                 order.trip_status = "CANCELLED"
                 # Only set cancelled_by if the column exists (for backward compatibility)
@@ -559,7 +556,8 @@ async def cancel_expired_unaccepted_orders(db: Session) -> int:
         try:
             # Skip anything that has EVER been accepted (assignment exists)
             has_assignment = db.query(OrderAssignment).filter(
-                OrderAssignment.order_id == order.id
+                OrderAssignment.order_id == order.id,
+                OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
             ).first()
             if has_assignment:
                 continue
@@ -704,86 +702,7 @@ async def send_urgent_booking_reminders(db: Session) -> int:
     return notified
 
 
-async def complete_no_start_assignments(db: Session) -> int:
-    """Driver assigned but never started the trip: 24h after pickup time the
-    booking is marked COMPLETED and the owner's held commission+extras are
-    kept (split vendor/admin), per platform policy. Returns count processed."""
-    from datetime import timezone as _tz
-    from app.crud.wallet import get_trip_hold
-    from app.crud.admin_wallet import credit_admin_wallet
-    from app.models.admin import Admin
-
-    admin = db.query(Admin).first()
-    admin_id = str(admin.id) if admin else None
-
-    now = datetime.now(_tz.utc)
-    processed = 0
-
-    stale = (
-        db.query(OrderAssignment)
-        .join(Order, Order.id == OrderAssignment.order_id)
-        .filter(
-            OrderAssignment.assignment_status == AssignmentStatusEnum.ASSIGNED,
-            OrderAssignment.driver_id.isnot(None),
-            Order.trip_status == "PENDING",
-            Order.start_date_time.isnot(None),
-        )
-        .all()
-    )
-
-    for assignment in stale:
-        try:
-            order = db.query(Order).filter(Order.id == assignment.order_id).first()
-            if not order or order.start_date_time is None:
-                continue
-            start_at = order.start_date_time
-            if start_at.tzinfo is None:
-                start_at = start_at.replace(tzinfo=_tz.utc)
-            if now - start_at < timedelta(hours=24):
-                continue
-            # Trip actually started? Then leave it alone.
-            if db.query(EndRecord).filter(EndRecord.order_id == order.id).first():
-                continue
-
-            order.trip_status = "COMPLETED"
-            assignment.assignment_status = AssignmentStatusEnum.COMPLETED
-            assignment.completed_at = now
-
-            # Owner's hold is kept; split between vendor and admin
-            owner_id = str(assignment.vehicle_owner_id)
-            hold = get_trip_hold(db, order.id, owner_id)
-            if hold > 0:
-                if order.source == "NEW_ORDERS":
-                    dnew = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
-                    pct = (dnew.platform_fees_percent or 0) if dnew else (order.platform_fees_percent or 0)
-                else:
-                    pct = order.platform_fees_percent or 0
-                admin_share = math.ceil(hold * pct / 100)
-                vendor_share = hold - admin_share
-                if vendor_share > 0:
-                    credit_vendor_wallet(
-                        db=db,
-                        vendor_id=order.vendor_id,
-                        amount=vendor_share,
-                        order_id=order.id,
-                        notes=f"Booking {order.id}: driver never started trip (owner charges kept)",
-                    )
-                if admin_share > 0 and admin_id:
-                    credit_admin_wallet(
-                        db=db,
-                        admin_id=admin_id,
-                        amount=admin_share,
-                        order_id=order.id,
-                        notes=f"Penalty: booking {order.id} not started within 24h of pickup",
-                    )
-            processed += 1
-        except Exception as e:
-            print(f"No-start completion failed for assignment {assignment.id}: {e}")
-            continue
-
-    if processed:
-        db.commit()
-    return processed
+# complete_no_start_assignments was removed on 2026-10-14: a trip is never closed by a timer. See crud/trip_exceptions.alert_no_start_assignments.
 
 
 def get_order_assignment_by_id(db: Session, assignment_id: int) -> Optional[OrderAssignment]:
@@ -1101,7 +1020,18 @@ def get_pending_orders_for_vehicle_owner(db: Session, vehicle_owner_id: str) -> 
             OrderAssignment.order_id == order.id
         ).order_by(desc(OrderAssignment.created_at)).first()
 
-        if not latest_assignment:
+        # Back in the pool after its driver was penalised / removed / withdrew: shown again to everyone EXCEPT the owner who lost it,
+        # and not while it waits for the office to approve the repost.
+        _reopened = bool(latest_assignment and latest_assignment.assignment_status == AssignmentStatusEnum.CANCELLED)
+        if _reopened:
+            from app.crud.trip_exceptions import repost_is_held
+            if repost_is_held(order):
+                continue
+            _had_it = db.query(OrderAssignment.vehicle_owner_id).filter(OrderAssignment.order_id == order.id).all()
+            if any(str(r[0]) == str(vehicle_owner_id) for r in _had_it):
+                continue
+
+        if not latest_assignment or _reopened:
             if order.source == OrderSourceEnum.NEW_ORDERS:
                 new_order = db.query(NewOrder).filter(NewOrder.order_id == order.source_order_id).first()
                 

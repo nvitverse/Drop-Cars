@@ -793,7 +793,7 @@ def get_driver_assigned_completed_trips_endpoint(
 from app.core.limiter import limiter
 
 @router.post("/driver/start-trip/{order_id}", response_model=StartTripResponse)
-@limiter.limit("5/10minute")
+@limiter.limit("12/10minute")
 async def start_trip(
     request: Request,
     order_id: int,
@@ -941,7 +941,7 @@ def driver_location_sharing_paused(
 
 
 @router.post("/driver/end-trip/{order_id}", response_model=EndTripResponse)
-@limiter.limit("5/10minute")
+@limiter.limit("12/10minute")
 async def end_trip(
     request: Request,
     order_id: int,

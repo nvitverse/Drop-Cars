@@ -683,6 +683,14 @@ def get_all_admin_orders(db: Session, skip: int = 0, limit: int = 100, order_id:
     return order_responses, total_count
 
 
+def _no_show_fields(db: Session, order_id: int) -> dict:
+    try:
+        from app.crud.trip_exceptions import no_show_state
+        return no_show_state(db, order_id)
+    except Exception:       # noqa: BLE001 - the booking screen must never fail because of this extra
+        return {}
+
+
 def get_vendor_order_details(db: Session, order_id: int, vendor_id: str) -> Optional[VendorOrderDetailResponse]:
     """Get limited order details for vendor (excludes sensitive user data)"""
     order = get_order_by_id(db, order_id)
@@ -849,7 +857,8 @@ def get_vendor_order_details(db: Session, order_id: int, vendor_id: str) -> Opti
         vehicle_owner_name=vehicle_owner_name,
         vendor_profit=order.vendor_profit,
         admin_profit=order.admin_profit,
-        vehicle_owner_number=vehicle_owner_number
+        vehicle_owner_number=vehicle_owner_number,
+        **_no_show_fields(db, order_id),
     )
 
 

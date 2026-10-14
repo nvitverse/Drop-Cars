@@ -95,6 +95,11 @@ class Order(Base):
     # can't get spammed forever - see send_urgent_booking_reminders.
     urgent_notify_count = Column(Integer, nullable=False, server_default='0')
 
+    # A booking that comes back to the pool after its driver was penalised (no driver & car in time) waits here for the office to
+    # approve it, or until this time passes (setting repost_approval_minutes). Drivers do not see it while it waits.
+    repost_hold_until = Column(TIMESTAMP(timezone=True), nullable=True)
+    repost_announced_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
     # Trip Start/End OTPs, created when the booking is posted (not when a
     # driver is assigned) so the vendor can hand them to the customer
     # straight away. Every assignment for this booking copies these same

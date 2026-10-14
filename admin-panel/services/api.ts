@@ -909,6 +909,11 @@ class ApiService {
     });
   }
 
+  // Correct the km of a COMPLETED trip: preview first (nothing changes), then apply with or without posting the commission difference to the wallets
+  async correctTripKm(orderId: number | string, payload: { end_km: number; reason: string; adjust_wallet: boolean; preview: boolean }): Promise<any> {
+    return this.makeRequest(`/admin/orders/${orderId}/correct-km`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
   async forceCompleteOrder(orderId: number | string, payload?: { end_km?: number; final_fare?: number; note?: string }): Promise<any> {
     return this.makeRequest(`/admin/orders/${orderId}/force-complete`, {
       method: 'POST',
