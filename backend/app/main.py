@@ -294,6 +294,8 @@ from app.api.routes import admin_trip_close as _trip_close
 from app.api.routes import billing_docs as _billing_docs
 app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estimates"])
 app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
+from app.api.routes import vendor_billing as _vendor_billing
+app.include_router(_vendor_billing.router, prefix="/api", tags=["Vendor invoices"])
 from app.api.routes import unaccepted_desk as _unaccepted_desk
 app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
 from app.api.routes import portal as _portal
@@ -543,6 +545,9 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_driver_name VARCHAR',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_car_id VARCHAR',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS vacant_car_number VARCHAR',
+        # Vendor invoices in the vendor's own name (2026-10-14)
+        'ALTER TABLE billing_brands ADD COLUMN IF NOT EXISTS owner_vendor_id UUID',
+        'ALTER TABLE billing_documents ADD COLUMN IF NOT EXISTS vendor_id UUID',
         # Yearly-fee billing columns (dormant until an admin enables billing)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_next_date DATE',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_last_charged_at TIMESTAMPTZ',

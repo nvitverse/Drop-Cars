@@ -72,3 +72,35 @@ def test_vendor_terms_default_is_real_text_with_placeholders_filled(client_with_
     assert "{support_phone}" not in d["body"] and "{commission_min}" not in d["body"]
     ta = client_with_db.get("/api/public/app-content/vendor_terms?lang=ta").json()
     assert "வெண்டர்" in ta["body"]
+
+
+def test_statement_comes_from_the_ledger_and_customer_message_is_own_booking_only(pg_session, client_with_db):
+    from app.models.vendor_wallet_ledger import VendorWalletLedger, VendorLedgerEntryType
+    creds, details = _vendor(pg_session)
+    other, _ = _vendor(pg_session)
+    h = _auth(creds)
+    pg_session.add(VendorWalletLedger(vendor_id=creds.id, entry_type=VendorLedgerEntryType.CREDIT, amount=420, balance_before=0, balance_after=420, notes="Trip 1 vendor profit"))
+    pg_session.add(VendorWalletLedger(vendor_id=creds.id, entry_type=VendorLedgerEntryType.DEBIT, amount=100, balance_before=420, balance_after=320, notes="adjust"))
+    pg_session.flush()
+    from datetime import datetime
+    now = datetime.utcnow()
+    st = client_with_db.get(f"/api/users/vendor/reports/monthly-statement?year={now.year}&month={now.month}", headers=h)
+    assert st.status_code == 200, st.text
+    s = st.json()["summary"]
+    assert s["earned"] == 420 and s["deducted"] == 100 and s["net"] == 320 and s["closing_balance"] == 320
+    e = client_with_db.get("/api/users/vendor/reports/earnings-summary", headers=h).json()
+    assert e["this_month"]["earned"] == 420 and e["open_bookings"] == 0
+
+    from tests.test_vendor_billing import _order
+    mine = _order(pg_session, creds.id, "Customer A")
+    theirs = _order(pg_session, other.id, "Customer B")
+    m = client_with_db.get(f"/api/users/vendor/orders/{mine.id}/customer-message", headers=h)
+    assert m.status_code == 200, m.text
+    assert "Customer A" in m.json()["message"] and "Chennai" in m.json()["message"] and "track" not in m.json()["message"].lower()
+    assert client_with_db.get(f"/api/users/vendor/orders/{theirs.id}/customer-message", headers=h).status_code == 404
+
+
+def test_a_vendor_cannot_approve_their_own_aadhaar(pg_session, client_with_db):
+    creds, _ = _vendor(pg_session)
+    r = client_with_db.patch("/api/users/vendor/document-status", headers=_auth(creds), json={"status": "VERIFIED"})
+    assert r.status_code == 403

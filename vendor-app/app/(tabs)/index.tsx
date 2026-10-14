@@ -25,8 +25,11 @@ import {
   CheckCircle2,
   ShieldCheck,
   Zap,
+  FileText,
 } from 'lucide-react-native';
+
 import api from '../api/api';
+import EarningsCard from '../../components/EarningsCard';
 import { router } from 'expo-router';
 
 interface VendorData {
@@ -304,6 +307,8 @@ export default function VendorDashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
 
+        <EarningsCard />
+
         {/* Operations Grid */}
         <View style={styles.quickActionsContainer}>
           <Text style={styles.sectionHeaderTitle}>Dashboard Operations</Text>
@@ -360,6 +365,19 @@ export default function VendorDashboardScreen() {
               </View>
               <Text style={styles.quickActionLabel} numberOfLines={1} adjustsFontSizeToFit>Chats</Text>
               <Text style={styles.quickActionSub} numberOfLines={1}>Drivers on your trips</Text>
+            </TouchableOpacity>
+
+            {/* Invoices & estimates in the vendor's own name */}
+            <TouchableOpacity
+              style={styles.quickActionTile}
+              onPress={() => router.push('/(menu)/invoices' as any)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickActionIconBg, { backgroundColor: '#EFF6FF' }]}>
+                <FileText size={20} color="#1D4ED8" />
+              </View>
+              <Text style={styles.quickActionLabel} numberOfLines={1} adjustsFontSizeToFit>Invoices</Text>
+              <Text style={styles.quickActionSub} numberOfLines={1}>In your name</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,88 +1,63 @@
+"""Vendor statements, built from the vendor's wallet ledger - the one record every credit and debit goes through, so the statement can never
+disagree with the wallet balance. (It used to re-derive a "2% commission" from the bookings, which stopped being true with the v2 commission
+rules and showed numbers that matched nothing in the wallet.)"""
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import extract, func
+from typing import Any, Dict
 
-from app.models.orders import Order, Trip_status
+from sqlalchemy import extract
+from sqlalchemy.orm import Session
+
+from app.models.payout_request import PayoutRequest, PayoutRequestStatusEnum
 from app.models.vendor import VendorCredentials as Vendor
 from app.models.vendor_details import VendorDetails
+from app.models.vendor_wallet_ledger import VendorLedgerEntryType, VendorWalletLedger
 
 logger = logging.getLogger(__name__)
 
 
-def generate_vendor_monthly_statement(
-    db: Session,
-    vendor_id: str,
-    year: int,
-    month: int
-) -> Dict[str, Any]:
-    """
-    Calculates monthly statement metrics for a Vendor:
-    - Total completed trips
-    - Gross booking value
-    - 2% Admin Platform Commission
-    - Net Earnings & Wallet Holds
-    """
+def _month_rows(db: Session, vendor_id: str, year: int, month: int):
+    return (db.query(VendorWalletLedger)
+            .filter(VendorWalletLedger.vendor_id == vendor_id, extract("year", VendorWalletLedger.created_at) == year,
+                    extract("month", VendorWalletLedger.created_at) == month)
+            .order_by(VendorWalletLedger.created_at.asc()).all())
+
+
+def generate_vendor_monthly_statement(db: Session, vendor_id: str, year: int, month: int) -> Dict[str, Any]:
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
-    vendor_detail = db.query(VendorDetails).filter(VendorDetails.vendor_id == vendor_id).first()
-    
-    business_name = getattr(vendor_detail, "company_name", None) or getattr(vendor, "full_name", "Vendor")
-
-    # Fetch completed orders for the specified month/year
-    completed_orders = db.query(Order).filter(
-        Order.vendor_id == vendor_id,
-        Order.trip_status == Trip_status.COMPLETED,
-        extract('year', Order.start_date_time) == year,
-        extract('month', Order.start_date_time) == month
-    ).all()
-
-    total_trips = len(completed_orders)
-    total_gross = 0.0
-    total_commission_2pct = 0.0
-    total_advance_received = 0.0
-    total_cash_collected_by_drivers = 0.0
-
-    trip_list = []
-    for order in completed_orders:
-        fare = float(getattr(order, "total_booking_amount", 0) or getattr(order, "driver_fare", 0) or 0)
-        commission = round(fare * 0.02, 2)
-        advance = float(getattr(order, "advance_received", 0) or 0)
-        cash_collect = float(getattr(order, "cash_to_collect", 0) or 0)
-
-        total_gross += fare
-        total_commission_2pct += commission
-        total_advance_received += advance
-        total_cash_collected_by_drivers += cash_collect
-
-        trip_list.append({
-            "order_id": str(order.id),
-            "booking_id": getattr(order, "booking_id", str(order.id)[:8]),
-            "date": order.created_at.strftime("%Y-%m-%d") if order.created_at else "",
-            "pickup_city": getattr(order, "pickup_city", ""),
-            "drop_city": getattr(order, "drop_city", ""),
-            "gross_fare": fare,
-            "platform_fee_2pct": commission,
-            "advance_received": advance,
-            "cash_collected": cash_collect
-        })
-
-    net_settlement = round(total_gross - total_commission_2pct, 2)
-
-    statement_data = {
-        "vendor_id": vendor_id,
-        "business_name": business_name,
-        "period": f"{year}-{month:02d}",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+    detail = db.query(VendorDetails).filter(VendorDetails.vendor_id == vendor_id).first()
+    name = getattr(detail, "business_name", None) or getattr(detail, "full_name", None) or "Vendor"
+    rows = _month_rows(db, vendor_id, year, month)
+    credits = sum(int(r.amount) for r in rows if r.entry_type == VendorLedgerEntryType.CREDIT)
+    debits = sum(int(r.amount) for r in rows if r.entry_type == VendorLedgerEntryType.DEBIT)
+    trips = {r.order_id for r in rows if r.order_id is not None and r.entry_type == VendorLedgerEntryType.CREDIT}
+    paid_out = (db.query(PayoutRequest)
+                .filter(PayoutRequest.vendor_id == vendor_id, PayoutRequest.status == PayoutRequestStatusEnum.PAID,
+                        extract("year", PayoutRequest.processed_at) == year, extract("month", PayoutRequest.processed_at) == month).all())
+    return {
+        "vendor_id": str(vendor_id), "business_name": name, "period": f"{year}-{month:02d}", "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "total_completed_trips": total_trips,
-            "gross_booking_amount": total_gross,
-            "platform_commission_2pct": total_commission_2pct,
-            "total_advance_received": total_advance_received,
-            "total_cash_collected": total_cash_collected_by_drivers,
-            "net_vendor_settlement": net_settlement
+            "earned": credits, "deducted": debits, "net": credits - debits, "trips_with_earnings": len(trips),
+            "paid_out_to_bank": sum(int(p.amount) for p in paid_out),
+            "opening_balance": int(rows[0].balance_before) if rows else None, "closing_balance": int(rows[-1].balance_after) if rows else None,
         },
-        "trips": trip_list
+        "entries": [{"date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "", "type": r.entry_type.value, "amount": int(r.amount),
+                     "order_id": r.order_id, "notes": r.notes, "balance_after": int(r.balance_after)} for r in rows],
     }
 
-    return statement_data
+
+def vendor_earnings_summary(db: Session, vendor_id: str) -> Dict[str, Any]:
+    """Dashboard card: this month and last month, from the same ledger."""
+    now = datetime.now(timezone.utc)
+    ly, lm = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
+    this_m = generate_vendor_monthly_statement(db, vendor_id, now.year, now.month)["summary"]
+    last_m = generate_vendor_monthly_statement(db, vendor_id, ly, lm)["summary"]
+    detail = db.query(VendorDetails).filter(VendorDetails.vendor_id == vendor_id).first()
+    open_orders = 0
+    try:
+        from app.models.orders import Order, Trip_status
+        open_orders = db.query(Order).filter(Order.vendor_id == vendor_id, Order.trip_status.in_([Trip_status.PENDING, Trip_status.ASSIGNED, Trip_status.STARTED])).count()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("open order count failed: %s", e)
+    return {"this_month": this_m, "last_month": last_m, "wallet_balance": int(getattr(detail, "wallet_balance", 0) or 0), "open_bookings": open_orders,
+            "this_period": f"{now.year}-{now.month:02d}", "last_period": f"{ly}-{lm:02d}"}

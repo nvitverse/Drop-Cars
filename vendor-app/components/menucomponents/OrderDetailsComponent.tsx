@@ -319,6 +319,26 @@ const cancelRecreateInput = () => {
     }
   };
 
+  // The booking confirmation for the vendor's own customer, written by the server from this booking (route, time, vehicle, driver, trip code).
+  const [messaging, setMessaging] = useState(false);
+  const sendToCustomer = async () => {
+    if (!orderDetails) return;
+    setMessaging(true);
+    try {
+      const res = await api.get(`/users/vendor/orders/${orderDetails.id}/customer-message`);
+      const { message, whatsapp_url } = res.data || {};
+      if (whatsapp_url) {
+        await Linking.openURL(whatsapp_url);
+      } else {
+        await Share.share({ message: message || '' });
+      }
+    } catch (e: any) {
+      Alert.alert('Could not prepare the message', e?.message || 'Please try again.');
+    } finally {
+      setMessaging(false);
+    }
+  };
+
   const cancelOrder = () => {
     if (!orderDetails) return;
     setShowCancelReason(true);
@@ -1220,6 +1240,26 @@ const cancelRecreateInput = () => {
             />
           </View>
         )}
+
+        {/* For the vendor's own customer: the confirmation to send (WhatsApp) and an estimate / invoice in the vendor's own name. */}
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+          <TouchableOpacity
+            onPress={sendToCustomer}
+            disabled={messaging}
+            activeOpacity={0.85}
+            style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#16A34A', borderRadius: 12, paddingHorizontal: 8, opacity: messaging ? 0.7 : 1 }}
+          >
+            {messaging ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Send size={15} color="#FFFFFF" />}
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>Send to customer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/(menu)/invoice-editor' as any, params: { type: 'INVOICE', ref: String(orderDetails.id) } })}
+            activeOpacity={0.85}
+            style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#1D4ED8', borderRadius: 12, paddingHorizontal: 8 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>Make invoice</Text>
+          </TouchableOpacity>
+        </View>
 
         {orderDetails.trip_status === 'PENDING' && (
           <TouchableOpacity

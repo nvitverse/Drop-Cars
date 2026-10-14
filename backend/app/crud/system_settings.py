@@ -62,6 +62,7 @@ SYSTEM_SETTING_DEFAULTS = {
     "verified_car_required_for": "",            # booking kinds that need a fully VERIFIED car, comma separated: CORPORATE, DROP_BID, ALL_INCLUSIVE, WEBSITE (empty = none)
     "min_app_build_driver": "0",                # an installed Driver App with a build number below this must update (0 = off)
     "min_app_build_customer": "0",              # same for the Customer App
+    "min_app_build_vendor": "0",                # same for the Vendor App
     "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only
     "urgent_reminder_max_count": "1",           # drivers get this many "closing soon" pushes per booking (was one per minute)
     "fleet_payment_channels": "Wallet,GPay,PhonePe,Paytm,Bank Transfer,Cash in Hand",   # comma separated; "Wallet" debits the partner's wallet

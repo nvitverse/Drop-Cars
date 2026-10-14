@@ -9,6 +9,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import UpdateGate from '@/components/UpdateGate';
+import ForceUpdateGate from '@/components/ForceUpdateGate';
 
 // react-native-web's Alert.alert is a no-op - patch it before any screen can
 // call Alert.alert (sign-in errors, validation, etc. all rely on it). No-op
@@ -41,6 +42,7 @@ export default function RootLayout() {
         <StatusBar style="auto" />
         <WebAlertHost />
         <UpdateGate />
+        <ForceUpdateGate />
       </LanguageProvider>
     </GlobalErrorBoundary>
   );

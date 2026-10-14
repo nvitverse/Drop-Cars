@@ -304,7 +304,9 @@ def update_vendor_document_status(
     db: Session = Depends(get_db),
     vendor_id: str = Depends(get_current_vendor),
 ):
-    """Update document status for vendor (admin only)"""
+    """Only the Drop Cars team can change a document's status. This route used to accept the VENDOR'S OWN token, so a vendor could have set
+    their own Aadhaar to Verified; nothing in the apps used it, so it now simply refuses."""
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Drop Cars team can change the status of a document.")
     vendor_credentials, vendor_details = get_vendor_with_details(db, str(vendor_id.id))
     
     if not vendor_details:
@@ -747,6 +749,59 @@ def get_vendor_monthly_report_api(
     """Generates monthly trip settlement summary & breakdown for Vendor App direct PDF download."""
     from app.services.vendor_pdf_report import generate_vendor_monthly_statement
     return generate_vendor_monthly_statement(db, str(current_vendor.id), year, month)
+
+
+@router.get("/vendor/reports/earnings-summary")
+def get_vendor_earnings_summary_api(db: Session = Depends(get_db), current_vendor=Depends(get_current_vendor)):
+    """Dashboard card: this month and last month earned / deducted, trips with earnings, wallet balance, open bookings (all from the wallet ledger)."""
+    from app.services.vendor_pdf_report import vendor_earnings_summary
+    return vendor_earnings_summary(db, str(current_vendor.id))
+
+
+@router.get("/vendor/orders/{order_id}/customer-message")
+def vendor_customer_message(order_id: int, db: Session = Depends(get_db), current_vendor=Depends(get_current_vendor)):
+    """The booking confirmation the vendor sends to THEIR customer (WhatsApp): route, pickup time, vehicle, driver, the start-trip code the customer
+    gives the driver. (No tracking link: there is no public tracking page for app bookings yet - the website tracks website bookings only.) Built on the server from the vendor's own booking (nothing typed or guessed on the phone), signed
+    with the vendor's business name."""
+    import urllib.parse
+    from datetime import timedelta, timezone
+    from app.models.orders import Order
+    from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
+    from app.models.vendor_details import VendorDetails
+    from app.models.car_driver import CarDriver
+    from app.models.car_details import CarDetails
+    order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == current_vendor.id).first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    vd = db.query(VendorDetails).filter(VendorDetails.vendor_id == current_vendor.id).first()
+    biz = (getattr(vd, "business_name", None) or getattr(vd, "full_name", None) or "Drop Cars").strip()
+    loc = order.pickup_drop_location or {}
+    keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0) if isinstance(loc, dict) else []
+    pickup, drop = (loc.get(keys[0]) if keys else None), (loc.get(keys[-1]) if len(keys) > 1 else None)
+    when = order.start_date_time.astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%d %b %Y, %I:%M %p") if order.start_date_time else None
+    a = (db.query(OrderAssignment).filter(OrderAssignment.order_id == order.id, OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED)
+         .order_by(OrderAssignment.created_at.desc()).first())
+    driver = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a is not None and a.driver_id else None
+    car = db.query(CarDetails).filter(CarDetails.id == a.car_id).first() if a is not None and a.car_id else None
+    lines = [f"Hello {order.customer_name or ''}, your trip is booked with {biz}.".replace("Hello ,", "Hello,"), f"Booking no: {order.id}"]
+    if pickup or drop:
+        lines.append(f"Route: {pickup or '-'}" + (f" to {drop}" if drop else ""))
+    if when:
+        lines.append(f"Pickup: {when}")
+    if car or driver:
+        lines.append("Vehicle: " + " ".join(x for x in [getattr(car, "car_name", None), getattr(car, "car_number", None)] if x))
+    if driver:
+        lines.append(f"Driver: {driver.full_name}" + (f", {getattr(driver, 'primary_number', None) or ''}" if getattr(driver, "primary_number", None) else ""))
+        code = getattr(order, "start_trip_otp", None) or (getattr(a, "start_trip_otp", None) if a is not None else None)
+        if code:
+            lines.append(f"Trip start code: {code}  (tell this to the driver when you board)")
+    else:
+        lines.append("Driver and vehicle details will be shared as soon as a driver accepts.")
+    lines.append(f"- {biz}" + (f", {vd.primary_number}" if vd is not None and getattr(vd, "primary_number", None) else ""))
+    msg = "\n".join(lines)
+    digits = "".join(ch for ch in str(order.customer_number or "") if ch.isdigit())[-10:]
+    return {"message": msg, "phone": f"91{digits}" if len(digits) == 10 else None,
+            "whatsapp_url": f"https://wa.me/91{digits}?text={urllib.parse.quote(msg)}" if len(digits) == 10 else None}
 
 
 @router.post("/vendor/whatsapp-slip")

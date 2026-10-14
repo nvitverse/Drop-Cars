@@ -74,3 +74,18 @@ export const createImageFormData = async (imageInfo: ImageInfo): Promise<FormDat
 
   return formData;
 };
+
+/** Take the photo with the camera instead of choosing one from the gallery (a vendor holding the Aadhaar card in hand). */
+export const takePhoto = async (): Promise<ImageInfo | null> => {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) {
+    throw new Error('Please allow the camera in your phone settings to take the photo.');
+  }
+  const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+  if (result.canceled || !result.assets || result.assets.length === 0) return null;
+  const asset = result.assets[0];
+  if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+    throw new Error('Image size must be less than 5MB');
+  }
+  return { uri: asset.uri, type: asset.mimeType || 'image/jpeg', name: `aadhar_${Date.now()}.${(asset.uri.split('.').pop() || 'jpg')}`, size: asset.fileSize || 0 };
+};

@@ -200,7 +200,8 @@ def get_brand(db: Session, brand_id: Optional[str]) -> BillingBrand:
         except ValueError:
             b = db.query(BillingBrand).filter(BillingBrand.code == str(brand_id)).first()
     if b is None:
-        b = db.query(BillingBrand).filter(BillingBrand.is_default.is_(True), BillingBrand.is_active.is_(True)).first() or db.query(BillingBrand).first()
+        b = (db.query(BillingBrand).filter(BillingBrand.is_default.is_(True), BillingBrand.is_active.is_(True), BillingBrand.owner_vendor_id.is_(None)).first()
+             or db.query(BillingBrand).filter(BillingBrand.owner_vendor_id.is_(None)).first())
     if b is None:
         raise HTTPException(status_code=404, detail="No brand is set up yet")
     return b
@@ -466,7 +467,7 @@ def issue(db: Session, doc: BillingDocument, admin_name: str) -> BillingDocument
     doc.issued_at = datetime.now(timezone.utc)
     recalc(doc)
     _log(doc, admin_name, "ISSUED", doc.number)
-    if doc.doc_type == "INVOICE" and doc.gst_mode != "NONE":
+    if doc.doc_type == "INVOICE" and doc.gst_mode != "NONE" and not doc.vendor_id:      # a vendor's GST is the vendor's own, never filed under Drop Cars
         _sync_tax_ledger(db, doc, admin_name)
     return doc
 
@@ -662,7 +663,7 @@ def reconcile_pending_links(db: Session, max_docs: int = 40) -> dict:
 # ---------------------------------------------------------------- listing
 def list_documents(db: Session, doc_type: Optional[str], status: Optional[str], brand_id: Optional[str], search: Optional[str], limit: int, skip: int,
                    created_by: Optional[str] = None) -> List[BillingDocument]:
-    q = db.query(BillingDocument)
+    q = db.query(BillingDocument).filter(BillingDocument.vendor_id.is_(None))      # vendors' own invoices never show in the staff list
     if created_by:
         q = q.filter(BillingDocument.created_by == created_by)
     if doc_type:

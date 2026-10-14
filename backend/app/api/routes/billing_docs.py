@@ -121,7 +121,7 @@ def _apply_brand(b: BillingBrand, body: BrandIn, db: Session) -> None:
 @router.get("/brands")
 def list_brands(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
     svc.seed_default_brands(db)
-    return [svc.brand_dict(b) for b in db.query(BillingBrand).order_by(BillingBrand.is_default.desc(), BillingBrand.name).all()]
+    return [svc.brand_dict(b) for b in db.query(BillingBrand).filter(BillingBrand.owner_vendor_id.is_(None)).order_by(BillingBrand.is_default.desc(), BillingBrand.name).all()]
 
 
 @router.post("/brands")

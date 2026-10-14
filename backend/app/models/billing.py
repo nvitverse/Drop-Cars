@@ -57,6 +57,7 @@ class BillingBrand(Base):
     payment_links_enabled = Column(Boolean, nullable=False, server_default="true")
     is_default = Column(Boolean, nullable=False, server_default="false")
     is_active = Column(Boolean, nullable=False, server_default="true")
+    owner_vendor_id = Column(UUID(as_uuid=True), nullable=True, index=True)   # set = this is a VENDOR's own business profile (their name on their invoices), never listed to staff
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -116,6 +117,7 @@ class BillingDocument(Base):
     history = Column(JSON, nullable=True)
     cancel_reason = Column(String, nullable=True)
 
+    vendor_id = Column(UUID(as_uuid=True), nullable=True, index=True)       # set = a vendor made this in their own name (kept out of the staff lists and the GST ledger)
     created_by = Column(String, nullable=True)                              # the staff member who made it (shown on the document and in the list)
     created_by_phone = Column(String, nullable=True)                        # so a follow-up question goes to the same person
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False, index=True)
