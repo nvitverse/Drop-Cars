@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { CheckCircle, Clock, FileText, Car, User, Home } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, Clock, FileText, Car, User, Home } from 'lucide-react-native';
+import { fetchDocumentStatuses } from '@/services/documents/documentStatusService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -19,6 +20,32 @@ export default function DocumentsReviewScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { colors, isDarkMode } = useTheme();
+
+  // The REAL state of each group of documents (it used to say "Under Review" for everything, whatever the truth was, and promised 24-48 hours
+  // before the account would be "activated" - but a car or driver works as soon as its documents are valid; checking runs in the background).
+  type Group = 'owner' | 'driver' | 'car';
+  const [state, setState] = useState<Record<Group, 'verified' | 'checking' | 'fix' | 'none'>>({ owner: 'checking', driver: 'checking', car: 'checking' });
+  useEffect(() => {
+    let alive = true;
+    fetchDocumentStatuses().then((list: any[]) => {
+      if (!alive) return;
+      const next: Record<Group, 'verified' | 'checking' | 'fix' | 'none'> = { owner: 'none', driver: 'none', car: 'none' };
+      (['owner', 'driver', 'car'] as Group[]).forEach((g) => {
+        const sts: string[] = [];
+        (list || []).filter((e: any) => String(e.entity_type || '').toLowerCase() === (g === 'owner' ? 'vehicle_owner' : g)).forEach((e: any) => {
+          Object.values(e.documents || {}).forEach((d: any) => sts.push(String(d?.status || 'PENDING').toUpperCase()));
+        });
+        next[g] = sts.length === 0 ? 'none' : sts.some((x) => x === 'INVALID') ? 'fix' : sts.every((x) => x === 'VERIFIED') ? 'verified' : 'checking';
+      });
+      setState(next);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const chip = (st: 'verified' | 'checking' | 'fix' | 'none') =>
+    st === 'verified' ? { text: t('documentsReview.verifiedLabel'), color: '#16A34A', bg: isDarkMode ? '#064E3B' : '#DCFCE7' }
+    : st === 'fix' ? { text: t('documentsReview.needsAttention'), color: '#DC2626', bg: isDarkMode ? '#7F1D1D' : '#FEE2E2' }
+    : st === 'none' ? { text: t('documentsReview.notUploaded'), color: colors.textSecondary, bg: isDarkMode ? '#1F2937' : '#F1F5F9' }
+    : { text: t('documentsReview.underReview'), color: colors.warning, bg: isDarkMode ? '#78350F' : '#FEF3C7' };
 
   const handleGoToDashboard = () => {
     router.replace('/(tabs)');
@@ -100,21 +127,27 @@ export default function DocumentsReviewScreen() {
               <View style={[styles.documentItem, { backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.7)' }]}>
                 <FileText color={colors.textSecondary} size={16} />
                 <Text style={[styles.documentText, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>{t('documentsReview.accountOwnerDocuments')}</Text>
-                <Text style={[styles.documentStatus, { color: colors.warning, backgroundColor: isDarkMode ? '#78350F' : '#FEF3C7' }]}>{t('documentsReview.underReview')}</Text>
+                <Text style={[styles.documentStatus, { color: chip(state.owner).color, backgroundColor: chip(state.owner).bg }]}>{chip(state.owner).text}</Text>
               </View>
 
               <View style={[styles.documentItem, { backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.7)' }]}>
                 <FileText color={colors.textSecondary} size={16} />
                 <Text style={[styles.documentText, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>{t('documentsReview.driverDocuments')}</Text>
-                <Text style={[styles.documentStatus, { color: colors.warning, backgroundColor: isDarkMode ? '#78350F' : '#FEF3C7' }]}>{t('documentsReview.underReview')}</Text>
+                <Text style={[styles.documentStatus, { color: chip(state.driver).color, backgroundColor: chip(state.driver).bg }]}>{chip(state.driver).text}</Text>
               </View>
 
               <View style={[styles.documentItem, { backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.7)' }]}>
                 <FileText color={colors.textSecondary} size={16} />
                 <Text style={[styles.documentText, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>{t('documentsReview.carRegistration')}</Text>
-                <Text style={[styles.documentStatus, { color: colors.warning, backgroundColor: isDarkMode ? '#78350F' : '#FEF3C7' }]}>{t('documentsReview.underReview')}</Text>
+                <Text style={[styles.documentStatus, { color: chip(state.car).color, backgroundColor: chip(state.car).bg }]}>{chip(state.car).text}</Text>
               </View>
             </View>
+            {(state.owner === 'fix' || state.driver === 'fix' || state.car === 'fix') ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'flex-start' }}>
+                <AlertTriangle color="#DC2626" size={18} />
+                <Text style={{ flex: 1, color: '#B91C1C', fontSize: 13, lineHeight: 19 }}>{t('documentsReview.fixHint')}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
