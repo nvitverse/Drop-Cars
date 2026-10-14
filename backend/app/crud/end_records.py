@@ -87,6 +87,10 @@ def closing_breakdown_for_order(db, order) -> dict | None:
         if order.trip_type == OrderTypeEnum.ONEWAY:
             floor = int(rules["oneway_min_km"])
             billed = max(km_driven, floor)
+        elif order.trip_type == OrderTypeEnum.LOCAL:
+            from app.crud.local_drop import local_min_km as _lmk
+            floor = _lmk(new_order.charge_items, int(rules["local_drop_min_km"]))
+            billed = max(km_driven, floor)
         elif order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
             days = max(1, _actual_trip_days(order.start_date_time, er.updated_at or er.created_at))
             key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
@@ -253,6 +257,9 @@ def build_customer_bill(db, order) -> dict:
         billed_km = km_driven
         if order.trip_type == OrderTypeEnum.ONEWAY:
             billed_km = max(km_driven, int(get_fare_rules()["oneway_min_km"]))
+        elif order.trip_type == OrderTypeEnum.LOCAL:
+            from app.crud.local_drop import local_min_km as _lmk
+            billed_km = max(km_driven, _lmk(getattr(new_order, "charge_items", None), int(get_fare_rules()["local_drop_min_km"])))
         elif order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
             key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
             billed_km = max(km_driven, int(get_fare_rules()[key]))
@@ -682,6 +689,9 @@ async def update_end_trip_record(
         _min_rules = _get_fare_rules()
         if order.trip_type == OrderTypeEnum.ONEWAY:
             updated_km = max(updated_km, int(_min_rules["oneway_min_km"]))
+        elif order.trip_type == OrderTypeEnum.LOCAL:
+            from app.crud.local_drop import local_min_km as _local_min_km
+            updated_km = max(updated_km, _local_min_km(new_order.charge_items, int(_min_rules["local_drop_min_km"])))
 
         # Round Trip / Multi City that actually ran into a second day (past
         # the 6 AM cutoff) - the driver allowance and minimum-km floor were
@@ -709,6 +719,7 @@ async def update_end_trip_record(
             order.waiting_time = waiting_charge
         _bd_days = actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1
         _bd_floor = (int(_min_rules["oneway_min_km"]) if order.trip_type == OrderTypeEnum.ONEWAY
+                     else _local_min_km(new_order.charge_items, int(_min_rules["local_drop_min_km"])) if order.trip_type == OrderTypeEnum.LOCAL
                      else (_min_rules["round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"] * _bd_days
                            if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else None))
         try:

@@ -26,6 +26,7 @@ export default function FareRulesScreen() {
   const [onewayMinKm, setOnewayMinKm] = useState('');
   const [roundTripMinKmPerDay, setRoundTripMinKmPerDay] = useState('');
   const [multicityMinKmPerDay, setMulticityMinKmPerDay] = useState('');
+  const [localDropMinKm, setLocalDropMinKm] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +35,7 @@ export default function FareRulesScreen() {
       setOnewayMinKm(String(rules.oneway_min_km));
       setRoundTripMinKmPerDay(String(rules.round_trip_min_km_per_day));
       setMulticityMinKmPerDay(String(rules.multicity_min_km_per_day));
+      setLocalDropMinKm(String(rules.local_drop_min_km ?? 20));
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to load fare rules');
     } finally {
@@ -49,7 +51,8 @@ export default function FareRulesScreen() {
     const oneway = parseInt(onewayMinKm, 10);
     const roundTrip = parseInt(roundTripMinKmPerDay, 10);
     const multicity = parseInt(multicityMinKmPerDay, 10);
-    if ([oneway, roundTrip, multicity].some((n) => isNaN(n) || n <= 0)) {
+    const localDrop = parseInt(localDropMinKm, 10);
+    if ([oneway, roundTrip, multicity, localDrop].some((n) => isNaN(n) || n <= 0)) {
       Alert.alert('Invalid', 'Enter a positive number of kilometers for every field');
       return;
     }
@@ -59,6 +62,7 @@ export default function FareRulesScreen() {
         oneway_min_km: oneway,
         round_trip_min_km_per_day: roundTrip,
         multicity_min_km_per_day: multicity,
+        local_drop_min_km: localDrop,
       });
       showToast('Fare rules updated - new quotes will use these values immediately.', 'success');
     } catch (e: any) {
@@ -124,6 +128,19 @@ export default function FareRulesScreen() {
                 value={multicityMinKmPerDay}
                 onChangeText={setMulticityMinKmPerDay}
               />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Local Drop Minimum (km)</Text>
+              <TextInput
+                style={[styles.inputField, { color: themeColors.text, borderColor: themeColors.border, backgroundColor: themeColors.surface }]}
+                keyboardType="numeric"
+                value={localDropMinKm}
+                onChangeText={setLocalDropMinKm}
+              />
+              <Text style={{ color: themeColors.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 }}>
+                A short in-city Local Drop is billed for at least this many km (like the one-way minimum). You can still change the km on one booking while posting it.
+              </Text>
             </View>
 
             <Btn

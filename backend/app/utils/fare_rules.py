@@ -16,6 +16,8 @@ DEFAULT_FARE_RULES: Dict[str, int] = {
     # Fare = max(min_km_per_day * days, actual_km) * rate + driver_allowance * days
     "round_trip_min_km_per_day": 250,
     "multicity_min_km_per_day": 250,
+    # Local Drop (short in-city trip): the km billed even when the trip is shorter - the same idea as the 130 km one-way minimum.
+    "local_drop_min_km": 20,
 }
 
 

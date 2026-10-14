@@ -2145,6 +2145,7 @@ class ApiService {
     oneway_min_km: number;
     round_trip_min_km_per_day: number;
     multicity_min_km_per_day: number;
+    local_drop_min_km: number;
   }> {
     return this.makeRequest('/admin/fare-rules');
   }
@@ -2153,6 +2154,7 @@ class ApiService {
     oneway_min_km?: number;
     round_trip_min_km_per_day?: number;
     multicity_min_km_per_day?: number;
+    local_drop_min_km?: number;
   }): Promise<any> {
     return this.makeRequest('/admin/fare-rules', {
       method: 'PUT',

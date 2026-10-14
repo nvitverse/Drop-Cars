@@ -21,6 +21,23 @@ def local_drop_item(km_limit: int, extra_km_rate: Optional[int], rate_per_km: in
     }
 
 
+MIN_KEY = "local_min_km"
+
+
+def local_min_item(min_km: int) -> dict:
+    """The booking's own minimum billed km, fixed when it is posted (so a later change of the setting does not change a booking already given to a driver)."""
+    km = max(1, int(min_km or 0))
+    return {"key": MIN_KEY, "included": True, "min_km": km, "label": f"Minimum billing: {km} km (billed even if the trip is shorter)."}
+
+
+def local_min_km(charge_items: Optional[List[Any]], default: int) -> int:
+    """Minimum billed km of a Local booking: the one stored on the booking, else the current setting."""
+    for it in charge_items or []:
+        if isinstance(it, dict) and it.get("key") == MIN_KEY and int(it.get("min_km") or 0) > 0:
+            return int(it["min_km"])
+    return max(0, int(default or 0))
+
+
 def find_item(charge_items: Optional[List[Any]]) -> Optional[dict]:
     for it in charge_items or []:
         if isinstance(it, dict) and it.get("key") == ITEM_KEY:

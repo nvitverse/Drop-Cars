@@ -1805,6 +1805,11 @@ def admin_oneway_confirm(
         if payload.trip_type == _OrderType.LOCAL and payload.local_km_limit:
             from app.crud.local_drop import local_drop_item
             _items = (_items or []) + [local_drop_item(payload.local_km_limit, payload.local_extra_km_rate, payload.cost_per_km + (payload.extra_cost_per_km or 0))]
+        if payload.trip_type == _OrderType.LOCAL:
+            from app.crud.local_drop import local_min_item
+            from app.utils.fare_rules import get_fare_rules
+            # the km the admin typed on the form (if any) is this booking's minimum; otherwise the Fare Rules setting (default 20)
+            _items = (_items or []) + [local_min_item(int(payload.km_override) if payload.km_override else get_fare_rules()["local_drop_min_km"])]
         new_order, master_order_id = create_oneway_order(
             db, skip_broadcast=fleet_owner is not None, vendor_id=payload.vendor_id, trip_type=OrderTypeEnum(payload.trip_type.value), car_type=CarTypeEnum(payload.car_type),
             location_links=payload.location_links, pickup_drop_location=payload.pickup_drop_location, start_date_time=payload.start_date_time,

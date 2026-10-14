@@ -431,7 +431,7 @@ export default function CreateBookingScreen() {
   // from Settings > Fare Rules: 130 oneway, 250 per day round trip / multi
   // city), and follows the quote. Once the admin types a value, that exact km
   // is what gets billed (km_override) until they press Reset.
-  const [fareRules, setFareRules] = useState({ oneway_min_km: 130, round_trip_min_km_per_day: 250, multicity_min_km_per_day: 250 });
+  const [fareRules, setFareRules] = useState({ oneway_min_km: 130, round_trip_min_km_per_day: 250, multicity_min_km_per_day: 250, local_drop_min_km: 20 });
   const [minKm, setMinKm] = useState('130');
   const [minKmTouched, setMinKmTouched] = useState(false);
   const [routeKm, setRouteKm] = useState<number | null>(null);
@@ -440,6 +440,7 @@ export default function CreateBookingScreen() {
   const defaultMinKm = tripType === 'oneway' ? fareRules.oneway_min_km
     : tripType === 'roundtrip' ? fareRules.round_trip_min_km_per_day * tripDays
     : tripType === 'multicity' ? fareRules.multicity_min_km_per_day * tripDays
+    : tripType === 'local' ? fareRules.local_drop_min_km
     : 0;
   const autoKm = Math.round(routeKm != null ? Math.max(routeKm, defaultMinKm) : defaultMinKm);
   useEffect(() => {

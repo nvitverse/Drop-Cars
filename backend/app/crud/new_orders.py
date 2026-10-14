@@ -144,10 +144,14 @@ def calculate_oneway_fare(pickup_drop_location: Dict[str, str], cost_per_km: int
     else:
         origin, destination = _origin_and_destination_from_index_map(pickup_drop_location)
         total_km,duration_text = get_distance_km_between_locations(origin, destination)
-        oneway_min_km = get_fare_rules()["oneway_min_km"]
+        _rules = get_fare_rules()
+        oneway_min_km = _rules["oneway_min_km"]
         if trip_type.value == OrderTypeEnum.ONEWAY.value and total_km < oneway_min_km:
             remark_trip_min_km = total_km
             total_km = oneway_min_km
+        elif trip_type.value == OrderTypeEnum.LOCAL.value and total_km < _rules["local_drop_min_km"]:
+            remark_trip_min_km = total_km
+            total_km = _rules["local_drop_min_km"]            # Local Drop: at least 20 km (setting), whatever the route says
     base_km_amount = int(round(total_km * cost_per_km))
     extra_base_km_amount = int(round(total_km * extra_cost_per_km))
 
