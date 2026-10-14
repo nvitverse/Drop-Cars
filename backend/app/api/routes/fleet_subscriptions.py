@@ -100,7 +100,8 @@ def get_fleet_subscriptions(
     # Categorize and compile items
     total_count = len(all_owners)
     paid_count = 0
-    overdue_count = 0
+    overdue_count = 0       # a paid plan whose valid-until date has PASSED (needs a renewal)
+    unpaid_count = 0        # never paid at all: a normal Standard partner, NOT an overdue subscription
     paused_count = 0
     trusted_count = 0
 
@@ -129,7 +130,7 @@ def get_fleet_subscriptions(
             overdue_count += 1
         else:
             sub_status = "UNPAID"
-            overdue_count += 1
+            unpaid_count += 1
 
         # Trusted = the PREFERRED tier, the same single rule the posting gate and the Fleet Accounts filter use (VehicleOwnerDetails.tier):
         # staff override, a live driver Pro plan, OR an ordinary paid subscription (yearly / monthly). The list used to count only the first
@@ -147,7 +148,9 @@ def get_fleet_subscriptions(
         sf = status_filter.upper()
         if sf == "PAID" and sub_status != "PAID":
             continue
-        elif sf == "OVERDUE" and sub_status not in ("OVERDUE", "UNPAID"):
+        elif sf == "OVERDUE" and sub_status != "OVERDUE":
+            continue
+        elif sf == "UNPAID" and sub_status != "UNPAID":
             continue
         elif sf == "PAUSED" and sub_status != "PAUSED":
             continue
@@ -197,6 +200,7 @@ def get_fleet_subscriptions(
             "total_fleets": total_count,
             "paid_count": paid_count,
             "overdue_count": overdue_count,
+            "unpaid_count": unpaid_count,
             "paused_count": paused_count,
             "trusted_count": trusted_count,
         },
