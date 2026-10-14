@@ -28,7 +28,7 @@ export interface BillRow {
   booking_ref?: string; total_amount: number; balance_due: number; paid_amount: number; created_at?: string; valid_until?: string | null;
 }
 export interface BillOptions {
-  standard_charges: { label: string; kind: string }[]; gst_modes: { key: string; label: string }[]; gst_registered: boolean; gst_rate: number;
+  enabled?: boolean; standard_charges: { label: string; kind: string }[]; gst_modes: { key: string; label: string }[]; gst_registered: boolean; gst_rate: number;
   gst_collections: { key: string; label: string }[]; payment_modes: string[];
 }
 

@@ -252,7 +252,7 @@ def serialize(doc: BillingDocument, db: Optional[Session] = None, include_brand_
         "valid_until": doc.valid_until.isoformat() if doc.valid_until else None, "notes": doc.notes, "terms": terms, "terms_override": doc.terms_override,
         "share_token": doc.share_token, "converted_from_id": str(doc.converted_from_id) if doc.converted_from_id else None,
         "converted_to_id": str(doc.converted_to_id) if doc.converted_to_id else None, "cancel_reason": doc.cancel_reason,
-        "history": doc.history or [], "created_by": doc.created_by,
+        "history": doc.history or [], "created_by": doc.created_by, "vendor_id": str(doc.vendor_id) if doc.vendor_id else None,
         "prepared_by": {"name": doc.created_by, "phone": doc.created_by_phone},
         "shared_by": _shared_by(doc),
         "created_at": doc.created_at.isoformat() if doc.created_at else None, "issued_at": doc.issued_at.isoformat() if doc.issued_at else None,
@@ -442,6 +442,8 @@ def update_document(db: Session, doc: BillingDocument, p: Dict[str, Any], admin_
     if doc.status == "CANCELLED":
         raise HTTPException(status_code=409, detail="A cancelled document cannot be edited")
     brand = get_brand(db, str(doc.brand_id)) if doc.brand_id else get_brand(db, None)
+    if doc.vendor_id:                                       # a vendor's document always keeps the vendor's own profile, whoever edits it
+        p = {**p, "brand_id": str(doc.brand_id)}
     if p.get("brand_id") and str(p["brand_id"]) != str(doc.brand_id):
         if doc.status != "DRAFT":
             raise HTTPException(status_code=409, detail="The brand of an issued document cannot change. Cancel it and make a new one.")
@@ -574,6 +576,8 @@ def _razorpay_ready() -> bool:
 def create_link(db: Session, doc: BillingDocument, purpose: str, amount: Optional[int], admin_name: str) -> Dict[str, Any]:
     """A payment link for the ADVANCE, the GST, the BALANCE or any amount. Several links can exist; each one is recorded as a payment
     only when it is paid (checked by check_links / the hourly sweep)."""
+    if doc.vendor_id:
+        raise HTTPException(status_code=409, detail="Payment links are not available for a vendor's own invoice: the customer pays the vendor directly.")
     purpose = (purpose or "BALANCE").upper()
     t = serialize(doc)["totals"]
     default = {"ADVANCE": doc.advance_requested or t["payable_now"], "GST": t["gst_pending"] or t["gst_amount"], "BALANCE": t["payable_now"] or t["balance_due"]}.get(purpose, 0)
@@ -662,8 +666,18 @@ def reconcile_pending_links(db: Session, max_docs: int = 40) -> dict:
 
 # ---------------------------------------------------------------- listing
 def list_documents(db: Session, doc_type: Optional[str], status: Optional[str], brand_id: Optional[str], search: Optional[str], limit: int, skip: int,
-                   created_by: Optional[str] = None) -> List[BillingDocument]:
-    q = db.query(BillingDocument).filter(BillingDocument.vendor_id.is_(None))      # vendors' own invoices never show in the staff list
+                   created_by: Optional[str] = None, scope: str = "staff", vendor_id: Optional[str] = None) -> List[BillingDocument]:
+    """scope: staff (default - the documents our own team made), vendor (what vendors made in their own name - the owner sees all of it) or all."""
+    q = db.query(BillingDocument)
+    if scope == "staff":
+        q = q.filter(BillingDocument.vendor_id.is_(None))
+    elif scope == "vendor":
+        q = q.filter(BillingDocument.vendor_id.isnot(None))
+    if vendor_id:
+        try:
+            q = q.filter(BillingDocument.vendor_id == uuid.UUID(vendor_id))
+        except ValueError:
+            pass
     if created_by:
         q = q.filter(BillingDocument.created_by == created_by)
     if doc_type:
@@ -692,4 +706,4 @@ def summary_row(d: BillingDocument) -> Dict[str, Any]:
             "brand": (d.brand_snapshot or {}).get("name"), "brand_color": (d.brand_snapshot or {}).get("primary_color"),
             "gst_mode": d.gst_mode, "total_amount": d.total_amount, "balance_due": d.balance_due, "paid_amount": d.paid_amount,
             "valid_until": d.valid_until.isoformat() if d.valid_until else None, "created_by": d.created_by, "created_by_phone": d.created_by_phone,
-            "created_at": d.created_at.isoformat() if d.created_at else None}
+            "vendor_id": str(d.vendor_id) if d.vendor_id else None, "created_at": d.created_at.isoformat() if d.created_at else None}

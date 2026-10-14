@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowLeft, FileText, Plus, Receipt, Search, Settings2 } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
-import { billingApi, BillingBrand, BillingRow } from '@/services/billingApi';
+import { billingApi, BillingBrand, BillingRow, VendorProfileRow } from '@/services/billingApi';
+import { Switch } from 'react-native';
 
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
 const TYPES = [{ key: '', label: 'All' }, { key: 'INVOICE', label: 'Invoices' }, { key: 'ESTIMATE', label: 'Estimates' }];
@@ -26,14 +27,29 @@ export default function Invoices() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
+  // staff = our team's documents | vendor = everything vendors made in their own name | profiles = the vendors' business profiles (on / off switch)
+  const [scope, setScope] = useState<'staff' | 'vendor' | 'profiles'>('staff');
+  const [profiles, setProfiles] = useState<VendorProfileRow[]>([]);
+
   const load = useCallback(async () => {
     try {
       setError('');
-      const r = await billingApi.list({ doc_type: type, status, brand_id: brandId, search: search.trim(), created_by: by });
-      setRows(r);
+      if (scope === 'profiles') {
+        setProfiles(await billingApi.vendorProfiles(search.trim()));
+      } else {
+        const r = await billingApi.list({ doc_type: type, status, brand_id: scope === 'staff' ? brandId : '', search: search.trim(), created_by: scope === 'staff' ? by : '', scope });
+        setRows(r);
+      }
     } catch (e: any) { setError(e?.message || 'Could not load'); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [type, status, brandId, search, by]);
+  }, [type, status, brandId, search, by, scope]);
+
+  const toggleProfile = async (p: VendorProfileRow) => {
+    try {
+      await billingApi.setVendorProfileActive(p.brand_id, !p.is_active);
+      setProfiles((list) => list.map((x) => (x.brand_id === p.brand_id ? { ...x, is_active: !p.is_active } : x)));
+    } catch (e: any) { setError(e?.message || 'Could not change'); }
+  };
 
   useEffect(() => { billingApi.brands().then(setBrands).catch(() => {}); }, []);
   useFocusEffect(useCallback(() => { billingApi.staff().then(setStaff).catch(() => {}); }, []));
@@ -62,10 +78,16 @@ export default function Invoices() {
         <TouchableOpacity onPress={() => router.push('/billing-brands' as any)} style={{ padding: 6 }}><Settings2 size={21} color={c.text} /></TouchableOpacity>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10, padding: 12, paddingBottom: 4 }}>
+      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 10 }}>
+        {([['staff', 'Our team'], ['vendor', "Vendors' documents"], ['profiles', 'Vendor profiles']] as const).map(([k, label]) => (
+          <TouchableOpacity key={k} onPress={() => { setScope(k); setLoading(true); }} style={chip(scope === k)}><Text style={{ fontSize: 12, color: c.text, fontWeight: '800' }}>{label}</Text></TouchableOpacity>
+        ))}
+      </View>
+
+      {scope === 'staff' && <View style={{ flexDirection: 'row', gap: 10, padding: 12, paddingBottom: 4 }}>
         <TouchableOpacity onPress={() => router.push('/billing-editor?type=ESTIMATE' as any)} style={[s.big, { backgroundColor: c.primary }]}><FileText size={17} color="#FFFFFF" /><Text style={s.bigTxt}>New estimate</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/billing-editor?type=INVOICE' as any)} style={[s.big, { backgroundColor: '#047857' }]}><Receipt size={17} color="#FFFFFF" /><Text style={s.bigTxt}>New invoice</Text></TouchableOpacity>
-      </View>
+      </View>}
 
       <View style={[s.search, { borderColor: c.border, backgroundColor: c.surface }]}>
         <Search size={16} color={c.textMuted} />
@@ -76,15 +98,36 @@ export default function Invoices() {
         <View style={{ flexDirection: 'row', gap: 6 }}>{TYPES.map((x) => <TouchableOpacity key={x.key} onPress={() => setType(x.key)} style={chip(type === x.key)}><Text style={{ fontSize: 12, color: c.text, fontWeight: '700' }}>{x.label}</Text></TouchableOpacity>)}</View>
         <FlatList horizontal data={STATUSES} keyExtractor={(x) => x.key || 'any'} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}
           renderItem={({ item }) => <TouchableOpacity onPress={() => setStatus(item.key)} style={chip(status === item.key)}><Text style={{ fontSize: 12, color: c.text }}>{item.label}</Text></TouchableOpacity>} />
-        <FlatList horizontal data={[{ id: '', name: 'All brands', primary_color: '' } as any, ...brands]} keyExtractor={(x) => x.id || 'all'} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}
-          renderItem={({ item }) => <TouchableOpacity onPress={() => setBrandId(item.id)} style={chip(brandId === item.id)}>{!!item.primary_color && <View style={[s.dot, { backgroundColor: item.primary_color }]} />}<Text style={{ fontSize: 12, color: c.text }}>{item.name}</Text></TouchableOpacity>} />
-        {staff.length > 0 && (
+        {scope === 'staff' && <FlatList horizontal data={[{ id: '', name: 'All brands', primary_color: '' } as any, ...brands]} keyExtractor={(x) => x.id || 'all'} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}
+          renderItem={({ item }) => <TouchableOpacity onPress={() => setBrandId(item.id)} style={chip(brandId === item.id)}>{!!item.primary_color && <View style={[s.dot, { backgroundColor: item.primary_color }]} />}<Text style={{ fontSize: 12, color: c.text }}>{item.name}</Text></TouchableOpacity>} />}
+        {scope === 'staff' && staff.length > 0 && (
           <FlatList horizontal data={['', ...staff]} keyExtractor={(x) => x || 'all'} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}
             renderItem={({ item }) => <TouchableOpacity onPress={() => setBy(item)} style={chip(by === item)}><Text style={{ fontSize: 12, color: c.text }}>{item ? `By ${item}` : 'Everyone'}</Text></TouchableOpacity>} />
         )}
       </View>
 
-      {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={c.primary} /> : (
+      {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={c.primary} /> : scope === 'profiles' ? (
+        <FlatList
+          data={profiles} keyExtractor={(p) => p.brand_id} contentContainerStyle={{ padding: 12, paddingBottom: 60, gap: 8 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={c.primary} />}
+          ListEmptyComponent={<Text style={{ color: error ? '#B91C1C' : c.textSecondary, textAlign: 'center', marginTop: 50, paddingHorizontal: 24 }}>{error || 'No vendor has opened Invoices yet.'}</Text>}
+          renderItem={({ item: p }) => (
+            <View style={[s.row, { backgroundColor: c.surface, borderColor: c.border, borderLeftColor: p.is_active ? '#10B981' : '#EF4444' }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontWeight: '800', fontSize: 14.5 }}>{p.business_name}</Text>
+                <Text style={{ color: c.text, fontSize: 12.5, marginTop: 2 }}>{p.vendor_name || 'Vendor'}{p.vendor_phone ? ' · ' + p.vendor_phone : ''}</Text>
+                <Text style={{ color: c.textMuted, fontSize: 11.5, marginTop: 3 }}>{p.gstin ? 'GSTIN ' + p.gstin : 'No GSTIN (bills without GST)'} · prefix {p.prefix}{p.upi_id ? ' · UPI ' + p.upi_id : ''}</Text>
+                <Text style={{ color: c.textSecondary, fontSize: 12, marginTop: 4 }}>{p.invoices} invoices · {p.estimates} estimates · billed {inr(p.billed)} · to collect {inr(p.to_collect)}</Text>
+                <TouchableOpacity onPress={() => { setSearch(p.business_name); setScope('vendor'); setLoading(true); }}><Text style={{ color: c.primary, fontWeight: '800', fontSize: 12.5, marginTop: 6 }}>See their documents</Text></TouchableOpacity>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Switch value={p.is_active} onValueChange={() => toggleProfile(p)} />
+                <Text style={{ color: p.is_active ? '#047857' : '#B91C1C', fontSize: 10.5, fontWeight: '800' }}>{p.is_active ? 'ALLOWED' : 'STOPPED'}</Text>
+              </View>
+            </View>
+          )}
+        />
+      ) : (
         <FlatList
           data={rows} keyExtractor={(r) => r.id} contentContainerStyle={{ padding: 12, paddingBottom: 60, gap: 8 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={c.primary} />}

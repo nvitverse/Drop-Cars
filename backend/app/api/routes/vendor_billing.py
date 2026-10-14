@@ -179,9 +179,26 @@ def options(db: Session = Depends(get_db), vendor=Depends(get_current_vendor)):
     if (b.gstin or "").strip():
         modes += [{"key": "EXTRA", "label": "GST extra (added on top)"}, {"key": "INCLUDED", "label": "GST included in the amounts"}]
     return {"standard_charges": [c for c in billing_calc.STANDARD_CHARGES if c["label"] != "Convenience fee"], "gst_modes": modes,
-            "gst_registered": bool((b.gstin or "").strip()), "gst_rate": b.gst_rate,
+            "gst_registered": bool((b.gstin or "").strip()), "gst_rate": b.gst_rate, "enabled": _allowed(db, b),
             "gst_collections": [{"key": "COLLECT", "label": "Add GST to the bill"}, {"key": "SHOW_ONLY", "label": "Show GST, do not charge it"}],
             "payment_modes": ["Cash", "UPI", "Bank transfer", "Card", "Cheque", "Other"]}
+
+
+def _ensure_allowed(db: Session, brand: BillingBrand) -> None:
+    """The owner's two switches: the platform-wide setting `vendor_invoicing_enabled` and this vendor's own profile switch."""
+    from app.crud.customer_booking_request import get_platform_setting_value
+    if str(get_platform_setting_value(db, "vendor_invoicing_enabled", "1") or "1").strip() in ("0", "false", "False"):
+        raise HTTPException(status_code=403, detail="Invoicing is switched off right now. Please contact Drop Cars support.")
+    if not brand.is_active:
+        raise HTTPException(status_code=403, detail="Invoicing is switched off for your account. Please contact Drop Cars support.")
+
+
+def _allowed(db: Session, brand: BillingBrand) -> bool:
+    try:
+        _ensure_allowed(db, brand)
+        return True
+    except HTTPException:
+        return False
 
 
 def _own_order(db: Session, vendor, ref: str):
@@ -283,6 +300,7 @@ def summary(db: Session = Depends(get_db), vendor=Depends(get_current_vendor)):
 @router.post("/documents")
 def create_document(body: Dict[str, Any], db: Session = Depends(get_db), vendor=Depends(get_current_vendor)):
     b = vendor_brand(db, vendor)
+    _ensure_allowed(db, b)
     p = _clean_body(body, b)
     if p.get("booking_ref"):
         _own_order(db, vendor, str(p["booking_ref"]))
@@ -308,6 +326,7 @@ def update_document(doc_id: str, body: Dict[str, Any], db: Session = Depends(get
 @router.post("/documents/{doc_id}/issue")
 def issue_document(doc_id: str, db: Session = Depends(get_db), vendor=Depends(get_current_vendor)):
     d = _own_doc(db, vendor, doc_id)
+    _ensure_allowed(db, vendor_brand(db, vendor))
     svc.issue(db, d, _who(db, vendor))
     db.commit()
     db.refresh(d)
@@ -326,6 +345,7 @@ def cancel_document(doc_id: str, body: CancelIn, db: Session = Depends(get_db), 
 @router.post("/documents/{doc_id}/convert")
 def convert_document(doc_id: str, db: Session = Depends(get_db), vendor=Depends(get_current_vendor)):
     est = _own_doc(db, vendor, doc_id)
+    _ensure_allowed(db, vendor_brand(db, vendor))
     inv = svc.convert_estimate(db, est, _who(db, vendor), issue_now=False)
     inv.vendor_id = vendor.id
     db.commit()

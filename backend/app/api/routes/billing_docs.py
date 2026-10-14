@@ -406,11 +406,52 @@ def suggest_rules(body: SuggestIn, db: Session = Depends(get_db), admin=Depends(
     return {"suggestions": rules.suggest(db, body.model_dump())}
 
 
+# ------------------------------------------------------------------ vendors' own business profiles (the owner's control)
+@router.get("/vendor-profiles")
+def vendor_profiles(search: Optional[str] = None, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """Every vendor who has opened Invoices: who they are, the GSTIN they entered, how much they billed, and a switch to stop them invoicing."""
+    from app.models.vendor_details import VendorDetails
+    out = []
+    for b in db.query(BillingBrand).filter(BillingBrand.owner_vendor_id.isnot(None)).order_by(BillingBrand.created_at.desc()).all():
+        vd = db.query(VendorDetails).filter(VendorDetails.vendor_id == b.owner_vendor_id).first()
+        docs = db.query(BillingDocument).filter(BillingDocument.vendor_id == b.owner_vendor_id, BillingDocument.status != "CANCELLED").all()
+        inv = [d for d in docs if d.doc_type == "INVOICE" and d.status != "DRAFT"]
+        row = {"brand_id": str(b.id), "vendor_id": str(b.owner_vendor_id), "business_name": b.name, "vendor_name": getattr(vd, "full_name", None),
+               "vendor_phone": getattr(vd, "primary_number", None), "gstin": b.gstin, "upi_id": b.upi_id, "prefix": b.invoice_prefix, "is_active": bool(b.is_active),
+               "invoices": len(inv), "estimates": len([d for d in docs if d.doc_type == "ESTIMATE" and d.status != "DRAFT"]),
+               "billed": sum(int(d.total_amount or 0) for d in inv), "to_collect": sum(int(d.balance_due or 0) for d in inv)}
+        if search and search.strip():
+            q = search.strip().lower()
+            if not any(q in str(row.get(k) or "").lower() for k in ("business_name", "vendor_name", "vendor_phone", "gstin")):
+                continue
+        out.append(row)
+    return out
+
+
+class ActiveIn(BaseModel):
+    active: bool
+
+
+@router.put("/vendor-profiles/{brand_id}/active")
+def set_vendor_profile_active(brand_id: str, body: ActiveIn, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """Owner switch: a vendor whose profile is off cannot make or issue estimates / invoices (they keep seeing what they already made)."""
+    from app.api.routes.admin import require_owner
+    require_owner(admin)
+    b = svc.get_brand(db, brand_id)
+    if b.owner_vendor_id is None:
+        raise HTTPException(status_code=400, detail="That is not a vendor profile")
+    b.is_active = bool(body.active)
+    db.commit()
+    return {"brand_id": str(b.id), "is_active": bool(b.is_active)}
+
+
 # ------------------------------------------------------------------ documents
 @router.get("/documents")
 def list_documents(doc_type: Optional[str] = None, status: Optional[str] = None, brand_id: Optional[str] = None, search: Optional[str] = None,
-                   created_by: Optional[str] = None, limit: int = 60, skip: int = 0, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-    rows = svc.list_documents(db, doc_type, status, brand_id, search, limit, skip, created_by)
+                   created_by: Optional[str] = None, limit: int = 60, skip: int = 0, scope: str = "staff", vendor_id: Optional[str] = None,
+                   db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """scope=staff (our team's documents) | vendor (everything vendors made in their own name) | all."""
+    rows = svc.list_documents(db, doc_type, status, brand_id, search, limit, skip, created_by, scope if scope in ("staff", "vendor", "all") else "staff", vendor_id)
     return [svc.summary_row(d) for d in rows]
 
 

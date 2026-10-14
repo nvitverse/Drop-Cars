@@ -16,6 +16,7 @@ def _vendor(db, name="Test Vendor"):
     form = VendorSignupForm(full_name=name, primary_number=phone, password="Test@1234", address="12 Anna Salai Chennai", city="Chennai", pincode="600002",
                             aadhar_number=(digits[9:21] + "000000000000")[:12], gpay_number=phone)
     creds, details = create_vendor(db, form, None)
+    creds.account_status = type(creds.account_status).ACTIVE        # approved by the owner (a Pending vendor can do nothing but wait)
     db.flush()
     return creds, details
 

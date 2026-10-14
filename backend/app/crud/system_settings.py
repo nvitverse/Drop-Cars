@@ -63,6 +63,7 @@ SYSTEM_SETTING_DEFAULTS = {
     "min_app_build_driver": "0",                # an installed Driver App with a build number below this must update (0 = off)
     "min_app_build_customer": "0",              # same for the Customer App
     "min_app_build_vendor": "0",                # same for the Vendor App
+    "vendor_invoicing_enabled": "1",            # 1 = vendors can make estimates / invoices in their own name; 0 = switched off for everyone
     "trip_otp_enforced": "1",                   # 1 = a trip cannot start or end without the customer's code; 0 = emergency switch only
     "urgent_reminder_max_count": "1",           # drivers get this many "closing soon" pushes per booking (was one per minute)
     "fleet_payment_channels": "Wallet,GPay,PhonePe,Paytm,Bank Transfer,Cash in Hand",   # comma separated; "Wallet" debits the partner's wallet

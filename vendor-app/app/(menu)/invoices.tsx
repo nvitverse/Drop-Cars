@@ -32,6 +32,7 @@ export default function InvoicesHub() {
   const [sum, setSum] = useState<{ to_collect: number; billed: number; invoices: number; estimates: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [enabled, setEnabled] = useState(true);       // the office can switch invoicing off for a vendor (or for everyone)
 
   const load = useCallback(async () => {
     setError(null);
@@ -39,6 +40,7 @@ export default function InvoicesHub() {
       const f = FILTERS.find((x) => x.key === filter)!;
       const [list, s] = await Promise.all([vendorBilling.list({ ...f.q, search: search.trim() || undefined }), vendorBilling.summary()]);
       setRows(list); setSum(s);
+      vendorBilling.options().then((o) => setEnabled(o.enabled !== false)).catch(() => {});
     } catch (e: any) {
       setError(e?.message || 'Could not load. Please try again.');
     } finally {
@@ -72,6 +74,7 @@ export default function InvoicesHub() {
               <Text style={s.heroSub}>{sum ? `${sum.invoices} invoices · ${sum.estimates} estimates · ${rupees(sum.billed)} billed` : ' '}</Text>
             </View>
 
+            {!enabled && <Text style={s.error}>Making new invoices is switched off for your account right now. Please contact Drop Cars support. You can still see what you made earlier.</Text>}
             <View style={s.actions}>
               <TouchableOpacity style={[s.action, { backgroundColor: '#1D4ED8' }]} onPress={() => open(undefined, 'ESTIMATE')} activeOpacity={0.85}>
                 <FileText size={18} color="#FFFFFF" /><Text style={s.actionText}>New estimate</Text>

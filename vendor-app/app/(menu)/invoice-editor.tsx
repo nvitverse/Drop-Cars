@@ -81,6 +81,7 @@ export default function InvoiceEditor() {
         const p = await vendorBilling.profile();          // first: it creates the business profile the other calls read
         const o = await vendorBilling.options();
         setOpts(o); setProfile(p);
+        if (o.enabled === false && !params.id) Alert.alert('Invoicing is switched off', 'Making new invoices is switched off for your account right now. Please contact Drop Cars support.', [{ text: 'Back', onPress: () => router.back() }]);
         if (params.id) fill(await vendorBilling.get(String(params.id)));
         else if (params.ref) await doFetch(String(params.ref), true);
       } catch (e: any) {

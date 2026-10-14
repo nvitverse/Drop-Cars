@@ -426,7 +426,10 @@ def get_admin_order_details(db: Session, order_id: int) -> Optional[AdminOrderDe
         end_records=end_records,
         assigned_driver=assigned_driver,
         assigned_car=assigned_car,
-        vehicle_owner=vehicle_owner
+        vehicle_owner=vehicle_owner,
+        # the owner can always read the trip codes of any booking (vendor-posted or not) - same rule as the list view
+        start_otp=(((assignments[-1].start_trip_otp if assignments else None) or order.start_trip_otp) if _otps_visible(order) else None),
+        end_otp=(((assignments[-1].end_trip_otp if assignments else None) or order.end_trip_otp) if _otps_visible(order) else None),
     )
 
 

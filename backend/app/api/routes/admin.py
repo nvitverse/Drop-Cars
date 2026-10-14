@@ -7359,6 +7359,7 @@ class SystemSettingsUpdateSchema(BaseModel):
     verified_car_required_for: Optional[str] = None
     min_app_build_customer: Optional[int] = None
     min_app_build_vendor: Optional[int] = None
+    vendor_invoicing_enabled: Optional[int] = None
     multicity_waiting_rate_per_hour: Optional[float] = None
     multicity_waiting_free_minutes: Optional[int] = None
     fleet_payment_channels: Optional[str] = None
@@ -7403,7 +7404,7 @@ def update_system_settings_endpoint(
         "gst_number", "gst_business_name", "gst_business_address",
         "fleet_payment_channels", "fleet_payment_link_message", "fleet_payment_link_expiry_hours", "staff_permission_keys",
         "trip_otp_enforced", "multicity_waiting_rate_per_hour", "multicity_waiting_free_minutes",
-        "min_app_build_driver", "min_app_build_customer", "min_app_build_vendor", "payout_min_retained_balance", "verified_car_required_for",
+        "min_app_build_driver", "min_app_build_customer", "min_app_build_vendor", "vendor_invoicing_enabled", "payout_min_retained_balance", "verified_car_required_for",
     }
     if any(k in updates for k in _owner_only):
         require_owner(current_admin)

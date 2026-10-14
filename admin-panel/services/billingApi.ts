@@ -51,7 +51,12 @@ export interface EstimateLinesIn {
 export interface BillingRow {
   id: string; doc_type: string; number: string; status: string; payment_status: string; customer_name?: string; customer_phone?: string;
   booking_ref?: string; brand?: string; brand_color?: string; gst_mode: string; total_amount: number; balance_due: number; paid_amount: number;
-  valid_until?: string | null; created_at?: string; created_by?: string | null; created_by_phone?: string | null;
+  valid_until?: string | null; created_at?: string; created_by?: string | null; created_by_phone?: string | null; vendor_id?: string | null;
+}
+
+export interface VendorProfileRow {
+  brand_id: string; vendor_id: string; business_name: string; vendor_name?: string | null; vendor_phone?: string | null; gstin?: string | null; upi_id?: string | null;
+  prefix: string; is_active: boolean; invoices: number; estimates: number; billed: number; to_collect: number;
 }
 
 const j = (body: any) => ({ method: 'POST', body: JSON.stringify(body) });
@@ -81,7 +86,10 @@ export const billingApi = {
   suggestRules: (b: { brand_id?: string; pickup?: string; drop?: string; via?: string[]; trip_type?: string; days?: number; km?: number; vehicle?: string; on_date?: string; fare_total?: number }): Promise<{ suggestions: RuleSuggestion[] }> =>
     apiService.makeRequest('/admin/billing/rules/suggest', j(b)),
   staff: (): Promise<string[]> => apiService.makeRequest('/admin/billing/staff'),
-  list: (q: { doc_type?: string; status?: string; brand_id?: string; search?: string; created_by?: string; skip?: number } = {}): Promise<BillingRow[]> => {
+  vendorProfiles: (search = ''): Promise<VendorProfileRow[]> => apiService.makeRequest(`/admin/billing/vendor-profiles${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  setVendorProfileActive: (brandId: string, active: boolean): Promise<{ is_active: boolean }> =>
+    apiService.makeRequest(`/admin/billing/vendor-profiles/${brandId}/active`, { method: 'PUT', body: JSON.stringify({ active }) }),
+  list: (q: { doc_type?: string; status?: string; brand_id?: string; search?: string; created_by?: string; skip?: number; scope?: string } = {}): Promise<BillingRow[]> => {
     const p = Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
     return apiService.makeRequest(`/admin/billing/documents${p ? `?${p}` : ''}`);
   },

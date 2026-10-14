@@ -38,6 +38,7 @@ export default function BillingEditor() {
   const [docId, setDocId] = useState<string | null>(params.id ? String(params.id) : null);
   const [docType, setDocType] = useState<'INVOICE' | 'ESTIMATE'>(String(params.type).toUpperCase() === 'ESTIMATE' ? 'ESTIMATE' : 'INVOICE');
   const [brands, setBrands] = useState<BillingBrand[]>([]);
+  const [vendorDoc, setVendorDoc] = useState<{ by?: string | null; phone?: string | null } | null>(null);   // set when a VENDOR made this document in their own name
   const [brandId, setBrandId] = useState('');
   const [status, setStatus] = useState('DRAFT');
   const [number, setNumber] = useState('');
@@ -87,6 +88,12 @@ export default function BillingEditor() {
 
   const fillFromDoc = useCallback((d: BillingDoc) => {
     setDocId(d.id); setDocType(d.doc_type); setStatus(d.status); setNumber(d.number); setBrandId(d.brand_id || '');
+    if ((d as any).vendor_id) {
+      setVendorDoc({ by: d.created_by, phone: d.prepared_by?.phone });
+      setBrands((prev) => (d.brand_id && !prev.some((b) => b.id === d.brand_id) ? [...prev, ({ ...(d.brand || {}), id: d.brand_id, is_active: true } as any)] : prev));   // show the vendor's own profile as the brand
+    } else {
+      setVendorDoc(null);
+    }
     setBookingRef(d.booking_ref || ''); setOrderId(d.order_id || null);
     setCust({ name: d.customer.name || '', phone: d.customer.phone || '', email: d.customer.email || '', company: d.customer.company || '', gstin: d.customer.gstin || '', address: d.customer.address || '', state: d.customer.state || '' });
     setTrip(d.trip || {});
@@ -373,6 +380,12 @@ export default function BillingEditor() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 140, gap: 12 }} keyboardShouldPersistTaps="handled">
+        {!!vendorDoc && (
+          <View style={{ backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1, borderRadius: 10, padding: 10 }}>
+            <Text style={{ color: '#1E40AF', fontWeight: '800', fontSize: 13 }}>Made by a vendor, in the vendor's own name</Text>
+            <Text style={{ color: '#1E3A8A', fontSize: 12, marginTop: 3 }}>{vendorDoc.by || 'Vendor'}{vendorDoc.phone ? ' · ' + vendorDoc.phone : ''}. You can view, share or cancel it. Payment links are not available: the customer pays the vendor directly.</Text>
+          </View>
+        )}
         {/* 1. type + brand + booking id */}
         <View style={card}>
           {!docId && <Seg items={[{ key: 'INVOICE', label: 'Invoice' }, { key: 'ESTIMATE', label: 'Estimate' }]} value={docType} onChange={setDocType} />}
@@ -702,7 +715,7 @@ export default function BillingEditor() {
             <TouchableOpacity onPress={openPdf} style={[s.btn, { backgroundColor: c.primary }]}><FileText size={15} color="#FFFFFF" /><Text style={s.btnTxt}>PDF</Text></TouchableOpacity>
             <TouchableOpacity onPress={openPage} style={[s.btn, { borderWidth: 1, borderColor: c.border }]}><Receipt size={15} color={c.text} /><Text style={{ color: c.text, fontWeight: '800' }}>Preview</Text></TouchableOpacity>
             {docType === 'INVOICE' && <TouchableOpacity onPress={() => { setPay({ ...pay, amount: String(totals?.payable_now || totals?.balance_due || '') }); setShowPay(true); }} style={[s.btn, { backgroundColor: '#047857' }]}><CreditCard size={15} color="#FFFFFF" /><Text style={s.btnTxt}>Record payment</Text></TouchableOpacity>}
-            <TouchableOpacity onPress={() => setShowLink(true)} style={[s.btn, { backgroundColor: '#7C3AED' }]}><Link2 size={15} color="#FFFFFF" /><Text style={s.btnTxt}>Payment link</Text></TouchableOpacity>
+            {!vendorDoc && <TouchableOpacity onPress={() => setShowLink(true)} style={[s.btn, { backgroundColor: '#7C3AED' }]}><Link2 size={15} color="#FFFFFF" /><Text style={s.btnTxt}>Payment link</Text></TouchableOpacity>}
             {docType === 'ESTIMATE' && status !== 'CONVERTED' && <TouchableOpacity onPress={convert} style={[s.btn, { backgroundColor: '#0D47A1' }]}><Text style={s.btnTxt}>Make invoice</Text></TouchableOpacity>}
             <TouchableOpacity onPress={() => save(false)} style={[s.btn, { borderWidth: 1, borderColor: c.border }]}><Text style={{ color: c.text, fontWeight: '800' }}>Save changes</Text></TouchableOpacity>
           </ScrollView>

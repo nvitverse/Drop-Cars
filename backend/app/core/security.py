@@ -5,7 +5,7 @@ load_dotenv()
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database.session import get_db
@@ -270,7 +270,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     
     return user
 
-def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+# What a vendor who is not ACTIVE yet (waiting for approval) or was switched off may still reach: their own status, their Aadhaar photo and their e-mail.
+# Everything else - posting bookings, invoices, payouts, wallet - needs an ACTIVE account, so approval really is an approval.
+_VENDOR_NOT_ACTIVE_OK = ("/users/vendor-details/me", "/users/vendor/document-status", "/users/vendor/update-document", "/users/vendor/email")
+
+
+def get_current_vendor(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """Get current authenticated vendor from token"""
     # Import here to avoid circular import
     from app.crud.vendor import get_vendor_by_id
@@ -308,6 +313,12 @@ def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends(secur
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Force Logout Action Raised",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    acct = str(getattr(getattr(vendor, "account_status", None), "value", getattr(vendor, "account_status", "")) or "").upper()
+    if acct != "ACTIVE" and not any(request.url.path.rstrip("/").endswith(p) for p in _VENDOR_NOT_ACTIVE_OK):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is waiting for approval." if acct == "PENDING" else "Your account is switched off. Please contact Drop Cars support.",
         )
     return vendor
 
