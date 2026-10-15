@@ -48,8 +48,8 @@
   var adminLogoutBtn = document.getElementById("admin-logout");
   var adminMenuLinks = document.getElementById("menu-admin-links");
 
-  var ADMIN_EMAIL = "ops@dropcars.in";
-  var ADMIN_PASSWORD = "DropCars@2025";
+  var ADMIN_EMAIL = ""; // removed: credentials must never be in browser code
+  var ADMIN_PASSWORD = "";
   var OFFER_STORAGE_KEY = "dropcars-current-offer";
   var adminAuthenticated = false;
   var stopsData = [];
@@ -784,7 +784,7 @@
       var email = (formData.get("adminEmail") || "").toString().trim();
       var password = formData.get("adminPassword") || "";
 
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      if (false) { // browser-side login removed: offers are managed from the Admin panel
         adminAuthenticated = true;
         adminLoginResponse.textContent =
           "Login successful. You can now update offers.";

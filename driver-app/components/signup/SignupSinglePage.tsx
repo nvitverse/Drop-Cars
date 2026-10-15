@@ -777,7 +777,7 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
     else if (personalData.secondaryMobile && !/^[6-9]/.test(personalData.secondaryMobile)) problems.push(t('signupSinglePage.secondaryMobileMustStartWith'));
     const emailOk = !!personalData.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(personalData.email);
     if (!emailOk) problems.push(t('signupSinglePage.enterValidEmail'));
-    else if (!isEmailVerified) problems.push('Verify your e-mail: tap "Verify Email", type the code you receive, then continue.');
+    else if (!isEmailVerified) problems.push(t('signupSinglePage.verifyEmailFirst'));
     if (!personalData.city) problems.push(t('signupSinglePage.enterCity'));
     if (personalData.pincode && personalData.pincode.length !== 6) problems.push(t('signupSinglePage.pincodeMustBe6Digits'));
     if (!personalData.aadharNumber) problems.push(t('signupSinglePage.enterAadhar'));
@@ -786,8 +786,8 @@ export default function SignupSinglePage({ onSignupSuccess }: SignupSinglePagePr
     else if (!/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(personalData.panNumber)) problems.push(t('signupSinglePage.invalidPanFormat'));
     if (!personalData.password) problems.push(t('signupSinglePage.enterPassword'));
     else if (personalData.password.length < 6) problems.push(t('signupSinglePage.passwordTooShort'));
-    else if (!confirmPassword.trim()) problems.push('Please confirm your password.');
-    else if (personalData.password !== confirmPassword.trim()) problems.push('Create Password and Confirm Password do not match.');
+    else if (!confirmPassword.trim()) problems.push(t('signupSinglePage.confirmPasswordRequired'));
+    else if (personalData.password !== confirmPassword.trim()) problems.push(t('signupSinglePage.passwordsMismatch'));
     if (isAnyDocUploading) {
       Alert.alert(t('signupSinglePage.pleaseWaitTitle'), t('signupSinglePage.pleaseWaitBody'));
       return;

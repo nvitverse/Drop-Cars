@@ -130,7 +130,7 @@ def _waiting_applies(order) -> bool:
     return order.trip_type != OrderTypeEnum.HOURLY_RENTAL
 
 
-def multicity_waiting_charge(db, minutes, included_hours=None, days=1) -> int:
+def multicity_waiting_charge(db, minutes, included_hours=None, days=1, multicity=True) -> int:
     """Rupees to bill for the waiting time a driver entered (in MINUTES) at the end of a multi-city trip.
     Before 2026-10-07 the minutes themselves were added to the fare as rupees (450 min = Rs 450), unchecked, even when waiting hours
     were already included in the booking. Now: waiting hours included in the booking are free, anything above the length of the trip
@@ -144,8 +144,14 @@ def multicity_waiting_charge(db, minutes, included_hours=None, days=1) -> int:
         except (TypeError, ValueError):
             return float(default)
 
-    rate_per_hour = max(0.0, _num("multicity_waiting_rate_per_hour", 60))
-    free_minutes = max(0, int(_num("multicity_waiting_free_minutes", 0))) + max(0, int(included_hours or 0)) * 60
+    mc_rate = _num("multicity_waiting_rate_per_hour", 60)
+    mc_free = _num("multicity_waiting_free_minutes", 0)
+    if multicity:
+        rate_per_hour, free_base = mc_rate, mc_free
+    else:   # every other trip type has its own pair of settings (they start equal to the multi-city ones)
+        rate_per_hour, free_base = _num("waiting_rate_per_hour", mc_rate), _num("waiting_free_minutes", mc_free)
+    rate_per_hour = max(0.0, rate_per_hour)
+    free_minutes = max(0, int(free_base)) + max(0, int(included_hours or 0)) * 60
     cap = max(1, int(days or 1)) * 24 * 60
     mins = max(0, min(int(minutes or 0), cap))
     billable = max(0, mins - free_minutes)
@@ -720,6 +726,7 @@ async def update_end_trip_record(
                 db, waiting_time,
                 getattr(order, "waiting_hours_included", None) or getattr(new_order, "waiting_hours_included", None),
                 actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1,
+                multicity=(order.trip_type == OrderTypeEnum.MULTY_CITY),
             )
             order.waiting_time = waiting_charge
         _bd_days = actual_days if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY) else 1

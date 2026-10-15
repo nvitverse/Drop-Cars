@@ -346,3 +346,8 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - Customer number is blank in every finished-trip response; vendor "Self-Sourced" card gone (vendor_name is null).
 - Waiting charge billed on all trip types except hourly rental; waiting stopwatch + pre-fill on End Trip; SOS button on the running trip card.
 - Number opens-at clock time shown in the number's place; tab counters show a dash instead of a false 0; Settings shows the real version + OTA update id.
+
+## 2026-10-16 (Claude) - release prep
+- Website: admin password was written in the public file assets/js/ui-controls.js - removed from the source copies and from the FTP copy; stray diagnostic PHP files deleted from the FTP copy (backups in C:\gtmp\ftp_backup_cleanup_2026-10-16). FINDING: the FTP account does not reach the folder the web server actually serves (served files are older than every FTP copy) - live website changes need the correct hosting access.
+- Driver: signup messages translated; hooks/useTheme.ts added (tsc clean); OTA text-diff (scripts/ota_text_diff.py) runs inside publish-ota.js.
+- Backend: waiting_rate_per_hour / waiting_free_minutes settings for non multi-city trips (+ Admin System Config fields, test).

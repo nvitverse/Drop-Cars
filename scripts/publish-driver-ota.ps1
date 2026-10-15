@@ -26,7 +26,7 @@ $real = "C:\Users\Administrator\Desktop\dropcars-review\vendor\Driver-App\node_m
 if (Test-Path "$tmp\node_modules") { cmd /c rmdir "$tmp\node_modules" | Out-Null }
 if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
 New-Item -ItemType Directory -Force $tmp | Out-Null
-git archive HEAD driver-app | tar -x -C (Split-Path $tmp -Parent)
+git archive HEAD driver-app scripts/ota_text_diff.py scripts/hbc_strings.py | tar -x -C (Split-Path $tmp -Parent)
 cmd /c mklink /J "$tmp\node_modules" "$real" | Out-Null
 Set-Location $tmp
 $env:OTA_MAX_WORKERS = "1"; $env:OTA_GUARD_SHA = $sha

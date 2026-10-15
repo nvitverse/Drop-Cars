@@ -121,6 +121,16 @@ const fileInfo = (rel) => {
 };
 const bundleRel = norm(meta.fileMetadata.android.bundle);
 const b = fileInfo(bundleRel);
+// Report (never block) every screen text that the live update has and this one does not - features must not vanish unnoticed.
+try {
+  const { spawnSync } = require('child_process');
+  const py = ['C:/gtmp/ci_venv/Scripts/python.exe', 'C:/Users/Administrator/Desktop/dropcars-review/backend/.venv/Scripts/python.exe', 'python', 'py'].find((p) => spawnSync(p, ['--version']).status === 0);
+  const diffScript = path.join(root, '..', 'scripts', 'ota_text_diff.py');
+  if (py && fs.existsSync(diffScript)) {
+    const r = spawnSync(py, [diffScript, path.join(outDir, bundleRel), `${PUBLIC}/ota/${app}/${runtimeVersion}/android/latest.json`], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+    console.log(r.stdout || r.stderr);
+  } else console.log('text diff skipped (no python or script not found)');
+} catch (e) { console.log('text diff skipped:', e.message); }
 const launchAsset = { hash: b.hash, key: b.key, contentType: 'application/javascript', fileExtension: '.bundle', url: `${base}/${bundleRel}` };
 const assets = (meta.fileMetadata.android.assets || []).map((a) => {
   const rel = norm(a.path);

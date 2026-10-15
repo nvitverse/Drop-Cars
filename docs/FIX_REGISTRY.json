@@ -38,6 +38,10 @@
     {"id": "driver-offline-banner-mounted", "file": "driver-app/app/_layout.tsx", "must_contain": ["<OfflineBanner />"], "why": "a red 'No internet' strip with Retry (was built but never mounted)", "since": "2026-10-16"},
     {"id": "driver-review-qr-on-trip-report", "file": "driver-app/app/trip/report.tsx", "must_contain": ["<ReviewQrCard"], "why": "owner: after a trip the driver shows a QR so the customer can rate the service (in every build since 24 Sep 2026)", "since": "2026-09-24"},
     {"id": "driver-review-qr-component", "file": "driver-app/components/ReviewQrCard.tsx", "must_contain": ["Ask the customer to rate your service", "/api/trip-review/link/"], "why": "the QR card itself", "since": "2026-09-24"},
-    {"id": "driver-rating-page-after-trip", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["One last step", "Rate the customer"], "why": "rating + cash collected page that every finished trip must pass", "since": "2026-09-24"}
+    {"id": "driver-rating-page-after-trip", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["One last step", "Rate the customer"], "why": "rating + cash collected page that every finished trip must pass", "since": "2026-09-24"},
+    {"id": "website-no-password-in-browser-js", "file": "website/assets/js/ui-controls.js", "must_not_contain": ["DropCars@"], "must_contain": ["credentials must never be in browser code"], "why": "the admin password was written in this PUBLIC javascript file", "since": "2026-10-16"},
+    {"id": "driver-signup-messages-translated", "file": "driver-app/components/signup/SignupSinglePage.tsx", "must_contain": ["signupSinglePage.passwordsMismatch", "signupSinglePage.verifyEmailFirst"], "why": "signup problems are translated in all 5 languages", "since": "2026-10-16"},
+    {"id": "backend-waiting-own-settings", "file": "backend/app/crud/end_records.py", "must_contain": ["waiting_rate_per_hour", "multicity=(order.trip_type == OrderTypeEnum.MULTY_CITY)"], "why": "waiting on non multi-city trips has its own admin settings", "since": "2026-10-16"},
+    {"id": "ota-text-diff-in-publish", "file": "driver-app/scripts/publish-ota.js", "must_contain": ["ota_text_diff.py"], "why": "every OTA prints which screen texts disappear compared with the live one", "since": "2026-10-16"}
   ]
 }
