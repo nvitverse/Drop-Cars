@@ -19,6 +19,7 @@ import { Camera, ArrowLeft, Check, IndianRupee, KeyRound, Gauge, CheckCircle } f
 import * as ImagePicker from 'expo-image-picker';
 import { endTrip } from '@/services/driver/carDriverService';
 import * as SecureStore from '@/utils/secureStore';
+import { readWaiting, waitingMinutes, waitKey } from '@/components/WaitingTimer';
 import { stopTripLocationSharing } from '@/services/locationService';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -36,6 +37,15 @@ export default function EndTripScreen() {
   const [tollChargeUpdate, setTollChargeUpdate] = useState(false);
   const [endingKmShown, setEndingKmShown] = useState(false);
   const [waitingTime, setWaitingTime] = useState('');
+  // Minutes counted by the stopwatch on the running-trip card (pre-filled; the driver can still change it).
+  React.useEffect(() => {
+    if (!params.order_id) return;
+    readWaiting(String(params.order_id)).then((w) => {
+      const m = waitingMinutes(w);
+      if (m > 0) setWaitingTime((cur) => cur || String(m));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const handleWaitingTimeChange = (value: string) => {
     const sanitized = value.replace(/[^0-9]/g, '');
     setWaitingTime(sanitized);
@@ -218,6 +228,7 @@ export default function EndTripScreen() {
 
       // Trip is over - stop sharing this driver's live location for it.
       stopTripLocationSharing();
+      try { await SecureStore.deleteItemAsync(waitKey(String(params.order_id || ''))); } catch {}
 
       // Remember that this trip still needs its Completion step (rating + cash), so it is offered again if the app
       // is closed before it is done.

@@ -51,14 +51,22 @@ export default function CustomerNumberCountdown({
     return () => clearInterval(id);
   }, [onUnlock]);
 
+  // The clock time the number opens (worked out from the server's "seconds left", so a wrong phone clock cannot mislead).
+  const opensAt = new Date(target.current);
+  const sameDay = opensAt.toDateString() === new Date().toDateString();
+  const opensText = `${sameDay ? '' : opensAt.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ', '}${opensAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+
   return (
     <View
       accessibilityLabel={`${label} ${fmt(left)}`}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${colors.primary}14`, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
     >
       <Lock color={colors.primary} size={13} />
-      <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.textSecondary }}>{label}</Text>
-      <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.primary, fontVariant: ['tabular-nums'] }}>{left > 0 ? fmt(left) : '00:00'}</Text>
+      <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.textSecondary }}>Customer number opens at</Text>
+      <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.primary, fontVariant: ['tabular-nums'] }}>{opensText}</Text>
+      {left > 0 && left < 3600 && (
+        <Text style={{ fontSize: 11.5, color: colors.textSecondary, fontVariant: ['tabular-nums'] }}>({fmt(left)})</Text>
+      )}
     </View>
   );
 }

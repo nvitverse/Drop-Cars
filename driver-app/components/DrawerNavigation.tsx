@@ -516,7 +516,7 @@ export default function DrawerNavigation({ visible, onClose }: DrawerNavigationP
               <MenuItem
                 icon={<Wallet color={colors.textSecondary} size={20} />}
                 title={t('drawer.transactions')}
-                subtitle={`Wallet balance: ₹${dashboardData?.user_info?.wallet_balance || 0}`}
+                subtitle={`Wallet balance: ${dashboardData?.user_info?.wallet_balance == null ? '-' : '₹' + dashboardData.user_info.wallet_balance}`}
                 onPress={() => {
                   onClose();
                   router.push('/(tabs)/wallet');

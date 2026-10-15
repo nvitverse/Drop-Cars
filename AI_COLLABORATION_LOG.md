@@ -340,3 +340,9 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - **Owner sees everything a vendor invoices / quotes:** `GET /admin/billing/documents?scope=vendor|staff|all&vendor_id=`, `GET /admin/billing/vendor-profiles` (who, GSTIN, billed, to collect), `PUT /admin/billing/vendor-profiles/{brand}/active` (stop one vendor invoicing), setting `vendor_invoicing_enabled` (stop everyone; Admin > System config). Admin App Invoices: tabs "Our team | Vendors' documents | Vendor profiles" (switch per vendor); opening a vendor's document shows a "made by a vendor" banner, no payment-link button (and the API refuses links on vendor docs); staff edits keep the vendor's own profile.
 - **Owner sees the trip codes of any booking:** `GET /orders/admin/{id}` now returns start_otp / end_otp (the list view already did); verified for a vendor-posted booking together with the vendor's name and phone.
 - `tests/test_vendor_end_to_end.py` walks sign-up -> Pending cannot post -> owner approves -> vendor posts -> owner sees booking + vendor + codes -> vendor invoices -> owner sees / opens / PDFs it -> owner switches the vendor off and on -> payout request visible in the owner's queue. Whole suite passes.
+
+## 2026-10-16 (Claude) - Driver App: duty session, number rules, waiting, SOS
+- Duty driver stays in the duty area after a trip; owner switch no longer wipes the fleet token on a network error.
+- Customer number is blank in every finished-trip response; vendor "Self-Sourced" card gone (vendor_name is null).
+- Waiting charge billed on all trip types except hourly rental; waiting stopwatch + pre-fill on End Trip; SOS button on the running trip card.
+- Number opens-at clock time shown in the number's place; tab counters show a dash instead of a false 0; Settings shows the real version + OTA update id.

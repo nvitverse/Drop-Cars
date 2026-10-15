@@ -36,6 +36,8 @@ import { markEmailAddedLocally } from '@/utils/secureStore';
 import TermsModal from '@/components/TermsModal';
 import { useAppContent, TermsContent } from '@/services/appContent';
 import PartnerBadge from '@/components/PartnerBadge';
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -1300,7 +1302,13 @@ export default function SettingsScreen() {
           
           <View style={[dynamicStyles.appInfoCard, { backgroundColor: colors.surface }]}>
             <Text style={[dynamicStyles.appName, { color: colors.text }]}>Drop Cars Driver App</Text>
-            <Text style={[dynamicStyles.appVersion, { color: colors.textSecondary }]}>Version 0.1</Text>
+            <Text style={[dynamicStyles.appVersion, { color: colors.textSecondary }]}>
+              {`Version ${Constants.expoConfig?.version || '-'} (build ${(Constants as any).nativeBuildVersion || '-'})`}
+            </Text>
+            {/* Which code is really running on this phone - tells support at a glance whether the phone gets our updates. */}
+            <Text style={[dynamicStyles.appVersion, { color: colors.textSecondary, fontSize: 11, marginTop: 2 }]}>
+              {Updates.isEmbeddedLaunch ? 'Update: built-in version' : `Update: ${String(Updates.updateId || '').slice(0, 8)} · ${Updates.createdAt ? new Date(Updates.createdAt).toLocaleDateString() : ''}`}
+            </Text>
           </View>
         </View>
 

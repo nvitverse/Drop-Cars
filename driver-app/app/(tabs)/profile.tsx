@@ -726,7 +726,7 @@ export default function ProfileScreen() {
           {/* Quick Fleet & Earnings Stat Strip */}
           <View style={s.statStrip}>
             <View style={s.statBox}>
-              <Text style={s.statVal}>₹{(dashboardData?.user_info?.wallet_balance || 0).toLocaleString('en-IN')}</Text>
+              <Text style={s.statVal}>{dashboardData?.user_info?.wallet_balance == null ? '-' : `₹${Number(dashboardData.user_info.wallet_balance).toLocaleString('en-IN')}`}</Text>
               <Text style={s.statLbl}>Wallet Balance</Text>
             </View>
 

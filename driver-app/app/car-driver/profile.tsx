@@ -349,10 +349,10 @@ export default function CarDriverProfileScreen() {
         </View>
         <View style={styles.statsGrid}>
           {[
-            { label: 'Trips completed', val: String(summary?.stats?.total_trips ?? 0), sub: `${summary?.stats?.today_trips ?? 0} today`, icon: <Car color="#3B82F6" size={16} />, bg: '#3B82F612' },
-            { label: 'Earnings', val: `₹${summary?.stats?.earnings_total ?? 0}`, sub: `₹${summary?.stats?.earnings_today ?? 0} today`, icon: <CircleDollarSign color="#10B981" size={16} />, bg: '#10B98112' },
-            { label: 'Distance driven', val: `${summary?.stats?.total_km ?? 0} km`, sub: 'all trips', icon: <RouteIcon color="#8B5CF6" size={16} />, bg: '#8B5CF612' },
-            { label: 'Rating', val: summary?.stats?.avg_rating != null ? `${summary.stats.avg_rating} ★` : '-', sub: `${summary?.stats?.rating_count ?? 0} review(s)`, icon: <Star color="#F59E0B" size={16} />, bg: '#F59E0B12' },
+            { label: 'Trips completed', val: summary?.stats ? String(summary.stats.total_trips ?? 0) : '-', sub: summary?.stats ? `${summary.stats.today_trips ?? 0} today` : '', icon: <Car color="#3B82F6" size={16} />, bg: '#3B82F612' },
+            { label: 'Earnings', val: summary?.stats ? `₹${summary.stats.earnings_total ?? 0}` : '-', sub: summary?.stats ? `₹${summary.stats.earnings_today ?? 0} today` : '', icon: <CircleDollarSign color="#10B981" size={16} />, bg: '#10B98112' },
+            { label: 'Distance driven', val: summary?.stats ? `${summary.stats.total_km ?? 0} km` : '-', sub: 'all trips', icon: <RouteIcon color="#8B5CF6" size={16} />, bg: '#8B5CF612' },
+            { label: 'Rating', val: summary?.stats?.avg_rating != null ? `${summary.stats.avg_rating} ★` : '-', sub: summary?.stats ? `${summary.stats.rating_count ?? 0} review(s)` : '', icon: <Star color="#F59E0B" size={16} />, bg: '#F59E0B12' },
           ].map((st) => (
             <View key={st.label} style={styles.compactStatCard}>
               <View style={[styles.statIconBox, { backgroundColor: st.bg }]}>{st.icon}</View>

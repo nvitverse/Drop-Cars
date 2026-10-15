@@ -30,6 +30,10 @@
     {"id": "driver-finished-trip-no-customer-number", "file": "backend/app/crud/order_assignments.py", "must_contain": ["a finished trip never shows the customer number"], "why": "owner rule: the customer number is never shown to the driver after the trip is completed", "since": "2026-10-15"},
     {"id": "driver-complete-stays-in-duty", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["never to the fleet home"], "why": "after a trip the duty driver stays in the duty area (no forced fleet/Owner mode)", "since": "2026-10-15"},
     {"id": "driver-owner-switch-keeps-token", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["must NOT wipe it"], "why": "a network blip must not delete the fleet login (caused Wallet 'No authentication token')", "since": "2026-10-15"},
-    {"id": "waiting-charge-all-trip-types", "file": "backend/app/crud/end_records.py", "must_contain": ["def _waiting_applies"], "why": "waiting time is billed on every trip type except hourly rental (was multi-city only)", "since": "2026-10-16"}
+    {"id": "waiting-charge-all-trip-types", "file": "backend/app/crud/end_records.py", "must_contain": ["def _waiting_applies"], "why": "waiting time is billed on every trip type except hourly rental (was multi-city only)", "since": "2026-10-16"},
+    {"id": "driver-number-opens-at-time", "file": "driver-app/components/CustomerNumberCountdown.tsx", "must_contain": ["Customer number opens at"], "why": "owner request: show the clock time the customer number opens, in the number's place", "since": "2026-10-16"},
+    {"id": "driver-tab-counts-no-false-zero", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["ordersLoaded ?", "historyLoaded ?"], "why": "tab counters show a dash until data arrives (zero flash)", "since": "2026-10-16"},
+    {"id": "driver-waiting-timer", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["<WaitingTimer", "<SosButton"], "why": "waiting stopwatch (pre-fills End Trip) and emergency SOS on the running trip card", "since": "2026-10-16"},
+    {"id": "driver-real-version-line", "file": "driver-app/app/(tabs)/settings.tsx", "must_contain": ["Update: built-in version"], "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new", "since": "2026-10-16"}
   ]
 }

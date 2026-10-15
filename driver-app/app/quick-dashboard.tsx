@@ -20,6 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCarDriver } from '@/contexts/CarDriverContext';
 import * as SecureStore from '@/utils/secureStore';
+import WaitingTimer from '@/components/WaitingTimer';
+import SosButton from '@/components/SosButton';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -110,6 +112,9 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
   // State management
   const [driverStatus, setDriverStatus] = useState<'ONLINE' | 'OFFLINE' | 'DRIVING'>('OFFLINE');
   const [driverOrders, setDriverOrders] = useState<DriverOrder[]>([]);
+  // The tab counters show a dash until the first answer arrives - never a false 0 (owner rule 2026-10-16, "zero flash").
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
@@ -388,6 +393,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
       }));
       
       setDriverOrders(mappedOrders);
+      setOrdersLoaded(true);
       console.log('✅ Driver data loaded:', mappedOrders.length, 'orders');
 
       // Derive active trip and status
@@ -869,7 +875,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
     } catch(e: any) {
       setOrderHistory([]);
       setHistoryError(e?.response?.data?.detail || e?.message || t('quickDashboard.loadHistoryFailed'));
-    } finally { setHistoryLoading(false); }
+    } finally { setHistoryLoading(false); setHistoryLoaded(true); }
   };
 
   // Running active trips currently driving / started
@@ -1112,7 +1118,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
           </Text>
           <View style={[styles.tabBadge, { backgroundColor: activeTab === 'upcoming' ? '#F59E0B' : '#E5E7EB' }]}>
             <Text style={[styles.tabBadgeText, { color: activeTab === 'upcoming' ? '#FFFFFF' : '#4B5563' }]}>
-              {upcomingOrders.length}
+              {ordersLoaded ? upcomingOrders.length : '-'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1131,7 +1137,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
           </Text>
           <View style={[styles.tabBadge, { backgroundColor: runningOrders.length > 0 ? '#10B981' : (activeTab === 'running' ? '#10B981' : '#E5E7EB') }]}>
             <Text style={[styles.tabBadgeText, { color: (runningOrders.length > 0 || activeTab === 'running') ? '#FFFFFF' : '#4B5563' }]}>
-              {runningOrders.length}
+              {ordersLoaded ? runningOrders.length : '-'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1150,7 +1156,7 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
           </Text>
           <View style={[styles.tabBadge, { backgroundColor: activeTab === 'completed' ? colors.primary : '#E5E7EB' }]}>
             <Text style={[styles.tabBadgeText, { color: activeTab === 'completed' ? '#FFFFFF' : '#4B5563' }]}>
-              {filteredOrderHistory.length}
+              {historyLoaded ? filteredOrderHistory.length : "-"}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1584,6 +1590,9 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
                           </View>
                         );
                       })()}
+
+                      {isDriving && <WaitingTimer orderId={order.order_id} />}
+                      {isDriving && <SosButton orderId={order.order_id} />}
 
                       <View style={styles.orderFooter}>
                         {/* Show start/end buttons based on trip state */}
