@@ -35,6 +35,9 @@
     {"id": "driver-tab-counts-no-false-zero", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["ordersLoaded ?", "historyLoaded ?"], "why": "tab counters show a dash until data arrives (zero flash)", "since": "2026-10-16"},
     {"id": "driver-waiting-timer", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["<WaitingTimer", "<SosButton"], "why": "waiting stopwatch (pre-fills End Trip) and emergency SOS on the running trip card", "since": "2026-10-16"},
     {"id": "driver-real-version-line", "file": "driver-app/app/(tabs)/settings.tsx", "must_contain": ["Update: built-in version"], "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new", "since": "2026-10-16"},
-    {"id": "driver-offline-banner-mounted", "file": "driver-app/app/_layout.tsx", "must_contain": ["<OfflineBanner />"], "why": "a red 'No internet' strip with Retry (was built but never mounted)", "since": "2026-10-16"}
+    {"id": "driver-offline-banner-mounted", "file": "driver-app/app/_layout.tsx", "must_contain": ["<OfflineBanner />"], "why": "a red 'No internet' strip with Retry (was built but never mounted)", "since": "2026-10-16"},
+    {"id": "driver-review-qr-on-trip-report", "file": "driver-app/app/trip/report.tsx", "must_contain": ["<ReviewQrCard"], "why": "owner: after a trip the driver shows a QR so the customer can rate the service (in every build since 24 Sep 2026)", "since": "2026-09-24"},
+    {"id": "driver-review-qr-component", "file": "driver-app/components/ReviewQrCard.tsx", "must_contain": ["Ask the customer to rate your service", "/api/trip-review/link/"], "why": "the QR card itself", "since": "2026-09-24"},
+    {"id": "driver-rating-page-after-trip", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["One last step", "Rate the customer"], "why": "rating + cash collected page that every finished trip must pass", "since": "2026-09-24"}
   ]
 }
