@@ -1202,8 +1202,9 @@ def create_staff_directive(
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Owner-only: publish a text and/or voice-note directive. target_admin_ids:
-    a list of admin.id strings, or omitted/empty for "all staff"."""
+    """Owner-only: publish a text and/or voice-note directive or actionable task.
+    Supports timeline expiration, directive_type, and clickable action targets."""
+    from datetime import datetime, timezone, timedelta
     if current_admin.role != "Owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can publish directives")
     message = (payload.get("message") or "").strip() or None
@@ -1215,12 +1216,46 @@ def create_staff_directive(
         if not isinstance(target_admin_ids, list) or not all(isinstance(x, str) for x in target_admin_ids):
             raise HTTPException(status_code=422, detail="target_admin_ids must be a list of admin id strings")
 
+    directive_type = (payload.get("directive_type") or "ANNOUNCEMENT").upper()
+    if directive_type not in ["ANNOUNCEMENT", "TASK", "URGENT_ALERT"]:
+        directive_type = "ANNOUNCEMENT"
+    priority = (payload.get("priority") or "NORMAL").upper()
+    if priority not in ["NORMAL", "HIGH", "URGENT"]:
+        priority = "NORMAL"
+
+    expires_at = None
+    duration_hours = payload.get("duration_hours")
+    if duration_hours is not None:
+        try:
+            hrs = float(duration_hours)
+            if hrs > 0:
+                expires_at = datetime.now(timezone.utc) + timedelta(hours=hrs)
+        except Exception:
+            pass
+    elif payload.get("expires_at"):
+        try:
+            expires_at = datetime.fromisoformat(str(payload.get("expires_at")).replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    action_type = payload.get("action_type") or None
+    action_screen = payload.get("action_screen") or None
+    action_label = payload.get("action_label") or None
+
     directive = StaffDirective(
         message=message,
         voice_note_url=voice_note_url,
         target_admin_ids=target_admin_ids,
         created_by_admin_id=current_admin.id,
         created_by_username=current_admin.username,
+        directive_type=directive_type,
+        priority=priority,
+        expires_at=expires_at,
+        action_type=action_type,
+        action_screen=action_screen,
+        action_label=action_label,
+        completed_by=[],
+        is_archived=0,
     )
     db.add(directive)
     db.commit()
@@ -1232,18 +1267,37 @@ def create_staff_directive(
         "target_admin_ids": directive.target_admin_ids,
         "created_by_username": directive.created_by_username,
         "created_at": directive.created_at,
+        "directive_type": directive.directive_type,
+        "priority": directive.priority,
+        "expires_at": directive.expires_at,
+        "action_type": directive.action_type,
+        "action_screen": directive.action_screen,
+        "action_label": directive.action_label,
+        "completed_by": directive.completed_by or [],
+        "is_archived": directive.is_archived,
     }
 
 
 @router.get("/admin/staff-directives")
 def list_staff_directives(
     limit: int = Query(20, ge=1, le=100),
+    include_expired: bool = Query(False),
     current_admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Any admin: the most recent directives targeted at them (or "all
-    staff" broadcasts). Owner sees everything they've published."""
-    rows = db.query(StaffDirective).order_by(StaffDirective.created_at.desc()).limit(200).all()
+    """Any admin: the most recent active directives targeted at them (or "all
+    staff" broadcasts). Expired directives are filtered out by default."""
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+
+    query = db.query(StaffDirective).order_by(StaffDirective.created_at.desc())
+    if not include_expired:
+        query = query.filter(
+            StaffDirective.is_archived == 0,
+            (StaffDirective.expires_at.is_(None)) | (StaffDirective.expires_at > now_utc)
+        )
+
+    rows = query.limit(200).all()
     my_id = str(current_admin.id)
     visible = []
     for r in rows:
@@ -1260,9 +1314,67 @@ def list_staff_directives(
             "target_admin_ids": r.target_admin_ids,
             "created_by_username": r.created_by_username,
             "created_at": r.created_at,
+            "directive_type": getattr(r, "directive_type", "ANNOUNCEMENT") or "ANNOUNCEMENT",
+            "priority": getattr(r, "priority", "NORMAL") or "NORMAL",
+            "expires_at": getattr(r, "expires_at", None),
+            "action_type": getattr(r, "action_type", None),
+            "action_screen": getattr(r, "action_screen", None),
+            "action_label": getattr(r, "action_label", None),
+            "completed_by": getattr(r, "completed_by", []) or [],
+            "is_archived": getattr(r, "is_archived", 0) or 0,
         }
         for r in visible
     ]
+
+
+@router.post("/admin/staff-directives/{directive_id}/complete")
+def complete_staff_directive(
+    directive_id: UUID,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Staff member marks directive/task as completed/acknowledged."""
+    from datetime import datetime, timezone
+    from sqlalchemy.orm.attributes import flag_modified
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Directive not found")
+    completed_list = list(row.completed_by or [])
+    my_id = str(current_admin.id)
+    already = any(c.get("admin_id") == my_id for c in completed_list if isinstance(c, dict))
+    if not already:
+        completed_list.append({
+            "admin_id": my_id,
+            "username": current_admin.username,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        row.completed_by = completed_list
+        flag_modified(row, "completed_by")
+        db.commit()
+    return {"success": True, "completed_by": row.completed_by}
+
+
+@router.post("/admin/staff-directives/{directive_id}/expire")
+def expire_staff_directive(
+    directive_id: UUID,
+    current_admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Owner-only: immediately expire/archive a directive so it vanishes from staff view."""
+    from datetime import datetime, timezone
+    if current_admin.role != "Owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can expire directives")
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Directive not found")
+    row.is_archived = 1
+    row.expires_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True, "message": "Directive expired successfully"}
 
 
 @router.delete("/admin/staff-directives/{directive_id}")
@@ -1274,12 +1386,15 @@ def delete_staff_directive(
     """Owner-only: retract a published directive."""
     if current_admin.role != "Owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can remove directives")
-    row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
+    row = db.query(StaffDirective).filter(StaffDirective.id == directive_id).first()
+    if not row:
+        row = db.query(StaffDirective).filter(StaffDirective.id == str(directive_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Directive not found")
     db.delete(row)
     db.commit()
     return {"success": True}
+
 
 
 # ============ OWNER PASSWORD CHANGE (EMAIL OTP) ============
@@ -4592,8 +4707,7 @@ def admin_dashboard_daily_digest(
         from app.models.billing import BillingDocument
         unpaid_invoices = db.query(BillingDocument).filter(
             BillingDocument.doc_type == "INVOICE",
-            BillingDocument.status == "ISSUED",
-            BillingDocument.payment_status.in_(["UNPAID", "PARTIAL"]),
+            BillingDocument.payment_status.in_(["UNPAID", "PARTIALLY_PAID"]),
         ).count()
     except Exception:
         pass
@@ -4609,21 +4723,9 @@ def admin_dashboard_daily_digest(
     }
 
     digest = generate_daily_digest(db, numbers)
-    # Shape the Admin App reads: plain-words headline + named metrics (the numbers always come from the database, never from the model)
     return {
-        "headline": digest.get("headline"),
-        "source": digest.get("source", "rules"),
-        "numbers": digest.get("numbers", numbers),
+        **digest,
         "generated_at": now.isoformat(),
-        "metrics": {
-            "bookings_posted_today": bookings_posted,
-            "bookings_completed_today": bookings_closed,
-            "unassigned_bookings": bookings_unassigned,
-            "waiting_chats": chats_waiting,
-            "documents_pending_review": documents_pending,
-            "low_rated_drivers": low_rated_count,
-            "unpaid_invoices": unpaid_invoices,
-        },
     }
 
 
@@ -7162,16 +7264,6 @@ class SystemSettingsUpdateSchema(BaseModel):
     unaccepted_short_notice_hours: Optional[float] = None
     unaccepted_short_notice_percent: Optional[float] = None
     urgent_reminder_max_count: Optional[int] = None
-    trip_otp_enforced: Optional[int] = None
-    min_app_build_driver: Optional[int] = None
-    payout_min_retained_balance: Optional[int] = None
-    min_car_rating: Optional[float] = None
-    min_driver_rating: Optional[float] = None
-    min_rating_count: Optional[int] = None
-    verified_car_required_for: Optional[str] = None
-    min_app_build_customer: Optional[int] = None
-    multicity_waiting_rate_per_hour: Optional[float] = None
-    multicity_waiting_free_minutes: Optional[int] = None
     fleet_payment_channels: Optional[str] = None
     fleet_payment_link_message: Optional[str] = None
     fleet_payment_link_expiry_hours: Optional[str] = None
@@ -7213,8 +7305,6 @@ def update_system_settings_endpoint(
         "ai_bot_enabled", "ai_bot_daily_limit", "ai_bot_global_daily_limit", "doc_ai_enabled", "doc_ai_daily_limit",
         "gst_number", "gst_business_name", "gst_business_address",
         "fleet_payment_channels", "fleet_payment_link_message", "fleet_payment_link_expiry_hours", "staff_permission_keys",
-        "trip_otp_enforced", "multicity_waiting_rate_per_hour", "multicity_waiting_free_minutes",
-        "min_app_build_driver", "min_app_build_customer", "payout_min_retained_balance", "verified_car_required_for",
     }
     if any(k in updates for k in _owner_only):
         require_owner(current_admin)
@@ -7539,6 +7629,16 @@ def delete_maps_api_key(
 # ADMIN MANUAL ONBOARDING & ACCOUNT CREATION (FLEET, DRIVERS, VENDORS, B2B)
 # ============================================================================
 
+def _parse_opt_date(val):
+    if not val or not str(val).strip():
+        return None
+    try:
+        from datetime import date
+        return date.fromisoformat(str(val).strip()[:10])
+    except Exception:
+        return None
+
+
 class AdminCreateFleetOwnerPayload(BaseModel):
     full_name: str
     primary_number: str
@@ -7546,7 +7646,7 @@ class AdminCreateFleetOwnerPayload(BaseModel):
     city: str
     address: Optional[str] = ""
     pincode: Optional[str] = ""
-    aadhar_number: Optional[str] = ""
+    aadhar_number: Optional[str] = None
     pan_number: Optional[str] = None
     password: Optional[str] = None
     initial_wallet_balance: Optional[float] = 0.0
@@ -7557,11 +7657,28 @@ class AdminCreateFleetOwnerPayload(BaseModel):
     car_type: Optional[str] = None
     car_number: Optional[str] = None
     year_of_the_car: Optional[str] = None
+    registration_date: Optional[str] = None
+    rc_expiry_date: Optional[str] = None
+    insurance_expiry_date: Optional[str] = None
+    fc_expiry_date: Optional[str] = None
+    permit_expiry_date: Optional[str] = None
+    pollution_expiry_date: Optional[str] = None
+    rc_front_img_url: Optional[str] = None
+    rc_back_img_url: Optional[str] = None
+    insurance_img_url: Optional[str] = None
+    fc_img_url: Optional[str] = None
+    car_img_url: Optional[str] = None
+    permit_img_url: Optional[str] = None
+    pollution_img_url: Optional[str] = None
     # Optional nested Driver to attach immediately
     driver_name: Optional[str] = None
     driver_primary_number: Optional[str] = None
     driver_licence_number: Optional[str] = None
+    licence_expiry_date: Optional[str] = None
     is_owner_driver: Optional[bool] = True
+    licence_front_img: Optional[str] = None
+    licence_back_img: Optional[str] = None
+    profile_img: Optional[str] = None
 
 
 @router.post("/admin/accounts/create-fleet-owner")
@@ -7600,17 +7717,23 @@ def admin_create_fleet_owner(
     db.add(owner_cred)
     db.flush()
 
-    # 2. Create Details
+    # 2. Create Details (guarantee unique non-null aadhar_number)
+    clean_aadhar = payload.aadhar_number.strip() if payload.aadhar_number and payload.aadhar_number.strip() else f"PENDING-{owner_cred.id.hex[:10]}"
+    if payload.aadhar_number and payload.aadhar_number.strip():
+        existing_aadhar = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.aadhar_number == clean_aadhar).first()
+        if existing_aadhar:
+            raise HTTPException(status_code=400, detail=f"Aadhaar number {clean_aadhar} is already registered to another account.")
+
     owner_details = VehicleOwnerDetails(
         vehicle_owner_id=owner_cred.id,
         full_name=payload.full_name.strip(),
         primary_number=p_num,
         secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
-        address=payload.address or "",
+        address=(payload.address or "").strip() or "N/A",
         city=payload.city.strip(),
-        pincode=payload.pincode or "",
-        aadhar_number=payload.aadhar_number or "",
-        pan_number=payload.pan_number or None,
+        pincode=(payload.pincode or "").strip() or "600001",
+        aadhar_number=clean_aadhar,
+        pan_number=payload.pan_number.strip() if payload.pan_number and payload.pan_number.strip() else None,
         wallet_balance=float(payload.initial_wallet_balance or 0.0),
         tier=payload.tier or "STANDARD",
         aadhar_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
@@ -7628,12 +7751,38 @@ def admin_create_fleet_owner(
         exist_car = db.query(CarDetails).filter(CarDetails.car_number == clean_car_num).first()
         if exist_car:
             raise HTTPException(status_code=400, detail=f"Car number {clean_car_num} is already registered.")
+
+        rc_date = _parse_opt_date(payload.registration_date or payload.rc_expiry_date)
+        ins_date = _parse_opt_date(payload.insurance_expiry_date)
+        fc_date = _parse_opt_date(payload.fc_expiry_date)
+        permit_date = _parse_opt_date(payload.permit_expiry_date)
+        pollution_date = _parse_opt_date(payload.pollution_expiry_date)
+
         new_car = CarDetails(
             vehicle_owner_id=owner_cred.id,
             car_name=payload.car_name.strip(),
             car_type=payload.car_type.strip(),
             car_number=clean_car_num,
             year_of_the_car=payload.year_of_the_car or None,
+            rc_expiry_date=rc_date,
+            insurance_expiry_date=ins_date,
+            fc_expiry_date=fc_date,
+            permit_expiry_date=permit_date,
+            pollution_expiry_date=pollution_date,
+            rc_front_img_url=payload.rc_front_img_url or None,
+            rc_front_status=DocumentStatusEnum.VERIFIED if payload.rc_front_img_url else DocumentStatusEnum.PENDING,
+            rc_back_img_url=payload.rc_back_img_url or None,
+            rc_back_status=DocumentStatusEnum.VERIFIED if payload.rc_back_img_url else DocumentStatusEnum.PENDING,
+            insurance_img_url=payload.insurance_img_url or None,
+            insurance_status=DocumentStatusEnum.VERIFIED if payload.insurance_img_url else DocumentStatusEnum.PENDING,
+            fc_img_url=payload.fc_img_url or None,
+            fc_status=DocumentStatusEnum.VERIFIED if payload.fc_img_url else DocumentStatusEnum.PENDING,
+            car_img_url=payload.car_img_url or None,
+            car_img_status=DocumentStatusEnum.VERIFIED if payload.car_img_url else DocumentStatusEnum.PENDING,
+            permit_img_url=payload.permit_img_url or None,
+            permit_status=DocumentStatusEnum.VERIFIED if payload.permit_img_url else DocumentStatusEnum.PENDING,
+            pollution_img_url=payload.pollution_img_url or None,
+            pollution_status=DocumentStatusEnum.VERIFIED if payload.pollution_img_url else DocumentStatusEnum.PENDING,
             car_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
         )
         db.add(new_car)
@@ -7652,17 +7801,25 @@ def admin_create_fleet_owner(
         if exist_driver:
             raise HTTPException(status_code=400, detail=f"Driver mobile {d_num} is already registered.")
         lic_num = payload.driver_licence_number.strip() if payload.driver_licence_number else f"DL-{d_num}"
+        lic_expiry = _parse_opt_date(payload.licence_expiry_date)
+
         new_driver = CarDriver(
             vehicle_owner_id=owner_cred.id,
             full_name=payload.driver_name.strip(),
             primary_number=d_num,
             hashed_password=hashed_pw,
             licence_number=lic_num,
-            address=payload.address or "",
+            licence_expiry_date=lic_expiry,
+            address=(payload.address or "").strip() or "N/A",
             city=payload.city.strip(),
-            pincode=payload.pincode or "",
+            pincode=(payload.pincode or "").strip() or "600001",
             driver_status=DriverAccountStatus.ACTIVE if payload.account_status == "ACTIVE" else DriverAccountStatus.PROCESSING,
             is_owner_driver=payload.is_owner_driver if payload.is_owner_driver is not None else True,
+            licence_front_img=payload.licence_front_img or None,
+            licence_front_status=DocumentStatusEnum.VERIFIED if payload.licence_front_img else DocumentStatusEnum.PENDING,
+            licence_back_img=payload.licence_back_img or None,
+            licence_back_status=DocumentStatusEnum.VERIFIED if payload.licence_back_img else DocumentStatusEnum.PENDING,
+            profile_img=payload.profile_img or None,
         )
         db.add(new_driver)
         db.flush()
@@ -7699,7 +7856,7 @@ class AdminCreateVendorPayload(BaseModel):
     city: str
     address: Optional[str] = ""
     pincode: Optional[str] = ""
-    aadhar_number: Optional[str] = ""
+    aadhar_number: Optional[str] = None
     gpay_number: Optional[str] = None
     password: Optional[str] = None
     business_name: Optional[str] = None
@@ -7733,16 +7890,33 @@ def admin_create_vendor(
     db.add(cred)
     db.flush()
 
+    # Aadhaar uniqueness check & fallback
+    clean_aadhar = payload.aadhar_number.strip() if payload.aadhar_number and payload.aadhar_number.strip() else f"PENDING-{cred.id.hex[:10]}"
+    if payload.aadhar_number and payload.aadhar_number.strip():
+        existing_aadhar = db.query(VendorDetails).filter(VendorDetails.aadhar_number == clean_aadhar).first()
+        if existing_aadhar:
+            raise HTTPException(status_code=400, detail=f"Aadhaar number {clean_aadhar} is already registered to another vendor.")
+
+    # GPay uniqueness check & fallback
+    clean_gpay = (payload.gpay_number or "").strip() or p_num
+    existing_gpay = db.query(VendorDetails).filter(VendorDetails.gpay_number == clean_gpay).first()
+    if existing_gpay:
+        if not payload.gpay_number or not payload.gpay_number.strip():
+            clean_gpay = f"{clean_gpay}-{cred.id.hex[:4]}"
+        else:
+            raise HTTPException(status_code=400, detail=f"GPay number {clean_gpay} is already registered to another vendor.")
+
     details = VendorDetails(
         vendor_id=cred.id,
         full_name=payload.full_name.strip(),
+        business_name=payload.business_name.strip() if payload.business_name and payload.business_name.strip() else None,
         primary_number=p_num,
         secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
-        address=payload.address or "",
+        address=(payload.address or "").strip() or "N/A",
         city=payload.city.strip(),
-        pincode=payload.pincode or "",
-        aadhar_number=payload.aadhar_number or "",
-        gpay_number=payload.gpay_number or p_num,
+        pincode=(payload.pincode or "").strip() or "600001",
+        aadhar_number=clean_aadhar,
+        gpay_number=clean_gpay,
         aadhar_status=DocumentStatusEnum.VERIFIED if payload.account_status == "ACTIVE" else DocumentStatusEnum.PENDING,
     )
     assign_reg_id(db, details)
@@ -7759,6 +7933,7 @@ def admin_create_vendor(
             "reg_id": getattr(details, "reg_id", None),
             "full_name": details.full_name,
             "city": details.city,
+            "business_name": details.business_name,
         }
     }
 
@@ -7829,11 +8004,12 @@ class AdminAddCarToFleetPayload(BaseModel):
     car_type: str
     car_number: str
     year_of_the_car: Optional[str] = None
-    rc_expiry_date: Optional[str] = None      # ignored: an RC has no expiry date
     registration_date: Optional[str] = None
+    rc_expiry_date: Optional[str] = None
     insurance_expiry_date: Optional[str] = None
     fc_expiry_date: Optional[str] = None
     permit_expiry_date: Optional[str] = None
+    pollution_expiry_date: Optional[str] = None
     car_status: Optional[str] = "ACTIVE"
     rc_front_img_url: Optional[str] = None
     rc_back_img_url: Optional[str] = None
@@ -7841,6 +8017,7 @@ class AdminAddCarToFleetPayload(BaseModel):
     fc_img_url: Optional[str] = None
     car_img_url: Optional[str] = None
     permit_img_url: Optional[str] = None
+    pollution_img_url: Optional[str] = None
 
 
 @router.post("/admin/accounts/fleet/{vehicle_owner_id}/add-car")
@@ -7857,16 +8034,23 @@ def admin_add_car_to_fleet(
     if exist_car:
         raise HTTPException(status_code=400, detail=f"Car number {clean_car_num} is already registered.")
 
+    rc_date = _parse_opt_date(payload.registration_date or payload.rc_expiry_date)
+    ins_date = _parse_opt_date(payload.insurance_expiry_date)
+    fc_date = _parse_opt_date(payload.fc_expiry_date)
+    permit_date = _parse_opt_date(payload.permit_expiry_date)
+    pollution_date = _parse_opt_date(payload.pollution_expiry_date)
+
     car = CarDetails(
         vehicle_owner_id=UUID(vehicle_owner_id),
         car_name=payload.car_name.strip(),
         car_type=payload.car_type.strip(),
         car_number=clean_car_num,
         year_of_the_car=payload.year_of_the_car or None,
-        registration_date=payload.registration_date or None,
-        insurance_expiry_date=payload.insurance_expiry_date or None,
-        fc_expiry_date=payload.fc_expiry_date or None,
-        permit_expiry_date=payload.permit_expiry_date or None,
+        rc_expiry_date=rc_date,
+        insurance_expiry_date=ins_date,
+        fc_expiry_date=fc_date,
+        permit_expiry_date=permit_date,
+        pollution_expiry_date=pollution_date,
         rc_front_img_url=payload.rc_front_img_url or None,
         rc_front_status=CarDocStatus.VERIFIED if payload.rc_front_img_url else CarDocStatus.PENDING,
         rc_back_img_url=payload.rc_back_img_url or None,
@@ -7879,6 +8063,8 @@ def admin_add_car_to_fleet(
         car_img_status=CarDocStatus.VERIFIED if payload.car_img_url else CarDocStatus.PENDING,
         permit_img_url=payload.permit_img_url or None,
         permit_status=CarDocStatus.VERIFIED if payload.permit_img_url else CarDocStatus.PENDING,
+        pollution_img_url=payload.pollution_img_url or None,
+        pollution_status=CarDocStatus.VERIFIED if payload.pollution_img_url else CarDocStatus.PENDING,
         car_status=CarStatusEnum.ONLINE if payload.car_status == "ACTIVE" else CarStatusEnum.PROCESSING,
     )
     db.add(car)
@@ -7891,9 +8077,9 @@ def admin_add_car_to_fleet(
         "car": {
             "id": str(car.id),
             "car_name": car.car_name,
-            "car_type": car.car_type,
+            "car_type": str(car.car_type.value if hasattr(car.car_type, 'value') else car.car_type),
             "car_number": car.car_number,
-            "car_status": str(car.car_status),
+            "car_status": str(car.car_status.value if hasattr(car.car_status, 'value') else car.car_status),
         }
     }
 
@@ -7903,6 +8089,7 @@ class AdminAddDriverToFleetPayload(BaseModel):
     primary_number: str
     secondary_number: Optional[str] = None
     licence_number: str
+    licence_expiry_date: Optional[str] = None
     city: Optional[str] = None
     address: Optional[str] = None
     pincode: Optional[str] = None
@@ -7912,6 +8099,7 @@ class AdminAddDriverToFleetPayload(BaseModel):
     licence_front_img: Optional[str] = None
     licence_back_img: Optional[str] = None
     profile_img: Optional[str] = None
+    aadhar_img: Optional[str] = None
 
 
 @router.post("/admin/accounts/fleet/{vehicle_owner_id}/add-driver")
@@ -7932,6 +8120,7 @@ def admin_add_driver_to_fleet(
 
     raw_pw = payload.password.strip() if payload.password and payload.password.strip() else f"Driver@{d_num[-4:]}"
     hashed_pw = get_password_hash(raw_pw)
+    lic_expiry = _parse_opt_date(payload.licence_expiry_date)
 
     driver = CarDriver(
         vehicle_owner_id=UUID(vehicle_owner_id),
@@ -7940,9 +8129,10 @@ def admin_add_driver_to_fleet(
         secondary_number=payload.secondary_number.strip() if payload.secondary_number else None,
         hashed_password=hashed_pw,
         licence_number=payload.licence_number.strip(),
-        address=payload.address or "",
+        licence_expiry_date=lic_expiry,
+        address=(payload.address or "").strip() or "N/A",
         city=payload.city.strip() if payload.city else "",
-        pincode=payload.pincode or "",
+        pincode=(payload.pincode or "").strip() or "600001",
         driver_status=DriverAccountStatus.ACTIVE if payload.driver_status == "ACTIVE" else DriverAccountStatus.PROCESSING,
         is_owner_driver=payload.is_owner_driver or False,
         licence_front_img=payload.licence_front_img or None,
@@ -7950,6 +8140,8 @@ def admin_add_driver_to_fleet(
         licence_back_img=payload.licence_back_img or None,
         licence_back_status=DriverDocStatus.VERIFIED if payload.licence_back_img else DriverDocStatus.PENDING,
         profile_img=payload.profile_img or None,
+        aadhar_front_img=payload.aadhar_img or None,
+        aadhar_front_status=DriverDocStatus.VERIFIED if payload.aadhar_img else DriverDocStatus.PENDING,
     )
     db.add(driver)
     db.commit()

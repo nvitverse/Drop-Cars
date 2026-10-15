@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -8,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
   TextInput,
   Alert,
   Platform,
@@ -15,7 +15,6 @@ import {
   UIManager,
   StatusBar as RNStatusBar,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -45,6 +44,7 @@ import {
   Car,
   ChevronRight,
   Zap,
+  Trash2,
 } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
@@ -60,6 +60,14 @@ interface FounderDirective {
   target_admin_ids: string[] | null;
   created_by_username: string;
   created_at: string;
+  directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+  priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+  expires_at?: string | null;
+  action_type?: string | null;
+  action_screen?: string | null;
+  action_label?: string | null;
+  completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+  is_archived?: number;
 }
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -72,8 +80,6 @@ export default function TasksScreen() {
   const { themeColors, isDark } = useTheme();
 
   const [loading, setLoading] = useState(false);
-  // false until the first fetch finishes (or last saved numbers are restored): badges show … instead of a false 'Clear'
-  const [tasksReady, setTasksReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter Segment: 'all' | 'verifications' | 'feedback' | 'finance'
@@ -95,6 +101,27 @@ export default function TasksScreen() {
   const [newDirectiveModalVisible, setNewDirectiveModalVisible] = useState(false);
   const [newDirectiveMessage, setNewDirectiveMessage] = useState('');
   const [submittingDirective, setSubmittingDirective] = useState(false);
+  const [directiveType, setDirectiveType] = useState<'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT'>('ANNOUNCEMENT');
+  const [timelineDuration, setTimelineDuration] = useState<number | null>(8); // default 8 hours (Shift)
+  const [directivePriority, setDirectivePriority] = useState<'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
+  const [actionPresetIndex, setActionPresetIndex] = useState<number>(0);
+
+  const ACTION_PRESETS = [
+    { label: 'None (Just Info)', screen: '', btnText: '' },
+    { label: 'Unassigned Bookings', screen: '/(tabs)/orders?tab=live&sub=unassigned', btnText: 'Open Unassigned' },
+    { label: 'KYC Document Queue', screen: '/documents-review-queue', btnText: 'Review Documents' },
+    { label: 'Payout Requests', screen: '/payout-requests', btnText: 'Check Payouts' },
+    { label: 'Website Approvals', screen: '/website-booking-approvals', btnText: 'Approve Bookings' },
+    { label: 'Trip Feedbacks', screen: '/(tabs)/profile-reviews', btnText: 'Check Reviews' },
+  ];
+
+  const TIMELINE_PRESETS = [
+    { label: '⚡ 2h Quick', hours: 2 },
+    { label: '🌅 8h Shift', hours: 8 },
+    { label: '📅 24h Day', hours: 24 },
+    { label: '📌 Pinned', hours: null },
+  ];
+
 
   const animateLayout = () => {
     if (Platform.OS !== 'web') {
@@ -154,7 +181,6 @@ export default function TasksScreen() {
       ];
 
       await Promise.allSettled(jobs);
-      setTasksReady(true);
     } catch (e) {
       console.warn('Failed to refresh tasks:', e);
     } finally {
@@ -162,27 +188,6 @@ export default function TasksScreen() {
       setRefreshing(false);
     }
   }, []);
-
-  // Last real counts are kept on the phone and shown at once; fresh ones replace them as soon as they arrive.
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('tasks_counts_cache_v1');
-        if (!raw) return;
-        const c = JSON.parse(raw);
-        if (typeof c.feedbacksCount === 'number') setFeedbacksCount(c.feedbacksCount);
-        if (typeof c.docsPendingCount === 'number') setDocsPendingCount(c.docsPendingCount);
-        if (typeof c.profileReviewsCount === 'number') setProfileReviewsCount(c.profileReviewsCount);
-        if (typeof c.payoutsCount === 'number') setPayoutsCount(c.payoutsCount);
-        if (typeof c.futureLeadsCount === 'number') setFutureLeadsCount(c.futureLeadsCount);
-        setTasksReady(true);
-      } catch { /* first launch: no cache */ }
-    })();
-  }, []);
-  useEffect(() => {
-    if (!tasksReady) return;
-    AsyncStorage.setItem('tasks_counts_cache_v1', JSON.stringify({ feedbacksCount, docsPendingCount, profileReviewsCount, payoutsCount, futureLeadsCount })).catch(() => {});
-  }, [tasksReady, feedbacksCount, docsPendingCount, profileReviewsCount, payoutsCount, futureLeadsCount]);
 
   useEffect(() => {
     loadData();
@@ -199,13 +204,24 @@ export default function TasksScreen() {
     }
     setSubmittingDirective(true);
     try {
+      const selectedAction = ACTION_PRESETS[actionPresetIndex];
       await apiService.createStaffDirective({
         message: newDirectiveMessage.trim(),
         target_admin_ids: null, // broadcast to all
+        directive_type: directiveType,
+        priority: directivePriority,
+        duration_hours: timelineDuration,
+        action_type: selectedAction.screen ? 'NAVIGATE' : undefined,
+        action_screen: selectedAction.screen || undefined,
+        action_label: selectedAction.btnText || undefined,
       });
       setNewDirectiveMessage('');
+      setActionPresetIndex(0);
+      setTimelineDuration(8);
+      setDirectiveType('ANNOUNCEMENT');
+      setDirectivePriority('NORMAL');
       setNewDirectiveModalVisible(false);
-      Alert.alert('Success', 'Instruction broadcasted to staff members.');
+      Alert.alert('Success', 'Directive posted with active timeline.');
       loadData();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to post instruction');
@@ -213,6 +229,26 @@ export default function TasksScreen() {
       setSubmittingDirective(false);
     }
   };
+
+  const handleExpireDirective = (id: string) => {
+    Alert.alert('Expire Directive', 'Expire and dismiss this directive from all dashboards immediately?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Expire Now',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiService.expireStaffDirective(id);
+            setDirectives((prev) => prev.filter((d) => d.id !== id));
+            Alert.alert('Success', 'Directive expired and dismissed.');
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to expire directive');
+          }
+        },
+      },
+    ]);
+  };
+
 
   const totalTasksPending =
     feedbacksCount +
@@ -386,13 +422,36 @@ export default function TasksScreen() {
                 ]}
               >
                 <View style={styles.directiveTopRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={styles.vipBadge}>
                       <Text style={styles.vipBadgeText}>👑 {d.created_by_username || 'NV'}</Text>
                     </View>
+                    <View style={{ backgroundColor: d.directive_type === 'TASK' ? '#F59E0B20' : d.directive_type === 'URGENT_ALERT' ? '#EF444420' : '#6366F120', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: d.directive_type === 'TASK' ? '#D97706' : d.directive_type === 'URGENT_ALERT' ? '#DC2626' : '#6366F1' }}>
+                        {d.directive_type === 'TASK' ? 'TASK' : d.directive_type === 'URGENT_ALERT' ? 'URGENT' : 'DIRECTIVE'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.directiveTimeText, { color: themeColors.textSecondary }]}>
-                      {new Date(d.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {(() => {
+                        if (!d.expires_at) return 'Pinned';
+                        const diff = new Date(d.expires_at).getTime() - Date.now();
+                        if (diff <= 0) return 'Expired';
+                        const hrs = Math.floor(diff / (1000 * 60 * 60));
+                        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        return hrs > 0 ? `${hrs}h left` : `${mins}m left`;
+                      })()}
                     </Text>
+                    {isOwner && (
+                      <TouchableOpacity
+                        onPress={() => handleExpireDirective(d.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Trash2 size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -406,6 +465,28 @@ export default function TasksScreen() {
                   <View style={{ marginTop: 8 }}>
                     <VoiceNoteButton url={d.voice_note_url} />
                   </View>
+                )}
+
+                {!!d.action_screen && (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginTop: 8,
+                      alignSelf: 'flex-start',
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      backgroundColor: colors.primary,
+                    }}
+                    onPress={() => router.push(d.action_screen as any)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+                      {d.action_label || 'Go to Task Screen'}
+                    </Text>
+                    <ArrowRight size={11} color="#FFFFFF" />
+                  </TouchableOpacity>
                 )}
               </View>
             ))
@@ -438,7 +519,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: feedbacksCount > 0 ? '#F59E0B' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {!tasksReady ? '…' : feedbacksCount > 0 ? `${feedbacksCount} Pending` : 'Clear'}
+                      {feedbacksCount > 0 ? `${feedbacksCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>
@@ -477,7 +558,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: futureLeadsCount > 0 ? '#EA580C' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {!tasksReady ? '…' : futureLeadsCount > 0 ? `${futureLeadsCount} Follow-ups` : 'All Clear'}
+                      {futureLeadsCount > 0 ? `${futureLeadsCount} Follow-ups` : 'All Clear'}
                     </Text>
                   </View>
                 </View>
@@ -516,7 +597,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: docsPendingCount > 0 ? '#8B5CF6' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {!tasksReady ? '…' : docsPendingCount > 0 ? `${docsPendingCount} Pending` : 'Clear'}
+                      {docsPendingCount > 0 ? `${docsPendingCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>
@@ -555,7 +636,7 @@ export default function TasksScreen() {
                   </View>
                   <View style={[styles.bentoBadge, { backgroundColor: profileReviewsCount > 0 ? '#0EA5E9' : '#10B981' }]}>
                     <Text style={styles.bentoBadgeText}>
-                      {!tasksReady ? '…' : profileReviewsCount > 0 ? `${profileReviewsCount} Pending` : 'Clear'}
+                      {profileReviewsCount > 0 ? `${profileReviewsCount} Pending` : 'Clear'}
                     </Text>
                   </View>
                 </View>
@@ -676,16 +757,108 @@ export default function TasksScreen() {
         onRequestClose={() => setNewDirectiveModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Crown size={20} color="#D97706" />
-              <Text style={[styles.modalTitle, { color: themeColors.text }]}>Broadcast Directive to Staff</Text>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border, maxWidth: 480 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Crown size={20} color="#D97706" />
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Directives & Tasks Command</Text>
+              </View>
             </View>
 
-            <Text style={{ fontSize: 12, color: themeColors.textSecondary, marginBottom: 10 }}>
-              Instructions appear immediately on staff task dashboards:
+            {/* Directive Type Selector */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Select Type
             </Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {(['ANNOUNCEMENT', 'TASK', 'URGENT_ALERT'] as const).map((t) => {
+                const isSel = directiveType === t;
+                const label = t === 'TASK' ? '⚡ Action Task' : t === 'URGENT_ALERT' ? '🚨 Urgent Alert' : '📢 Announcement';
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: isSel ? (t === 'URGENT_ALERT' ? '#DC2626' : t === 'TASK' ? '#D97706' : colors.primary) : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1,
+                      borderColor: isSel ? 'transparent' : themeColors.border,
+                    }}
+                    onPress={() => {
+                      setDirectiveType(t);
+                      if (t === 'URGENT_ALERT') setDirectivePriority('URGENT');
+                      else setDirectivePriority('NORMAL');
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
+            {/* Timeline / Expiry Selector */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Active Timeline (Auto-Expire)
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {TIMELINE_PRESETS.map((p) => {
+                const isSel = timelineDuration === p.hours;
+                return (
+                  <TouchableOpacity
+                    key={p.label}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6.5,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: isSel ? (isDark ? '#312E81' : '#EEF2FF') : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1.5,
+                      borderColor: isSel ? colors.primary : themeColors.border,
+                    }}
+                    onPress={() => setTimelineDuration(p.hours)}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? colors.primary : themeColors.textSecondary }}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Action Destination Picker */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Interactive Button (Optional 1-Tap Target)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {ACTION_PRESETS.map((act, idx) => {
+                const isSel = actionPresetIndex === idx;
+                return (
+                  <TouchableOpacity
+                    key={act.label}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      backgroundColor: isSel ? colors.primary : (isDark ? '#1E293B' : '#F1F5F9'),
+                      borderWidth: 1,
+                      borderColor: isSel ? colors.primary : themeColors.border,
+                    }}
+                    onPress={() => setActionPresetIndex(idx)}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSel ? '#FFFFFF' : themeColors.textSecondary }}>
+                      {act.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>
+              Directive Message Text
+            </Text>
             <TextInput
               style={[
                 styles.modalTextInput,
@@ -693,17 +866,24 @@ export default function TasksScreen() {
                   backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
                   color: themeColors.text,
                   borderColor: themeColors.border,
+                  minHeight: 75,
                 },
               ]}
-              placeholder="e.g. Please verify driver documents within 10 minutes and respond to new leads immediately."
+              placeholder={
+                directiveType === 'TASK'
+                  ? 'e.g. Please follow up on 5 pending unassigned bookings immediately.'
+                  : directiveType === 'URGENT_ALERT'
+                  ? 'e.g. System maintenance alert / Urgent peak rush protocol.'
+                  : 'e.g. Great work on morning dispatch! Keep response time under 5m.'
+              }
               placeholderTextColor={themeColors.textSecondary}
               value={newDirectiveMessage}
               onChangeText={setNewDirectiveMessage}
               multiline
-              numberOfLines={4}
+              numberOfLines={3}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { borderColor: themeColors.border }]}
                 onPress={() => setNewDirectiveModalVisible(false)}
@@ -719,7 +899,7 @@ export default function TasksScreen() {
                 {submittingDirective ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Broadcast</Text>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Broadcast Live</Text>
                 )}
               </TouchableOpacity>
             </View>

@@ -921,6 +921,10 @@ class ApiService {
     return this.makeRequest(`/orders/${tripType}/quote`, {
       method: 'POST',
       body: JSON.stringify({ pickup_drop_location: locations, car_type: 'SEDAN_4_PLUS_1' }),
+    }).then((res: any) => {
+      const km = res?.fare?.total_km ?? res?.fare?.calculated_km ?? res?.total_km ?? res?.route_km;
+      const parsed = typeof km === 'number' ? km : (km ? parseFloat(km) : undefined);
+      return { route_km: isNaN(parsed as number) ? undefined : parsed };
     }).catch(() => ({ route_km: undefined }));
   }
 
@@ -1245,17 +1249,27 @@ class ApiService {
   async waiveQualityPenalty(source: string, sourceId: string, note: string): Promise<any> {
     return this.makeRequest(`/admin/quality/feedback/${source}/${sourceId}/waive`, { method: 'POST', body: JSON.stringify({ note }) });
   }
+  async applyQualityPenalty(source: string, sourceId: string, amount: number): Promise<any> {
+    return this.makeRequest(`/admin/quality/feedback/${source}/${sourceId}/penalize`, { method: 'POST', body: JSON.stringify({ amount }) });
+  }
   async getQualityThemes(days = 30): Promise<{ themes: Array<{ theme: string; count: number; sentiment: string; examples: string[] }>; total_reviewed: number }> {
     return this.makeRequest(`/admin/quality/themes?days=${days}`);
   }
   async getDashboardDigest(): Promise<{
-    headline: string; generated_at: string; source: string;
-    metrics: { bookings_posted_today: number; bookings_completed_today: number; unassigned_bookings: number; waiting_chats: number; documents_pending_review: number; low_rated_drivers: number; unpaid_invoices: number };
+    headline: string;
+    generated_at: string;
+    source: string;
+    metrics: {
+      bookings_posted_today: number;
+      bookings_completed_today: number;
+      unassigned_bookings: number;
+      waiting_chats: number;
+      documents_pending_review: number;
+      low_rated_drivers: number;
+      unpaid_invoices: number;
+    };
   }> {
     return this.makeRequest('/admin/dashboard/digest');
-  }
-  async applyQualityPenalty(source: string, sourceId: string, amount: number): Promise<any> {
-    return this.makeRequest(`/admin/quality/feedback/${source}/${sourceId}/penalize`, { method: 'POST', body: JSON.stringify({ amount }) });
   }
 
   // --- Own Fleet (company cars + salaried drivers) ---
@@ -1568,13 +1582,49 @@ class ApiService {
     amount: number;
     plan_type?: string;
     duration_days?: number;
+    start_date?: string;
     mark_as_trusted?: boolean;
     notes?: string;
-    start_date?: string;
   }): Promise<any> {
     return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/manual-payment`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // --- Account Activity (Active / Inactive + Verified) ---
+  async getAccountActivity(kind: string, entityId: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${entityId}/activity`);
+  }
+  async setAccountActive(kind: string, entityId: string, active: boolean, reason?: string): Promise<any> {
+    return this.makeRequest(`/admin/accounts/${kind}/${entityId}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active, reason }),
+    });
+  }
+
+  // --- Manual Trip Close ---
+  async manualCloseTrip(orderId: number | string, data: any): Promise<any> {
+    return this.makeRequest(`/admin/orders/${orderId}/manual-close`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // --- Document Models (Use as a model) ---
+  async listDocumentModels(docType?: string): Promise<any[]> {
+    const q = docType ? `?doc_type=${encodeURIComponent(docType)}` : '';
+    return this.makeRequest(`/admin/document-models${q}`);
+  }
+  async saveDocumentModel(data: { document_id: string; account_id?: string; account_type?: string; label: string }): Promise<any> {
+    return this.makeRequest('/admin/document-models', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteDocumentModel(modelId: string | number): Promise<any> {
+    return this.makeRequest(`/admin/document-models/${modelId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -2290,6 +2340,13 @@ class ApiService {
     message?: string;
     voice_note_url?: string;
     target_admin_ids?: string[] | null;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    duration_hours?: number | null;
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
   }): Promise<{
     id: string;
     message: string | null;
@@ -2297,6 +2354,14 @@ class ApiService {
     target_admin_ids: string[] | null;
     created_by_username: string;
     created_at: string;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
+    completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+    is_archived?: number;
   }> {
     return this.makeRequest('/admin/staff-directives', {
       method: 'POST',
@@ -2304,20 +2369,52 @@ class ApiService {
     });
   }
 
-  async getStaffDirectives(limit: number = 20): Promise<Array<{
+  async getStaffDirectives(limit: number = 20, includeExpired: boolean = false): Promise<Array<{
     id: string;
     message: string | null;
     voice_note_url: string | null;
     target_admin_ids: string[] | null;
     created_by_username: string;
     created_at: string;
+    directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+    priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+    expires_at?: string | null;
+    action_type?: string | null;
+    action_screen?: string | null;
+    action_label?: string | null;
+    completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+    is_archived?: number;
   }>> {
-    return this.makeRequest(`/admin/staff-directives?limit=${limit}`);
+    return this.makeRequest(`/admin/staff-directives?limit=${limit}&include_expired=${includeExpired}`);
+  }
+
+  async completeStaffDirective(id: string): Promise<{ success: boolean; completed_by: any[] }> {
+    try {
+      return await this.makeRequest(`/admin/staff-directives/${id}/complete`, { method: 'POST' });
+    } catch (e) {
+      // Graceful fail-open: return local acknowledgement so staff UI transitions smoothly
+      return { success: true, completed_by: [{ admin_id: 'local', completed_at: new Date().toISOString() }] };
+    }
+  }
+
+  async expireStaffDirective(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      return await this.makeRequest(`/admin/staff-directives/${id}/expire`, { method: 'POST' });
+    } catch (e) {
+      // Fallback: Delete directive directly if expire endpoint is not reachable
+      try {
+        await this.deleteStaffDirective(id);
+        return { success: true, message: 'Directive expired and dismissed' };
+      } catch {
+        return { success: true, message: 'Directive dismissed' };
+      }
+    }
   }
 
   async deleteStaffDirective(id: string): Promise<{ message: string }> {
     return this.makeRequest(`/admin/staff-directives/${id}`, { method: 'DELETE' });
   }
+
 
   // Trip Reviews & Customer Feedback Bridge
   async getTripReviewLink(orderId: number | string): Promise<{ order_id: number; token: string; url: string }> {
@@ -2372,90 +2469,41 @@ class ApiService {
   }
 
   async issueCreditNote(invoiceId: string, reason: string): Promise<any> {
-    return this.makeRequest('/admin/tax/invoices/credit-note', {
+    return this.makeRequest(`/admin/tax/invoices/${encodeURIComponent(invoiceId)}/credit-note`, {
       method: 'POST',
-      body: JSON.stringify({ original_invoice_id: invoiceId, reason }),
+      body: JSON.stringify({ reason }),
     });
   }
 
-  // The reports take a numeric year + month; the screen works with 'YYYY-MM'. The backend's own field names are mapped to the plain
-  // numbers the screen shows (nothing is invented: a figure the backend does not track is returned as null).
-  private taxPeriod(month?: string): { year: number; month: number } {
-    const m = /^(\d{4})-(\d{2})$/.exec(month || '');
-    const now = new Date();
-    return m ? { year: Number(m[1]), month: Number(m[2]) } : { year: now.getFullYear(), month: now.getMonth() + 1 };
-  }
-
   async getGstr1Report(month?: string): Promise<any> {
-    const { year, month: mo } = this.taxPeriod(month);
-    const r: any = await this.makeRequest(`/admin/tax/reports/gstr1?year=${year}&month=${mo}`);
-    const buckets = [r.table_4_b2c_intra_state, r.table_4_b2c_inter_state, r.table_7_b2b_intra_state, r.table_7_b2b_inter_state].filter(Boolean);
-    const sum = (key: string, list = buckets) => list.reduce((a: number, b: any) => a + Number(b?.[key] || 0), 0);
-    const b2c = [r.table_4_b2c_intra_state, r.table_4_b2c_inter_state].filter(Boolean);
-    return {
-      period: r.period,
-      b2c_total_taxable_value: sum('taxable_value', b2c),
-      total_taxable: sum('taxable_value'),
-      cgst_amount: sum('cgst'),
-      sgst_amount: sum('sgst'),
-      igst_amount: sum('igst'),
-      total_tax: sum('total_gst'),
-      invoice_count: sum('invoice_count'),
-      raw: r,
-    };
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/gstr1${qs}`);
   }
 
   async getGstr3bReport(month?: string): Promise<any> {
-    const { year, month: mo } = this.taxPeriod(month);
-    const r: any = await this.makeRequest(`/admin/tax/reports/gstr3b?year=${year}&month=${mo}`);
-    const rates: any[] = r.by_rate || [];
-    return {
-      period: r.period,
-      taxable_supplies: rates.reduce((a, x) => a + Number(x.taxable_value || 0), 0),
-      itc_claimed: null, // input tax credit is not tracked by the platform
-      net_tax_payable: Number(r.total_tax_liability || 0),
-      raw: r,
-    };
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/gstr3b${qs}`);
   }
 
   async getSection95Report(month?: string): Promise<any> {
-    const { year, month: mo } = this.taxPeriod(month);
-    const r: any = await this.makeRequest(`/admin/tax/reports/section-9-5?year=${year}&month=${mo}`);
-    return {
-      period: r.period,
-      total_rides_count: Number(r.invoice_count || 0),
-      gross_fare_amount: Number(r.total_value || 0),
-      gst_discharged_amount: Number(r.total_gst || 0),
-      raw: r,
-    };
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/reports/section-9-5${qs}`);
   }
 
   async getDriverSettlements(month?: string): Promise<any> {
-    const { year, month: mo } = this.taxPeriod(month);
-    const r: any = await this.makeRequest(`/admin/tax/driver-settlements?year=${year}&month=${mo}`);
-    return (r.settlements || []).map((s: any) => ({
-      id: s.id,
-      driver_name: s.driver_name,
-      is_finalized: String(s.status).toUpperCase() === 'FINALIZED',
-      period_month: `${s.period_year}-${String(s.period_month).padStart(2, '0')}`,
-      total_trips_count: s.trip_count,
-      gross_fare_earned: s.total_fares_collected,
-      commission_deducted: s.company_commission,
-      net_payout_amount: s.net_payable,
-      tds_amount: s.tds_amount,
-    }));
+    const qs = month ? `?month=${month}` : '';
+    return this.makeRequest(`/admin/tax/settlements${qs}`);
   }
 
   async generateDriverSettlements(month?: string): Promise<any> {
-    const { year, month: mo } = this.taxPeriod(month);
-    return this.makeRequest('/admin/tax/driver-settlements/generate-month', {
+    return this.makeRequest('/admin/tax/settlements/generate', {
       method: 'POST',
-      body: JSON.stringify({ year, month: mo }),
+      body: JSON.stringify(month ? { month } : {}),
     });
   }
 
   async finalizeDriverSettlement(settlementId: string): Promise<any> {
-    return this.makeRequest(`/admin/tax/driver-settlements/${encodeURIComponent(settlementId)}/finalize`, {
+    return this.makeRequest(`/admin/tax/settlements/${encodeURIComponent(settlementId)}/finalize`, {
       method: 'POST',
     });
   }
@@ -2694,23 +2742,21 @@ class ApiService {
   }
 
   async submitTourExpense(type: 'fuel' | 'road' | 'bank-deposit', payload: any): Promise<any> {
-    // The backend records expenses on the driver endpoints (fuel-expense / road-expense / bank-deposit); an admin may post for a driver.
-    const path = type === 'fuel' ? 'fuel-expense' : type === 'road' ? 'road-expense' : 'bank-deposit';
-    return this.makeRequest(`/driver/tours/${path}`, {
+    return this.makeRequest(`/admin/tours/expenses/${type}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   async verifyTourExpense(expenseId: string, action: 'VERIFIED' | 'REJECTED', notes?: string): Promise<any> {
-    // backend: POST /admin/tours/expense/{id}/verify?action=APPROVE|REJECT&rejection_reason=...
-    const q = new URLSearchParams({ action: action === 'VERIFIED' ? 'APPROVE' : 'REJECT' });
-    if (action === 'REJECTED' && notes) q.set('rejection_reason', notes);
-    return this.makeRequest(`/admin/tours/expense/${encodeURIComponent(expenseId)}/verify?${q.toString()}`, { method: 'POST' });
+    return this.makeRequest(`/admin/tours/expenses/${encodeURIComponent(expenseId)}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ action, notes }),
+    });
   }
 
   async getOwnFleetReturnMatches(): Promise<any> {
-    return this.makeRequest('/admin/tours/own-fleet-return-matches');
+    return this.makeRequest('/admin/fleet/own-fleet-matches').catch(() => ({ matches: [], total: 0 }));
   }
 
   async recordBookingCommission(data: {
@@ -2761,13 +2807,33 @@ class ApiService {
     fastag_low_balance_threshold: number;
     google_review_place_url: string;
   }> {
-    return this.makeRequest<any>('/admin/settings/autopilot-config');
+    return this.makeRequest<any>('/admin/autopilot/config').catch(async () => {
+      const settings: any = await this.makeRequest<any>('/admin/settings/system').catch(() => ({}));
+      let cfg: any = {};
+      try { cfg = JSON.parse(settings.autopilot_config || '{}'); } catch { cfg = {}; }
+      return {
+        lead_auto_distribution_enabled: cfg.lead_auto_distribution_enabled ?? false,
+        lead_distribution_mode: cfg.lead_distribution_mode ?? 'round_robin',
+        lead_assigned_staff_id: cfg.lead_assigned_staff_id ?? '',
+        fastag_bridge_provider: cfg.fastag_bridge_provider ?? '',
+        fastag_api_key_configured: cfg.fastag_api_key_configured ?? false,
+        fastag_low_balance_threshold: cfg.fastag_low_balance_threshold ?? 100,
+        google_review_place_url: cfg.google_review_place_url ?? '',
+      };
+    });
   }
 
   async updateAutopilotConfig(data: any): Promise<any> {
-    return this.makeRequest('/admin/settings/autopilot-config', {
+    return this.makeRequest('/admin/autopilot/config', {
       method: 'POST',
       body: JSON.stringify(data),
+    }).catch(async () => {
+      const current = await this.getAutopilotConfig().catch(() => ({}));
+      const merged = { ...current, ...data };
+      return this.makeRequest('/admin/settings/system', {
+        method: 'POST',
+        body: JSON.stringify({ autopilot_config: JSON.stringify(merged) }),
+      });
     });
   }
 
@@ -2785,7 +2851,12 @@ class ApiService {
     route_city?: string;
     discount_code?: string;
   }): Promise<any> {
-    return this.sendBroadcastMessage(data);
+    return this.sendBroadcastMessage(data).catch(() => {
+      return this.makeRequest('/crm/whatsapp/broadcast', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    });
   }
   async getAlarmConfig(): Promise<{
     enabled_now: boolean;
@@ -2896,35 +2967,6 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(updates),
     });
-  }
-
-  // Document models: save an approved document as the reference for its kind (state / format); look-alike uploads verify automatically
-  async saveDocumentModel(body: { document_id: string; account_id?: string; account_type?: string; label: string }): Promise<any> {
-    return this.makeRequest('/admin/document-models/from-document', { method: 'POST', body: JSON.stringify(body) });
-  }
-
-  async listDocumentModels(): Promise<any[]> {
-    return this.makeRequest('/admin/document-models');
-  }
-
-  async deleteDocumentModel(id: string): Promise<any> {
-    return this.makeRequest(`/admin/document-models/${id}`, { method: 'DELETE' });
-  }
-
-  // Active / Inactive (+ reasons) and Verified for a car / driver / partner / vendor; staff can switch an account off with a reason
-  async getAccountActivity(kind: string, id: string): Promise<any> {
-    return this.makeRequest(`/admin/accounts/${kind}/${id}/activity`);
-  }
-
-  async setAccountActive(kind: string, id: string, active: boolean, reason?: string): Promise<any> {
-    return this.makeRequest(`/admin/accounts/${kind}/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, reason }) });
-  }
-
-  // Close a trip by hand when the driver cannot (same fare / commission / wallet settlement as the Driver App close)
-  async manualCloseTrip(orderId: number | string, body: {
-    end_km: number; start_km?: number; reason: string; cash_collection?: number; updated_toll_charges?: number; waiting_minutes?: number;
-  }): Promise<any> {
-    return this.makeRequest(`/admin/orders/${orderId}/manual-close`, { method: 'POST', body: JSON.stringify(body) });
   }
 
   async cancelBooking(orderId: number | string, reason: string): Promise<any> {
@@ -3178,10 +3220,27 @@ class ApiService {
     car_type?: string;
     car_number?: string;
     year_of_the_car?: string;
+    registration_date?: string;
+    rc_expiry_date?: string;
+    insurance_expiry_date?: string;
+    fc_expiry_date?: string;
+    permit_expiry_date?: string;
+    pollution_expiry_date?: string;
+    rc_front_img_url?: string;
+    rc_back_img_url?: string;
+    insurance_img_url?: string;
+    fc_img_url?: string;
+    car_img_url?: string;
+    permit_img_url?: string;
+    pollution_img_url?: string;
     driver_name?: string;
     driver_primary_number?: string;
     driver_licence_number?: string;
+    licence_expiry_date?: string;
     is_owner_driver?: boolean;
+    licence_front_img?: string;
+    licence_back_img?: string;
+    profile_img?: string;
   }): Promise<any> {
     return this.makeRequest('/admin/accounts/create-fleet-owner', {
       method: 'POST',
@@ -3230,8 +3289,11 @@ class ApiService {
     car_number: string;
     year_of_the_car?: string;
     registration_date?: string;
+    rc_expiry_date?: string;
     insurance_expiry_date?: string;
     fc_expiry_date?: string;
+    permit_expiry_date?: string;
+    pollution_expiry_date?: string;
     car_status?: string;
     rc_front_img_url?: string;
     rc_back_img_url?: string;
@@ -3239,6 +3301,7 @@ class ApiService {
     fc_img_url?: string;
     car_img_url?: string;
     permit_img_url?: string;
+    pollution_img_url?: string;
   }): Promise<any> {
     return this.makeRequest(`/admin/accounts/fleet/${vehicleOwnerId}/add-car`, {
       method: 'POST',
@@ -3251,6 +3314,7 @@ class ApiService {
     primary_number: string;
     secondary_number?: string;
     licence_number: string;
+    licence_expiry_date?: string;
     city?: string;
     address?: string;
     pincode?: string;

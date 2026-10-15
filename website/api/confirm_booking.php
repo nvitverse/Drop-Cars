@@ -1271,6 +1271,16 @@ if ($targetStatus !== 'confirmed') {
                 'quoted_permit_charges' => $backendPermitCharges,
                 'quoted_toll_charges' => $backendTollCharges,
                 'quoted_trip_distance' => (float)$distance,
+                'quoted_fare' => [
+                    'per_km_rate' => (float)$backendCostPerKm,
+                    'driver_bata' => (int)$backendDriverBata,
+                    'billable_km' => (float)$distance,
+                    'total_fare' => (int) round($finalFare),
+                    'toll_amount' => (int)$backendTollCharges,
+                    'permit_amount' => (int)$backendPermitCharges,
+                    'include_taxes' => true,
+                    'include_tolls' => (int)$backendTollCharges > 0,
+                ],
                 // "Urgent - need taxi immediately" (website Phase 3) - the
                 // customer already completed a Razorpay Checkout payment for
                 // the 15% advance client-side (see assets/js/booking-form.js'

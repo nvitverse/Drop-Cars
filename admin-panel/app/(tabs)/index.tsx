@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   Platform,
   StatusBar as RNStatusBar,
+  Modal,
   TextInput,
   Alert,
   Animated,
   LayoutAnimation,
   UIManager,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,6 +50,9 @@ import {
   RefreshCw,
   Zap,
   CreditCard,
+  Clock,
+  ArrowRight,
+  Trash2,
 } from 'lucide-react-native';
 import { apiService } from '../../services/api';
 import { enquiriesApi } from '../../services/enquiriesApi';
@@ -58,12 +61,13 @@ import { LABELS } from '@/constants/labels';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import VoiceNoteButton from '@/components/VoiceNoteButton';
-import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock, Shimmer, LiveNumber, FadeIn, StatChip, Pill } from '@/components/ui';
+import { Section, Row, Segmented, Stat, Btn, ScreenHero, KpiStrip, PriorityGrid, ActionDock, StatChip, Pill } from '@/components/ui';
 import DutySignOffModal from '@/components/DutySignOffModal';
 import StaffWelcomeShiftModal from '@/components/StaffWelcomeShiftModal';
 import { useStaffDuty } from '@/context/StaffDutyContext';
 import { unlockAudioContext, playMildNotificationSound } from '@/utils/alarmSound';
 import { triggerTestEnquiryAlarm } from '@/components/EnquiryAlarmHost';
+import AppLoadingScreen from '@/components/AppLoadingScreen';
 
 type StaffDirective = {
   id: string;
@@ -72,6 +76,14 @@ type StaffDirective = {
   target_admin_ids: string[] | null;
   created_by_username: string;
   created_at: string;
+  directive_type?: 'ANNOUNCEMENT' | 'TASK' | 'URGENT_ALERT';
+  priority?: 'NORMAL' | 'HIGH' | 'URGENT';
+  expires_at?: string | null;
+  action_type?: string | null;
+  action_screen?: string | null;
+  action_label?: string | null;
+  completed_by?: Array<{ admin_id: string; username: string; completed_at: string }>;
+  is_archived?: number;
 };
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -84,8 +96,6 @@ export default function DashboardScreen() {
   const { isDark, themeColors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // false until the first round of dashboard requests has finished: counts show a shimmer instead of a misleading 0
-  const [dataReady, setDataReady] = useState(false);
   const router = useRouter();
   const [adminRole, setAdminRole] = useState('Owner');
   const { isOnDuty, toggleDuty } = useStaffDuty();
@@ -297,6 +307,9 @@ export default function DashboardScreen() {
 
   // Older, separate "shared actions/day" target feature (staff-performance.tsx
   // / Staff & Roles) - kept as-is, not part of this redesign's new per-metric
+  // targets, but still real and still worth showing to Staff.
+  const [staffTarget, setStaffTarget] = useState<{ target: number; achieved: number } | null>(null);
+  const [ownRecordSubmitted, setOwnRecordSubmitted] = useState(false);
   const [dailyDigest, setDailyDigest] = useState<{
     headline: string;
     generated_at: string;
@@ -320,9 +333,6 @@ export default function DashboardScreen() {
       // Non-fatal - dashboard continues if digest is unavailable
     }
   };
-  // targets, but still real and still worth showing to Staff.
-  const [staffTarget, setStaffTarget] = useState<{ target: number; achieved: number } | null>(null);
-  const [ownRecordSubmitted, setOwnRecordSubmitted] = useState(false);
 
   // Live Operational Tasks matching Tasks Tab exactly
   const [feedbacksPendingCount, setFeedbacksPendingCount] = useState<number>(0);
@@ -337,39 +347,6 @@ export default function DashboardScreen() {
     profileReviewsCount +
     payoutsCount +
     futureLeadsCount;
-
-  // Last real numbers, kept on the phone: the dashboard opens with them straight away and quietly replaces them when fresh data
-  // arrives, so there is never a flash of 0 (and never an invented number). Only the very first launch shows shimmer.
-  const DASH_CACHE_KEY = 'dash_counts_cache_v1';
-  const cachedSetters: Record<string, (v: any) => void> = {
-    unrespondedEnquiries: setUnrespondedEnquiries, totalLeadsToday: setTotalLeadsToday, upcomingUnassignedCount: setUpcomingUnassignedCount,
-    upcomingUnder2HrsCount: setUpcomingUnder2HrsCount, feedbacksPendingCount: setFeedbacksPendingCount, docsPendingCount: setDocsPendingCount,
-    profileReviewsCount: setProfileReviewsCount, payoutsCount: setPayoutsCount, futureLeadsCount: setFutureLeadsCount,
-    websiteBookingsPending: setWebsiteBookingsPending, emergencyBidsCount: setEmergencyBidsCount, fleetDocsPending: setFleetDocsPending,
-    payoutsPending: setPayoutsPending, profileReviewsPending: setProfileReviewsPending, recentDirectivesCount: setRecentDirectivesCount,
-    docsNeedingReview: setDocsNeedingReview, fleetOverdueCount: setFleetOverdueCount, snapshot: setSnapshot,
-  };
-  const cachedValues: Record<string, any> = {
-    unrespondedEnquiries, totalLeadsToday, upcomingUnassignedCount, upcomingUnder2HrsCount, feedbacksPendingCount, docsPendingCount,
-    profileReviewsCount, payoutsCount, futureLeadsCount, websiteBookingsPending, emergencyBidsCount, fleetDocsPending, payoutsPending,
-    profileReviewsPending, recentDirectivesCount, docsNeedingReview, fleetOverdueCount, snapshot,
-  };
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(DASH_CACHE_KEY);
-        if (!raw) return;
-        const saved = JSON.parse(raw);
-        Object.keys(cachedSetters).forEach((k) => { if (saved[k] !== undefined) cachedSetters[k](saved[k]); });
-        setDataReady(true);
-      } catch { /* no cache yet: shimmer shows until the first fetch ends */ }
-    })();
-  }, []);
-  useEffect(() => {
-    if (!dataReady) return;
-    const t = setTimeout(() => { AsyncStorage.setItem(DASH_CACHE_KEY, JSON.stringify(cachedValues)).catch(() => {}); }, 800);
-    return () => clearTimeout(t);
-  }, [dataReady, ...Object.values(cachedValues)]);
 
   const fetchTasksData = async () => {
     try {
@@ -599,7 +576,6 @@ export default function DashboardScreen() {
       }
       try {
         const subs = await apiService.getFleetSubscriptions('OVERDUE', '', 0, 1);
-      fetchDigest(),
         setFleetOverdueCount(subs?.summary?.overdue_count ?? 0);
       } catch (e) {
         // Non-fatal
@@ -636,6 +612,7 @@ export default function DashboardScreen() {
       fetchEmergencyBidsCount(),
       fetchStaffDirectivesCard(),
       fetchTasksData(),
+      fetchDigest(),
     ];
     if (role === 'Owner') {
       jobs.push(fetchOwnerTileData());
@@ -646,7 +623,6 @@ export default function DashboardScreen() {
     // Show the screen right away; each section fills in as its own data arrives (one slow or
     // failing request must never keep the whole dashboard on the "Loading..." screen).
     await Promise.allSettled(jobs);
-    setDataReady(true);
   };
 
   useFocusEffect(
@@ -673,12 +649,7 @@ export default function DashboardScreen() {
   }, []);
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <AppLoadingScreen />;
   }
 
   // Plain names, grouped by what the person is trying to do. Counts come from the same fetches as before; a row without a
@@ -722,7 +693,6 @@ export default function DashboardScreen() {
   const attention: SectionRow[] = [
     { key: 'unassigned', label: 'Trips without a driver', hint: 'Upcoming, nobody assigned yet', icon: Car, color: '#4338CA', count: upcomingUnassignedCount, route: '/(tabs)/orders?segment=bookings&tab=unassigned', perm: 'bookings' },
     { key: 'tasks', label: 'My pending tasks', hint: 'Feedback, documents, payouts', icon: ListTodo, color: '#0F766E', count: totalTasksPending, route: '/(tabs)/tasks' },
-    { key: 'subscriptions', label: 'Fleet subscriptions due', hint: 'Payment renewal pending', icon: CreditCard, color: '#DC2626', count: fleetOverdueCount, route: '/fleet-subscriptions', perm: 'fleet' },
     ...allRows.bookings.slice(0, 3),
     allRows.people[1],
     allRows.money[0],
@@ -732,8 +702,9 @@ export default function DashboardScreen() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const displayName = isOwner ? 'NV' : adminUsername;
   const currentTodayBookings = snapshot?.today_bookings ?? snapshot?.active_bookings ?? 0;
-  const currentTargetBookings = (staffTarget as any)?.bookings_target ?? staffTarget?.target ?? 30;
+  const currentTargetBookings = (staffTarget as any)?.bookings_target ?? staffTarget?.target ?? 20;
   const targetProgressPct = Math.min(100, Math.round((currentTodayBookings / Math.max(1, currentTargetBookings)) * 100));
+  const currentDispatchedAmount = snapshot?.today_profit ? snapshot.today_profit * 10 : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -835,54 +806,256 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />}
       >
 
-        {/* 1. Priority Directive from NV / Management (Shown at Top for Staff) */}
-        {!isOwner && myDirectives.length > 0 && (
+        {/* 1. Futuristic Priority Directive & Tasks Card from NV / Management */}
+        {myDirectives.length > 0 && (
           <View
             style={{
               marginHorizontal: 16,
               marginTop: 10,
-              marginBottom: 8,
-              padding: 14,
-              borderRadius: 14,
-              backgroundColor: isDark ? '#1E1B4B40' : '#EEF2FF',
+              marginBottom: 10,
+              padding: 15,
+              borderRadius: 16,
+              backgroundColor: isDark
+                ? (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#450A0A50' : myDirectives[0].directive_type === 'TASK' ? '#3B200540' : '#1E1B4B45')
+                : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#FEF2F2' : myDirectives[0].directive_type === 'TASK' ? '#FFFBEB' : '#EEF2FF'),
               borderWidth: 1.5,
-              borderColor: isDark ? '#6366F150' : '#C7D2FE',
+              borderColor: isDark
+                ? (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#EF444460' : myDirectives[0].directive_type === 'TASK' ? '#F59E0B60' : '#6366F160')
+                : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#FCA5A5' : myDirectives[0].directive_type === 'TASK' ? '#FDE68A' : '#C7D2FE'),
               ...shadows.card,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#6366F120', alignItems: 'center', justifyContent: 'center' }}>
-                  <Megaphone size={15} color="#6366F1" />
+            {/* Top Row: Type Pill, Countdown Badge, and Urgency */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: myDirectives[0].directive_type === 'URGENT_ALERT' ? '#EF444425' : myDirectives[0].directive_type === 'TASK' ? '#F59E0B25' : '#6366F125',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Megaphone
+                    size={14}
+                    color={myDirectives[0].directive_type === 'URGENT_ALERT' ? '#DC2626' : myDirectives[0].directive_type === 'TASK' ? '#D97706' : '#6366F1'}
+                  />
                 </View>
-                <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#C7D2FE' : '#3730A3' }}>
-                  Message from Management / NV
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: 'Inter-Bold',
+                    fontWeight: '800',
+                    color: isDark ? themeColors.text : (myDirectives[0].directive_type === 'URGENT_ALERT' ? '#991B1B' : myDirectives[0].directive_type === 'TASK' ? '#92400E' : '#3730A3'),
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {myDirectives[0].directive_type === 'TASK'
+                    ? '🎯 Assigned Task from NV'
+                    : myDirectives[0].directive_type === 'URGENT_ALERT'
+                    ? '🚨 Urgent Alert from NV'
+                    : '📢 Directive from NV / Management'}
                 </Text>
               </View>
-              <View style={{ backgroundColor: '#6366F1', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>IMPORTANT</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {/* Expiry / Timeline Badge */}
+                <View
+                  style={{
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : '#FFFFFF',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2.5,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Clock size={10} color={themeColors.textSecondary} />
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>
+                    {(() => {
+                      if (!myDirectives[0].expires_at) return 'Pinned';
+                      const diff = new Date(myDirectives[0].expires_at).getTime() - Date.now();
+                      if (diff <= 0) return 'Expired';
+                      const hrs = Math.floor(diff / (1000 * 60 * 60));
+                      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                      if (hrs > 24) return `${Math.floor(hrs / 24)}d left`;
+                      if (hrs > 0) return `${hrs}h ${mins}m left`;
+                      return `${mins}m left`;
+                    })()}
+                  </Text>
+                </View>
+
+                {/* Priority Chip */}
+                {myDirectives[0].priority === 'URGENT' && (
+                  <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>URGENT</Text>
+                  </View>
+                )}
               </View>
             </View>
 
+            {/* Directive Message Body */}
             {!!myDirectives[0].message && (
-              <Text style={{ fontSize: 13.5, lineHeight: 20, color: themeColors.text, fontWeight: '600', marginBottom: 6 }}>
+              <Text
+                style={{
+                  fontSize: 13.5,
+                  lineHeight: 20,
+                  color: themeColors.text,
+                  fontWeight: '600',
+                  marginBottom: 8,
+                }}
+              >
                 {myDirectives[0].message}
               </Text>
             )}
 
+            {/* Voice Note Player if attached */}
             {!!myDirectives[0].voice_note_url && (
-              <View style={{ marginTop: 6, marginBottom: 4 }}>
+              <View style={{ marginTop: 4, marginBottom: 8 }}>
                 <VoiceNoteButton url={myDirectives[0].voice_note_url} />
               </View>
             )}
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
-                Posted {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </Text>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6366F1' }}>
-                Follow Instructions
-              </Text>
+            {/* Action Row: Interactive Buttons for Staff & Owner */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              {/* Left Side: Clickable Destination Action Button */}
+              {!!myDirectives[0].action_screen ? (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: colors.primary,
+                  }}
+                  onPress={() => {
+                    const screen = myDirectives[0].action_screen;
+                    if (screen) router.push(screen as any);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                    {myDirectives[0].action_label || 'Go to Action'}
+                  </Text>
+                  <ArrowRight size={13} color="#FFFFFF" strokeWidth={2.5} />
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                  Posted {new Date(myDirectives[0].created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              )}
+
+              {/* Right Side: Staff "Mark Done" OR Owner "Expire Now" */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {!isOwner ? (
+                  (() => {
+                    const isDone = Array.isArray(myDirectives[0].completed_by) && myDirectives[0].completed_by.length > 0;
+                    return (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5.5,
+                          borderRadius: 7,
+                          backgroundColor: isDone ? (isDark ? '#064E3B' : '#ECFDF5') : (isDark ? '#1E293B' : '#F1F5F9'),
+                          borderWidth: 1,
+                          borderColor: isDone ? '#10B981' : themeColors.border,
+                        }}
+                        onPress={async () => {
+                          const dirId = myDirectives[0].id;
+                          setMyDirectives((prev) =>
+                            prev.map((d, idx) =>
+                              idx === 0
+                                ? {
+                                    ...d,
+                                    completed_by: [
+                                      ...(d.completed_by || []),
+                                      { admin_id: 'me', username: adminUsername, completed_at: new Date().toISOString() },
+                                    ],
+                                  }
+                                : d
+                            )
+                          );
+                          Alert.alert('Acknowledged', 'Marked as completed! Management can see your status.');
+                          try {
+                            await apiService.completeStaffDirective(dirId);
+                          } catch {
+                            // Non-fatal, local completion preserved
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <CheckCircle2 size={13} color={isDone ? '#10B981' : themeColors.textSecondary} />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDone ? '#10B981' : themeColors.textSecondary }}>
+                          {isDone ? 'Completed ✓' : 'Mark as Done'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()
+                ) : (
+                  // Owner Controls: 1-Tap Expire & Dismiss
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 7,
+                      backgroundColor: isDark ? '#450A0A' : '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: '#EF4444',
+                    }}
+                    onPress={() => {
+                      Alert.alert(
+                        'Expire Directive',
+                        'Expire this directive immediately? It will disappear from all staff dashboards.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Expire Now',
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                await apiService.expireStaffDirective(myDirectives[0].id);
+                                setMyDirectives((prev) => prev.slice(1));
+                                Alert.alert('Success', 'Directive expired and dismissed from dashboard.');
+                              } catch (e: any) {
+                                Alert.alert('Error', e?.message || 'Failed to expire directive');
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Trash2 size={12} color="#DC2626" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>Expire Now</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -919,6 +1092,33 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 10, fontWeight: '700', color: themeColors.textSecondary }}>Shift Ready</Text>
               </View>
             </View>
+
+            <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
+              Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => setShowWelcomeModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#10B981',
+                paddingVertical: 10,
+                borderRadius: 10,
+                elevation: 2,
+              }}
+            >
+              <Zap size={15} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
+                Start Shift (Go Online)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* 1.8. Today at a Glance (AI-Assisted Operations Digest) */}
         {dailyDigest && (
           <View
@@ -991,33 +1191,6 @@ export default function DashboardScreen() {
           </View>
         )}
 
-
-            <Text style={{ fontSize: 12, lineHeight: 17, color: themeColors.textSecondary, marginBottom: 12 }}>
-              Ready to start your shift today? Go online to activate live customer enquiries, dispatch available drivers, and boost booking conversions.
-            </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => setShowWelcomeModal(true)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: '#10B981',
-                paddingVertical: 10,
-                borderRadius: 10,
-                elevation: 2,
-              }}
-            >
-              <Zap size={15} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800' }}>
-                Start Shift (Go Online)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* 2. Urgent Action Center (2x Grid Side-by-Side - Clean & Action-Oriented) */}
         <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
           <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text, marginBottom: 10 }}>
@@ -1044,15 +1217,14 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <Text style={{ fontSize: 18 }}>🔥</Text>
                   <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDA4AF' : '#9F1239' }}>
-                    {dataReady ? unrespondedEnquiries : ''}
+                    {unrespondedEnquiries}
                   </Text>
-                  {!dataReady && <Shimmer width={26} height={18} />}
                 </View>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDA4AF' : '#9F1239' }}>
                   Hot Enquiries
                 </Text>
                 <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCA5A5' : '#BE123C', marginTop: 1, marginBottom: 8 }}>
-                  {!dataReady ? 'Checking…' : unrespondedEnquiries > 0 ? `${unrespondedEnquiries} Pending Calls (<5m)` : 'All Caught Up'}
+                  {unrespondedEnquiries > 0 ? `${unrespondedEnquiries} Pending Calls (<5m)` : 'All Caught Up'}
                 </Text>
               </View>
               <View
@@ -1088,15 +1260,14 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <Text style={{ fontSize: 18 }}>🚨</Text>
                   <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDE68A' : '#92400E' }}>
-                    {dataReady ? upcomingUnassignedCount : ''}
+                    {upcomingUnassignedCount}
                   </Text>
-                  {!dataReady && <Shimmer width={26} height={18} />}
                 </View>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDE68A' : '#92400E' }}>
                   Unassigned Trips
                 </Text>
                 <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCD34D' : '#B45309', marginTop: 1, marginBottom: 8 }}>
-                  {!dataReady ? 'Checking…' : upcomingUnassignedCount > 0 ? (upcomingUnder2HrsCount > 0 ? `${upcomingUnder2HrsCount} urgent (<2h)` : 'Needs Quick Driver') : 'All Trips Assigned'}
+                  {upcomingUnassignedCount > 0 ? (upcomingUnder2HrsCount > 0 ? `${upcomingUnder2HrsCount} urgent (<2h)` : 'Needs Quick Driver') : 'All Trips Assigned'}
                 </Text>
               </View>
               <View
@@ -1113,63 +1284,6 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
           </View>
-
-          {/* Overdue Fleet Subscriptions Action Banner (Matches standard frame, radius & dark/light theme) */}
-          {(fleetOverdueCount ?? 0) > 0 && (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => router.push('/fleet-subscriptions' as any)}
-              style={{
-                marginTop: 10,
-                padding: 13,
-                borderRadius: 14,
-                backgroundColor: isDark ? '#4C1D2440' : '#FFF1F2',
-                borderWidth: 1.5,
-                borderColor: isDark ? '#F43F5E40' : '#FFE4E6',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: '#E11D4820',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <CreditCard size={18} color="#E11D48" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 13.5, fontFamily: 'Inter-Bold', fontWeight: '800', color: isDark ? '#FDA4AF' : '#9F1239' }}>
-                      {fleetOverdueCount} Overdue Subscriptions
-                    </Text>
-                    <View style={{ backgroundColor: '#E11D48', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5 }}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>URGENT</Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#FCA5A5' : '#BE123C', marginTop: 1 }}>
-                    Renewal payment due · Tap to collect or mark trusted
-                  </Text>
-                </View>
-              </View>
-              <View
-                style={{
-                  backgroundColor: '#E11D48',
-                  paddingVertical: 6.5,
-                  paddingHorizontal: 10,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Review →</Text>
-              </View>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* 3. Operational Tasks & Work Queues (2x2 Comprehensive Grid) */}
@@ -1177,7 +1291,7 @@ export default function DashboardScreen() {
         <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', fontWeight: '800', color: themeColors.text }}>
-              {dataReady ? `Operational Tasks (${totalTasksPending} Pending)` : 'Operational Tasks'}
+              Operational Tasks ({totalTasksPending} Pending)
             </Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/tasks' as any)}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>View All →</Text>
@@ -1386,11 +1500,9 @@ export default function DashboardScreen() {
             />
           </View>
           <Text style={{ fontSize: 11.5, color: themeColors.textSecondary }}>
-            {!dataReady
-              ? 'Loading today’s numbers…'
-              : isOwner
-                ? `Today: ${snapshot?.today_bookings || 0} Bookings Dispatched · ${unrespondedEnquiries} Pending Leads`
-                : `Today Active: ${snapshot?.today_bookings || 0} Bookings · ${unrespondedEnquiries} Leads in Queue`}
+            {isOwner
+              ? `Today: ${snapshot?.today_bookings || 0} Bookings Dispatched · ${unrespondedEnquiries} Pending Leads`
+              : `Today Active: ${snapshot?.today_bookings || 0} Bookings · ${unrespondedEnquiries} Leads in Queue`}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -1459,11 +1571,11 @@ export default function DashboardScreen() {
             <View style={{ gap: 10 }}>
               {[
                 {
-                  label: 'Create Estimate / Quotation',
-                  sub: 'Brand-wise estimate with tariff calculator, GST options & WhatsApp share',
+                  label: 'Create Trip Quotation & Estimate',
+                  sub: 'Instant fare estimate with WhatsApp share & customer booking link',
                   icon: Calculator,
                   color: '#0EA5E9',
-                  route: '/billing-editor?type=ESTIMATE',
+                  route: '/quote-estimate',
                 },
                 {
                   label: 'New Booking & Broadcast Trip',
@@ -1473,18 +1585,11 @@ export default function DashboardScreen() {
                   route: '/create-booking',
                 },
                 {
-                  label: 'Create Invoice',
-                  sub: 'Type a booking id - with or without GST, payment links & manual receipts',
+                  label: 'Generate GST Invoice',
+                  sub: 'Corporate & agency billing with tax invoices & PDF print',
                   icon: Receipt,
                   color: '#8B5CF6',
-                  route: '/billing-editor?type=INVOICE',
-                },
-                {
-                  label: 'All Invoices & Estimates',
-                  sub: 'Follow-ups, who made each one, unpaid balances',
-                  icon: FileText,
-                  color: '#047857',
-                  route: '/invoices',
+                  route: '/gst-invoices',
                 },
               ].map((item) => (
                 <TouchableOpacity

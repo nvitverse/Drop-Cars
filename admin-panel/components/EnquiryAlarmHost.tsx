@@ -94,6 +94,8 @@ export default function EnquiryAlarmHost() {
 
   const { isOnDuty, isOnBreak } = useStaffDuty();
 
+  const snoozedUntilRef = useRef<Record<number, number>>({});
+
   // Load persisted snooze map on mount
   useEffect(() => {
     (async () => {
@@ -110,6 +112,7 @@ export default function EnquiryAlarmHost() {
               }
             });
           }
+          snoozedUntilRef.current = valid;
           setSnoozedUntil(valid);
         }
       } catch {}
@@ -278,7 +281,7 @@ export default function EnquiryAlarmHost() {
         // Filter: ONLY fresh enquiries (< 60 mins), expired snooze reminders, or test items
         const activeItems = unackList.filter((e) => {
           // 1. Check if snoozed
-          const resumeAt = snoozedUntil[e.id];
+          const resumeAt = snoozedUntilRef.current[e.id];
           if (resumeAt) {
             if (now < resumeAt) return false;
             // Snooze expired -> Snooze reminder alarm!
@@ -306,32 +309,18 @@ export default function EnquiryAlarmHost() {
 
         if (!isMounted) return;
 
-        // 10-Minute CRM Screen Proximity Rule
-        const awayFromLeadsMs = lastLeftLeadsRef.current !== null ? (now - lastLeftLeadsRef.current) : 0;
-        const isRecentlyInLeads = isInsideLeads || (lastLeftLeadsRef.current !== null && awayFromLeadsMs < 10 * 60 * 1000);
-
         if (activeItems.length > 0) {
-          if (isRecentlyInLeads) {
-            // Staff was in leads screen < 10 mins ago -> Play 2-second mild chime instead of full siren
-            const freshOnes = activeItems.filter((e) => !softNotifiedIdsRef.current.has(e.id));
-            if (freshOnes.length > 0) {
-              playMildNotificationSound();
-              freshOnes.forEach((e) => softNotifiedIdsRef.current.add(e.id));
-            }
-            if (isInsideLeads) {
-              setUnackQueue([]);
-              stopAlarmSound('enquiry');
-              return;
-            }
-          } else {
-            // Staff has been away from leads screen >= 10 mins -> Full Siren Alarm!
-            playAlarmSound('enquiry');
+          if (isInsideLeads) {
+            setUnackQueue([]);
+            stopAlarmSound('enquiry');
+            return;
           }
+          playAlarmSound('enquiry');
+          setUnackQueue(activeItems);
         } else {
           stopAlarmSound('enquiry');
+          setUnackQueue([]);
         }
-
-        setUnackQueue(activeItems);
       } catch {
         stopAlarmSound('enquiry');
       }
@@ -348,18 +337,21 @@ export default function EnquiryAlarmHost() {
 
   const activeEnquiry = unackQueue[currentIndex] || unackQueue[0] || null;
 
-  const snoozeEnquiry = (id: number, resumeInMs: number) => {
+  const snoozeAllEnquiries = (resumeInMs: number) => {
     const nextSnoozeUntil = Date.now() + resumeInMs;
-    setSnoozedUntil((prev) => {
-      const updated = { ...prev, [id]: nextSnoozeUntil };
-      AsyncStorage.setItem(SNOOZED_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
-      return updated;
+    const updated = { ...snoozedUntilRef.current };
+    unackQueue.forEach((e) => {
+      updated[e.id] = nextSnoozeUntil;
+      dismissedIdsRef.current.add(e.id);
     });
-    setUnackQueue((prev) => {
-      const remaining = prev.filter((e) => e.id !== id);
-      if (remaining.length === 0) forceStopAlarmSound();
-      return remaining;
-    });
+    snoozedUntilRef.current = updated;
+    setSnoozedUntil(updated);
+    AsyncStorage.setItem(SNOOZED_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+    persistDismissed();
+
+    forceStopAlarmSound();
+    stopAlarmSound('enquiry');
+    setUnackQueue([]);
     setCurrentIndex(0);
   };
 
@@ -370,7 +362,6 @@ export default function EnquiryAlarmHost() {
     let autoTimeout: any = null;
 
     if (activeEnquiry) {
-      const id = activeEnquiry.id;
       setElapsedSecs(0);
 
       interval = setInterval(() => {
@@ -388,7 +379,7 @@ export default function EnquiryAlarmHost() {
       // Auto-snooze after ringSeconds -> retries after repeatMinutes
       const autoSnoozeDurationMs = Math.max(1, repeatMinutes) * 60 * 1000;
       autoTimeout = setTimeout(() => {
-        snoozeEnquiry(id, autoSnoozeDurationMs);
+        snoozeAllEnquiries(autoSnoozeDurationMs);
       }, ringSeconds * 1000);
     } else {
       stopAlarmSound('enquiry');
@@ -399,7 +390,7 @@ export default function EnquiryAlarmHost() {
       if (pulseLoop) pulseLoop.stop();
       if (autoTimeout) clearTimeout(autoTimeout);
     };
-  }, [activeEnquiry?.id, ringSeconds, repeatMinutes, pulseAnim]);
+  }, [activeEnquiry?.id, ringSeconds, repeatMinutes, pulseAnim, unackQueue]);
 
   const handleRespond = () => {
     if (!activeEnquiry) return;
@@ -447,12 +438,12 @@ export default function EnquiryAlarmHost() {
             <View style={styles.timerBadge}>
               <Text style={styles.timerText}>{formatTimer(elapsedSecs)}</Text>
             </View>
-            {/* Top-Right Dismiss / Snooze [X] Button */}
+            {/* Top-Right Dismiss / Snooze All [X] Button */}
             <TouchableOpacity
-              onPress={() => snoozeEnquiry(activeEnquiry.id, 10 * 60 * 1000)}
+              onPress={() => snoozeAllEnquiries(10 * 60 * 1000)}
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Dismiss Alert for 10m"
+              accessibilityLabel="Dismiss All Alerts for 10m"
             >
               <X size={18} color="#FFFFFF" />
             </TouchableOpacity>
@@ -545,38 +536,40 @@ export default function EnquiryAlarmHost() {
             )}
           </View>
 
-          {/* Action Buttons Row with 5m / 10m / 20m Snooze Chips */}
+          {/* Action Buttons Row with Snooze All & individual Snooze */}
           <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.textSecondary }}>
-                SNOOZE:
-              </Text>
-              <TouchableOpacity
-                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
-                onPress={() => snoozeEnquiry(activeEnquiry.id, 5 * 60 * 1000)}
-                activeOpacity={0.7}
-              >
-                <Clock size={12} color={themeColors.text} />
-                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>5m</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: themeColors.textSecondary, marginRight: 4 }}>
+                  SNOOZE:
+                </Text>
+                <TouchableOpacity
+                  style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                  onPress={() => snoozeAllEnquiries(5 * 60 * 1000)}
+                  activeOpacity={0.7}
+                >
+                  <Clock size={12} color={themeColors.text} />
+                  <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>5m</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
-                onPress={() => snoozeEnquiry(activeEnquiry.id, 10 * 60 * 1000)}
-                activeOpacity={0.7}
-              >
-                <Clock size={12} color={themeColors.text} />
-                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>10m</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                  onPress={() => snoozeAllEnquiries(10 * 60 * 1000)}
+                  activeOpacity={0.7}
+                >
+                  <Clock size={12} color={themeColors.text} />
+                  <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>10m</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
-                onPress={() => snoozeEnquiry(activeEnquiry.id, 20 * 60 * 1000)}
-                activeOpacity={0.7}
-              >
-                <Clock size={12} color={themeColors.text} />
-                <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>20m</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.snoozeChip, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: themeColors.border }]}
+                  onPress={() => snoozeAllEnquiries(20 * 60 * 1000)}
+                  activeOpacity={0.7}
+                >
+                  <Clock size={12} color={themeColors.text} />
+                  <Text style={[styles.snoozeChipText, { color: themeColors.text }]}>20m</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity style={styles.ackButton} onPress={handleRespond} activeOpacity={0.85}>

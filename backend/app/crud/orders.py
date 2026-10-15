@@ -60,11 +60,13 @@ def _stamp_commission_class(new_order):
     )
 
 
-def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, *, night_charges: int | None = None, acceptance_deadline: datetime | None = None, skip_broadcast: bool = False) -> Order:
+def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_assign_order: int = 15, toll_charge_update: bool = False, *, night_charges: int | None = None, acceptance_deadline: datetime | None = None, skip_broadcast: bool = False, customer_phone_reveal_at: datetime | None = None, data_visibility_vehicle_owner: bool | None = None) -> Order:
     start_at = new_order.start_date_time
     if start_at is not None and start_at.tzinfo is None:
         start_at = start_at.replace(tzinfo=timezone.utc)
     default_acceptance_deadline = (start_at + timedelta(minutes=15)) if start_at is not None else None
+    effective_reveal_at = customer_phone_reveal_at or getattr(new_order, 'customer_phone_reveal_at', None)
+    effective_data_vis = data_visibility_vehicle_owner if data_visibility_vehicle_owner is not None else getattr(new_order, 'data_visibility_vehicle_owner', False)
     master = Order(
         source=OrderSourceEnum.NEW_ORDERS,
         source_order_id=new_order.order_id,
@@ -109,6 +111,8 @@ def create_master_from_new_order(db: Session, new_order: NewOrder, max_time_to_a
         gst_included=getattr(new_order, 'gst_included', False),
         gst_amount=getattr(new_order, 'gst_amount', None),
         commission_class=_stamp_commission_class(new_order),
+        customer_phone_reveal_at=effective_reveal_at,
+        data_visibility_vehicle_owner=bool(effective_data_vis),
     )
     print(new_order.pickup_drop_location)
     db.add(master)

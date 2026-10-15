@@ -8,17 +8,19 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import EnquiryAlarmHost from '@/components/EnquiryAlarmHost';
-import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
-import UpdateGate from '@/components/UpdateGate';
+import { applyLatestUpdateOnLaunch } from '@/utils/otaUpdates';
 
 import { ThemeProvider } from '@/context/ThemeContext';
 import { StaffDutyProvider } from '@/context/StaffDutyContext';
 import StaffDutyFloatingBubble from '@/components/StaffDutyFloatingBubble';
 import { CommandCenterProvider } from '@/context/CommandCenterContext';
 import CommandCenterModal from '@/components/CommandCenterModal';
+
+import AppLoadingScreen from '@/components/AppLoadingScreen';
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -51,8 +53,10 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // The newest live update is checked at launch and whenever the app comes back to the front, downloaded in a visible
-  // "Updating..." box and applied by restarting (components/UpdateGate.tsx) - it used to happen silently and a failure was invisible.
+  // Start straight on the newest live update instead of one launch later.
+  useEffect(() => {
+    applyLatestUpdateOnLaunch();
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -61,30 +65,29 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <StaffDutyProvider>
-            <CommandCenterProvider>
-              <KeyboardSafeView>
-                {/* Screens glide in from the right and the previous one eases away (instead of snapping); the tab shell and login just fade. */}
+        <GlobalErrorBoundary>
+          <ThemeProvider>
+            <StaffDutyProvider>
+              <CommandCenterProvider>
+                {/* Screens glide in smoothly from the right; the tab shell and login ease in with a fade */}
                 <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 260, gestureEnabled: true }}>
                   <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 200 }} />
                   <Stack.Screen name="login" options={{ animation: 'fade', animationDuration: 200 }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
-              </KeyboardSafeView>
-              <StatusBar style="auto" />
-              <WebAlertHost />
-              {/* Alarms paused temporarily as requested to work freely in other sections */}
-              <AlarmDutyGate />
-              <UpdateGate />
-              <EnquiryAlarmHost />
-              <BookingAlarmHost />
-              <StaffDutyFloatingBubble />
-              {/* The Command Centre floating button is gone: it opens from Chats > Command Centre */}
-              <CommandCenterModal />
-            </CommandCenterProvider>
-          </StaffDutyProvider>
-        </ThemeProvider>
+                <StatusBar style="auto" />
+                <WebAlertHost />
+                {/* Alarms paused temporarily as requested to work freely in other sections */}
+                <AlarmDutyGate />
+                <EnquiryAlarmHost />
+                <BookingAlarmHost />
+                <StaffDutyFloatingBubble />
+                {/* The Command Centre floating button is gone: it opens from Chats > Command Centre */}
+                <CommandCenterModal />
+              </CommandCenterProvider>
+            </StaffDutyProvider>
+          </ThemeProvider>
+        </GlobalErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

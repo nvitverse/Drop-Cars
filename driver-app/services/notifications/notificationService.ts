@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as Speech from 'expo-speech';
 import { createAudioPlayer } from 'expo-audio';
+import Constants from 'expo-constants';
 import { Platform, Alert } from 'react-native';
 import { maybeShowBubbleForNotification } from '@/services/bubble/bubbleOverlay';
 import { registerBackgroundNotificationTask } from '@/services/notifications/backgroundNotificationTask';
@@ -196,12 +197,19 @@ async function doRegisterForPushNotifications(): Promise<string | null> {
       return null;
     }
 
-        const token = await Notifications.getExpoPushTokenAsync();
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ??
+          (Constants as any)?.easConfig?.projectId ??
+          '31f4ffee-37b4-4db6-a102-1cd99bd74f8e';
 
-    return token.data;
-    } catch (error) {
-    console.error('Error getting push token:', error);
-    Alert.alert('Error', 'Failed to get push notification token');
+        const token = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+
+        return token.data;
+  } catch (error) {
+    console.warn('Silent notice: Push notification token registration unavailable:', error);
+    // Never show an intrusive popup modal to the driver while browsing/accepting rides
     return null;
   }
 }

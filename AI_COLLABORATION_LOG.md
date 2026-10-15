@@ -4,6 +4,48 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Master Prompt 5: Smart Multi-Lead Snooze All Engine & Booking Card 'Customize' Hydration Fix (Antigravity, 2026-10-11)
+- **Target Files Modified:**
+  - `admin/components/EnquiryAlarmHost.tsx` (and synced to `Drop-Cars-Full-Repo/admin-panel/components/EnquiryAlarmHost.tsx`)
+  - `admin/app/create-booking.tsx` (and synced to `Drop-Cars-Full-Repo/admin-panel/app/create-booking.tsx`)
+- **Key Fixes Implemented:**
+  1. **Enquiry Alarm Loop & Multi-Lead Snooze Fix:**
+     - Added `snoozeAllEnquiries(durationMs)` to bulk-silence and snooze all active unacknowledged leads currently in `unackQueue` in a single tap.
+     - Auto-snooze timeout now snoozes the entire queue at once instead of blaring individual alarms sequentially for 5-10 leads.
+     - Close button `[X]` now executes `snoozeAllEnquiries(10m)` and immediately calls `forceStopAlarmSound()`.
+     - Added a dedicated `"Snooze All (N)"` button in the alarm modal when multiple leads are pending.
+  2. **Booking Card 'Customize' Pre-fill & Hydration Fix:**
+     - Connected `useLocalSearchParams` in `create-booking.tsx` with a safe, one-time parameter hydration `useEffect`.
+     - Pre-fills Customer Name, Clean Mobile Number, Stops / Multi-City Route (`stops_json`), Trip Type, Vehicle Category, Dates/Times, and Custom Fares / Inclusions passed from `orders.tsx`.
+     - Prevents white/blank crash screen and enables staff to seamlessly edit fare, vehicle, or route for an existing booking.
+- **Verification:**
+  - Targeted TypeScript check (`tsconfig.checkonly.json`) -> **100% clean, 0 errors**.
+  - Dual-Repo synchronization verified with `Drop-Cars-Full-Repo/admin-panel` (KeyboardSafe modal imports preserved).
+
+---
+
+### Master Prompt 4 Batch 5: Brand Consistency UI Kits, SVG Empty States, First-Run Coach Marks & Zero-Dependency Audit Verification (Antigravity, 2026-10-09)
+- **Branch:** `feat/brand-language-help-round4`.
+- **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
+- **KeyboardSafe Untouched:** Standard `components/KeyboardSafe.tsx` strictly utilized across Admin, Driver, Customer, and Vendor apps.
+- **Workstream A3, A5, E5, E6 & Audit Tool Polish:**
+  - **Shared UI Kits & SVG Empty States (Workstream A3):**
+    - Created `components/ui/UiKit.tsx` in `Customer App` and `Vendor App` (`Card`, `Pill`, `SectionHeader`, `Shimmer`, `FadeIn`, `EmptyState`).
+    - Created lightweight SVG illustrations in `components/ui/EmptyStateIllustrations.tsx` across `Customer App` and `Vendor App` (`NoBookingsSvg`, `NoCarsSvg`, `NoChatsSvg`, `NoInternetSvg`, `NoDocumentsSvg`).
+  - **First-Run Onboarding Coach Marks (Workstream A5):**
+    - Created `components/FirstRunCoachMarks.tsx` in `Driver-App` and `Customer App` featuring 3-step carousel (Bookings/Rides, Wallet/Earnings, 24/7 Help & Support) with `AsyncStorage` persistence (`@has_seen_home_coach_marks_v1`, `@has_seen_customer_coach_marks_v1`).
+  - **Zero-Dependency i18n Audit Verification:**
+    - Updated `scripts/i18n-audit.js` to dynamically resolve all 4 app workspace directory trees.
+    - Untranslated literals reduced (Customer App: 627 -> 618 -> 616).
+- **Verification Results:**
+  - Backend pytest suite: `uv run pytest -q tests` (with `PYTHONPATH=.`) -> **230 passed, 0 failed (100% green)**.
+  - Admin App typecheck: `npx tsc --noEmit` in `admin-panel` -> **0 errors (100% clean)**.
+  - Driver App typecheck: `npx tsc --noEmit` in `driver-app` -> **0 errors (100% clean)**.
+  - Customer App typecheck: `npx tsc --noEmit` in `customer-app` -> **0 errors (100% clean)**.
+  - Vendor App typecheck: `npx tsc --noEmit` in `vendor-app` -> **0 errors (100% clean)**.
+
+---
+
 ### Master Prompt 4 Batch 4: Help Telemetry Events, Admin Help Insights Dashboard, Offline Banner & Document Coach (Antigravity, 2026-10-09)
 - **Branch:** `feat/brand-language-help-round4`.
 - **Billing Module Untouched:** Zero edits to billing files (`models/billing.py`, `crud/billing_docs.py`, `utils/billing_calc.py`, `utils/billing_render.py`, `api/routes/billing_docs.py`, `app/billing-editor.tsx`, `billing-hub.tsx`, `billing-brands.tsx`, `services/billingApi.ts`).
@@ -192,3 +234,56 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 3. **Multi-Session Safety Rule**:
    - Strictly surgical line-by-line edits only. No file-level overwrites.
+
+---
+
+### Master Reconciliation & Booking Customization Fix (Antigravity, 2026-10-11)
+- **Branch / Workspaces:** `dropcars-review/admin` & `Drop-Cars-Full-Repo/admin-panel`
+- **1. Booking Card Customize Flow (`create-booking.tsx` & `orders.tsx`):**
+  - **Direct Post Booking Screen:** Tapping `[ Customize ]` on any Live/Pending booking card routes directly to `/create-booking` with `edit_order_id`.
+  - **Edit Mode Visuals:** Header updates to `Customize Booking #{id}` with a prominent `[EDIT MODE]` badge.
+  - **Tariff Overwrite Freeze:** Auto-calculation `useEffect` strictly bypassed via `if (params.edit_order_id) return;`, preserving custom tariffs and special rates from being wiped out.
+  - **Direct Master Update (No Duplicates):** Submit action detects edit mode and dispatches `apiService.masterEditOrder` and `apiService.adminEditOrderFare`, displays success confirmation, and returns cleanly with `router.back()`.
+  - **Action Button Added:** Live cards now display `[ Customize ]` (SlidersHorizontal icon) alongside `[ Edit ]` for 1-tap deep customization.
+- **2. Concurrency & Protection Guidelines for Claude (`CLAUDE.md`):**
+  - Updated root and admin `CLAUDE.md` with explicit non-regression rules protecting all Antigravity features:
+    - Customize booking flow & tariff freeze
+    - Help Catalogs (`DC_*` codes) & `GlobalErrorBoundary`
+    - Spoken Tamil Glossary & `uiTranslate`
+    - Operations Suite (`[ Cancel ]`, `[ Delete ]`, `[ Recreate ]`, `[ Customize ]`, `+` FAB)
+    - Missing screens (`workers-payroll.tsx`, `tax-reports.tsx`, `driver-tours.tsx`, `website-settings.tsx`)
+    - AI Copilot suite (`Today at a Glance` digest, AI drafts, voice parser, theme clustering)
+    - Backend Extra KM + 5% GST billing at trip close
+    - Number integrity (no fake fallbacks) & `KeyboardSafe` modal rules
+- **3. Dual-Repo Sync:**
+  - Synchronized exact surgical changes across `dropcars-review/admin` and `Drop-Cars-Full-Repo/admin-panel`.
+- **4. Verification:**
+  - `admin-panel` typecheck: `npx tsc --noEmit --project tsconfig.checkonly.json` -> **0 errors (100% clean)**.
+
+---
+
+### Futuristic Management Directives & Live Tasks Engine (Antigravity, 2026-10-11)
+- **Workspaces:** `dropcars-review` (admin + backend) & `Drop-Cars-Full-Repo` (admin-panel + backend)
+- **1. Backend Data Model & Migrations (`models/staff_directive.py`, `main.py`):**
+  - Added `directive_type` (`ANNOUNCEMENT` | `TASK` | `URGENT_ALERT`), `priority` (`NORMAL` | `HIGH` | `URGENT`), `expires_at` (TIMESTAMPTZ), `action_type`, `action_screen`, `action_label`, `completed_by` (JSON), and `is_archived` (INT).
+  - Added startup auto-migration `ensure_staff_directive_columns` in `main.py`.
+- **2. Endpoints Enhanced (`api/routes/admin.py`):**
+  - `POST /admin/staff-directives`: Accepts duration hours (`duration_hours`), preset expiry dates, directive type, and action navigation targets.
+  - `GET /admin/staff-directives`: Filters out expired (`expires_at < NOW()`) and archived directives by default, instantly eliminating stale/test messages from view.
+  - `POST /admin/staff-directives/{id}/complete`: Allows staff members to mark assigned tasks as completed/acknowledged with live audit logs.
+  - `POST /admin/staff-directives/{id}/expire`: Owner 1-tap immediate expiry action to dismiss any directive.
+- **3. Admin Dashboard Mission Card (`app/(tabs)/index.tsx`):**
+  - Rebuilt with futuristic glassmorphism styling, dynamic urgency color accents, and live countdown badges (`⏳ 2h 15m left` / `📌 Pinned`).
+  - Interactive Action Button: 1-tap jump to the relevant screen (`action_screen`).
+  - Staff "Mark as Done" toggle with live acknowledgment state.
+  - Owner "Expire Now" button to vanish test messages instantly.
+- **4. Directive Command Modal (`app/(tabs)/tasks.tsx`):**
+  - Added Type selector (`📢 Announcement`, `⚡ Action Task`, `🚨 Urgent Alert`).
+  - Added Timeline auto-expire selector (`2h Quick`, `8h Shift`, `24h Day`, `📌 Pinned`).
+  - Added Action Target presets (`Unassigned Bookings`, `KYC Queue`, `Payouts`, `Website Approvals`, `Trip Reviews`).
+- **5. Dual-Repo Sync & Verification:**
+  - Synchronized across both repositories.
+  - Backend tests: `pytest -q tests/test_ux_llm_round3.py` -> **7 passed (100% green)**.
+  - Frontend typecheck: `npx tsc --noEmit` -> **0 errors (100% clean)**.
+
+

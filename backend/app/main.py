@@ -16,9 +16,6 @@ from app.utils.cities import load_cities_once
 from app.utils.car_models import load_car_models_once
 import app.models.admin
 import app.models.worker_management
-import app.models.document_model  # document_models table must be known before create_all()
-import app.models.chat_trash  # chat_trash table must be known before create_all()
-import app.models.billing  # billing_brands / billing_documents tables
 import app.models.car_driver
 import app.models.vehicle_owner
 import app.models.vehicle_owner_details
@@ -281,16 +278,6 @@ app.include_router(own_fleet_router.router, prefix="/api", tags=["Own Fleet"])
 
 from app.api.routes import quality as quality_router
 app.include_router(quality_router.router, prefix="/api", tags=["Ratings & Quality"])
-from app.api.routes import account_activity_routes as _activity_routes
-app.include_router(_activity_routes.admin_router, prefix="/api", tags=["Active / Inactive"])
-app.include_router(_activity_routes.owner_router, prefix="/api/users", tags=["Active / Inactive"])
-from app.api.routes import admin_trip_close as _trip_close
-from app.api.routes import billing_docs as _billing_docs
-app.include_router(_billing_docs.router, prefix="/api", tags=["Invoices & Estimates"])
-app.include_router(_billing_docs.public_router, prefix="/api", tags=["Invoices & Estimates (public link)"])
-from app.api.routes import document_models as _doc_models
-app.include_router(_doc_models.router, prefix="/api", tags=["Document Models"])
-app.include_router(_trip_close.router, prefix="/api", tags=["Admin Trip Close"])
 
 from app.api.routes import driver_ops as driver_ops_router
 app.include_router(driver_ops_router.router, prefix="/api", tags=["Driver Lookup"])
@@ -380,6 +367,30 @@ async def ensure_admin_token_version_column() -> None:
 
 
 @app.on_event("startup")
+async def ensure_staff_directive_columns() -> None:
+    """Lightweight migration: add timeline expiry, directive_type, and actionable task fields to staff_directive."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    statements = [
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS directive_type VARCHAR NOT NULL DEFAULT 'ANNOUNCEMENT'",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS priority VARCHAR NOT NULL DEFAULT 'NORMAL'",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_type VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_screen VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS action_label VARCHAR",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS completed_by JSON",
+        "ALTER TABLE staff_directive ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0",
+    ]
+    for stmt in statements:
+        try:
+            db.execute(text(stmt))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+    db.close()
+
+
+@app.on_event("startup")
 async def ensure_admin_add_money_admin_id_column() -> None:
     """Lightweight migration: admin_add_money_to_vehicle_owner had no way
     to record WHICH admin credited a given amount - no admin_id column at
@@ -457,8 +468,6 @@ async def ensure_extra_kyc_document_columns() -> None:
         # Yearly registration/attachment fee paid via Razorpay (verification screen)
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS registration_fee_paid_at TIMESTAMPTZ',
         # Booking-level trip OTPs, shown to the vendor right after posting (2026-09-30)
-        'ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiting_minutes INTEGER',
-        'ALTER TABLE orders ADD COLUMN IF NOT EXISTS closing_breakdown JSON',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS start_trip_otp VARCHAR',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS end_trip_otp VARCHAR',
         'ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone_reveal_at TIMESTAMPTZ',
@@ -1132,15 +1141,6 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"payment reconcile failed (continuing): {_e}")
-            # Payment links on invoices / estimates (advance, GST, balance): record whichever were paid while nobody was watching
-            try:
-                from app.crud.billing_docs import reconcile_pending_links as _bill_links
-                _bl = _bill_links(db)
-                if _bl.get("paid"):
-                    print(f"Recorded {_bl['paid']} invoice payment-link payment(s)")
-            except Exception as _e:
-                db.rollback()
-                print(f"invoice payment-link reconcile failed (continuing): {_e}")
             # Payment links staff shared on WhatsApp for Standard -> Trusted upgrades: activate whichever were paid
             try:
                 from app.crud.fleet_payment_links import reconcile_pending_links
@@ -1193,14 +1193,6 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"chat purge failed (continuing): {_e}")
-            try:
-                from app.crud.chat_trash import purge_expired_trash
-                _trash = purge_expired_trash(db)
-                if any(_trash.values()):
-                    print(f"Chat Trash cleared for good: {_trash}")
-            except Exception as _e:
-                db.rollback()
-                print(f"chat trash purge failed (continuing): {_e}")
             try:
                 from app.api.routes.support import purge_old_support_messages
                 _support_purged = purge_old_support_messages(db)
@@ -1384,10 +1376,6 @@ async def _run_document_expiry_sweep() -> None:
         result = send_expiry_reminders(db)
         if any(result.values()):
             print(f"Document expiry sweep: {result}")
-        from app.crud.account_activity import refresh_auto_inactive
-        _act = refresh_auto_inactive(db)          # switch cars / drivers off (or on) by customer rating
-        if any(_act.values()):
-            print(f"Rating-based active/inactive refresh: {_act}")
     except Exception as e:
         db.rollback()
         print(f"Document expiry sweep failed (continuing): {e}")
@@ -1487,34 +1475,11 @@ async def ensure_order_assignment_cancel_reason_column() -> None:
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_img_url VARCHAR'))
         db.execute(text("ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_status document_status_enum DEFAULT 'PENDING'"))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS rc_expiry_date DATE'))
-        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS registration_date DATE'))
-        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS document_notes TEXT'))
-        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS document_notes TEXT'))
-        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
-        db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS auto_inactive_reason TEXT'))
-        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
-        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS auto_inactive_reason TEXT'))
-        db.execute(text('ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS police_verification_img VARCHAR'))
-        db.execute(text("ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS police_verification_status document_status_enum DEFAULT 'PENDING'"))
-        db.execute(text('ALTER TABLE vendor_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
-        db.execute(text('ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS manual_inactive_reason TEXT'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS insurance_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS fc_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS permit_expiry_date DATE'))
         db.execute(text('ALTER TABLE car_details ADD COLUMN IF NOT EXISTS pollution_expiry_date DATE'))
-        db.execute(text('ALTER TABLE IF EXISTS billing_documents ADD COLUMN IF NOT EXISTS created_by_phone VARCHAR'))
-        db.execute(text('ALTER TABLE IF EXISTS billing_brands ADD COLUMN IF NOT EXISTS highlights TEXT'))
-        db.execute(text('ALTER TABLE IF EXISTS billing_brands ADD COLUMN IF NOT EXISTS secondary_color VARCHAR'))
-        db.execute(text("ALTER TABLE IF EXISTS billing_brands ADD COLUMN IF NOT EXISTS font_style VARCHAR NOT NULL DEFAULT 'SANS'"))
         db.commit()
-        from app.crud.billing_docs import seed_default_brands
-        _seeded = seed_default_brands(db)
-        if _seeded:
-            print(f"Billing: seeded {_seeded} brand(s)")
-        from app.crud.one_time_fixes import reset_false_invalid_documents
-        _fixed = reset_false_invalid_documents(db)
-        if not _fixed.get("skipped"):
-            print(f"One-time repair of false INVALID documents: {_fixed}")
     except Exception as e:
         db.rollback()
         print(f"order_assignments.cancel_reason migration failed (continuing): {e}")

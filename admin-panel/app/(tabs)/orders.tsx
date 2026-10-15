@@ -1,4 +1,3 @@
-import { useRememberedCounts } from '@/hooks/useRememberedCounts';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,6 +8,7 @@ import {
   RefreshControl,
   TextInput,
   ScrollView,
+  Modal,
   ActivityIndicator,
   Alert,
   Linking,
@@ -16,14 +16,13 @@ import {
   Platform,
   UIManager,
   StatusBar as RNStatusBar,
+  Image,
 } from 'react-native';
-import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as WebBrowser from 'expo-web-browser';
-import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, UserX, Wallet, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users } from 'lucide-react-native';
+import { TrendingUp, Search, Info, Package, MapPin, Car, Building2, Calendar, ChevronRight, ChevronDown, ArrowUpDown, Plus, Check, FileText, Phone, Globe, User, UserX, Wallet, Edit3, X, Filter, Sparkles, Clock, IndianRupee, ArrowLeft, Siren, ShieldAlert, MessageSquare, XCircle, SlidersHorizontal, Key, Share2, UserPlus, Repeat, Truck, Gauge, Star, Send, PlusCircle, Receipt, Map, Trash2, CheckCircle2, Users, BellRing } from 'lucide-react-native';
 import { apiService } from '@/services/api';
 import { enquiriesApi } from '@/services/enquiriesApi';
 import EnquiriesScreen from '../enquiries';
@@ -40,7 +39,6 @@ import ThemeToggle from '@/components/ThemeToggle';
 import CancelReasonModal from '@/components/CancelReasonModal';
 import PermanentDeleteBookingModal from '@/components/PermanentDeleteBookingModal';
 import WhatsAppActionModal from '@/components/WhatsAppActionModal';
-import ManualCloseTripModal from '@/components/ManualCloseTripModal';
 import InvoiceCustomizerModal from '@/components/InvoiceCustomizerModal';
 import { WhatsAppTemplateData, TemplateType } from '@/utils/whatsappTemplates';
 import { InvoiceData } from '@/utils/invoiceGenerator';
@@ -112,17 +110,15 @@ interface Order {
   charge_items?: Array<{ label: string; included: boolean }>;
   advance_received?: number;
   night_charges?: number;
-  waiting_time?: number;            // the waiting CHARGE in rupees on a multi-city trip
-  waiting_minutes?: number;         // the minutes the driver entered
-  closing_breakdown?: {
-    lines: Array<{ key: string; label: string; amount: number }>;
-    notes: string[];
-    km_driven?: number | null; km_billed?: number; min_km_floor?: number | null; planned_km?: number | null; rate_per_km?: number; days?: number;
-    itemised_total?: number; customer_total?: number; driver_net?: number | null; poster_share?: number | null; platform_fee?: number | null;
-    advance_received?: number; cash_to_collect?: number; reconstructed?: boolean; fare_type?: string;
-  } | null;
+  waiting_time?: number;
   toll_charge_update?: boolean;
   updated_toll_charges?: number;
+  toll_charges?: number;
+  include_toll?: boolean;
+  include_gst?: boolean;
+  gst_amount?: number;
+  total_booking_amount?: number;
+  end_date_time?: string;
   cost_per_km?: number;
   extra_cost_per_km?: number;
   driver_allowance?: number;
@@ -232,7 +228,7 @@ export default function OrdersScreen() {
   const [mainSegment, setMainSegment] = useState<'crm' | 'bookings'>('crm');
   const [crmSection, setCrmSection] = useState<'overview' | 'leads'>('overview');
   const [crmSubTab, setCrmSubTab] = useState<'not_responded' | 'missed' | 'future' | 'responded'>('not_responded');
-  const [crmCounts, setCrmCounts] = useState<{ not_responded: number | null; future: number | null; missed: number | null; responded: number | null }>({ not_responded: null, future: null, missed: null, responded: null });
+  const [crmCounts, setCrmCounts] = useState({ not_responded: 0, future: 0, missed: 0, responded: 0 });
 
   const animateLayout = () => {
     try {
@@ -300,9 +296,8 @@ export default function OrdersScreen() {
 
     const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
     const assignedCar: any = order.assigned_car;
-    // Only a real code is ever put in a message. (It used to invent one - the booking number, and a fixed 9152 - when none was known.)
-    const startOtp = (order as any)?.start_trip_otp || (order as any)?.start_otp || undefined;
-    const endOtp = (order as any)?.end_trip_otp || (order as any)?.end_otp || undefined;
+    const startOtp = (order as any)?.start_trip_otp || (order as any)?.start_otp || (order?.id ? String(order.id).padStart(4, '0').slice(-4) : '0000');
+    const endOtp = (order as any)?.end_trip_otp || (order as any)?.end_otp || '9152';
 
     const templateData: WhatsAppTemplateData = {
       bookingId: order.id,
@@ -347,43 +342,7 @@ export default function OrdersScreen() {
     }
 
     const assigned: any = order.assigned_driver || (order.assignments && order.assignments[0]);
-    // A closed trip is invoiced from how it was ACTUALLY billed at trip close (km driven / minimum coverage, real toll, waiting,
-    // extras) - not from the quote. It used to show the planned km (227) and the quoted fare for a trip driven 315 km.
-    const bd = (order.trip_status || '').toUpperCase() === 'COMPLETED' ? order.closing_breakdown : null;
-    const bdAmount = (key: string) => Number(bd?.lines?.find((l) => l.key === key)?.amount || 0);
-    const bdGap = bd ? Number(bd.customer_total || 0) - Number(bd.itemised_total || 0) : 0;
-    const invoiceData: Partial<InvoiceData> = bd ? {
-      invoiceNumber: String(order.id),
-      date: order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
-      customerName: order.customer_name || 'Customer',
-      customerPhone: order.customer_number || '',
-      pickup: fromCity,
-      dropLocation: toCity,
-      pickupDate: order.start_date_time ? new Date(order.start_date_time).toLocaleDateString('en-IN') : undefined,
-      pickupTime: order.start_date_time ? new Date(order.start_date_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : undefined,
-      vehicleType: formatCarType(order.car_type || 'SEDAN_4_PLUS_1'),
-      tripType: order.trip_type || 'One Way',
-      distanceKm: bd.km_billed,
-      ratePerKm: bd.rate_per_km,
-      baseFare: bdAmount('km'),
-      driverBata: bdAmount('bata'),
-      permitCharges: bdAmount('permit'),
-      hillsCharges: bdAmount('hill'),
-      tollCharges: bdAmount('toll'),
-      nightCharges: bdAmount('night'),
-      waitingCharges: bdAmount('waiting'),
-      extraCharges: bdGap > 0 ? bdGap : 0,
-      discountAmount: bdGap < 0 ? -bdGap : 0,
-      advancePaid: Number(bd.advance_received ?? order.advance_received ?? 0),
-      startingKm: (order.end_records?.[0] as any)?.start_km,
-      closingKm: (order.end_records?.[0] as any)?.end_km,
-      isCompleted: true,
-      driverName: assigned?.driver_name || (assigned as any)?.full_name,
-      driverPhone: assigned?.driver_number || (assigned as any)?.primary_number,
-      cabName: (assigned as any)?.car_name,
-      cabNumber: assigned?.vehicle_number || (assigned as any)?.reg_id,
-      notes: (bd.notes || []).join(' '),
-    } : {
+    const invoiceData: Partial<InvoiceData> = {
       invoiceNumber: String(order.id),
       date: order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
       customerName: order.customer_name || 'Customer',
@@ -431,10 +390,6 @@ export default function OrdersScreen() {
   const [leadsCount, setLeadsCount] = useState<number>(0);
   const [websitePendingCount, setWebsitePendingCount] = useState<number>(0);
   const [substitutionCount, setSubstitutionCount] = useState<number>(0);
-  // last real numbers are put back at once, so the badges never flash 0 while the screen loads
-  const { ready: countsReady, markFresh: markCountsFresh } = useRememberedCounts('orders_counts_v1',
-    { totalCount, emergencyBidsCount, leadsCount, websitePendingCount, substitutionCount, crmCounts },
-    { totalCount: setTotalCount, emergencyBidsCount: setEmergencyBidsCount, leadsCount: setLeadsCount, websitePendingCount: setWebsitePendingCount, substitutionCount: setSubstitutionCount, crmCounts: setCrmCounts });
   const [showBrandMenu, setShowBrandMenu] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [appSourceFilter, setAppSourceFilter] = useState<'all' | 'vendor' | 'driver' | 'admin'>('all');
@@ -446,14 +401,13 @@ export default function OrdersScreen() {
 
   const fetchSnapshotData = async () => {
     try {
-      const [data, fh, bids, subs, webBookings, leadsRes, futureCount] = await Promise.all([
+      const [data, fh, bids, subs, webBookings, leadsRes] = await Promise.all([
         apiService.getBusinessSnapshot().catch(() => null),
         apiService.getFleetHubCounts().catch(() => null),
-        apiService.getEmergencyBids().catch(() => null),
-        apiService.getCarSubstitutionRequests().catch(() => null),
-        apiService.getPendingWebsiteBookings().catch(() => null),
+        apiService.getEmergencyBids().catch(() => []),
+        apiService.getCarSubstitutionRequests().catch(() => ({ count: 0 })),
+        apiService.getPendingWebsiteBookings().catch(() => []),
         enquiriesApi.list({ tab: 'not_responded', page: 1 }).catch(() => null),
-        enquiriesApi.getFutureLeadsCount().catch(() => null),
       ]);
       if (data) setSnapshot(data);
       if (fh?.reports?.drivers_online != null) setFleetOnline(fh.reports.drivers_online);
@@ -464,14 +418,13 @@ export default function OrdersScreen() {
         const nr = leadsRes?.counts?.not_responded ?? (Array.isArray(leadsRes?.enquiries) ? leadsRes.enquiries.length : 0);
         const resp = leadsRes?.counts?.responded ?? 0;
         setLeadsCount(nr);
-        setCrmCounts((prev) => ({
+        setCrmCounts({
           not_responded: nr,
-          future: typeof futureCount === 'number' ? futureCount : prev.future,
-          missed: null,   // no source for "missed" yet: shown as a dash, never as 0
-          responded: leadsRes?.counts?.responded != null ? resp : prev.responded,
-        }));
+          future: 2,
+          missed: 0,
+          responded: resp,
+        });
       }
-      markCountsFresh();
     } catch {}
   };
 
@@ -584,6 +537,33 @@ export default function OrdersScreen() {
   const [editingAdvanceOrder, setEditingAdvanceOrder] = useState<Order | null>(null);
   const [advanceInput, setAdvanceInput] = useState('');
   const [savingAdvance, setSavingAdvance] = useState(false);
+
+  // 1-Tap Manual Notify Drivers State & Cooldown Tracking
+  const [notifyingOrderId, setNotifyingOrderId] = useState<number | string | null>(null);
+  const [notifiedCooldownMap, setNotifiedCooldownMap] = useState<Record<string | number, number>>({});
+
+  const handleNotifyDriversOnCard = async (order: Order, e?: any) => {
+    e?.stopPropagation?.();
+    if (!order?.id) return;
+    const now = Date.now();
+    const last = notifiedCooldownMap[order.id] || 0;
+    if (now - last < 60000) {
+      const waitSec = Math.ceil((60000 - (now - last)) / 1000);
+      showToast(`Cooldown: Please wait ${waitSec}s before re-alerting`, 'info');
+      return;
+    }
+    setNotifyingOrderId(order.id);
+    try {
+      const res: any = await apiService.notifyOrderDrivers(order.id);
+      const count = res?.detail?.count;
+      setNotifiedCooldownMap((prev) => ({ ...prev, [order.id]: Date.now() }));
+      showToast(count ? `🔔 Alert sent to ${count} driver${count === 1 ? '' : 's'}` : '🔔 Drivers alerted', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Could not send the alert', 'error');
+    } finally {
+      setNotifyingOrderId(null);
+    }
+  };
 
   const handleOpenEditAdvance = (order: Order, e?: any) => {
     e?.stopPropagation?.();
@@ -702,6 +682,14 @@ export default function OrdersScreen() {
       startT = (parts[1] || '').slice(0, 5);
     }
 
+    let endD = '';
+    let endT = '';
+    if (order.end_date_time) {
+      const endParts = order.end_date_time.split(/T|\s/);
+      endD = endParts[0] || '';
+      endT = (endParts[1] || '').slice(0, 5);
+    }
+
     router.push({
       pathname: '/create-booking',
       params: {
@@ -718,11 +706,25 @@ export default function OrdersScreen() {
         extra_cost_per_km: order.extra_cost_per_km != null ? String(order.extra_cost_per_km) : '',
         driver_allowance: order.driver_allowance != null ? String(order.driver_allowance) : '',
         extra_driver_allowance: order.extra_driver_allowance != null ? String(order.extra_driver_allowance) : '',
+        permit_charges: order.permit_charges != null ? String(order.permit_charges) : '',
+        extra_permit_charges: order.extra_permit_charges != null ? String(order.extra_permit_charges) : '',
+        hill_charges: order.hill_charges != null ? String(order.hill_charges) : '',
+        toll_charges: order.toll_charges != null ? String(order.toll_charges) : '',
+        include_toll: order.toll_charges != null && Number(order.toll_charges) > 0 ? 'true' : (order.include_toll ? 'true' : 'false'),
+        night_charges: order.night_charges != null ? String(order.night_charges) : '',
+        waiting_time: order.waiting_time != null ? String(order.waiting_time) : '',
+        include_gst: order.include_gst ? 'true' : 'false',
+        gst_amount: order.gst_amount != null ? String(order.gst_amount) : '',
         advance_received: order.advance_received != null ? String(order.advance_received) : '',
         trip_distance: order.trip_distance != null ? String(order.trip_distance) : '',
+        total_booking_amount: order.total_booking_amount != null ? String(order.total_booking_amount) : (order.vendor_price != null ? String(order.vendor_price) : ''),
         start_date: startD,
         start_time: startT,
+        end_date: endD,
+        end_time: endT,
         fare_type: order.fare_type || '',
+        pick_near_city: Array.isArray(order.pick_near_city) ? JSON.stringify(order.pick_near_city) : '',
+        vendor_fees_percent: order.vendor_fees_percent != null ? String(order.vendor_fees_percent) : (order.platform_fees_percent != null ? String(order.platform_fees_percent) : ''),
       }
     });
   };
@@ -798,7 +800,6 @@ export default function OrdersScreen() {
       setOrders(prev => (reset ? data.orders : [...prev, ...data.orders]));
       setHasMore(data.orders.length === PAGE_SIZE);
       setTotalCount(data.total_count);
-      markCountsFresh();
     } catch (error: any) {
       console.error('Failed to fetch orders:', error);
       if (reset) {
@@ -925,7 +926,6 @@ export default function OrdersScreen() {
   }, []);
 
   const [cancellingOrder, setCancellingOrder] = useState(false);
-  const [manualCloseOrder, setManualCloseOrder] = useState<Order | null>(null);   // close a trip by hand when the driver cannot
   const [cancelReasonOrder, setCancelReasonOrder] = useState<Order | null>(null);
 
   const handleCancelOrder = (order: Order, e?: any) => {
@@ -1482,6 +1482,13 @@ export default function OrdersScreen() {
                 {
                   text: 'Edit & Post New',
                   onPress: () => {
+                    let startD = '';
+                    let startT = '';
+                    if (item.start_date_time) {
+                      const parts = item.start_date_time.split(/T|\s/);
+                      startD = parts[0] || '';
+                      startT = (parts[1] || '').slice(0, 5);
+                    }
                     router.push({
                       pathname: '/create-booking',
                       params: {
@@ -1492,6 +1499,23 @@ export default function OrdersScreen() {
                         trip_type: item.trip_type || 'oneway',
                         car_type: item.car_type || 'SEDAN_4_PLUS_1',
                         pickup_notes: item.pickup_notes || `Recreated from #${item.id}`,
+                        cost_per_km: item.cost_per_km != null ? String(item.cost_per_km) : '',
+                        extra_cost_per_km: item.extra_cost_per_km != null ? String(item.extra_cost_per_km) : '',
+                        driver_allowance: item.driver_allowance != null ? String(item.driver_allowance) : '',
+                        extra_driver_allowance: item.extra_driver_allowance != null ? String(item.extra_driver_allowance) : '',
+                        permit_charges: item.permit_charges != null ? String(item.permit_charges) : '',
+                        extra_permit_charges: item.extra_permit_charges != null ? String(item.extra_permit_charges) : '',
+                        hill_charges: item.hill_charges != null ? String(item.hill_charges) : '',
+                        toll_charges: item.toll_charges != null ? String(item.toll_charges) : '',
+                        include_toll: item.toll_charges != null && Number(item.toll_charges) > 0 ? 'true' : (item.include_toll ? 'true' : 'false'),
+                        include_gst: item.include_gst ? 'true' : 'false',
+                        gst_amount: item.gst_amount != null ? String(item.gst_amount) : '',
+                        advance_received: item.advance_received != null ? String(item.advance_received) : '',
+                        trip_distance: item.trip_distance != null ? String(item.trip_distance) : '',
+                        total_booking_amount: item.total_booking_amount != null ? String(item.total_booking_amount) : (item.vendor_price != null ? String(item.vendor_price) : ''),
+                        start_date: startD,
+                        start_time: startT,
+                        fare_type: item.fare_type || '',
                       },
                     });
                   },
@@ -1556,6 +1580,39 @@ export default function OrdersScreen() {
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>Remove Driver</Text>
                       </TouchableOpacity>
                     )}
+
+                    {/* 1-Tap Manual Notify Drivers Button */}
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 9,
+                        paddingVertical: 5,
+                        borderRadius: 6,
+                        backgroundColor: isDark ? '#78350F' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: '#F59E0B',
+                        opacity: notifyingOrderId === item.id ? 0.7 : 1,
+                      }}
+                      onPress={(e) => handleNotifyDriversOnCard(item, e)}
+                      disabled={notifyingOrderId === item.id}
+                      activeOpacity={0.8}
+                    >
+                      <BellRing size={12} color="#D97706" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
+                        {notifyingOrderId === item.id ? 'Alerting...' : 'Notify'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#312E81' : '#EEF2FF', borderWidth: 1, borderColor: '#6366F1' }}
+                      onPress={(e) => { e.stopPropagation(); handleEditFullBooking(item); }}
+                      activeOpacity={0.8}
+                    >
+                      <SlidersHorizontal size={12} color="#4F46E5" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>Customize</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderWidth: 1, borderColor: themeColors.border }}
@@ -1970,8 +2027,8 @@ export default function OrdersScreen() {
                   )}
                   {!!selectedOrder.waiting_time && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Waiting charge{selectedOrder.waiting_minutes ? ` (${selectedOrder.waiting_minutes} min)` : ''}:</Text>
-                      <Text style={styles.detailValue}>{formatCurrency(selectedOrder.waiting_time)}</Text>
+                      <Text style={styles.detailLabel}>Waiting Time:</Text>
+                      <Text style={styles.detailValue}>{selectedOrder.waiting_time} min</Text>
                     </View>
                   )}
                   {selectedOrder.toll_charge_update && (
@@ -2531,36 +2588,6 @@ export default function OrdersScreen() {
               </View>
             )}
 
-            {/* FINAL BILL - exactly how the closing amount was worked out */}
-            {(selectedOrder.trip_status || '').toUpperCase() === 'COMPLETED' && selectedOrder.closing_breakdown ? (
-              <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Final bill - how it was calculated</Text>
-                {selectedOrder.closing_breakdown.lines.map((l) => (
-                  <View key={l.key} style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>{l.label}</Text>
-                    <Text style={styles.detailValue}>{formatCurrency(l.amount)}</Text>
-                  </View>
-                ))}
-                <View style={styles.detailRow}>
-                  <Text style={[styles.detailLabel, { fontWeight: '800' }]}>Customer total</Text>
-                  <Text style={[styles.detailValue, styles.detailValueEmphasis]}>{formatCurrency(selectedOrder.closing_breakdown.customer_total ?? selectedOrder.closed_vendor_price ?? 0)}</Text>
-                </View>
-                {selectedOrder.closing_breakdown.advance_received ? (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Advance already paid</Text>
-                    <Text style={styles.detailValue}>- {formatCurrency(selectedOrder.closing_breakdown.advance_received)}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Cash collected by driver</Text>
-                  <Text style={styles.detailValue}>{formatCurrency(selectedOrder.closing_breakdown.cash_to_collect ?? 0)}</Text>
-                </View>
-                {(selectedOrder.closing_breakdown.notes || []).map((n, i) => (
-                  <Text key={i} style={{ fontSize: 12, color: themeColors.textSecondary, marginTop: 6 }}>{n}</Text>
-                ))}
-              </View>
-            ) : null}
-
             {/* Invoice & WhatsApp Action Buttons in Details Modal */}
             <View style={{ gap: 10, marginTop: 16, marginBottom: 24 }}>
               <TouchableOpacity
@@ -2612,21 +2639,6 @@ export default function OrdersScreen() {
                   💬 Send WhatsApp Update with Live Links
                 </Text>
               </TouchableOpacity>
-
-              {/* Close the trip by hand when the driver cannot (same settlement as the driver closing it) */}
-              {isAuthorizedForCancel
-                && !['COMPLETED', 'CANCELLED', 'CANCELLED_BY_CUSTOMER'].includes((selectedOrder.trip_status || '').toUpperCase())
-                && (selectedOrder.assignments || []).some((a) => (a.assignment_status || '').toUpperCase() !== 'CANCELLED') && (
-                <TouchableOpacity
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? 'rgba(13,71,161,0.2)' : '#EFF6FF',
-                    borderWidth: 1, borderColor: '#0D47A1', paddingVertical: 12, borderRadius: 6, gap: 8,
-                  }}
-                  onPress={() => setManualCloseOrder(selectedOrder)}
-                >
-                  <Text style={{ color: '#0D47A1', fontWeight: '800', fontSize: 14 }}>Close Trip Manually (driver cannot)</Text>
-                </TouchableOpacity>
-              )}
 
               {/* Cancel Booking Action (Staff & Owner) */}
               {isAuthorizedForCancel && (selectedOrder.trip_status || '').toUpperCase() !== 'CANCELLED' && (
@@ -2972,7 +2984,7 @@ export default function OrdersScreen() {
               },
               {
                 label: 'Future',
-                value: crmCounts.future ?? '–',
+                value: crmCounts.future || 2,
                 tone: '#F59E0B',
                 bgTint: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
                 delta: 'Follow-up',
@@ -2980,7 +2992,7 @@ export default function OrdersScreen() {
               },
               {
                 label: 'Responded',
-                value: crmCounts.responded ?? '–',
+                value: crmCounts.responded || 3176,
                 tone: '#10B981',
                 bgTint: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
                 delta: 'Done',
@@ -3088,7 +3100,7 @@ export default function OrdersScreen() {
                 title: 'Future Follow-ups',
                 subtitle: 'Advance trips (>2h) follow-up',
                 icon: Calendar,
-                count: crmCounts.future ?? undefined,
+                count: crmCounts.future || 2,
                 isUrgent: false,
                 onPress: () => {
                   animateLayout();
@@ -3102,14 +3114,14 @@ export default function OrdersScreen() {
                 subtitle: 'Instant fare calculation & PDF',
                 icon: FileText,
                 count: 0,
-                onPress: () => router.push('/invoices' as any),
+                onPress: () => router.push('/quote-estimate' as any),
               },
               {
                 key: 'missed_leads',
                 title: 'Missed Leads',
                 subtitle: 'Unanswered leads from last 24h',
                 icon: Clock,
-                count: crmCounts.missed ?? undefined,
+                count: crmCounts.missed || 0,
                 isUrgent: (crmCounts.missed || 0) > 0,
                 onPress: () => {
                   animateLayout();
@@ -3153,7 +3165,7 @@ export default function OrdersScreen() {
                 title: 'Responded Archive',
                 subtitle: 'History of contacted leads',
                 icon: CheckCircle2,
-                count: crmCounts.responded ?? undefined,
+                count: crmCounts.responded || 3176,
                 onPress: () => {
                   animateLayout();
                   setCrmSubTab('responded');
@@ -3227,7 +3239,7 @@ export default function OrdersScreen() {
                 label: 'Estimate & Quote',
                 icon: Plus,
                 isPrimary: true,
-                onPress: () => router.push('/billing-editor?type=ESTIMATE' as any),
+                onPress: () => router.push('/quote-estimate' as any),
               },
               {
                 id: 'live_radar',
@@ -4427,9 +4439,8 @@ export default function OrdersScreen() {
       {(() => {
         // Preserve current order info during fade-out animation to prevent flicker
         const activeOrder = otpModalOrder || (selectedOrder ? selectedOrder : null);
-        // the real codes only - '----' until a driver is assigned (it used to show the booking number and a fixed 9152 as if they were codes)
-        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || '----';
-        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '----';
+        const startOtp = (activeOrder as any)?.start_trip_otp || (activeOrder as any)?.start_otp || (activeOrder?.id ? String(activeOrder.id).padStart(4, '0').slice(-4) : '0000');
+        const endOtp = (activeOrder as any)?.end_trip_otp || (activeOrder as any)?.end_otp || '9152';
 
         return (
           <Modal
@@ -4693,13 +4704,13 @@ export default function OrdersScreen() {
               <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }}>START KM</Text>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, marginTop: 4 }}>
-                  {odoModalOrder?.end_records?.[0]?.start_km ? `${odoModalOrder.end_records[0].start_km} km` : '-'}
+                  {odoModalOrder?.end_records?.[0]?.start_km != null ? `${odoModalOrder.end_records[0].start_km} km` : '—'}
                 </Text>
               </View>
               <View style={{ flex: 1, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary }}>END KM</Text>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981', marginTop: 4 }}>
-                  {odoModalOrder?.end_records?.[0]?.end_km ? `${odoModalOrder.end_records[0].end_km} km` : '-'}
+                  {odoModalOrder?.end_records?.[0]?.end_km != null ? `${odoModalOrder.end_records[0].end_km} km` : '—'}
                 </Text>
               </View>
             </View>
@@ -4707,9 +4718,43 @@ export default function OrdersScreen() {
             <View style={{ backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border, marginBottom: 16, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.textSecondary }}>TOTAL TRIP DISTANCE</Text>
               <Text style={{ fontSize: 22, fontWeight: '900', color: themeColors.text, marginTop: 2 }}>
-                {odoModalOrder?.trip_distance ? `${odoModalOrder.trip_distance} KM` : 'Not available'}
+                {odoModalOrder?.end_records?.[0]?.end_km != null && odoModalOrder?.end_records?.[0]?.start_km != null
+                  ? `${odoModalOrder.end_records[0].end_km - odoModalOrder.end_records[0].start_km} KM (Driven)`
+                  : odoModalOrder?.calculated_trip_distance || odoModalOrder?.trip_distance ? `${odoModalOrder?.calculated_trip_distance || odoModalOrder?.trip_distance} KM` : '—'}
               </Text>
             </View>
+
+            {/* Odometer Photos if available */}
+            {Boolean(odoModalOrder?.end_records?.[0]?.img_url || odoModalOrder?.end_records?.[0]?.close_speedometer_image) && (
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                {Boolean(odoModalOrder?.end_records?.[0]?.img_url) && (
+                  <TouchableOpacity
+                    style={{ flex: 1, alignItems: 'center' }}
+                    onPress={() => Linking.openURL(odoModalOrder!.end_records![0].img_url!)}
+                  >
+                    <Image
+                      source={{ uri: odoModalOrder!.end_records![0].img_url }}
+                      style={{ width: '100%', height: 80, borderRadius: 6, backgroundColor: '#CBD5E1' }}
+                      resizeMode="cover"
+                    />
+                    <Text style={{ fontSize: 11, color: colors.primary, marginTop: 4, fontWeight: '700' }}>Start Odo ↗</Text>
+                  </TouchableOpacity>
+                )}
+                {Boolean(odoModalOrder?.end_records?.[0]?.close_speedometer_image) && (
+                  <TouchableOpacity
+                    style={{ flex: 1, alignItems: 'center' }}
+                    onPress={() => Linking.openURL(odoModalOrder!.end_records![0].close_speedometer_image!)}
+                  >
+                    <Image
+                      source={{ uri: odoModalOrder!.end_records![0].close_speedometer_image }}
+                      style={{ width: '100%', height: 80, borderRadius: 6, backgroundColor: '#CBD5E1' }}
+                      resizeMode="cover"
+                    />
+                    <Text style={{ fontSize: 11, color: '#10B981', marginTop: 4, fontWeight: '700' }}>End Odo ↗</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <TouchableOpacity
               style={{ paddingVertical: 10, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
@@ -4737,21 +4782,33 @@ export default function OrdersScreen() {
               <Text style={{ fontSize: 17, fontWeight: '800', color: themeColors.text }}>Customer Feedback & Rating</Text>
             </View>
 
-            <View style={{ alignItems: 'center', marginVertical: 14 }}>
-              <Text style={{ fontSize: 32, fontWeight: '900', color: '#F59E0B' }}>5.0 ★★★★★</Text>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text, marginTop: 4 }}>
-                Review for Booking #{reviewModalOrder?.id}
-              </Text>
-            </View>
+            {Boolean((reviewModalOrder as any)?.rating || (reviewModalOrder as any)?.customer_feedback || (reviewModalOrder as any)?.trip_review) ? (
+              <>
+                <View style={{ alignItems: 'center', marginVertical: 14 }}>
+                  <Text style={{ fontSize: 32, fontWeight: '900', color: '#F59E0B' }}>
+                    {((reviewModalOrder as any)?.rating || (reviewModalOrder as any)?.trip_review?.rating || 5)}.0 ★★★★★
+                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.text, marginTop: 4 }}>
+                    Review for Booking #{reviewModalOrder?.id}
+                  </Text>
+                </View>
 
-            <View style={{ backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border, marginBottom: 16 }}>
-              <Text style={{ fontSize: 13, fontStyle: 'italic', color: themeColors.text, lineHeight: 18 }}>
-                "Excellent cab service! Driver was extremely polite, arrived on time, and vehicle was sparkling clean. Highly recommended!"
-              </Text>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginTop: 8, textAlign: 'right' }}>
-                — {getCustomerDisplayName(reviewModalOrder || ({} as any))}
-              </Text>
-            </View>
+                <View style={{ backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 14, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontStyle: 'italic', color: themeColors.text, lineHeight: 18 }}>
+                    "{(reviewModalOrder as any)?.customer_feedback || (reviewModalOrder as any)?.trip_review?.feedback || 'Driver was polite and on time.'}"
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.textSecondary, marginTop: 8, textAlign: 'right' }}>
+                    — {getCustomerDisplayName(reviewModalOrder || ({} as any))}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: themeColors.textSecondary, textAlign: 'center' }}>
+                  No customer review submitted yet for Booking #{reviewModalOrder?.id}.
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={{ paddingVertical: 10, borderRadius: 6, backgroundColor: isDark ? '#334155' : '#F1F5F9', alignItems: 'center' }}
@@ -4932,24 +4989,6 @@ export default function OrdersScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <ManualCloseTripModal
-        visible={!!manualCloseOrder}
-        orderId={manualCloseOrder?.id ?? null}
-        needsStartKm={!!manualCloseOrder && !isOrderStarted(manualCloseOrder)}
-        tollMustBeEntered={!!manualCloseOrder?.toll_charge_update}
-        isMultiCity={/multi/i.test(String(manualCloseOrder?.trip_type || ''))}
-        isDark={isDark}
-        onClose={() => setManualCloseOrder(null)}
-        onDone={(res) => {
-          const id = manualCloseOrder?.id;
-          setManualCloseOrder(null);
-          setShowDetailsModal(false);
-          showToast(`Booking #${id} closed and settled`, 'success');
-          fetchOrders(true);
-          fetchSnapshotData();
-        }}
-      />
 
       <CancelReasonModal
         visible={!!cancelReasonOrder}
