@@ -34,6 +34,7 @@
     {"id": "driver-number-opens-at-time", "file": "driver-app/components/CustomerNumberCountdown.tsx", "must_contain": ["Customer number opens at"], "why": "owner request: show the clock time the customer number opens, in the number's place", "since": "2026-10-16"},
     {"id": "driver-tab-counts-no-false-zero", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["ordersLoaded ?", "historyLoaded ?"], "why": "tab counters show a dash until data arrives (zero flash)", "since": "2026-10-16"},
     {"id": "driver-waiting-timer", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["<WaitingTimer", "<SosButton"], "why": "waiting stopwatch (pre-fills End Trip) and emergency SOS on the running trip card", "since": "2026-10-16"},
-    {"id": "driver-real-version-line", "file": "driver-app/app/(tabs)/settings.tsx", "must_contain": ["Update: built-in version"], "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new", "since": "2026-10-16"}
+    {"id": "driver-real-version-line", "file": "driver-app/app/(tabs)/settings.tsx", "must_contain": ["Update: built-in version"], "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new", "since": "2026-10-16"},
+    {"id": "driver-offline-banner-mounted", "file": "driver-app/app/_layout.tsx", "must_contain": ["<OfflineBanner />"], "why": "a red 'No internet' strip with Retry (was built but never mounted)", "since": "2026-10-16"}
   ]
 }

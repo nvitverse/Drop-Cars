@@ -22,6 +22,7 @@ import { setupNotificationListeners } from '@/services/notifications/notificatio
 import WebAlertHost, { installWebAlert } from '@/components/WebAlertHost';
 import OtaUpdateGate from '@/components/OtaUpdateGate';
 import ForceUpdateGate from '@/components/ForceUpdateGate';
+import OfflineBanner from '@/components/OfflineBanner';
 import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import { installUiTranslation } from '@/utils/uiTranslate';
 
@@ -122,6 +123,7 @@ export default function RootLayout() {
                   <WebAlertHost />
                   <OtaUpdateGate />
                   <ForceUpdateGate app="driver" />
+                  <OfflineBanner />
                   </CarDriverProvider>
                   </BubbleProvider>
                 </NotificationProvider>

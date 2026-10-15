@@ -1,46 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// A red strip at the top of the screen when the phone cannot reach the server ("No internet"), with a Retry button. It only
+// pings the server (no native module), so it works through normal OTA updates. Any answer from the server - even an error
+// page - counts as online; only a network failure or a 4 second silence counts as offline.
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, AppState } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WifiOff, RefreshCw } from 'lucide-react-native';
-import NetInfo from '@react-native-community/netinfo';
-import { useTheme } from '@/hooks/useTheme';
+
+const PING_URL = 'https://drop-cars-api-207918408785.asia-south2.run.app/';
 
 export const OfflineBanner: React.FC = () => {
-  const { colors } = useTheme();
-  const [isConnected, setIsConnected] = useState<boolean | null>(true);
+  const insets = useSafeAreaInsets();
+  const [isOffline, setIsOffline] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsConnected(state.isConnected);
-    });
-    return () => unsubscribe();
+  const check = useCallback(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      await fetch(PING_URL, { method: 'HEAD', signal: controller.signal });
+      setIsOffline(false);
+    } catch {
+      setIsOffline(true);
+    } finally {
+      clearTimeout(timer);
+    }
   }, []);
 
-  const handleRetry = () => {
+  useEffect(() => {
+    check();
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') check(); });
+    const id = setInterval(check, 30000);
+    return () => { sub.remove(); clearInterval(id); };
+  }, [check]);
+
+  const retry = async () => {
     setRetrying(true);
-    NetInfo.fetch().then((state) => {
-      setIsConnected(state.isConnected);
-      setRetrying(false);
-    });
+    await check();
+    setRetrying(false);
   };
 
-  if (isConnected !== false) return null;
+  if (!isOffline) return null;
 
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
       <View style={styles.leftRow}>
         <WifiOff size={15} color="#FFFFFF" />
-        <Text style={styles.text} numberOfLines={1}>
-          No internet — showing last saved data
-        </Text>
+        <Text style={styles.text} numberOfLines={1}>No internet - please check your network</Text>
       </View>
-      <TouchableOpacity
-        style={styles.retryBtn}
-        onPress={handleRetry}
-        disabled={retrying}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.retryBtn} onPress={retry} disabled={retrying} activeOpacity={0.7}>
         <RefreshCw size={12} color="#FFFFFF" />
         <Text style={styles.retryText}>{retrying ? 'Checking...' : 'Retry'}</Text>
       </TouchableOpacity>
@@ -50,6 +58,7 @@ export const OfflineBanner: React.FC = () => {
 
 const styles = StyleSheet.create({
   banner: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999,
     backgroundColor: '#DC2626',
     flexDirection: 'row',
     alignItems: 'center',
