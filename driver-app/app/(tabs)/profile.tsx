@@ -1257,6 +1257,21 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+
+          {/* The only way into the "Request Profile Update" popup below (Sep 21 build had it; the button was dropped when the apps were merged) */}
+          <TouchableOpacity
+            style={[s.adminEditBanner, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 14 }]}
+            onPress={() => setShowEditRequestModal(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <ShieldCheck size={22} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.adminEditTitle, { color: colors.text }]}>Need to Change Profile Details?</Text>
+              <Text style={[s.adminEditSub, { color: colors.textSecondary }]}>Submit correction request to Drop Cars Admin Team</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
       </ScrollView>

@@ -12,6 +12,7 @@ export default function ReviewQrCard({ orderId }: { orderId: number | string }) 
   const { colors } = useTheme();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -24,9 +25,20 @@ export default function ReviewQrCard({ orderId }: { orderId: number | string }) 
       }
     })();
     return () => { alive = false; };
-  }, [orderId]);
+  }, [orderId, reloadKey]);
 
-  if (failed) return null; // never get in the way of closing out a trip
+  // never get in the way of closing out a trip - but never vanish silently either (it looked like the feature was removed)
+  if (failed) {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text }]}>⭐ Customer rating QR</Text>
+        <Text style={[styles.sub, { color: colors.textSecondary }]}>The QR could not load (check your internet).</Text>
+        <TouchableOpacity onPress={() => { setFailed(false); setReloadKey((k) => k + 1); }}>
+          <Text style={{ color: colors.primary, fontFamily: 'Inter-Bold', fontSize: 13 }}>Try again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
