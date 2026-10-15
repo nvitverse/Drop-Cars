@@ -90,3 +90,14 @@ jobs:
         run: npm ci || npm install
       - name: Type check
         run: npx tsc --noEmit
+
+  regression-guard:
+    name: Regression guard (fixes that were undone once)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Registered fixes are still there, no raw Modal with text boxes, no made-up numbers
+        run: node scripts/regression-guard.js

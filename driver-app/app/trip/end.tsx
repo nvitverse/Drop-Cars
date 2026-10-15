@@ -198,7 +198,7 @@ export default function EndTripScreen() {
       
       if (assignment_id) {
         // Create a dummy contact number since it's no longer required from user
-        const dummyContact = '0000000000';
+        const dummyContact = '';   // the server does not use a contact number here (the customer is identified by the booking)
         tripEndResponse = await endTrip(
           parseInt(params.order_id || ''),
           parseInt(endKm, 10),

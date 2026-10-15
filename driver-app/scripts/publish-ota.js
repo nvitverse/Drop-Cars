@@ -31,6 +31,25 @@ const opt = (name, def) => {
 const app = opt('app', 'driver');
 const message = opt('message', '');
 const root = path.resolve(__dirname, '..');
+
+// ---- publish gate (scripts/publish-guard.js): no phone update from a stale / uncommitted / unpushed folder, none that would drop what is
+// live, none that undoes a registered fix. Inside the repo it runs here; from a temporary copy (no .git) the wrapper script has already run
+// it and passes the commit in OTA_GUARD_SHA.
+let guardSha = process.env.OTA_GUARD_SHA || '';
+const repoGuard = path.resolve(root, '..', 'scripts', 'publish-guard.js');
+if (!args.includes('--list') && !args.includes('--rollback')) {
+  if (fs.existsSync(repoGuard) && !guardSha) {
+    const g = spawnSync(process.execPath, [repoGuard, '--app', app === 'driver' ? 'driver' : app], { encoding: 'utf8' });
+    process.stdout.write(g.stdout || '');
+    process.stderr.write(g.stderr || '');
+    if (g.status !== 0) process.exit(1);
+    const m = /GITSHA=([0-9a-f]{40})/.exec(g.stdout || '');
+    guardSha = m ? m[1] : '';
+  } else if (!guardSha && process.env.OTA_UNSAFE !== '1') {
+    console.error('STOPPED: this folder has no repository, so the publish gate cannot run here. Run scripts\publish-driver-ota.ps1 (it checks first, then publishes), or set OTA_UNSAFE=1 in an emergency and tell the owner.');
+    process.exit(1);
+  }
+}
 const outDir = path.join(root, 'dist-ota');
 
 const env = { ...process.env };
@@ -114,7 +133,7 @@ const manifest = {
   runtimeVersion,
   launchAsset,
   assets,
-  metadata: { message: message === true ? '' : String(message) },
+  metadata: { message: message === true ? '' : String(message), gitSha: guardSha || null },
   extra: { expoClient: expoConfig },
 };
 

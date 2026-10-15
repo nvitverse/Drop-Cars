@@ -4,6 +4,13 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Claude, 2026-10-15 - regression audit + guards so overwritten fixes cannot return silently
+- Audit report: `REGRESSION_AUDIT_2026-10-14.md` (Desktop\SAAS). Restored: Notification Sounds screen, place-search memory rule, Driver trip-code rule + keyboard-safe pop-ups, Customer App keyboard-safe modals, Quote & Estimate luxury screen, AG Directives UI in Tasks. Removed fake-data screens (customer-insights, face-audit; our-fleet-requests no longer in the menu).
+- NEW guards: `docs/FIX_REGISTRY.json` + `scripts/regression-guard.js` (CI job `regression-guard`), `backend/tests/test_route_snapshot.py` (+ `routes_snapshot.txt`), `scripts/publish-guard.js` used by `scripts/publish-driver-ota.ps1` / `publish-admin-ota.ps1` (clean + pushed + contains the live update + guard passes), `publish-ota.js` records `gitSha` in the update. CLAUDE.md sections 1 and 7 rewritten (section 1 used to name the wrong repository). Stale folders carry `STALE_COPY_DO_NOT_EDIT.txt`. Prompt for Antigravity: `ANTIGRAVITY_PROMPT_NoOverride_Rules.md`.
+- Caught by the existing undefined-names test: my sweep edit referenced a removed variable (`completed`) - fixed before any deploy.
+
+---
+
 ### Claude, 2026-10-14 (b) - trips are never closed by a timer; no-show; repost approval; km correction; per-account rate limit
 - **Branch:** `deploy/merged-2026-10-06` (commits e96b24d, 427c365, plus the Vendor splash/APK commit ac6f59c and 34b8413). **Not deployed yet when this was written** - check Cloud Run label `git-sha` before assuming it is live; if you deploy an OLDER backend you will bring the old auto-close and the shared rate limit back (see the 2026-10-12 regression note).
 - **Incident:** Booking 429 (Dharmapuri -> Bengaluru): driver could not start the trip with the customer's code, the trip was then closed by itself and the Rs 500 hold stayed with the platform. Causes found: (1) `limiter` counted by the Cloud Run front-end address = ONE shared bucket for everybody ("5 trip starts per 10 minutes" for the whole platform, login 5/minute for everyone) -> `app/core/limiter.py` now counts per signed-in account, else the real client address; (2) `complete_no_start_assignments` auto-completed a not-started trip 24 h after pickup and kept the driver's hold -> REMOVED. Do not bring an automatic close back.

@@ -7,9 +7,10 @@
 ---
 
 ## 1. Primary Repository: Single Source of Truth
-- **Root Repository**: `C:\Users\Administrator\Desktop\Drop-Cars-Full-Repo`
-- **Live Dev Server**: Expo running on `localhost:8082` (`admin-panel/`)
-- All sessions must write to and read directly from this repository.
+- **THE working copy: `C:\gtmp\wt-merged`, branch `deploy/merged-2026-10-06`** (a git worktree of the same repository). Everything that goes to phones or to Cloud Run is built from it - nothing else.
+- **These are STALE COPIES and must never be edited, built, deployed or published from**: `Desktop\dropcars-review\*` (admin, backend, vendor/Driver-App, vendor/Vendor App), the other worktrees (`Desktop\Drop-Cars-Full-Repo` on `feat/brand-language-help-round4`, `C:\gtmp\wt-antigravity`, `wt-autopost`, `wt-chat`, `wt-eval`, `wt-r4`, `wt-tariff`), `C:\DPrev` and `C:\VBuild` (preview / build scratch copies). They hold older code; on 2026-10-02, 10-06 and 10-11 a deploy or OTA from one of them erased work that was live (see `AI_COLLABORATION_LOG.md`). Each has a `STALE_COPY_DO_NOT_EDIT.txt`.
+- If you started in a stale folder: `git fetch`, switch to `C:\gtmp\wt-merged` (or `git worktree add` a new one from `deploy/merged-2026-10-06`), and bring your work over with `git cherry-pick` / `git merge` - never by copying files.
+- Phone updates: ONLY `scripts\publish-driver-ota.ps1` / `scripts\publish-admin-ota.ps1`. Backend: ONLY `scripts\deploy-backend.ps1`. They check that the folder is committed, pushed, contains what is live, and that no registered fix was undone.
 
 ---
 
@@ -37,6 +38,14 @@
 
 ## 5. Communication with Other Sessions
 - If creating a major refactor or adding a new global component, add a brief note in `AI_COLLABORATION_LOG.md` so other Claude/Antigravity sessions are instantly aware.
+
+---
+
+## 7. The regression guard (added 2026-10-15) - how fixes stay fixed
+- `docs/FIX_REGISTRY.json` lists every fix that has ever been undone by an old copy of a file (file + the text that must / must not be there + why). `node scripts/regression-guard.js` checks it, plus: no react-native `Modal` in a file with a text box (use `@/components/KeyboardSafe`), no made-up phone numbers in app code. It runs in CI and inside both publish scripts.
+- **When you fix something that matters, add a line to the registry in the same commit.** When a guard check fails, do NOT silence it: an older copy overwrote a fix - restore the fix (`git log -S"<text>"` shows the commit that added it).
+- `backend/tests/test_route_snapshot.py` fails if an API route that existed is gone (an older backend over a newer one). After adding routes run `python -m scripts.update_route_snapshot` from `backend/` (it only adds lines).
+- Never `git checkout <old>` or copy a whole file from another folder over a file: take hunks (`git merge`, `git cherry-pick`, `git apply --3way`).
 
 ---
 
