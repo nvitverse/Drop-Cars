@@ -1282,7 +1282,7 @@ def get_driver_assigned_orders(db: Session, driver_id: str) -> List[dict]:
                 # customer via the vendor's number below in the meantime.
                 "customer_number": get_masked_customer_number(db, order, assignment),
                 **customer_number_reveal_info(db, order, assignment),
-                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else "Self-Sourced Booking (No Vendor)",
+                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else None,
                 "vendor_primary_number" : vendor_detail_show.primary_number if vendor_detail_show else None,
                 "vendor_secondary_number" : vendor_detail_show.secondary_number if vendor_detail_show else None,
                 "pickup_drop_location": order.pickup_drop_location,
@@ -1362,8 +1362,8 @@ def get_driver_assigned_orders_completed_trip(db: Session, driver_id: str) -> Li
                 # Trip is already COMPLETED (see the query filter above) -
                 # no reveal-timing concern here, unlike the active-bookings
                 # listing above.
-                "customer_number": order.customer_number,
-                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else "Self-Sourced Booking (No Vendor)",
+                "customer_number": "",  # owner rule 2026-10-15: a finished trip never shows the customer number
+                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else None,
                 "vendor_primary_number" : vendor_detail_show.primary_number if vendor_detail_show else None,
                 "vendor_secondary_number" : vendor_detail_show.secondary_number if vendor_detail_show else None,
                 "pickup_drop_location": order.pickup_drop_location,
@@ -1419,7 +1419,7 @@ def get_driver_assigned_orders_report(db: Session, driver_id: str, order_id : in
                     
                     #Order details
                     "customer_name": order.customer_name,
-                    "customer_number": order.customer_number,
+                    "customer_number": "",  # owner rule 2026-10-15: a finished trip never shows the customer number
                     "pickup_drop_location": order.pickup_drop_location,
                     "start_date_time": order.start_date_time,
                     "trip_type": order.trip_type if order.trip_type else "Unknown",
@@ -1435,7 +1435,7 @@ def get_driver_assigned_orders_report(db: Session, driver_id: str, order_id : in
 
                     "updated_toll_charge": order.updated_toll_charges,
                     "customer_price": order.closed_vendor_price,
-                    "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else "Self-Sourced Booking (No Vendor)",
+                    "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else None,
                     "vendor_primary_number" : vendor_detail_show.primary_number if vendor_detail_show else None,
                     "vendor_secondary_number" : vendor_detail_show.secondary_number if vendor_detail_show else None,
                     
@@ -1466,7 +1466,7 @@ def get_driver_assigned_orders_report(db: Session, driver_id: str, order_id : in
                 
                 #Order details
                 "customer_name": order.customer_name,
-                "customer_number": order.customer_number,
+                "customer_number": "",  # owner rule 2026-10-15: a finished trip never shows the customer number
                 "pickup_drop_location": order.pickup_drop_location,
                 "start_date_time": order.start_date_time,
                 "trip_type": order.trip_type if order.trip_type else "Unknown",
@@ -1475,7 +1475,7 @@ def get_driver_assigned_orders_report(db: Session, driver_id: str, order_id : in
                 "trip_distance": order.trip_distance if order.trip_distance else 0,
                 "toll_charges": order.updated_toll_charges if order.updated_toll_charges else (new_order.toll_charges if new_order else 0),
                 "customer_price": order.closed_vendor_price,
-                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else "Self-Sourced Booking (No Vendor)",
+                "vendor_name" : (vendor_detail_show.business_name or vendor_detail_show.full_name) if vendor_detail_show else None,
                 "vendor_primary_number" : vendor_detail_show.primary_number if vendor_detail_show else None,
                 "vendor_secondary_number" : vendor_detail_show.secondary_number if vendor_detail_show else None,
                 #New Order details

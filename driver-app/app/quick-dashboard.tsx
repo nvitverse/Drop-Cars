@@ -156,7 +156,14 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
         return;
       }
       throw new Error('owner session invalid');
-    } catch {
+    } catch (err: any) {
+      // Only a real rejection (401/403) means the fleet login is dead. A weak network or a server hiccup must NOT wipe it - that
+      // used to log the driver out of the fleet side after every trip (owner report 2026-10-15).
+      const st = err?.response?.status;
+      if (st !== 401 && st !== 403 && err?.message !== 'owner session invalid') {
+        Alert.alert(t('quickDashboard.fleetLoginNeededTitle'), 'Could not reach the server. Please check your internet and try again.');
+        return;
+      }
       // Owner login no longer valid - clear the stale session and go to the
       // owner login screen (mobile number is prefilled there).
       try {
@@ -1898,13 +1905,8 @@ export default function QuickDashboardScreen({ embedded = false }: { embedded?: 
                       <Text style={{ fontSize: 15, fontFamily: 'Inter-SemiBold', color: colors.text }}>
                         {selectedHistoryOrder.customer_name || 'Customer'}
                       </Text>
-                      <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 2 }}>
-                        {selectedHistoryOrder.customer_number || selectedHistoryOrder.customer_mobile || 'No number'}
-                      </Text>
+                      {/* Owner rule 2026-10-15: the customer's number is never shown after the trip is finished. */}
                     </View>
-                    {(selectedHistoryOrder.customer_number || selectedHistoryOrder.customer_mobile) && (
-                      <CallButton phoneNumber={selectedHistoryOrder.customer_number || selectedHistoryOrder.customer_mobile} variant="inline" />
-                    )}
                   </View>
                 </View>
 

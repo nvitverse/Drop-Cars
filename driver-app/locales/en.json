@@ -112,8 +112,8 @@
     "loginAction": "Log In",
     "switchSuggestion": "You're logged in as {name} — switch to manage this trip",
     "switchAction": "Switch",
-    "tripCompletedHint": "Trip completed! Tap Owner above to switch back and accept new bookings or trips.",
-    "tripCompletedHintNoOwner": "Trip completed! Log in to your fleet driver account to accept new bookings or trips."
+    "tripCompletedHint": "Trip completed! You are still in your duty session - your next bookings will show here.",
+    "tripCompletedHintNoOwner": "Trip completed! You are still in your duty session - your next bookings will show here."
   },
   "login": {
     "subtitle": "Driver Partner",

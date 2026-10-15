@@ -1232,7 +1232,7 @@ def get_driver_trip_history(db: Session, driver_id: str) -> List[dict]:
                 "id": record.id,
                 "order_id": record.order_id,
                 "customer_name": order.customer_name,
-                "customer_number": order.customer_number,
+                "customer_number": "",
                 "start_km": record.start_km,
                 "end_km": record.end_km,
                 "total_km": total_km,

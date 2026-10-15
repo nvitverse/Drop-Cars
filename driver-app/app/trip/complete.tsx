@@ -69,7 +69,10 @@ export default function TripCompleteScreen() {
 
   const finish = async () => {
     await SecureStore.deleteItemAsync(PENDING_COMPLETION_KEY).catch(() => {});
-    router.replace({ pathname: '/quick-dashboard', params: { tripJustCompleted: '1' } } as any);
+    // Stay in the driver's own duty area: a fleet owner who also drives goes back to the Duty tab, a duty driver to the duty
+    // dashboard - never to the fleet home (owner rule 2026-10-15).
+    const ownerToken = await SecureStore.getItemAsync('authToken').catch(() => null);
+    router.replace({ pathname: ownerToken ? '/(tabs)/duty' : '/quick-dashboard', params: { tripJustCompleted: '1' } } as any);
   };
 
   const submit = async () => {
