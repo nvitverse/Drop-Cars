@@ -50,6 +50,7 @@
     },
     "android": {
       "package": "com.pugazheas.dropcarsvendor",
+      "versionCode": 2,
       "googleServicesFile": "./assets/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
