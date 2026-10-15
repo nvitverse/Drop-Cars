@@ -11,7 +11,7 @@ param([Parameter(Mandatory = $true)][string]$Message)
 $ErrorActionPreference = "Stop"
 $root = (git rev-parse --show-toplevel).Trim()
 Set-Location $root
-$out = node scripts\publish-guard.js --app driver 2>&1 | Out-String
+$out = (cmd /c "node scripts\publish-guard.js --app driver 2>&1") | Out-String   # cmd keeps node's stderr note from being treated as an error
 Write-Host $out
 if ($LASTEXITCODE -ne 0) { Write-Host "STOPPED - nothing was published." -ForegroundColor Red; exit 1 }
 $sha = ([regex]::Match($out, "GITSHA=([0-9a-f]{40})")).Groups[1].Value
