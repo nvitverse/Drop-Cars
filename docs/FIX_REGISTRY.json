@@ -29,6 +29,7 @@
     {"id": "customer-no-invented-phone", "file": "customer-app/app/auth/index.tsx", "must_contain": ["never register with an invented number"], "why": "registration needs the customer's real mobile number", "since": "2026-10-14"},
     {"id": "driver-finished-trip-no-customer-number", "file": "backend/app/crud/order_assignments.py", "must_contain": ["a finished trip never shows the customer number"], "why": "owner rule: the customer number is never shown to the driver after the trip is completed", "since": "2026-10-15"},
     {"id": "driver-complete-stays-in-duty", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["never to the fleet home"], "why": "after a trip the duty driver stays in the duty area (no forced fleet/Owner mode)", "since": "2026-10-15"},
-    {"id": "driver-owner-switch-keeps-token", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["must NOT wipe it"], "why": "a network blip must not delete the fleet login (caused Wallet 'No authentication token')", "since": "2026-10-15"}
+    {"id": "driver-owner-switch-keeps-token", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["must NOT wipe it"], "why": "a network blip must not delete the fleet login (caused Wallet 'No authentication token')", "since": "2026-10-15"},
+    {"id": "waiting-charge-all-trip-types", "file": "backend/app/crud/end_records.py", "must_contain": ["def _waiting_applies"], "why": "waiting time is billed on every trip type except hourly rental (was multi-city only)", "since": "2026-10-16"}
   ]
 }

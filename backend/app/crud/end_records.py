@@ -99,7 +99,7 @@ def closing_breakdown_for_order(db, order) -> dict | None:
         da, eda = int(new_order.driver_allowance or 0), int(new_order.extra_driver_allowance or 0)
         if days > 1:
             da, eda = da * days, eda * days
-        waiting = int(order.waiting_time or 0) if order.trip_type == OrderTypeEnum.MULTY_CITY else 0
+        waiting = int(order.waiting_time or 0) if _waiting_applies(order) else 0
         bd = build_closing_breakdown(
             trip_type=getattr(order.trip_type, "value", order.trip_type), km_driven=km_driven, billed_km=billed, min_km_floor=floor,
             planned_km=order.trip_distance, days=days, cost_per_km=new_order.cost_per_km, extra_cost_per_km=new_order.extra_cost_per_km,
@@ -123,6 +123,11 @@ def closing_breakdown_for_order(db, order) -> dict | None:
     except Exception as e:  # noqa: BLE001
         print(f"closing breakdown rebuild failed: {e}")
         return None
+
+
+def _waiting_applies(order) -> bool:
+    """Waiting time is billed on every trip type except Hourly Rental (owner rule 2026-10-15: it used to be Multi-City only)."""
+    return order.trip_type != OrderTypeEnum.HOURLY_RENTAL
 
 
 def multicity_waiting_charge(db, minutes, included_hours=None, days=1) -> int:
@@ -598,7 +603,7 @@ async def update_end_trip_record(
         order.updated_toll_charges = None
     
     # If waiting time provided and trip type is Multy City, store it
-    if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY:
+    if waiting_time is not None and _waiting_applies(order):
         try:
             order.waiting_minutes = int(waiting_time)   # the rupee charge is worked out (and stored in waiting_time) below
         except Exception:
@@ -710,7 +715,7 @@ async def update_end_trip_record(
 
         print("Total Km is ",total_km)
         waiting_charge = 0
-        if waiting_time is not None and order.trip_type == OrderTypeEnum.MULTY_CITY:
+        if waiting_time is not None and _waiting_applies(order):
             waiting_charge = multicity_waiting_charge(
                 db, waiting_time,
                 getattr(order, "waiting_hours_included", None) or getattr(new_order, "waiting_hours_included", None),
@@ -729,7 +734,7 @@ async def update_end_trip_record(
                 extra_cost_per_km=extra_cost_per_km, driver_allowance=driver_allowance, extra_driver_allowance=extra_driver_allowance,
                 permit_charges=permit_charges, extra_permit_charges=extra_permit_charges, hill_charges=hill_charges,
                 toll_charges=toll_charges, toll_is_actual=bool(order.updated_toll_charges), night_charges=night_charges,
-                waiting_minutes=waiting_time if order.trip_type == OrderTypeEnum.MULTY_CITY else None, waiting_charge=waiting_charge,
+                waiting_minutes=waiting_time if _waiting_applies(order) else None, waiting_charge=waiting_charge,
                 fare_type=str(getattr(getattr(order, "fare_type", None), "value", getattr(order, "fare_type", None)) or "ITEMIZED"),
             )
         except Exception as _bd_err:

@@ -206,7 +206,7 @@ export default function EndTripScreen() {
           odometerPhoto,
           tollChargeUpdate === true ? parseFloat(tollCharge) : undefined,
           tollChargeUpdate,
-          isMulticity ? parseInt(waitingTime, 10) : undefined,
+          waitingTime !== '' ? parseInt(waitingTime, 10) : undefined,
           undefined, // cash collected is confirmed on the Completion page, after the bill is shown
           tripOtp,
           extraChargeItems.map((item) => ({ label: item.label, amount: parseInt(extraChargeAmounts[item.label] || '0', 10) || 0 })),
@@ -448,8 +448,8 @@ export default function EndTripScreen() {
           </View>
         )}
 
-        {/* 4. Waiting Time Input - Only show for multicity orders */}
-        {isMulticity && (
+        {/* 4. Waiting time - every trip type except hourly rental (compulsory only on multi-city; blank = no waiting) */}
+        {!tripTypeLower.includes('hour') && (
           <View style={styles.cardSection}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('tripEnd.waitingTimeMinutes')}</Text>
             <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: waitingTime ? colors.primary : colors.border }]}>
@@ -465,8 +465,13 @@ export default function EndTripScreen() {
                 <Text style={[styles.unitBadgeText, { color: colors.primary }]}>MINS</Text>
               </View>
             </View>
+            {!!waitingTime && parseInt(waitingTime, 10) >= 60 && (
+              <Text style={[styles.helperText, { color: colors.primary }]}>
+                = {Math.floor(parseInt(waitingTime, 10) / 60)} h {parseInt(waitingTime, 10) % 60} min
+              </Text>
+            )}
             <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-              {t('tripEnd.waitingTimeHelper')}
+              {isMulticity ? t('tripEnd.waitingTimeHelper') : 'Only if the customer made you wait. Leave blank for no waiting. The bill adds it at the platform waiting rate.'}
             </Text>
           </View>
         )}
