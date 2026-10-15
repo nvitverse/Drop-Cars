@@ -68,7 +68,8 @@ def _respond(parts: Dict[str, Dict[str, Any]]) -> Response:
 
 
 DEFAULT_DOWNLOAD_URL = {
-    "driver": "https://dropcars.in/assets/apk/DropCars-Driver-App.apk",
+    # our own storage (the website copy was the old v1.0.4 that never receives our updates; the website folder cannot be reached from here)
+    "driver": "https://storage.googleapis.com/drop-cars-apk-downloads/driver-app/DropCars-Driver-latest.apk",
 }
 
 
