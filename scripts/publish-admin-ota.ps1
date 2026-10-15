@@ -11,12 +11,13 @@ Set-Location $root
 # the commit of the update that is live now = "[sha1234567]" in the newest update message of the production branch
 $last = ""
 try {
-  $json = (Set-Location "$root\admin-panel"; npx eas update:list --branch production --limit 1 --json --non-interactive 2>$null | Out-String)
+  Set-Location "$root\admin-panel"
+  $json = (cmd /c "npx eas update:list --branch production --limit 1 --json --non-interactive 2>nul") | Out-String
   $m = [regex]::Match($json, "\[sha([0-9a-f]{7,40})\]"); if ($m.Success) { $last = $m.Groups[1].Value }
 } catch {}
 Set-Location $root
 $guardArgs = @("scripts\publish-guard.js", "--app", "admin"); if ($last) { $guardArgs += @("--last-sha", $last) } else { Write-Host "note: the live Admin update has no recorded commit - ancestor check skipped this once." }
-$out = node @guardArgs 2>&1 | Out-String
+$out = (cmd /c ("node " + ($guardArgs -join " ") + " 2>&1")) | Out-String
 Write-Host $out
 if ($LASTEXITCODE -ne 0) { Write-Host "STOPPED - nothing was published." -ForegroundColor Red; exit 1 }
 $sha = ([regex]::Match($out, "GITSHA=([0-9a-f]{40})")).Groups[1].Value
