@@ -351,3 +351,10 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - Website: admin password was written in the public file assets/js/ui-controls.js - removed from the source copies and from the FTP copy; stray diagnostic PHP files deleted from the FTP copy (backups in C:\gtmp\ftp_backup_cleanup_2026-10-16). FINDING: the FTP account does not reach the folder the web server actually serves (served files are older than every FTP copy) - live website changes need the correct hosting access.
 - Driver: signup messages translated; hooks/useTheme.ts added (tsc clean); OTA text-diff (scripts/ota_text_diff.py) runs inside publish-ota.js.
 - Backend: waiting_rate_per_hour / waiting_free_minutes settings for non multi-city trips (+ Admin System Config fields, test).
+
+## 2026-10-16 (Claude) - what went live (owner approved "release")
+- Backend rev 00344 (commit 1aa4369) then rev 00345 (db0cf14: Driver update link -> our storage bucket).
+- Driver OTA 77c5e7f1 (trip bill/QR/rating, duty stays, waiting timer, SOS, offline bar, profile change-request button, zero-flash, opens-at time).
+- Admin OTA on preview (group b33a3306) and production (group ae4c987a).
+- Driver APK 1.1.1 (code 31), same signing key as 1.1.0, OTA URL = our manifest: storage bucket driver-app/DropCars-Driver-latest.apk.
+- Publish scripts fixed (driver: stderr + tar pipe; admin: syntax). Website: FTP does not reach the served docroot (see memory).
