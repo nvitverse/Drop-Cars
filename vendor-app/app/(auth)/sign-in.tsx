@@ -79,7 +79,7 @@ export default function SignIn() {
       style={styles.container}
       behavior="padding"
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={styles.headerSection}>
           <LinearGradient

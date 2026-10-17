@@ -478,7 +478,7 @@ export default function SignUp() {
       style={styles.container}
       behavior="padding"
     >
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}></View>

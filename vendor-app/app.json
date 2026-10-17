@@ -50,18 +50,19 @@
     },
     "android": {
       "package": "com.pugazheas.dropcarsvendor",
-      "versionCode": 2,
+      "versionCode": 3,
       "googleServicesFile": "./assets/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0D47A1"
-      }
+      },
+      "softwareKeyboardLayoutMode": "resize"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
-      "url": "https://u.expo.dev/006d0dbc-80eb-4f34-94dc-f7357b36fd43"
+      "url": "https://drop-cars-api-207918408785.asia-south2.run.app/api/app-updates/vendor/manifest",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "owner": "dropcars"
   }

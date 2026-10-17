@@ -69,8 +69,6 @@ const LiftedContext = createContext(false);
 /** Drop-in for react-native's KeyboardAvoidingView (same props; behavior / keyboardVerticalOffset are accepted and ignored on Android). */
 export function KeyboardAvoidingView(props: ViewProps & { behavior?: 'padding' | 'height' | 'position'; keyboardVerticalOffset?: number; enabled?: boolean; contentContainerStyle?: StyleProp<ViewStyle> }) {
   const { children, style, behavior, keyboardVerticalOffset, enabled, contentContainerStyle, ...rest } = props;
-  const kb = useKeyboardHeight();
-  const alreadyLifted = useContext(LiftedContext);
   if (Platform.OS !== 'android') {
     return (
       <RNKeyboardAvoidingView behavior="padding" keyboardVerticalOffset={keyboardVerticalOffset} enabled={enabled} style={style} {...rest}>
@@ -78,27 +76,16 @@ export function KeyboardAvoidingView(props: ViewProps & { behavior?: 'padding' |
       </RNKeyboardAvoidingView>
     );
   }
-  if (alreadyLifted) {
-    return <View {...rest} style={style}>{children}</View>;
-  }
-  const flat = StyleSheet.flatten(style) || {};
-  const own = typeof flat.paddingBottom === 'number' ? flat.paddingBottom : 0;
-  return (
-    <LiftedContext.Provider value={true}>
-      <View {...rest} style={[style, kb > 0 && enabled !== false ? { paddingBottom: own + kb } : null]}>
-        {children}
-      </View>
-    </LiftedContext.Provider>
-  );
+  // On Android with softwareKeyboardLayoutMode="resize", Android OS natively resizes the window
+  // and ScrollViews scroll active inputs into view. Do not add duplicate padding.
+  return <View {...rest} style={style}>{children}</View>;
 }
 
 /** The screen root / a modal's body: lifts everything inside by the keyboard's height (always, whatever is above it). */
 export function KeyboardSafeView({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  const kb = useKeyboardHeight();
-  if (Platform.OS !== 'android') return <View style={[{ flex: 1 }, style]}>{children}</View>;
   return (
     <LiftedContext.Provider value={true}>
-      <View style={[{ flex: 1 }, style, kb > 0 ? { paddingBottom: kb } : null]}>{children}</View>
+      <View style={[{ flex: 1 }, style]}>{children}</View>
     </LiftedContext.Provider>
   );
 }

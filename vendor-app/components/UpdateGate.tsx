@@ -46,8 +46,8 @@ export default function UpdateGate() {
       setPhase('idle');
     } catch (e: any) {
       const text = String(e?.message || e || 'unknown error');
-      // no internet / server busy: stay quiet unless the person asked for the check themselves
-      if (force || /signature|runtime|channel|manifest|disabled|unsupported/i.test(text)) {
+      // routine check failure (network lag / offline): stay quiet, do not block the vendor
+      if (phase === 'downloading') {
         setMessage(`Could not download the update: ${text}`);
         setPhase('failed');
       } else {
@@ -81,7 +81,7 @@ export default function UpdateGate() {
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 20, width: '100%', maxWidth: 380 }}>
           {phase === 'downloading' && <ActivityIndicator size="large" color="#0D47A1" style={{ marginBottom: 12 }} />}
           <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A', marginBottom: 6 }}>
-            {phase === 'downloading' ? 'Updating Drop Cars Admin' : phase === 'rolledBack' ? 'An update was skipped' : 'Update did not finish'}
+            {phase === 'downloading' ? 'Updating Drop Cars Vendor' : phase === 'rolledBack' ? 'An update was skipped' : 'Update did not finish'}
           </Text>
           <Text style={{ fontSize: 14, color: '#334155', lineHeight: 20 }}>{message}</Text>
           {phase !== 'downloading' && (

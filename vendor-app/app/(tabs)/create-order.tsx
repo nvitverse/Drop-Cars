@@ -1322,7 +1322,7 @@ const handleEndTimeChange = (event: any, selectedTime?: Date) => {
         <Text style={styles.headerTitle}>Create {formData.trip_type} Booking</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* 1. Trip Type Section */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
