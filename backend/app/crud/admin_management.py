@@ -15,8 +15,8 @@ from uuid import UUID
 # ============ VENDOR MANAGEMENT ============
 
 def get_all_vendors(db: Session, skip: int = 0, limit: int = 100) -> Tuple[List[VendorDetails], int]:
-    """Get all vendors with pagination"""
-    vendors = db.query(VendorDetails).offset(skip).limit(limit).all()
+    """Get all vendors with pagination (newest first)"""
+    vendors = db.query(VendorDetails).order_by(VendorDetails.created_at.desc()).offset(skip).limit(limit).all()
     total_count = db.query(VendorDetails).count()
     return vendors, total_count
 
@@ -625,6 +625,8 @@ def get_all_accounts_unified(
             q = q.filter(or_(
                 VendorDetails.full_name.ilike(search_like),
                 VendorDetails.primary_number.ilike(search_like),
+                VendorDetails.gpay_number.ilike(search_like),
+                VendorDetails.secondary_number.ilike(search_like),
                 VendorCredentials.reg_id.ilike(search_like),
             ))
         return q
@@ -643,6 +645,8 @@ def get_all_accounts_unified(
             "account_status": vendor_cred.account_status.value if vendor_cred else "Pending",
             "reg_id": vendor_cred.reg_id if vendor_cred else None,
             "primary_number": vendor.primary_number,
+            "secondary_number": vendor.secondary_number,
+            "gpay_number": vendor.gpay_number,
             "blocked_reason": vendor_cred.blocked_reason if vendor_cred else None,
             "permanently_blocked": bool(vendor_cred.permanently_blocked) if vendor_cred else False,
             "permanently_blocked_reason": vendor_cred.permanently_blocked_reason if vendor_cred else None,
@@ -670,6 +674,7 @@ def get_all_accounts_unified(
             q = q.filter(or_(
                 VehicleOwnerDetails.full_name.ilike(search_like),
                 VehicleOwnerDetails.primary_number.ilike(search_like),
+                VehicleOwnerDetails.secondary_number.ilike(search_like),
                 VehicleOwnerCredentials.reg_id.ilike(search_like),
             ))
         return q
@@ -701,6 +706,8 @@ def get_all_accounts_unified(
             "account_status": owner_cred.account_status.value if owner_cred else "Inactive",
             "reg_id": owner_cred.reg_id if owner_cred else None,
             "primary_number": owner.primary_number,
+            "secondary_number": owner.secondary_number,
+            "gpay_number": None,
             "blocked_reason": owner_cred.blocked_reason if owner_cred else None,
             "permanently_blocked": bool(owner_cred.permanently_blocked) if owner_cred else False,
             "permanently_blocked_reason": owner_cred.permanently_blocked_reason if owner_cred else None,
@@ -741,6 +748,7 @@ def get_all_accounts_unified(
             q = q.filter(or_(
                 CarDriver.full_name.ilike(search_like),
                 CarDriver.primary_number.ilike(search_like),
+                CarDriver.secondary_number.ilike(search_like),
                 CarDriver.reg_id.ilike(search_like),
             ))
         return q
@@ -759,6 +767,8 @@ def get_all_accounts_unified(
             "account_status": driver.driver_status.value,
             "reg_id": driver.reg_id,
             "primary_number": driver.primary_number,
+            "secondary_number": driver.secondary_number,
+            "gpay_number": None,
             "permanently_blocked": bool(driver.permanently_blocked),
             "permanently_blocked_reason": driver.permanently_blocked_reason,
             "pending_documents_count": sum(

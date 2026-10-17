@@ -24,6 +24,8 @@ interface Vendor {
   vendor_id: string;
   full_name: string;
   primary_number: string;
+  secondary_number?: string;
+  gpay_number?: string;
   wallet_balance: number;
   bank_balance: number;
   address: string;
@@ -98,9 +100,11 @@ export default function VendorsScreen() {
   };
 
   const filteredVendors = vendors.filter(vendor =>
-    vendor.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    vendor.primary_number.includes(searchQuery) ||
-    vendor.city.toLowerCase().includes(searchQuery.toLowerCase())
+    (vendor.full_name && vendor.full_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (vendor.primary_number && vendor.primary_number.includes(searchQuery)) ||
+    (vendor.gpay_number && vendor.gpay_number.includes(searchQuery)) ||
+    (vendor.secondary_number && vendor.secondary_number.includes(searchQuery)) ||
+    (vendor.city && vendor.city.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const statusOptions = [
@@ -144,6 +148,12 @@ export default function VendorsScreen() {
               <Phone size={12} color={themeColors.textMuted} />
               <Text style={[styles.detailText, { color: themeColors.textSecondary }]}>{item.primary_number}</Text>
             </View>
+            {!!item.gpay_number && item.gpay_number !== item.primary_number && (
+              <View style={styles.detailItem}>
+                <Text style={{ fontSize: 10, color: themeColors.primary, fontWeight: '700' }}>GPay:</Text>
+                <Text style={[styles.detailText, { color: themeColors.textSecondary }]}>{item.gpay_number}</Text>
+              </View>
+            )}
             {!!item.city && (
               <View style={styles.detailItem}>
                 <MapPin size={12} color={themeColors.textMuted} />

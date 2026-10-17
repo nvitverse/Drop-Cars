@@ -232,6 +232,10 @@ class AccountListItem(BaseModel):
     account_type: str  # "vendor", "vehicle_owner", "driver", "quickdriver"
     account_status: Optional[str] = "Inactive"  # "Active", "Inactive", "Pending", "ONLINE", "OFFLINE", etc.
     primary_number: Optional[str] = None  # In the list directly - saves N extra detail calls
+    secondary_number: Optional[str] = None
+    gpay_number: Optional[str] = None
+    secondary_number: Optional[str] = None
+    gpay_number: Optional[str] = None
     # Set only when an admin deliberately blocked this account (vendor/
     # vehicle_owner only) - lets the UI show "Blocked" as a distinct
     # sub-state of Inactive instead of lumping in never-activated accounts.

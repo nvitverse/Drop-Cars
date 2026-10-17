@@ -492,6 +492,8 @@ class ApiService {
       account_type: 'vendor' | 'vehicle_owner' | 'driver' | 'quickdriver' | 'car';
       account_status: string;
       primary_number?: string | null;
+      secondary_number?: string | null;
+      gpay_number?: string | null;
       blocked_reason?: string | null;
       permanently_blocked?: boolean;
       permanently_blocked_reason?: string | null;

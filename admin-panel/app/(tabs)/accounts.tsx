@@ -36,6 +36,8 @@ interface Account {
   account_status: string;
   driver_status?: string; // For drivers and quickdrivers
   primary_number?: string | null; // Mobile number
+  secondary_number?: string | null;
+  gpay_number?: string | null;
   // Set only when an admin deliberately blocked this account (vendor/
   // vehicle_owner only) - distinguishes "manually blocked" from "just
   // never activated" within the Inactive tab.
@@ -563,9 +565,13 @@ export default function AccountsScreen() {
     if (!searchLower) return true;
 
     const mobileNumber = accountMobileNumbers[account.id] || account.primary_number || '';
+    const gpay = account.gpay_number || '';
+    const secondary = account.secondary_number || '';
     return (
       account.name.toLowerCase().includes(searchLower) ||
       mobileNumber.toLowerCase().includes(searchLower) ||
+      gpay.toLowerCase().includes(searchLower) ||
+      secondary.toLowerCase().includes(searchLower) ||
       (account.reg_id || '').toLowerCase().includes(searchLower)
     );
   });

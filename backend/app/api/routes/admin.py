@@ -2511,6 +2511,8 @@ def list_all_accounts(
                 account_type=acc["account_type"],
                 account_status=acc["account_status"],
                 primary_number=acc.get("primary_number"),
+                secondary_number=acc.get("secondary_number"),
+                gpay_number=acc.get("gpay_number"),
                 blocked_reason=acc.get("blocked_reason"),
                 permanently_blocked=acc.get("permanently_blocked", False),
                 permanently_blocked_reason=acc.get("permanently_blocked_reason"),
