@@ -4,6 +4,18 @@ This file is read by **Claude (Session 1 & 2)** and **Antigravity** to know the 
 
 ---
 
+### Antigravity, 2026-10-18 - Prevent acceptance of cancelled bookings & harden trip hold refunds (Booking #462 incident)
+- **Branch:** `deploy/merged-2026-10-06` (commit `6d5a6f38ad`). Deployed to Cloud Run service `drop-cars-api` (revision `drop-cars-api-00346-mwq`).
+- **Incident & Bug:** Admin created Booking #462 (Salem -> Namakkal) and cancelled it 1.5 minutes later (`cancel-by-admin` as customer). At cancellation time, no driver had accepted, so no active assignment or hold existed. 46 seconds later, driver Sankar T tapped "Accept" from a stale feed view. `accept_order` (`api/routes/order_assignments.py`) and `create_order_assignment` (`crud/order_assignments.py`) only checked `cancelled_by == "CANCELLED_BY_VENDOR"` and `"AUTO_CANCELLED"`, failing to check `trip_status == "CANCELLED"` or `cancelled_by is not None`. The system accepted the cancelled trip, debited a ₹500 `TRIP_HOLD`, and because the trip was already cancelled, no subsequent cancellation event ever triggered to refund the hold.
+- **Fix (backend):**
+  1. `backend/app/api/routes/order_assignments.py`: `accept_order` now checks `trip_status` and `cancelled_by`, immediately rejecting acceptance of cancelled or completed bookings with HTTP 400.
+  2. `backend/app/crud/order_assignments.py`: `create_order_assignment` validates that the order is not cancelled or completed prior to creating any assignment.
+  3. `backend/app/api/routes/admin.py` & `backend/app/api/routes/orders.py`: Admin cancellation endpoints now verify `get_trip_hold(db, order.id, owner_id)` against `wallet_ledger` before falling back to `assignment.held_amount`, guaranteeing held funds recorded in the ledger are accurately credited back as `TRIP_HOLD_REFUND`.
+- **Database Reconciliation:** Assignment #93 marked `CANCELLED`. Staff thamizh's ₹500 manual credit (`5b0bee25...`, note: "Salem duty") reconciled as `reference_type = 'TRIP_HOLD_REFUND'` for Order 462, restoring clear transaction ledger visibility. Driver's wallet balance verified at ₹1,000.
+- **Verification:** All 466 tests passed (`466 passed in 224s`). Cloud Run deployed successfully.
+
+---
+
 ### Claude, 2026-10-15 - regression audit + guards so overwritten fixes cannot return silently
 - Audit report: `REGRESSION_AUDIT_2026-10-14.md` (Desktop\SAAS). Restored: Notification Sounds screen, place-search memory rule, Driver trip-code rule + keyboard-safe pop-ups, Customer App keyboard-safe modals, Quote & Estimate luxury screen, AG Directives UI in Tasks. Removed fake-data screens (customer-insights, face-audit; our-fleet-requests no longer in the menu).
 - NEW guards: `docs/FIX_REGISTRY.json` + `scripts/regression-guard.js` (CI job `regression-guard`), `backend/tests/test_route_snapshot.py` (+ `routes_snapshot.txt`), `scripts/publish-guard.js` used by `scripts/publish-driver-ota.ps1` / `publish-admin-ota.ps1` (clean + pushed + contains the live update + guard passes), `publish-ota.js` records `gitSha` in the update. CLAUDE.md sections 1 and 7 rewritten (section 1 used to name the wrong repository). Stale folders carry `STALE_COPY_DO_NOT_EDIT.txt`. Prompt for Antigravity: `ANTIGRAVITY_PROMPT_NoOverride_Rules.md`.
