@@ -181,16 +181,34 @@ async def accept_order(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Booking not found"
             )
-        if order.cancelled_by == "CANCELLED_BY_VENDOR":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot accept an Booking that has been cancelled by vendor"
+        from app.models.orders import Trip_status
+        is_cancelled = (
+            order.trip_status in (
+                Trip_status.CANCELLED,
+                Trip_status.AUTO_CANCELLED,
+                Trip_status.CANCELLED_BY_VENDOR,
+                Trip_status.CANCELLED_WHILE_DRIVING,
+                Trip_status.CANCELLED_BY_CUSTOMER,
+                Trip_status.CANCELLED_BY_ADMIN,
             )
-        
-        if order.cancelled_by == "AUTO_CANCELLED":
+            or str(getattr(order.trip_status, "value", order.trip_status)).upper().startswith("CANCEL")
+            or order.cancelled_by is not None
+        )
+        if is_cancelled:
+            detail_msg = "Cannot accept a booking that has been cancelled"
+            if order.cancelled_by == "CANCELLED_BY_VENDOR":
+                detail_msg = "Cannot accept a booking that has been cancelled by vendor"
+            elif order.cancelled_by == "AUTO_CANCELLED":
+                detail_msg = "Cannot accept a booking that has already been accepted by someone"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot accept an Booking that has been already accepted by someone"
+                detail=detail_msg
+            )
+
+        if order.trip_status == Trip_status.COMPLETED or str(getattr(order.trip_status, "value", order.trip_status)).upper() == "COMPLETED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot accept a booking that has already completed"
             )
 
         # Vehicle-type gate: only a fleet with a VERIFIED car of the exact

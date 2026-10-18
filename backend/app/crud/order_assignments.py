@@ -240,6 +240,30 @@ def create_order_assignment(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    is_cancelled = (
+        order.trip_status in (
+            Trip_status.CANCELLED,
+            Trip_status.AUTO_CANCELLED,
+            Trip_status.CANCELLED_BY_VENDOR,
+            Trip_status.CANCELLED_WHILE_DRIVING,
+            Trip_status.CANCELLED_BY_CUSTOMER,
+            Trip_status.CANCELLED_BY_ADMIN,
+        )
+        or str(getattr(order.trip_status, "value", order.trip_status)).upper().startswith("CANCEL")
+        or order.cancelled_by is not None
+    )
+    if is_cancelled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot accept booking #{order_id} because it has already been cancelled."
+        )
+
+    if order.trip_status == Trip_status.COMPLETED or str(getattr(order.trip_status, "value", order.trip_status)).upper() == "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot accept booking #{order_id} because it has already completed."
+        )
+
     now = datetime.utcnow()
     expires_at = compute_assignment_deadline(now, order)
     

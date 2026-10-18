@@ -607,18 +607,24 @@ def cancel_order_by_admin(
         active_assignment.cancel_note = reason
 
         # Refund hold if applicable
-        if active_assignment.held_amount and active_assignment.held_amount > 0 and active_assignment.vehicle_owner_id:
-            try:
-                credit_wallet(
-                    db,
-                    vehicle_owner_id=str(active_assignment.vehicle_owner_id),
-                    amount=active_assignment.held_amount,
-                    reference_id=str(order.id),
-                    reference_type="TRIP_HOLD_REFUND",
-                    notes=f"Hold refunded due to customer cancellation via Admin on Booking #{order.id}"
-                )
-            except Exception as e:
-                print(f"Hold refund warning on cancel_order_by_admin: {e}")
+        if active_assignment.vehicle_owner_id:
+            from app.crud.wallet import get_trip_hold
+            owner_id_str = str(active_assignment.vehicle_owner_id)
+            hold_to_refund = get_trip_hold(db, order.id, owner_id_str)
+            if hold_to_refund <= 0 and active_assignment.held_amount:
+                hold_to_refund = int(active_assignment.held_amount)
+            if hold_to_refund > 0:
+                try:
+                    credit_wallet(
+                        db,
+                        vehicle_owner_id=owner_id_str,
+                        amount=hold_to_refund,
+                        reference_id=str(order.id),
+                        reference_type="TRIP_HOLD_REFUND",
+                        notes=f"Hold refunded due to customer cancellation via Admin on Booking #{order.id}"
+                    )
+                except Exception as e:
+                    print(f"Hold refund warning on cancel_order_by_admin: {e}")
 
     from app.crud.wallet import release_poster_advance_hold
     release_poster_advance_hold(db, order, "booking cancelled by admin")
