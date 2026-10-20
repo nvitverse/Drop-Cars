@@ -38,6 +38,13 @@ const REJECT_REASON_PRESETS = [
   'Incorrect or invalid document uploaded',
 ];
 
+const isExpiryTracked = (doc?: DocumentItem | null): boolean => {
+  if (!doc) return false;
+  const type = (doc.document_type || '').toLowerCase();
+  if (type.includes('car_img') || type.includes('photo')) return false;
+  return true;
+};
+
 interface DocumentItem {
   document_id: string;
   document_type: string;
@@ -586,53 +593,55 @@ export default function CarDocumentsScreen() {
                         </Text>
 
                         {/* Expiry / Validity Date Field */}
-                        <View style={styles.compactExpiryBox}>
-                          <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
-                          <View style={styles.expiryInputRow}>
-                            <DatePickButton
-                              style={[styles.compactExpiryInput, { justifyContent: 'center' }]}
-                              textStyle={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}
-                              placeholder="Pick date"
-                              title="Expiry / valid date"
-                              value={doc.document_id === currentDocument?.document_id ? expiryInput : doc.expiry_date || ''}
-                              onChange={(v) => {
-                                setCurrentDocIndex(idx);
-                                setExpiryInput(v);
-                              }}
-                              />
-                            <TouchableOpacity
-                              style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
-                              onPress={() => handleSaveExpiry(doc)}
-                              disabled={savingExpiry}
-                            >
-                              {savingExpiry ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                              ) : (
-                                <Text style={styles.compactExpirySaveBtnText}>Save</Text>
-                              )}
-                            </TouchableOpacity>
-                          </View>
+                        {isExpiryTracked(doc) ? (
+                          <View style={styles.compactExpiryBox}>
+                            <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
+                            <View style={styles.expiryInputRow}>
+                              <DatePickButton
+                                style={[styles.compactExpiryInput, { justifyContent: 'center' }]}
+                                textStyle={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}
+                                placeholder="Pick date"
+                                title="Expiry / valid date"
+                                value={doc.document_id === currentDocument?.document_id ? expiryInput : doc.expiry_date || ''}
+                                onChange={(v) => {
+                                  setCurrentDocIndex(idx);
+                                  setExpiryInput(v);
+                                }}
+                                />
+                              <TouchableOpacity
+                                style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
+                                onPress={() => handleSaveExpiry(doc)}
+                                disabled={savingExpiry}
+                              >
+                                {savingExpiry ? (
+                                  <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                  <Text style={styles.compactExpirySaveBtnText}>Save</Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
 
-                          {/* Quick Date Picker Chips */}
-                          <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, display: doc.date_label === 'Registration date' ? 'none' : 'flex' }}>
-                            {['+1 Yr', '+2 Yrs', '+3 Yrs', '+5 Yrs'].map((chip, chipIdx) => {
-                              const years = [1, 2, 3, 5][chipIdx];
-                              return (
-                                <TouchableOpacity
-                                  key={chip}
-                                  style={styles.quickDateChip}
-                                  onPress={() => {
-                                    setCurrentDocIndex(idx);
-                                    setExpiryInput(getFutureDateStr(years));
-                                  }}
-                                  activeOpacity={0.7}
-                                >
-                                  <Text style={styles.quickDateChipText}>{chip}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
+                            {/* Quick Date Picker Chips */}
+                            <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, display: doc.date_label === 'Registration date' ? 'none' : 'flex' }}>
+                              {['+1 Yr', '+2 Yrs', '+3 Yrs', '+5 Yrs'].map((chip, chipIdx) => {
+                                const years = [1, 2, 3, 5][chipIdx];
+                                return (
+                                  <TouchableOpacity
+                                    key={chip}
+                                    style={styles.quickDateChip}
+                                    onPress={() => {
+                                      setCurrentDocIndex(idx);
+                                      setExpiryInput(getFutureDateStr(years));
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.quickDateChipText}>{chip}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
                           </View>
-                        </View>
+                        ) : null}
                       </View>
                     </View>
 

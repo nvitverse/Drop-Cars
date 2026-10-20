@@ -44,7 +44,20 @@ interface DocumentItem {
   date_label?: string | null; // 'Registration date' for an RC
 }
 
-const EXPIRY_TRACKED_TYPES = ['rc_front', 'insurance', 'licence'];
+const EXPIRY_TRACKED_TYPES = ['rc_front', 'rc_back', 'insurance', 'fc', 'permit', 'licence'];
+
+const isExpiryTracked = (doc?: DocumentItem | null): boolean => {
+  if (!doc) return false;
+  const type = (doc.document_type || '').toLowerCase();
+  // Aadhaar, PAN, and Car photos have lifetime validity and never have an expiry date
+  if (type.includes('aadhar') || type.includes('pan') || type.includes('car_img')) {
+    return false;
+  }
+  if (doc.expiry_date || doc.date_label) {
+    return true;
+  }
+  return EXPIRY_TRACKED_TYPES.includes(type) || type.includes('licence') || type.includes('insurance') || type.includes('permit') || type.includes('fc') || type.includes('rc');
+};
 
 interface DocumentsResponse {
   account_id: string;
@@ -749,53 +762,62 @@ export default function AccountDocumentsScreen() {
                       </Text>
 
                       {/* Expiry / Validity Date Field with Quick Date Picker Chips */}
-                      <View style={styles.compactExpiryBox}>
-                        <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
-                        <View style={styles.expiryInputRow}>
-                          <DatePickButton
-                            style={[styles.compactExpiryInput, { justifyContent: 'center' }]}
-                            textStyle={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}
-                            placeholder="Pick date"
-                            title="Expiry / valid date"
-                            value={doc.document_id === currentDocument?.document_id ? expiryInput : doc.expiry_date || ''}
-                            onChange={(v) => {
-                              setCurrentDocIndex(idx);
-                              setExpiryInput(v);
-                            }}
-                            />
-                          <TouchableOpacity
-                            style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
-                            onPress={() => handleSaveExpiry(doc)}
-                            disabled={savingExpiry}
-                          >
-                            {savingExpiry ? (
-                              <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                              <Text style={styles.compactExpirySaveBtnText}>Save</Text>
-                            )}
-                          </TouchableOpacity>
-                        </View>
+                      {isExpiryTracked(doc) ? (
+                        <View style={styles.compactExpiryBox}>
+                          <Text style={styles.compactExpiryLabel}>{doc.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry / Valid Date:'}</Text>
+                          <View style={styles.expiryInputRow}>
+                            <DatePickButton
+                              style={[styles.compactExpiryInput, { justifyContent: 'center' }]}
+                              textStyle={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}
+                              placeholder="Pick date"
+                              title="Expiry / valid date"
+                              value={doc.document_id === currentDocument?.document_id ? expiryInput : doc.expiry_date || ''}
+                              onChange={(v) => {
+                                setCurrentDocIndex(idx);
+                                setExpiryInput(v);
+                              }}
+                              />
+                            <TouchableOpacity
+                              style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
+                              onPress={() => handleSaveExpiry(doc)}
+                              disabled={savingExpiry}
+                            >
+                              {savingExpiry ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                              ) : (
+                                <Text style={styles.compactExpirySaveBtnText}>Save</Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
 
-                        {/* Quick Date Picker Chips */}
-                        <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-                          {['+1 Yr', '+2 Yrs', '+3 Yrs', '+5 Yrs'].map((chip, chipIdx) => {
-                            const years = [1, 2, 3, 5][chipIdx];
-                            return (
-                              <TouchableOpacity
-                                key={chip}
-                                style={styles.quickDateChip}
-                                onPress={() => {
-                                  setCurrentDocIndex(idx);
-                                  setExpiryInput(getFutureDateStr(years));
-                                }}
-                                activeOpacity={0.7}
-                              >
-                                <Text style={styles.quickDateChipText}>{chip}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
+                          {/* Quick Date Picker Chips */}
+                          <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
+                            {['+1 Yr', '+2 Yrs', '+3 Yrs', '+5 Yrs'].map((chip, chipIdx) => {
+                              const years = [1, 2, 3, 5][chipIdx];
+                              return (
+                                <TouchableOpacity
+                                  key={chip}
+                                  style={styles.quickDateChip}
+                                  onPress={() => {
+                                    setCurrentDocIndex(idx);
+                                    setExpiryInput(getFutureDateStr(years));
+                                  }}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.quickDateChipText}>{chip}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
                         </View>
-                      </View>
+                      ) : (
+                        <View style={[styles.compactExpiryBox, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 10 }]}>
+                          <Text style={[styles.compactExpiryLabel, { color: '#64748B' }]}>Document Validity</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669', marginTop: 3 }}>
+                            ✓ Lifetime Validity (No Expiry Date)
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -975,45 +997,55 @@ export default function AccountDocumentsScreen() {
           {currentDocument && (
             <View style={styles.lightboxActionBar}>
               {/* Date Edit Row Inside Pop-up */}
-              <View style={styles.lightboxDateBox}>
-                <Text style={styles.lightboxDateLabel}>Expiry Date:</Text>
-                <DatePickButton
-                  style={[styles.lightboxDateInput, { justifyContent: 'center' }]}
-                  textStyle={{ fontSize: 12, fontWeight: '600', color: '#F8FAFC' }}
-                  placeholder="Pick date"
-                  title="Expiry date"
-                  value={expiryInput}
-                  onChange={setExpiryInput}
-                  />
-                <TouchableOpacity
-                  style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
-                  onPress={() => handleSaveExpiry(currentDocument)}
-                  disabled={savingExpiry}
-                >
-                  {savingExpiry ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.compactExpirySaveBtnText}>Save Date</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* Lightbox Quick Date Picker Chips */}
-              <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
-                {['+1 Year', '+2 Years', '+3 Years', '+5 Years'].map((chip, chipIdx) => {
-                  const years = [1, 2, 3, 5][chipIdx];
-                  return (
+              {isExpiryTracked(currentDocument) ? (
+                <>
+                  <View style={styles.lightboxDateBox}>
+                    <Text style={styles.lightboxDateLabel}>{currentDocument.date_label === 'Registration date' ? 'Registration Date:' : 'Expiry Date:'}</Text>
+                    <DatePickButton
+                      style={[styles.lightboxDateInput, { justifyContent: 'center' }]}
+                      textStyle={{ fontSize: 12, fontWeight: '600', color: '#F8FAFC' }}
+                      placeholder="Pick date"
+                      title={currentDocument.date_label === 'Registration date' ? 'Registration date' : 'Expiry date'}
+                      value={expiryInput}
+                      onChange={setExpiryInput}
+                      />
                     <TouchableOpacity
-                      key={chip}
-                      style={styles.lightboxQuickDateChip}
-                      onPress={() => setExpiryInput(getFutureDateStr(years))}
-                      activeOpacity={0.7}
+                      style={[styles.compactExpirySaveBtn, savingExpiry && { opacity: 0.6 }]}
+                      onPress={() => handleSaveExpiry(currentDocument)}
+                      disabled={savingExpiry}
                     >
-                      <Text style={styles.lightboxQuickDateChipText}>{chip}</Text>
+                      {savingExpiry ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.compactExpirySaveBtnText}>Save Date</Text>
+                      )}
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  </View>
+
+                  {/* Lightbox Quick Date Picker Chips */}
+                  <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+                    {['+1 Year', '+2 Years', '+3 Years', '+5 Years'].map((chip, chipIdx) => {
+                      const years = [1, 2, 3, 5][chipIdx];
+                      return (
+                        <TouchableOpacity
+                          key={chip}
+                          style={styles.lightboxQuickDateChip}
+                          onPress={() => setExpiryInput(getFutureDateStr(years))}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.lightboxQuickDateChipText}>{chip}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <View style={[styles.lightboxDateBox, { justifyContent: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', borderWidth: 1, borderColor: '#10B98140' }]}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#34D399', textAlign: 'center' }}>
+                    ✓ Lifetime Validity · No Expiry Date Required
+                  </Text>
+                </View>
+              )}
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
