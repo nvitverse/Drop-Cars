@@ -847,6 +847,15 @@
       ],
       "why": "Admin 'Re-verify pending documents' also re-reads date-INVALID insurance/permit/FC/licence and fills the dates",
       "since": "2026-10-24"
+    },
+    {
+      "id": "admin-reread-documents-button",
+      "file": "admin-panel/app/documents-review-queue.tsx",
+      "must_contain": [
+        "Re-read all documents and fill dates"
+      ],
+      "why": "one tap re-reads every car/licence photo, fills validity dates and clears date-only INVALIDs",
+      "since": "2026-10-24"
     }
   ]
 }

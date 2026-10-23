@@ -56,6 +56,31 @@ export default function DocumentsReviewQueueScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingKey, setProcessingKey] = useState<string | null>(null);
+  const [rereading, setRereading] = useState(false);
+  const [rereadNote, setRereadNote] = useState('');
+
+  // Re-reads every stored car / licence photo with the current reader: fills the validity dates it can read and clears documents
+  // that were only INVALID because of a typed date. Runs in batches until nothing is left.
+  const rereadAll = async () => {
+    if (rereading) return;
+    setRereading(true);
+    let checked = 0, verified = 0, dates = 0, rounds = 0;
+    try {
+      for (let i = 0; i < 40; i++) {
+        const r = await apiService.reverifyPendingDocuments(20);
+        rounds += 1;
+        checked += r.checked || 0; verified += r.auto_verified || 0; dates += r.dates_filled || 0;
+        setRereadNote(`Checked ${checked} documents, ${dates} dates filled, ${verified} approved...`);
+        if (!r.has_more) break;
+      }
+      setRereadNote(`Done: ${checked} documents re-read, ${dates} dates filled, ${verified} approved.`);
+      fetchQueue();
+    } catch (e: any) {
+      setRereadNote(`Stopped after ${checked} documents: ${e?.message || 'network problem'}. Tap again to continue.`);
+    } finally {
+      setRereading(false);
+    }
+  };
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -130,6 +155,11 @@ export default function DocumentsReviewQueueScreen() {
             <Text style={[styles.countText, { color: themeColors.textSecondary }]}>{items.length}</Text>
           </View>
         </View>
+      </View>
+
+      <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 6 }}>
+        <Btn label={rereading ? 'Re-reading documents...' : 'Re-read all documents and fill dates'} variant="secondary" size="sm" onPress={rereadAll} disabled={rereading} />
+        {!!rereadNote && <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>{rereadNote}</Text>}
       </View>
 
       {loading && !refreshing ? (

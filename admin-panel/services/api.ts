@@ -2230,6 +2230,7 @@ class ApiService {
     unchanged: number;
     errors: number;
     has_more: boolean;
+    dates_filled?: number;
   }> {
     return this.makeRequest(`/admin/documents/reverify-pending?limit=${limit}`, { method: 'POST' });
   }
