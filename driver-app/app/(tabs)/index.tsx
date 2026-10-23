@@ -180,7 +180,9 @@ export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const { balance, refreshBalance } = useWallet();
   const { colors, isDarkMode } = useTheme();
-  const { t } = useLanguage();
+  const { t, language: appLanguage } = useLanguage();
+  const ttsLanguageRef = React.useRef<'en' | 'ta' | 'hi'>('en');
+  ttsLanguageRef.current = appLanguage === 'ta' || appLanguage === 'hi' ? appLanguage : 'en';   // the new-booking voice follows the app language
   const { dashboardData, loading, error, fetchData, refreshData, futureRides } = useDashboard();
   const { notificationsEnabled, getNotificationStatus } = useNotifications();
   const router = useRouter();
@@ -335,6 +337,7 @@ export default function DashboardScreen() {
             drop: msg.payload.drop || 'Drop',
             totalFare: Number(msg.payload.estimated_price || 0),
             tripType: msg.payload.trip_type,
+            language: ttsLanguageRef.current,
           });
         }
       }

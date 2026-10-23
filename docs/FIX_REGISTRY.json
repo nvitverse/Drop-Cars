@@ -856,6 +856,24 @@
       ],
       "why": "one tap re-reads every car/licence photo, fills validity dates and clears date-only INVALIDs",
       "since": "2026-10-24"
+    },
+    {
+      "id": "driver-cars-valid-count",
+      "file": "driver-app/app/my-cars.tsx",
+      "must_contain": [
+        "documents valid"
+      ],
+      "why": "My Cars shows how many documents are valid (good date) next to how many Drop Cars verified",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "driver-new-booking-voice-language",
+      "file": "driver-app/app/(tabs)/index.tsx",
+      "must_contain": [
+        "ttsLanguageRef"
+      ],
+      "why": "the spoken new-booking alert follows the app language (Tamil / Hindi / English)",
+      "since": "2026-10-24"
     }
   ]
 }

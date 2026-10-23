@@ -624,6 +624,14 @@ export default function MyCarsScreen() {
               .map((d) => ({ d, reason: getDocumentReason(car.id, d.key), status: getDocumentStatus(car.id, d.key) }))
               .filter((x) => !!x.reason && (x.status as string) === 'INVALID');
             const isAllVerified = verifiedCount === docs.length;
+            // "Valid" = uploaded, not marked INVALID and its date has not passed. Not-yet-verified documents with a good date are valid: the
+            // car is ACTIVE on that (Verified is only a badge).
+            const validCount = docs.filter((d) => {
+              const entry = (documentStatuses.find((x: any) => x.entity_type === 'car' && x.entity_id === car.id) as any)?.documents?.[d.key];
+              if (!entry) return false;
+              const dl = typeof entry.days_left === 'number' ? entry.days_left : null;
+              return entry.status !== 'INVALID' && !(dl !== null && dl <= 0);
+            }).length;
 
             const statusColor =
               carStatus === 'ASSIGNED' ? '#3B82F6' :
@@ -720,7 +728,7 @@ export default function MyCarsScreen() {
                     >
                       {isAllVerified
                         ? `${docs.length}/${docs.length} documents verified`
-                        : `${verifiedCount}/${docs.length} documents verified · Tap to update`}
+                        : `${validCount}/${docs.length} documents valid · ${verifiedCount} checked by Drop Cars${validCount < docs.length ? ' · Tap to update' : ''}`}
                     </Text>
                   </View>
                   <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', color: colors.textSecondary }}>
