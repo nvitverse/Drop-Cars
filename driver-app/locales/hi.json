@@ -3,11 +3,12 @@
     "brand": "Drop Cars"
   },
   "tabBar": {
-    "home": "होम",
-    "myRides": "मेरी सवारियां",
-    "dropMarket": "ड्रॉप मार्केट",
+    "home": "बुकिंग",
+    "myRides": "मेरी ट्रिप",
+    "dropMarket": "मार्केट",
     "chats": "चैट",
-    "duty": "ड्यूटी"
+    "duty": "ड्यूटी",
+    "more": "और"
   },
   "languageNames": {
     "en": "English",

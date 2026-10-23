@@ -3,11 +3,12 @@
     "brand": "Drop Cars"
   },
   "tabBar": {
-    "home": "முகப்பு",
-    "myRides": "எனது பயணங்கள்",
-    "dropMarket": "டிராப் மார்க்கெட்",
+    "home": "புக்கிங்கள்",
+    "myRides": "என் பயணங்கள்",
+    "dropMarket": "மார்க்கெட்",
     "chats": "சாட்",
-    "duty": "பணி"
+    "duty": "பணி",
+    "more": "மேலும்"
   },
   "languageNames": {
     "en": "English",

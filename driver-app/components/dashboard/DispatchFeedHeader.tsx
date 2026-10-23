@@ -12,6 +12,8 @@ export interface DispatchFeedHeaderProps {
   upcomingCount: number;
   runningCount: number;
   isDarkMode?: boolean;
+  /** Home shows only the new bookings; accepted work lives in My Trips (one place for it, not two). */
+  onlyNew?: boolean;
   onTabChange: (tab: MainTabType) => void;
 }
 
@@ -27,6 +29,7 @@ export const DispatchFeedHeader: React.FC<DispatchFeedHeaderProps> = ({
   upcomingCount = 0,
   runningCount = 0,
   isDarkMode = false,
+  onlyNew = false,
   onTabChange,
 }) => {
   const { colors } = useTheme();
@@ -40,7 +43,8 @@ export const DispatchFeedHeader: React.FC<DispatchFeedHeaderProps> = ({
       ]}
     >
       {TAB_CONFIG.map(({ key, label, activeColor }, idx) => {
-        const isActive = activeTab === key;
+        if (onlyNew && key !== 'new_bookings') return null;
+        const isActive = activeTab === key || onlyNew;
         return (
           <TouchableOpacity
             key={key}

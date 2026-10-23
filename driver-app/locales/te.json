@@ -3,11 +3,12 @@
     "brand": "Drop Cars"
   },
   "tabBar": {
-    "home": "హోమ్",
-    "myRides": "నా రైడ్‌లు",
-    "dropMarket": "డ్రాప్ మార్కెట్",
+    "home": "బుకింగ్స్",
+    "myRides": "నా ట్రిప్‌లు",
+    "dropMarket": "మార్కెట్",
     "chats": "చాట్",
-    "duty": "డ్యూటీ"
+    "duty": "డ్యూటీ",
+    "more": "మరిన్ని"
   },
   "languageNames": {
     "en": "English",

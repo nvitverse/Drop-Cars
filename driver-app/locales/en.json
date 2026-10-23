@@ -3,11 +3,12 @@
     "brand": "Drop Cars"
   },
   "tabBar": {
-    "home": "Home",
-    "myRides": "My Rides",
-    "dropMarket": "Drop Market",
+    "home": "Bookings",
+    "myRides": "My Trips",
+    "dropMarket": "Market",
     "chats": "Chat",
-    "duty": "Duty"
+    "duty": "Duty",
+    "more": "More"
   },
   "languageNames": {
     "en": "English",

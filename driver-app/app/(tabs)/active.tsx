@@ -20,6 +20,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fareBreakdown } from '@/utils/fareBreakdown';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCarDriver } from '@/contexts/CarDriverContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MapPin, Clock, IndianRupee, User, Phone, Car, RefreshCw, UserPlus, X, CheckCircle, FileText, ChevronDown, ChevronUp, ExternalLink, Send, ShieldAlert } from 'lucide-react-native';
@@ -107,7 +108,25 @@ export default function ActiveRidesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string; subTab?: string }>();
   const { user } = useAuth();
+  const { signinAsOwner } = useCarDriver();
   const { } = useNotifications();
+  // A trip the fleet owner drives himself: the assigned driver's number is his own number. Start / End then happen right on the card
+  // (no separate Duty tab); the driver-side login is done silently in the background.
+  const last10 = (s?: string | null) => String(s || '').replace(/\D/g, '').slice(-10);
+  const isMyOwnTrip = (ride: any) => !!ride?.assigned_driver_phone && !!user?.primaryMobile && last10(ride.assigned_driver_phone) === last10(user.primaryMobile);
+  const [openingTrip, setOpeningTrip] = useState<number | null>(null);
+  const openMyTrip = async (ride: any) => {
+    if (openingTrip) return;
+    setOpeningTrip(ride.id);
+    try {
+      await signinAsOwner();
+      router.push('/(tabs)/duty' as any);
+    } catch (e: any) {
+      Alert.alert('Could not open the trip', e?.message || 'Please try again.');
+    } finally {
+      setOpeningTrip(null);
+    }
+  };
   const { t } = useLanguage();
   const [activeRides, setActiveRides] = useState<ActiveRide[]>([]);
   const [loading, setLoading] = useState(false);
@@ -719,6 +738,31 @@ export default function ActiveRidesScreen() {
           </View>
         )}
 
+        {mainTab === 'running' && isMyOwnTrip(ride) && (
+          <TouchableOpacity
+            onPress={() => openMyTrip(ride)}
+            disabled={openingTrip === ride.id}
+            style={{ backgroundColor: '#EF4444', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginBottom: 8 }}
+            accessibilityRole="button"
+          >
+            {openingTrip === ride.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Bold', fontSize: 15 }}>{t('Open running trip')}</Text>}
+          </TouchableOpacity>
+        )}
+        {mainTab === 'upcoming' && upcomingSubTab === 'assigned' && isMyOwnTrip(ride) && (
+          <View style={{ marginBottom: 8, gap: 6 }}>
+            <View style={{ alignSelf: 'flex-start', backgroundColor: colors.primary + '18', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+              <Text style={{ color: colors.primary, fontFamily: 'Inter-Bold', fontSize: 11 }}>{t('You drive')}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => openMyTrip(ride)}
+              disabled={openingTrip === ride.id}
+              style={{ backgroundColor: '#1D9E75', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+              accessibilityRole="button"
+            >
+              {openingTrip === ride.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Bold', fontSize: 15 }}>{t('Start trip')}</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
         {mainTab === 'running' ? (
           <View style={[styles.assignmentInfo, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -789,9 +833,9 @@ export default function ActiveRidesScreen() {
         }}
       >
         {([
-          { key: 'upcoming', label: 'Upcoming', count: totalUpcomingCount, activeColor: '#6366F1' },
-          { key: 'running', label: 'Running', count: runningRides.length, activeColor: '#10B981' },
-          { key: 'executed', label: 'Executed', count: totalExecutedCount, activeColor: '#8B5CF6' },
+          { key: 'upcoming', label: t('Booked'), count: totalUpcomingCount, activeColor: '#6366F1' },
+          { key: 'running', label: t('On trip'), count: runningRides.length, activeColor: '#10B981' },
+          { key: 'executed', label: t('Completed'), count: totalExecutedCount, activeColor: '#8B5CF6' },
         ] as { key: string; label: string; count: number; activeColor: string }[]).map((tab) => {
           const isActive = mainTab === tab.key;
           return (
@@ -861,7 +905,7 @@ export default function ActiveRidesScreen() {
           }}
         >
           {([
-            { key: 'unassigned', label: 'Unassigned', count: upcomingUnassignedRides.length, activeColor: '#EF4444' },
+            { key: 'unassigned', label: t('To assign'), count: upcomingUnassignedRides.length, activeColor: '#EF4444' },
             { key: 'assigned', label: 'Assigned', count: upcomingAssignedRides.length, activeColor: '#3B82F6' },
           ] as { key: string; label: string; count: number; activeColor: string }[]).map((sub) => {
             const isActive = upcomingSubTab === sub.key;
@@ -1047,13 +1091,16 @@ export default function ActiveRidesScreen() {
                   </Text>
                 </View>
               ) : availableDrivers.length > 0 ? (
-                availableDrivers.map((driver) => (
+                [...availableDrivers].sort((a, b) => Number(last10(b.primary_number) === last10(user?.primaryMobile)) - Number(last10(a.primary_number) === last10(user?.primaryMobile))).map((driver) => (
                   <TouchableOpacity
                     key={driver.id}
-                    style={[styles.driverCard, { backgroundColor: colors.background }]}
+                    style={[styles.driverCard, { backgroundColor: colors.background }, last10(driver.primary_number) === last10(user?.primaryMobile) && { borderWidth: 1.5, borderColor: colors.primary }]}
                     onPress={() => handleDriverSelect(driver)}
                   >
                     <View style={styles.driverInfo}>
+                      {last10(driver.primary_number) === last10(user?.primaryMobile) && (
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter-Bold', fontSize: 12, marginBottom: 2 }}>{t('I will drive it myself')}</Text>
+                      )}
                       <Text style={[styles.driverName, { color: colors.text }]}>
                         {driver.full_name}
                       </Text>

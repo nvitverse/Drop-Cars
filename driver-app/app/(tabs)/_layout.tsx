@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
-import { Chrome as Home, Navigation, Zap, IdCard, Briefcase, MessageCircle } from 'lucide-react-native';
+import { Chrome as Home, Navigation, Zap, IdCard, Briefcase, MessageCircle, Menu } from 'lucide-react-native';
 import { Alert, Platform } from 'react-native';
 import * as SecureStore from '@/utils/secureStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -208,12 +208,15 @@ export default function TabLayout() {
         }}
       />
 
+      {/* Owner session: no separate Duty tab - own trips are started / ended from My Trips; everything else lives under More.
+          (duty stays a hidden route: the Start / Open trip buttons and the More menu open it.) */}
+      <Tabs.Screen name="duty" options={{ href: null }} />
       <Tabs.Screen
-        name="duty"
+        name="more"
         options={{
-          title: t('tabBar.duty'),
+          title: t('tabBar.more'),
           tabBarIcon: ({ size, color }) => (
-            <IdCard size={size} color={color} />
+            <Menu size={size} color={color} />
           ),
         }}
       />

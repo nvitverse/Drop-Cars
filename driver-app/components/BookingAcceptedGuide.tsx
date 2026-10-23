@@ -44,7 +44,7 @@ export default function BookingAcceptedGuide({ visible, onClose, onNeverShow, ju
             ))}
           </ScrollView>
           <TouchableOpacity onPress={onClose} style={{ backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}>
-            <Text style={{ color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold' }}>{justAccepted ? 'Assign now' : 'Got it'}</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold' }}>{justAccepted ? 'Assign driver and car now' : 'Got it'}</Text>
           </TouchableOpacity>
           {justAccepted && onNeverShow ? (
             <TouchableOpacity onPress={onNeverShow} style={{ alignItems: 'center', paddingVertical: 12 }}>

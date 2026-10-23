@@ -883,6 +883,37 @@
       ],
       "why": "a white-paper original with a colour signature / stamp counts as an original (a B/W photocopy has no coloured marks)",
       "since": "2026-10-24"
+    },
+    {
+      "id": "driver-more-tab-replaces-duty",
+      "file": "driver-app/app/(tabs)/_layout.tsx",
+      "must_contain": [
+        "name=\"more\"",
+        "name=\"duty\" options={{ href: null }}"
+      ],
+      "why": "owner session: no separate Duty tab; More menu instead (own trips start/end from My Trips)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "driver-accept-goes-to-assign",
+      "file": "driver-app/app/(tabs)/index.tsx",
+      "must_contain": [
+        "const goAssign",
+        "bookings need a driver"
+      ],
+      "why": "after accepting, go straight to My Trips > To assign; Home shows a red 'N bookings need a driver' strip",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "driver-mytrips-own-trip-start",
+      "file": "driver-app/app/(tabs)/active.tsx",
+      "must_contain": [
+        "isMyOwnTrip",
+        "t('Start trip')",
+        "t('I will drive it myself')"
+      ],
+      "why": "owner who drives: 'You drive' + Start trip on the card, own name pinned first when assigning",
+      "since": "2026-10-24"
     }
   ]
 }

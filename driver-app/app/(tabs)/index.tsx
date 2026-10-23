@@ -453,13 +453,9 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (searchTab === 'new_bookings') {
       setHomeMainTab('new_bookings');
-    } else if (searchTab === 'upcoming') {
-      setHomeMainTab('upcoming');
-      if (searchSubTab === 'assigned' || searchSubTab === 'unassigned') {
-        setUpcomingSubTab(searchSubTab);
-      }
-    } else if (searchTab === 'running') {
-      setHomeMainTab('running');
+    } else if (searchTab === 'upcoming' || searchTab === 'running') {
+      // Accepted work lives in My Trips now (old notification links still say Home > Upcoming / Running): send them there.
+      router.replace({ pathname: '/(tabs)/active', params: { tab: searchTab, ...(searchSubTab ? { subTab: searchSubTab } : {}) } } as any);
     }
   }, [searchTab, searchSubTab]);
 
@@ -621,8 +617,10 @@ export default function DashboardScreen() {
 
   // "Booking accepted - what next?" (assign a driver, start / end the trip). Drivers did not know the steps.
   const [guide, setGuide] = useState<{ visible: boolean; justAccepted: boolean }>({ visible: false, justAccepted: false });
+  // After accepting, the next job is always "assign a driver and car": go straight to My Trips > To assign (drivers kept asking where).
+  const goAssign = () => router.push({ pathname: '/(tabs)/active', params: { tab: 'upcoming', subTab: 'unassigned' } } as any);
   const openGuideAfterAccept = async () => {
-    try { if (await AsyncStorage.getItem('dropcars_hide_accept_guide') === '1') return false; } catch { /* show it */ }
+    try { if (await AsyncStorage.getItem('dropcars_hide_accept_guide') === '1') { goAssign(); return false; } } catch { /* show it */ }
     setGuide({ visible: true, justAccepted: true });
     return true;
   };
@@ -1899,9 +1897,7 @@ export default function DashboardScreen() {
 
         addFutureRide(ride);
 
-        // Auto-swift live tabs to Upcoming -> Unassigned!
-        setHomeMainTab('upcoming');
-        setUpcomingSubTab('unassigned');
+        // The accepted booking now shows in My Trips > To assign (goAssign below); Home keeps showing new bookings.
         await fetchActiveRidesData();
 
         if (!(await openGuideAfterAccept())) {
@@ -2159,7 +2155,21 @@ export default function DashboardScreen() {
 
               <View style={dynamicStyles.bookingsSection}>
                 {/* Modular Live Dispatch Top Tabs Header: New Bookings | Upcoming | Running */}
+                {upcomingUnassignedRides.length > 0 && (
+                  <TouchableOpacity
+                    onPress={goAssign}
+                    activeOpacity={0.85}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 12, marginTop: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: isDarkMode ? 'rgba(239,68,68,0.18)' : '#FEE2E2', borderWidth: 1, borderColor: isDarkMode ? 'rgba(239,68,68,0.5)' : '#FCA5A5' }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ flexShrink: 1, color: isDarkMode ? '#FCA5A5' : '#B91C1C', fontFamily: 'Inter-SemiBold', fontSize: 13 }}>
+                      {upcomingUnassignedRides.length} {t('bookings need a driver')}
+                    </Text>
+                    <Text style={{ color: isDarkMode ? '#FCA5A5' : '#B91C1C', fontFamily: 'Inter-Bold', fontSize: 13 }}>{t('Assign')} ›</Text>
+                  </TouchableOpacity>
+                )}
                 <DispatchFeedHeader
+                  onlyNew
                   activeTab={homeMainTab}
                   newBookingsCount={filteredOrders.length}
                   upcomingCount={totalUpcomingCount}
@@ -3171,8 +3181,8 @@ export default function DashboardScreen() {
       <BookingAcceptedGuide
         visible={guide.visible}
         justAccepted={guide.justAccepted}
-        onClose={() => setGuide((g) => ({ ...g, visible: false }))}
-        onNeverShow={() => { AsyncStorage.setItem('dropcars_hide_accept_guide', '1').catch(() => {}); setGuide((g) => ({ ...g, visible: false })); }}
+        onClose={() => { const was = guide.justAccepted; setGuide((g) => ({ ...g, visible: false })); if (was) goAssign(); }}
+        onNeverShow={() => { AsyncStorage.setItem('dropcars_hide_accept_guide', '1').catch(() => {}); setGuide((g) => ({ ...g, visible: false })); goAssign(); }}
       />
       <ActionableErrorModal
         visible={actionableError.visible}
@@ -3273,18 +3283,14 @@ export default function DashboardScreen() {
         }}
         onAutoAssign={() => {
           setShowHudAlert(false);
-          setHomeMainTab('upcoming');
-          setUpcomingSubTab('assigned');
           Alert.alert(
             'Ride Auto-Assigned!',
             `Ride from ${matchingHudOrder?.pickup || 'Pickup'} to ${matchingHudOrder?.drop || 'Drop'} has been auto-assigned to ${activeRouteRequest?.driverName || 'Driver'}.\n\n⚠️ Any cancellation after auto-assignment incurs a ₹500 fee.`,
-            [{ text: 'View in Upcoming', onPress: () => { setHomeMainTab('upcoming'); setUpcomingSubTab('assigned'); } }]
+            [{ text: 'View in My Trips', onPress: () => router.push({ pathname: '/(tabs)/active', params: { tab: 'upcoming', subTab: 'assigned' } } as any) }]
           );
         }}
         onClose={() => {
           setShowHudAlert(false);
-          setHomeMainTab('upcoming');
-          setUpcomingSubTab('assigned');
         }}
       />
 
