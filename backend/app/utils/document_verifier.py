@@ -29,6 +29,27 @@ except Exception:
     HAS_EASYOCR = False
 
 
+def _coloured_marks_area(img_bgr) -> float:
+    """Fraction of the page covered by clusters of strongly coloured pixels whose hue differs from the paper's own tint (so a warm light on
+    a photocopy does not count). Works on a downscaled copy; clusters under 25 px are ignored (noise)."""
+    try:
+        h, w = img_bgr.shape[:2]
+        scale = 1000.0 / max(h, w)
+        small = cv2.resize(img_bgr, (max(1, int(w * scale)), max(1, int(h * scale)))) if scale < 1 else img_bgr
+        hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+        H, S, V = hsv[:, :, 0].astype(np.int32), hsv[:, :, 1], hsv[:, :, 2]
+        bright = V >= np.percentile(V, 50)
+        paper_h = int(np.median(H[bright])) if bright.any() else 0
+        dist = np.minimum(np.abs(H - paper_h), 180 - np.abs(H - paper_h))      # circular hue distance (OpenCV hue is 0..179)
+        mask = ((S >= 70) & (V >= 45) & (V <= 250) & (dist >= 14)).astype(np.uint8)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        area = int(sum(stats[i, cv2.CC_STAT_AREA] for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= 25))
+        return area / float(mask.size)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("coloured-marks check failed: %s", e)
+        return 0.0
+
+
 def check_is_original_color(image_bytes: bytes, saturation_threshold: float = 14.0) -> Tuple[bool, float]:
     """
     Checks whether an uploaded document image is a colored original or a monochrome/grayscale Xerox copy.
@@ -67,6 +88,11 @@ def check_is_original_color(image_bytes: bytes, saturation_threshold: float = 14
         std_bgr = float(np.std([np.mean(b), np.mean(g), np.mean(r)]))
 
         is_color = mean_saturation >= saturation_threshold and std_bgr >= 3.0
+        if not is_color:
+            # A WHITE-paper original (insurance policy, permit) has little colour overall, but its signature (blue / black-blue ink), stamp,
+            # logo or holographic print is colour. Count real coloured marks (clusters, not JPEG noise); a black-and-white photocopy has none.
+            if _coloured_marks_area(img) >= 0.0012:
+                return True, max(mean_saturation, saturation_threshold)
         return is_color, mean_saturation
     except Exception as e:
         logger.error(f"OpenCV color check error: {e}")

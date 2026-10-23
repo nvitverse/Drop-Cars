@@ -874,6 +874,15 @@
       ],
       "why": "the spoken new-booking alert follows the app language (Tamil / Hindi / English)",
       "since": "2026-10-24"
+    },
+    {
+      "id": "doc-original-colour-marks",
+      "file": "backend/app/utils/document_verifier.py",
+      "must_contain": [
+        "def _coloured_marks_area"
+      ],
+      "why": "a white-paper original with a colour signature / stamp counts as an original (a B/W photocopy has no coloured marks)",
+      "since": "2026-10-24"
     }
   ]
 }
