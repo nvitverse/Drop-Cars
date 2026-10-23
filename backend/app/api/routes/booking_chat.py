@@ -39,7 +39,8 @@ def _resolve_caller(request: Request, db: Session):
     creds = _creds(request)
     for role, getter in (("VENDOR", get_current_vendor), ("OWNER", get_current_user), ("DRIVER", get_current_driver), ("ADMIN", get_current_admin)):
         try:
-            return role, getter(creds, db)
+            # get_current_vendor takes the request first; the others are (credentials, db)
+            return role, (getter(request, creds, db) if role == "VENDOR" else getter(creds, db))
         except HTTPException:
             continue
     raise HTTPException(status_code=401, detail="Could not validate credentials")
