@@ -30,10 +30,14 @@ def list_pending_website_bookings(db) -> list:
         .order_by(CustomerBookingRequest.created_at.asc())
         .all()
     )
+    from app.models.website_integration import WebsiteIntegration
+    site_names = {w.id: w.name for w in db.query(WebsiteIntegration).all()}   # which website each request came from (Admin App brand chip)
     out = []
     for r, plan in describe_pending(db, requests):
         out.append({
             "id": r.id,
+            "source_website_name": site_names.get(r.source_website_id) if r.source_website_id else None,
+            "external_booking_id": r.external_booking_id,
             "customer_name": r.customer_name,
             "customer_number": r.customer_number,
             "pickup_drop_location": r.pickup_drop_location,

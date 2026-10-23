@@ -106,6 +106,9 @@ class CustomerBookingRequest(Base):
     # Null for APP-sourced rows and for WEBSITE rows authenticated via the
     # legacy single env-var key rather than a registered integration row.
     source_website_id = Column(UUID(as_uuid=True), ForeignKey("website_integrations.id"), nullable=True)
+    # The website's own booking reference (e.g. Southern Drop Taxi's "SDTC26101601"), so staff and the apps can quote the same ID the customer
+    # sees on that website. Null for APP rows and for websites that do not send one.
+    external_booking_id = Column(String, nullable=True)
     # Who/what approved or rejected it ("ADMIN" | "AUTO_TIMEOUT")
     decided_by = Column(String, nullable=True)
 

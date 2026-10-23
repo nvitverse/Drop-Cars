@@ -567,6 +567,7 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS hold_until TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS post_at_override TIMESTAMPTZ',
+        'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS external_booking_id VARCHAR',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS custom_driver_fare BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS language VARCHAR(2)',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_suspended_at TIMESTAMPTZ',

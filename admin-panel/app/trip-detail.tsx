@@ -518,6 +518,15 @@ export default function TripDetailScreen() {
         {
           text: 'Edit & Post New',
           onPress: () => {
+            // keep the booking's own money terms and date - recreating must not silently re-price it from the default tariff
+            let startD = '';
+            let startT = '';
+            if (order.start_date_time) {
+              const parts = String(order.start_date_time).split(/T|\s/);
+              startD = parts[0] || '';
+              startT = (parts[1] || '').slice(0, 5);
+            }
+            const str = (v: any) => (v != null && v !== '' ? String(v) : '');
             router.push({
               pathname: '/create-booking',
               params: {
@@ -528,6 +537,22 @@ export default function TripDetailScreen() {
                 trip_type: order.trip_type || 'oneway',
                 car_type: order.car_type || 'SEDAN_4_PLUS_1',
                 pickup_notes: order.pickup_notes || `Recreated from #${order.id || order._id}`,
+                cost_per_km: str(order.cost_per_km),
+                extra_cost_per_km: str(order.extra_cost_per_km),
+                driver_allowance: str(order.driver_allowance),
+                extra_driver_allowance: str(order.extra_driver_allowance),
+                permit_charges: str(order.permit_charges),
+                extra_permit_charges: str(order.extra_permit_charges),
+                hill_charges: str(order.hill_charges),
+                toll_charges: str(order.toll_charges),
+                include_toll: Number(order.toll_charges) > 0 || order.include_toll ? 'true' : 'false',
+                include_gst: order.include_gst ? 'true' : 'false',
+                gst_amount: str(order.gst_amount),
+                trip_distance: str(order.trip_distance),
+                total_booking_amount: str(order.total_booking_amount != null ? order.total_booking_amount : order.vendor_price),
+                start_date: startD,
+                start_time: startT,
+                fare_type: order.fare_type || '',
               },
             });
           },

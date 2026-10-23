@@ -128,6 +128,15 @@ class WebsiteBookingCreate(BaseModel):
     quoted_permit_charges: Optional[int] = None
     quoted_toll_charges: Optional[int] = None
     quoted_trip_distance: Optional[float] = None
+    # The website's own booking reference (e.g. "SDTC26101601"); shown next to the booking in the Admin App.
+    external_booking_id: Optional[str] = None
+
+    @field_validator("external_booking_id", mode="before")
+    def clean_external_booking_id(cls, v):
+        if v is None:
+            return None
+        v = "".join(ch for ch in str(v).strip() if ch.isalnum() or ch in "-_")[:40]
+        return v or None
 
     @field_validator("pickup_drop_location", mode="before")
     def locations_from_list(cls, v):
@@ -261,6 +270,7 @@ async def create_website_booking(
             status="PENDING",
             source="WEBSITE",
             source_website_id=integration.id if integration else None,
+            external_booking_id=payload.external_booking_id,
             is_paid=payload.is_urgent,  # verified above if urgent; normal bookings have no advance
             is_urgent=payload.is_urgent,
             rp_order_id=payload.rp_order_id,
