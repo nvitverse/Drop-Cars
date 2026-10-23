@@ -714,6 +714,11 @@ def verify_uploaded_document(
             exp_typed = datetime.strptime(expected_expiry_date, "%Y-%m-%d").date()
         except ValueError:
             exp_typed = None
+    # The date typed next to the upload is PAST (typically a new vehicle's policy START date typed as the expiry) but the document itself
+    # clearly shows a later validity date: trust the document, not the typing. (Before this the car was marked INVALID/expired and stayed
+    # INACTIVE although nothing had expired - owner report 2026-10-24.) The caller saves the date read from the photo.
+    if exp_typed and exp_typed <= today and detected_expiry and expiry_trusted and detected_expiry > today:
+        exp_typed = None
     # a typed date that is printed on the document (and not past) outranks whichever date the reader guessed to be the expiry
     if exp_typed and exp_typed > today and not ai and exp_typed in set(all_dates_in_text(text)):
         detected_expiry, expiry_trusted = exp_typed, True
@@ -721,7 +726,8 @@ def verify_uploaded_document(
         if label_date and label_date <= today:
             _lab = profile["label"] if profile else "document"
             return _result("INVALID", f"Your {_lab} is not valid from {label_date.strftime('%d %b %Y')} (its expiry date; it is accepted only until the day before). Upload the renewed {_lab} and enter its new expiry date.", base, 0.93, confident=True,
-                           extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True)
+                           extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else label_date.isoformat()), is_expired=True,
+                           expiry_trusted=bool(detected_expiry and expiry_trusted))
     if detected_expiry and expiry_trusted and exp_typed and detected_expiry != exp_typed:
         # The typed date may well be printed on the document even if it is not the one picked as "the expiry" (a licence carries several
         # dates; a policy has start AND end): accept it when the photo really contains it. Otherwise it is a mismatch - but one misread
@@ -772,6 +778,7 @@ def verify_uploaded_document(
 
     return _result("VERIFIED", None, base, 0.9 if ai else 0.85,
                    extracted_expiry_date=(detected_expiry.isoformat() if detected_expiry else expected_expiry_date),
+                   expiry_trusted=bool(detected_expiry and expiry_trusted),
                    entered_expiry_date=exp_typed.isoformat() if exp_typed else None, date_mismatch=False,
                    extracted_aadhaar_number=aadhaar_found, entered_aadhaar_number=entered_aadhaar, aadhaar_mismatch=False,
                    document_number=doc_number, read_by="AI" if ai else "OCR")
@@ -780,6 +787,16 @@ def verify_uploaded_document(
 def get_auto_verified_status(*args, **kwargs):
     """Status only (see get_auto_verification for the status AND the reason)."""
     return get_auto_verification(*args, **kwargs)[0]
+
+
+import threading as _threading
+_last = _threading.local()
+
+
+def last_extracted_expiry() -> Optional[str]:
+    """ISO date the reader TRUSTED as the document's validity date during the last get_auto_verification() call of THIS request thread
+    (None when none was read with confidence). Routes save it so the driver does not have to type the date."""
+    return getattr(_last, "expiry", None)
 
 
 def get_auto_verification(
@@ -792,6 +809,7 @@ def get_auto_verification(
     previous_status=None,
 ):
     from app.models.common_enums import DocumentStatusEnum
+    _last.expiry = None
     try:
         result = verify_uploaded_document(
             image_bytes=image_bytes,
@@ -803,6 +821,7 @@ def get_auto_verification(
         )
         status_str = result.get("status")
         reason = result.get("reason")
+        _last.expiry = result.get("extracted_expiry_date") if result.get("expiry_trusted") else None
         # A document the check could not judge, but that looks like a model staff already approved (e.g. a Karnataka RC), is
         # verified like that one. Never for what the check is SURE about (expired / date mismatch / another document).
         if status_str == "NEEDS_REVIEW" or (status_str == "INVALID" and not result.get("confident")):

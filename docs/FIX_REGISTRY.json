@@ -827,6 +827,26 @@
       ],
       "why": "the accept popup lists the real problems of the car instead of always saying 'a document has expired'",
       "since": "2026-10-24"
+    },
+    {
+      "id": "doc-date-read-and-saved",
+      "file": "backend/app/utils/document_verifier.py",
+      "must_contain": [
+        "def last_extracted_expiry",
+        "exp_typed = None"
+      ],
+      "why": "the validity date printed on a document is read and saved; a typed START date no longer makes a valid document INVALID (new cars stayed INACTIVE)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "doc-reverify-fills-dates",
+      "file": "backend/app/crud/admin_management.py",
+      "must_contain": [
+        "dates_filled",
+        "_date_invalid_unchecked"
+      ],
+      "why": "Admin 'Re-verify pending documents' also re-reads date-INVALID insurance/permit/FC/licence and fills the dates",
+      "since": "2026-10-24"
     }
   ]
 }

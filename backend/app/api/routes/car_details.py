@@ -142,6 +142,7 @@ def signup_car_details(
         'permit_img': getattr(car_form, 'permit_expiry_date', None), 'pollution_img': getattr(car_form, 'pollution_expiry_date', None),
     }
     upload_notes = {}
+    auto_dates = {}
     DOC_TYPE_FOR_FIELD = {
         'rc_front_img': 'rc', 'rc_back_img': 'rc',
         'insurance_img': 'insurance', 'fc_img': 'fc', 'permit_img': 'permit',
@@ -159,6 +160,9 @@ def signup_car_details(
                 image_bytes = image_file.file.read()
                 image_file.file.seek(0)
                 _st, _why = get_auto_verification(image_bytes, doc_type, expected_expiry_date=TYPED_EXPIRY.get(field_name))
+                from app.utils.document_verifier import last_extracted_expiry
+                if last_extracted_expiry() and field_name in TYPED_EXPIRY:
+                    auto_dates[field_name] = last_extracted_expiry()      # the date READ from the photo is saved - nobody has to type it
                 uploaded_statuses[f"{field_name}_url"] = _st
                 if _why:
                     upload_notes[field_name] = _why
@@ -184,6 +188,16 @@ def signup_car_details(
     # Step 4: Update the database record with the GCS image URLs
     try:
         update_car_images(db, db_car.id, uploaded_urls, statuses=uploaded_statuses)
+        if auto_dates:
+            from app.models.car_details import CarDetails
+            from app.crud.document_expiry import parse_expiry as _pe
+            _row = db.query(CarDetails).filter(CarDetails.id == db_car.id).first()
+            for _f, _iso in auto_dates.items():
+                _col = {'insurance_img': 'insurance_expiry_date', 'fc_img': 'fc_expiry_date', 'permit_img': 'permit_expiry_date', 'pollution_img': 'pollution_expiry_date'}.get(_f)
+                _d = _pe(_iso)
+                if _col and _d and hasattr(_row, _col):
+                    setattr(_row, _col, _d)
+            db.commit()
         if upload_notes:
             from app.models.car_details import CarDetails
             _car_row = db.query(CarDetails).filter(CarDetails.id == db_car.id).first()
@@ -618,6 +632,11 @@ def update_car_document(
         setattr(car, f"{document_type}_img_url", new_image_url)
         from app.crud.document_expiry import parse_expiry
         _exp = parse_expiry(expiry_date)
+        if document_type in ("insurance", "fc", "permit"):
+            from app.utils.document_verifier import last_extracted_expiry
+            _read = parse_expiry(last_extracted_expiry()) if last_extracted_expiry() else None
+            if _read:
+                _exp = _read          # the date printed on the document wins over the typed one (a typed start date made new cars INACTIVE)
         _reg = parse_expiry(registration_date)
         if _reg and document_type in ("rc_front", "rc_back"):
             car.registration_date = _reg

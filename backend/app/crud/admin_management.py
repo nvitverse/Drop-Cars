@@ -1263,13 +1263,46 @@ def reverify_pending_documents(db: Session, limit: int = 20) -> dict:
     document volume) - the caller now gets `has_more` back and can tap the
     button again to keep going in safe batches instead."""
     from app.utils.gcs import download_gcs_bytes
-    from app.utils.document_verifier import get_auto_verified_status
+    from app.utils.document_verifier import get_auto_verified_status, last_extracted_expiry
+    from app.crud.document_expiry import parse_expiry
 
     RECHECKABLE = (DocumentStatusEnum.PENDING, DocumentStatusEnum.NEEDS_REVIEW)
-    summary = {"checked": 0, "auto_verified": 0, "unchanged": 0, "errors": 0, "has_more": False}
+    # Dated car / licence documents that an OLD engine run marked INVALID (typically a typed START date taken as the expiry) are re-read too:
+    # they are only ever UPGRADED, never made worse.
+    RECHECKABLE_DATED = RECHECKABLE + (DocumentStatusEnum.INVALID,)
+    summary = {"checked": 0, "auto_verified": 0, "unchanged": 0, "errors": 0, "has_more": False, "dates_filled": 0}
 
-    def _recheck(img_url: Optional[str], doc_type: str, current_status) -> "DocumentStatusEnum":
-        if not img_url or current_status not in RECHECKABLE:
+    import json as _json
+    import re as _re
+    from app.crud.document_notes import get_notes
+
+    def _date_invalid_unchecked(entity, note_key: str) -> bool:
+        """An INVALID worth re-reading: its reason is about a DATE (or there is no reason: rejected before reasons were stored), and it has
+        not been re-read already (a marker is kept, so the same documents do not use up every batch)."""
+        notes = get_notes(entity)
+        if notes.get(f"_reread_{note_key}"):
+            return False
+        why = notes.get(note_key)
+        return (not why) or bool(_re.search(r"not valid from|date you entered|does not match the date|expired|expiry", why, _re.I))
+
+    def _fill(entity, column: str, new_date) -> None:
+        """Save the date read from the photo only where none is saved or the saved one has already passed - never over a date a person
+        entered that is still in the future."""
+        from datetime import date as _date
+        cur = getattr(entity, column, None)
+        if cur is None or cur <= _date.today():
+            setattr(entity, column, new_date)
+
+    def _mark_reread(entity, note_key: str) -> None:
+        notes = get_notes(entity)
+        notes[f"_reread_{note_key}"] = "1"
+        entity.document_notes = _json.dumps(notes)
+
+    def _recheck(img_url: Optional[str], doc_type: str, current_status, date_setter=None, entity=None, note_key=None) -> "DocumentStatusEnum":
+        allowed = RECHECKABLE_DATED if date_setter is not None else RECHECKABLE
+        if not img_url or current_status not in allowed:
+            return current_status
+        if current_status == DocumentStatusEnum.INVALID and not (entity is not None and note_key and _date_invalid_unchecked(entity, note_key)):
             return current_status
         if summary["checked"] >= limit:
             summary["has_more"] = True
@@ -1278,10 +1311,23 @@ def reverify_pending_documents(db: Session, limit: int = 20) -> dict:
         try:
             image_bytes = download_gcs_bytes(img_url)
             new_status = get_auto_verified_status(image_bytes, doc_type, previous_status=current_status)
+            read_date = parse_expiry(last_extracted_expiry()) if (date_setter is not None and last_extracted_expiry()) else None
         except Exception as e:
             print(f"reverify_pending_documents: failed to recheck {doc_type} at {img_url}: {e}")
             summary["errors"] += 1
             return current_status
+        if read_date is not None:
+            date_setter(read_date)                 # the validity date READ from the photo is saved - no one types it
+            summary["dates_filled"] += 1
+        if current_status == DocumentStatusEnum.INVALID:
+            if entity is not None and note_key:
+                _mark_reread(entity, note_key)
+            if new_status != DocumentStatusEnum.VERIFIED:
+                summary["unchanged"] += 1
+                return current_status              # an INVALID is only ever replaced by a clean VERIFIED
+            from app.crud.document_notes import set_note
+            if entity is not None and note_key:
+                set_note(entity, note_key, DocumentStatusEnum.VERIFIED, None)
         if new_status == DocumentStatusEnum.VERIFIED and current_status != DocumentStatusEnum.VERIFIED:
             summary["auto_verified"] += 1
         else:
@@ -1304,24 +1350,28 @@ def reverify_pending_documents(db: Session, limit: int = 20) -> dict:
         or_(
             CarDetails.rc_front_status.in_(RECHECKABLE),
             CarDetails.rc_back_status.in_(RECHECKABLE),
-            CarDetails.insurance_status.in_(RECHECKABLE),
-            CarDetails.permit_status.in_(RECHECKABLE),
-        )
+            CarDetails.insurance_status.in_(RECHECKABLE_DATED),
+            CarDetails.permit_status.in_(RECHECKABLE_DATED),
+            CarDetails.fc_status.in_(RECHECKABLE_DATED),
+        ),
+        CarDetails.removed_at.is_(None),
     ).all()
     for c in cars:
         c.rc_front_status = _recheck(c.rc_front_img_url, "rc", c.rc_front_status)
         c.rc_back_status = _recheck(c.rc_back_img_url, "rc", c.rc_back_status)
-        c.insurance_status = _recheck(c.insurance_img_url, "insurance", c.insurance_status)
-        c.permit_status = _recheck(c.permit_img_url, "permit", c.permit_status)
+        c.insurance_status = _recheck(c.insurance_img_url, "insurance", c.insurance_status, lambda d, c=c: _fill(c, "insurance_expiry_date", d), c, "insurance")
+        c.permit_status = _recheck(c.permit_img_url, "permit", c.permit_status, lambda d, c=c: _fill(c, "permit_expiry_date", d), c, "permit")
+        if getattr(c, "fc_img_url", None):
+            c.fc_status = _recheck(c.fc_img_url, "fc", c.fc_status, lambda d, c=c: _fill(c, "fc_expiry_date", d), c, "fc")
 
     drivers = db.query(CarDriver).filter(
         or_(
-            CarDriver.licence_front_status.in_(RECHECKABLE),
+            CarDriver.licence_front_status.in_(RECHECKABLE_DATED),
             CarDriver.licence_back_status.in_(RECHECKABLE),
         )
     ).all()
     for d in drivers:
-        d.licence_front_status = _recheck(d.licence_front_img, "licence", d.licence_front_status)
+        d.licence_front_status = _recheck(d.licence_front_img, "licence", d.licence_front_status, lambda x, d=d: _fill(d, "licence_expiry_date", x), d, "licence")
         d.licence_back_status = _recheck(d.licence_back_img, "licence", d.licence_back_status)
 
     vendors = db.query(VendorDetails).filter(

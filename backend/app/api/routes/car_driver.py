@@ -1009,6 +1009,10 @@ def update_driver_document(
                 expected_name=driver.full_name,
                 previous_status=prev_front_status
             )
+            from app.utils.document_verifier import last_extracted_expiry
+            _read_exp = parse_expiry(last_extracted_expiry()) if last_extracted_expiry() else None
+            if _read_exp:
+                driver.licence_expiry_date = _read_exp        # the validity date READ from the licence photo is saved - nobody has to type it
             driver.licence_front_img = front_url
             driver.licence_front_status = front_status
             set_note(driver, "licence", front_status, front_why)
