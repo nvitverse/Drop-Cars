@@ -385,3 +385,5 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - Admin OTA on preview (group b33a3306) and production (group ae4c987a).
 - Driver APK 1.1.1 (code 31), same signing key as 1.1.0, OTA URL = our manifest: storage bucket driver-app/DropCars-Driver-latest.apk.
 - Publish scripts fixed (driver: stderr + tar pipe; admin: syntax). Website: FTP does not reach the served docroot (see memory).
+
+- 2026-10-24 (Claude): LIVE - backend rev 00348 (commit 04c0c90: permanent block + identifier blocklist + account gate, subscription lifecycle (dormant until Owner switches on), request-for-my-car approval by poster/any admin, Rs 500 wallet text, vendor chat 500 fix). OTAs: Driver 862d1fef, Admin 078f6e2a (EAS production), Vendor dddaf1ab. Website NOT deployed. Saravanan block not yet applied.
