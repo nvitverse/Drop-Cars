@@ -797,6 +797,18 @@
       ],
       "why": "the vendor who posted the booking approves / declines the offered car",
       "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "driver-accept-no-double-hold",
+      "file": "driver-app/app/(tabs)/index.tsx",
+      "must_contain": [
+        "const availableForNewOrder = currentWallet;"
+      ],
+      "must_not_contain": [
+        "currentWallet - totalReservedAmount"
+      ],
+      "why": "the server already takes each hold out of the wallet at accept; subtracting it again made a small booking ask for double (Rs 1000)",
+      "since": "2026-10-23"
     }
   ]
 }

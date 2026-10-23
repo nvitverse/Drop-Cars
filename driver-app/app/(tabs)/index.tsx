@@ -667,14 +667,11 @@ export default function DashboardScreen() {
   // Count accepted orders without both driver and car assigned
   const acceptedOrdersCount = acceptedOrdersWithoutAssignment.length;
   
-  // Calculate total reserved amount from all accepted orders (frozen amounts, min ₹500 per booking)
-  const totalReservedAmount = acceptedOrdersWithoutAssignment.reduce((sum, order) => {
-    const charges = Number((order as any).charges_to_deduct ?? 0);
-    return sum + Math.max(500, charges);
-  }, 0);
-  
-  // Calculate available balance (current wallet minus all frozen amounts)
-  const availableForNewOrder = currentWallet - totalReservedAmount;
+  // The server takes the hold out of the wallet the moment a booking is accepted (TRIP_HOLD debit), so the wallet balance
+  // we show is ALREADY net of every earlier hold. This used to subtract the earlier holds a second time, which made a
+  // driver with one accepted booking need double (Rs 1000) to accept a small one (owner report 2026-10-23).
+  const totalReservedAmount = 0;
+  const availableForNewOrder = currentWallet;
   
   // Determine button status for an order
   const getOrderButtonStatus = (order: PendingOrder): { disabled: boolean; buttonText: string; priorityBlockedUntil?: string | null; amountNeeded?: number } => {
@@ -1782,7 +1779,7 @@ export default function DashboardScreen() {
         visible: true,
         errorType: 'INSUFFICIENT_BALANCE',
         title: 'Security Hold Required',
-        message: `A minimum wallet security hold of ₹${amountToCheck} is required to accept this booking. Available: ₹${availableForNewOrder.toFixed(2)} (₹${currentWallet} total - ₹${totalReservedAmount} reserved). Add ₹${Math.ceil(amountNeeded)} to accept this booking.`,
+        message: `A minimum wallet security hold of ₹${amountToCheck} is required to accept this booking. Your wallet has ₹${availableForNewOrder.toFixed(2)} (money held for your other bookings is already taken out). Add ₹${Math.ceil(amountNeeded)} to accept this booking.`,
         actionText: 'Add Money to Wallet',
         actionRoute: '/(tabs)/wallet',
       });
