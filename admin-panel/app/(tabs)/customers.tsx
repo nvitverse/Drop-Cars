@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     gap: 8,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   customerCard: {
     marginBottom: 4,

@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   loadingContainer: { padding: 16, gap: 8 },
-  listContainer: { padding: 16, gap: 8, paddingBottom: 40 },
+  listContainer: { padding: 16, gap: 8, paddingBottom: 110 },
   logCard: { marginBottom: 4, padding: 12 },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
   avatarBox: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },

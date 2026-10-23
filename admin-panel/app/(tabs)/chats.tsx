@@ -1548,7 +1548,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   loadingContainer: { padding: 16, gap: 8 },
-  listContainer: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 40 },
+  listContainer: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 110 },
   assistantsContainer: {
     paddingHorizontal: 16,
     gap: 8,

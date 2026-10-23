@@ -1,49 +1,557 @@
 {
   "_about": "Every fix that has been undone once by an old copy of a file goes here. scripts/regression-guard.js fails (CI, before every OTA, before every deploy) if the text is gone (must_contain) or has come back (must_not_contain). Add an entry in the SAME commit as the fix. If you remove a fix on purpose, change the entry in that commit and say why.",
   "fixes": [
-    {"id": "trip-code-poster-only", "file": "driver-app/components/BookingDetailModal.tsx", "must_contain": ["isPosted && !!activeData.start_trip_otp"], "must_not_contain": ["activeData.assignment?.start_trip_otp ||"], "why": "only the person who POSTED a booking sees the trip codes; the driver must ask the customer", "since": "2026-10-07, restored 2026-10-14 after 6f463fe undid it"},
-    {"id": "popup-header-no-overlap", "file": "driver-app/components/BookingCard.tsx", "must_contain": ["the title sits in a column", "lineHeight: 24"], "why": "booking pop-up title must not be drawn over by the vendor / car line", "since": "2026-09 / 2026-10-14"},
-    {"id": "popup-header-lineheight", "file": "driver-app/components/BookingDetailModal.tsx", "must_contain": ["lineHeight: 24"], "why": "explicit line heights in the booking detail header", "since": "2026-10-14"},
-    {"id": "driver-customer-cancelled-no-penalty", "file": "driver-app/app/trip/start.tsx", "must_contain": ["requestNoShow"], "why": "customer cancelled / not there goes to the office as a no-show request, not a penalised cancel", "since": "2026-10-14"},
-    {"id": "driver-cancel-sheet-no-show", "file": "driver-app/app/(tabs)/my-bookings.tsx", "must_contain": ["handleAskNoShow"], "why": "the cancel sheet offers the no-show request (no penalty) first", "since": "2026-10-14"},
-    {"id": "driver-support-screenshot", "file": "driver-app/app/(tabs)/chats.tsx", "must_contain": ["screenshot-help"], "why": "drivers can send a screenshot to Support", "since": "2026-10-14"},
-    {"id": "too-many-tries-message", "file": "driver-app/app/api/axiosDriver.ts", "must_contain": ["Too many tries in a short time"], "why": "429 gives a clear message", "since": "2026-10-14"},
-    {"id": "place-search-real-places-only", "file": "admin-panel/components/LocationPickerModal.tsx", "must_contain": ["save: boolean = true", "handleSelectLocation(searchQuery.trim(), false)"], "why": "typed text is never saved as a remembered place", "since": "2026-10-01, restored 2026-10-14 after the 6 Oct snapshot undid it"},
-    {"id": "place-search-v3-keys", "file": "admin-panel/services/citySuggestions.ts", "must_contain": ["dropcars_saved_locations_v3"], "why": "old polluted saved-place lists stay reset", "since": "2026-10-01"},
-    {"id": "notification-sounds-screen", "file": "admin-panel/app/notification-settings.tsx", "must_contain": ["APP_TABS", "resetNotificationSound"], "why": "per-app filter, search, play, upload, reset-to-default for all notification types", "since": "2026-09-30, restored 2026-10-14"},
-    {"id": "notification-sounds-api", "file": "admin-panel/services/api.ts", "must_contain": ["resetNotificationSound", "correctTripKm", "getAccountActivity", "saveDocumentModel", "getRouteKm"], "why": "API methods the screens call", "since": "2026-10-14"},
-    {"id": "calm-enquiry-chime", "file": "admin-panel/utils/alarmSound.ts", "must_contain": ["notify_chime.wav"], "must_not_contain": ["alarm_siren.wav'));\n    nativeSirenPlayer"], "why": "the enquiry alarm is a calm repeating chime, not a siren (owner 2026-10-09)", "since": "2026-10-09"},
-    {"id": "enquiry-snooze-remembered", "file": "admin-panel/components/EnquiryAlarmHost.tsx", "must_contain": ["snoozeLoaded", "dismissedLoaded"], "why": "no enquiry pop-up again after the app is reopened", "since": "2026-10-09"},
-    {"id": "no-fake-settings-screens", "file": "admin-panel/app/(tabs)/settings.tsx", "must_not_contain": ["to: '/customer-insights'", "to: '/face-audit'", "to: '/our-fleet-requests'"], "why": "these three screens show invented data and are not connected to the server", "since": "2026-10-14"},
-    {"id": "tasks-directives-ui", "file": "admin-panel/app/(tabs)/tasks.tsx", "must_contain": ["directive_type", "handleExpireDirective", "tasksReady"], "why": "timed directives with type / priority / action, and no false 'Clear' before counts load", "since": "2026-10-11 / 2026-10-15"},
-    {"id": "needs-attention-screen", "file": "admin-panel/app/(tabs)/index.tsx", "must_contain": ["/needs-attention"], "why": "trips not started, no-show requests, reposts waiting for approval", "since": "2026-10-14"},
-    {"id": "trip-km-correction", "file": "admin-panel/app/trip-detail.tsx", "must_contain": ["CorrectKmModal"], "why": "correct the km of a completed trip and settle the difference", "since": "2026-10-14"},
-    {"id": "local-drop-gst-locked", "file": "admin-panel/app/create-booking.tsx", "must_contain": ["GST is compulsory"], "why": "5% GST on a Local Drop can not be unticked", "since": "2026-10-14"},
-    {"id": "fare-rules-local-min", "file": "admin-panel/app/fare-rules.tsx", "must_contain": ["Local Drop Minimum"], "why": "the Local Drop minimum km is editable", "since": "2026-10-14"},
-    {"id": "quote-no-invented-link", "file": "admin-panel/app/quote-estimate.tsx", "must_not_contain": ["Direct 1-Click Confirmation Link"], "why": "customers get real document links only, never an invented confirmation URL", "since": "2026-10-10"},
-    {"id": "quote-luxury-ui", "file": "admin-panel/app/quote-estimate.tsx", "must_contain": ["selectedBrand.primaryColor"], "why": "brand-aware quote screen", "since": "2026-10-01, restored 2026-10-15"},
-    {"id": "admin-zero-flash", "file": "admin-panel/app/(tabs)/accounts.tsx", "must_contain": ["useRememberedCounts"], "why": "no false 0 / Clear while numbers load", "since": "2026-10-09"},
-    {"id": "vendor-force-update-gate", "file": "vendor-app/app/_layout.tsx", "must_contain": ["ForceUpdateGate", "KeyboardSafeView"], "why": "vendor app can be forced to update; keyboard-safe root", "since": "2026-10-14"},
-    {"id": "vendor-no-show", "file": "vendor-app/components/menucomponents/OrderDetailsComponent.tsx", "must_contain": ["Mark customer no-show"], "why": "the poster confirms a customer no-show", "since": "2026-10-14"},
-    {"id": "vendor-status-gate", "file": "vendor-app/app/index.tsx", "must_contain": ["fetchVendorStatus"], "why": "a vendor waiting for approval lands on the status page", "since": "2026-10-14"},
-    {"id": "customer-no-invented-phone", "file": "customer-app/app/auth/index.tsx", "must_contain": ["never register with an invented number"], "why": "registration needs the customer's real mobile number", "since": "2026-10-14"},
-    {"id": "driver-finished-trip-no-customer-number", "file": "backend/app/crud/order_assignments.py", "must_contain": ["a finished trip never shows the customer number"], "why": "owner rule: the customer number is never shown to the driver after the trip is completed", "since": "2026-10-15"},
-    {"id": "driver-complete-stays-in-duty", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["never to the fleet home"], "why": "after a trip the duty driver stays in the duty area (no forced fleet/Owner mode)", "since": "2026-10-15"},
-    {"id": "driver-owner-switch-keeps-token", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["must NOT wipe it"], "why": "a network blip must not delete the fleet login (caused Wallet 'No authentication token')", "since": "2026-10-15"},
-    {"id": "waiting-charge-all-trip-types", "file": "backend/app/crud/end_records.py", "must_contain": ["def _waiting_applies"], "why": "waiting time is billed on every trip type except hourly rental (was multi-city only)", "since": "2026-10-16"},
-    {"id": "driver-number-opens-at-time", "file": "driver-app/components/CustomerNumberCountdown.tsx", "must_contain": ["Customer number opens at"], "why": "owner request: show the clock time the customer number opens, in the number's place", "since": "2026-10-16"},
-    {"id": "driver-tab-counts-no-false-zero", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["ordersLoaded ?", "historyLoaded ?"], "why": "tab counters show a dash until data arrives (zero flash)", "since": "2026-10-16"},
-    {"id": "driver-waiting-timer", "file": "driver-app/app/quick-dashboard.tsx", "must_contain": ["<WaitingTimer", "<SosButton"], "why": "waiting stopwatch (pre-fills End Trip) and emergency SOS on the running trip card", "since": "2026-10-16"},
-    {"id": "driver-real-version-line", "file": "driver-app/app/(tabs)/settings.tsx", "must_contain": ["Update: built-in version"], "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new", "since": "2026-10-16"},
-    {"id": "driver-offline-banner-mounted", "file": "driver-app/app/_layout.tsx", "must_contain": ["<OfflineBanner />"], "why": "a red 'No internet' strip with Retry (was built but never mounted)", "since": "2026-10-16"},
-    {"id": "driver-review-qr-on-trip-report", "file": "driver-app/app/trip/report.tsx", "must_contain": ["<ReviewQrCard"], "why": "owner: after a trip the driver shows a QR so the customer can rate the service (in every build since 24 Sep 2026)", "since": "2026-09-24"},
-    {"id": "driver-review-qr-component", "file": "driver-app/components/ReviewQrCard.tsx", "must_contain": ["Ask the customer to rate your service", "/api/trip-review/link/"], "why": "the QR card itself", "since": "2026-09-24"},
-    {"id": "driver-rating-page-after-trip", "file": "driver-app/app/trip/complete.tsx", "must_contain": ["One last step", "Rate the customer"], "why": "rating + cash collected page that every finished trip must pass", "since": "2026-09-24"},
-    {"id": "website-no-password-in-browser-js", "file": "website/assets/js/ui-controls.js", "must_not_contain": ["DropCars@"], "must_contain": ["credentials must never be in browser code"], "why": "the admin password was written in this PUBLIC javascript file", "since": "2026-10-16"},
-    {"id": "driver-signup-messages-translated", "file": "driver-app/components/signup/SignupSinglePage.tsx", "must_contain": ["signupSinglePage.passwordsMismatch", "signupSinglePage.verifyEmailFirst"], "why": "signup problems are translated in all 5 languages", "since": "2026-10-16"},
-    {"id": "backend-waiting-own-settings", "file": "backend/app/crud/end_records.py", "must_contain": ["waiting_rate_per_hour", "multicity=(order.trip_type == OrderTypeEnum.MULTY_CITY)"], "why": "waiting on non multi-city trips has its own admin settings", "since": "2026-10-16"},
-    {"id": "ota-text-diff-in-publish", "file": "driver-app/scripts/publish-ota.js", "must_contain": ["ota_text_diff.py"], "why": "every OTA prints which screen texts disappear compared with the live one", "since": "2026-10-16"},
-    {"id": "driver-profile-change-request-button", "file": "driver-app/app/(tabs)/profile.tsx", "must_contain": ["setShowEditRequestModal(true)", "Need to Change Profile Details?"], "why": "the only way to open the Request Profile Update popup (KYC / bank corrections); it had been dropped when the apps were merged (found by Antigravity audit 2026-10-16)", "since": "2026-09-21"},
-    {"id": "driver-qr-card-never-silent", "file": "driver-app/components/ReviewQrCard.tsx", "must_not_contain": ["if (failed) return null"], "must_contain": ["Try again"], "why": "the rating QR must show a retry line instead of vanishing when the link cannot load", "since": "2026-10-16"}
+    {
+      "id": "trip-code-poster-only",
+      "file": "driver-app/components/BookingDetailModal.tsx",
+      "must_contain": [
+        "isPosted && !!activeData.start_trip_otp"
+      ],
+      "must_not_contain": [
+        "activeData.assignment?.start_trip_otp ||"
+      ],
+      "why": "only the person who POSTED a booking sees the trip codes; the driver must ask the customer",
+      "since": "2026-10-07, restored 2026-10-14 after 6f463fe undid it"
+    },
+    {
+      "id": "popup-header-no-overlap",
+      "file": "driver-app/components/BookingCard.tsx",
+      "must_contain": [
+        "the title sits in a column",
+        "lineHeight: 24"
+      ],
+      "why": "booking pop-up title must not be drawn over by the vendor / car line",
+      "since": "2026-09 / 2026-10-14"
+    },
+    {
+      "id": "popup-header-lineheight",
+      "file": "driver-app/components/BookingDetailModal.tsx",
+      "must_contain": [
+        "lineHeight: 24"
+      ],
+      "why": "explicit line heights in the booking detail header",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "driver-customer-cancelled-no-penalty",
+      "file": "driver-app/app/trip/start.tsx",
+      "must_contain": [
+        "requestNoShow"
+      ],
+      "why": "customer cancelled / not there goes to the office as a no-show request, not a penalised cancel",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "driver-cancel-sheet-no-show",
+      "file": "driver-app/app/(tabs)/my-bookings.tsx",
+      "must_contain": [
+        "handleAskNoShow"
+      ],
+      "why": "the cancel sheet offers the no-show request (no penalty) first",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "driver-support-screenshot",
+      "file": "driver-app/app/(tabs)/chats.tsx",
+      "must_contain": [
+        "screenshot-help"
+      ],
+      "why": "drivers can send a screenshot to Support",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "too-many-tries-message",
+      "file": "driver-app/app/api/axiosDriver.ts",
+      "must_contain": [
+        "Too many tries in a short time"
+      ],
+      "why": "429 gives a clear message",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "place-search-real-places-only",
+      "file": "admin-panel/components/LocationPickerModal.tsx",
+      "must_contain": [
+        "save: boolean = true",
+        "handleSelectLocation(searchQuery.trim(), false)"
+      ],
+      "why": "typed text is never saved as a remembered place",
+      "since": "2026-10-01, restored 2026-10-14 after the 6 Oct snapshot undid it"
+    },
+    {
+      "id": "place-search-v3-keys",
+      "file": "admin-panel/services/citySuggestions.ts",
+      "must_contain": [
+        "dropcars_saved_locations_v3"
+      ],
+      "why": "old polluted saved-place lists stay reset",
+      "since": "2026-10-01"
+    },
+    {
+      "id": "notification-sounds-screen",
+      "file": "admin-panel/app/notification-settings.tsx",
+      "must_contain": [
+        "APP_TABS",
+        "resetNotificationSound"
+      ],
+      "why": "per-app filter, search, play, upload, reset-to-default for all notification types",
+      "since": "2026-09-30, restored 2026-10-14"
+    },
+    {
+      "id": "notification-sounds-api",
+      "file": "admin-panel/services/api.ts",
+      "must_contain": [
+        "resetNotificationSound",
+        "correctTripKm",
+        "getAccountActivity",
+        "saveDocumentModel",
+        "getRouteKm"
+      ],
+      "why": "API methods the screens call",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "calm-enquiry-chime",
+      "file": "admin-panel/utils/alarmSound.ts",
+      "must_contain": [
+        "notify_chime.wav"
+      ],
+      "must_not_contain": [
+        "alarm_siren.wav'));\n    nativeSirenPlayer"
+      ],
+      "why": "the enquiry alarm is a calm repeating chime, not a siren (owner 2026-10-09)",
+      "since": "2026-10-09"
+    },
+    {
+      "id": "enquiry-snooze-remembered",
+      "file": "admin-panel/components/EnquiryAlarmHost.tsx",
+      "must_contain": [
+        "snoozeLoaded",
+        "dismissedLoaded"
+      ],
+      "why": "no enquiry pop-up again after the app is reopened",
+      "since": "2026-10-09"
+    },
+    {
+      "id": "no-fake-settings-screens",
+      "file": "admin-panel/app/(tabs)/settings.tsx",
+      "must_not_contain": [
+        "to: '/customer-insights'",
+        "to: '/face-audit'",
+        "to: '/our-fleet-requests'"
+      ],
+      "why": "these three screens show invented data and are not connected to the server",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "tasks-directives-ui",
+      "file": "admin-panel/app/(tabs)/tasks.tsx",
+      "must_contain": [
+        "directive_type",
+        "handleExpireDirective",
+        "tasksReady"
+      ],
+      "why": "timed directives with type / priority / action, and no false 'Clear' before counts load",
+      "since": "2026-10-11 / 2026-10-15"
+    },
+    {
+      "id": "needs-attention-screen",
+      "file": "admin-panel/app/(tabs)/index.tsx",
+      "must_contain": [
+        "/needs-attention"
+      ],
+      "why": "trips not started, no-show requests, reposts waiting for approval",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "trip-km-correction",
+      "file": "admin-panel/app/trip-detail.tsx",
+      "must_contain": [
+        "CorrectKmModal"
+      ],
+      "why": "correct the km of a completed trip and settle the difference",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "local-drop-gst-locked",
+      "file": "admin-panel/app/create-booking.tsx",
+      "must_contain": [
+        "GST is compulsory"
+      ],
+      "why": "5% GST on a Local Drop can not be unticked",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "fare-rules-local-min",
+      "file": "admin-panel/app/fare-rules.tsx",
+      "must_contain": [
+        "Local Drop Minimum"
+      ],
+      "why": "the Local Drop minimum km is editable",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "quote-no-invented-link",
+      "file": "admin-panel/app/quote-estimate.tsx",
+      "must_not_contain": [
+        "Direct 1-Click Confirmation Link"
+      ],
+      "why": "customers get real document links only, never an invented confirmation URL",
+      "since": "2026-10-10"
+    },
+    {
+      "id": "quote-luxury-ui",
+      "file": "admin-panel/app/quote-estimate.tsx",
+      "must_contain": [
+        "selectedBrand.primaryColor"
+      ],
+      "why": "brand-aware quote screen",
+      "since": "2026-10-01, restored 2026-10-15"
+    },
+    {
+      "id": "admin-zero-flash",
+      "file": "admin-panel/app/(tabs)/accounts.tsx",
+      "must_contain": [
+        "useRememberedCounts"
+      ],
+      "why": "no false 0 / Clear while numbers load",
+      "since": "2026-10-09"
+    },
+    {
+      "id": "vendor-force-update-gate",
+      "file": "vendor-app/app/_layout.tsx",
+      "must_contain": [
+        "ForceUpdateGate",
+        "KeyboardSafeView"
+      ],
+      "why": "vendor app can be forced to update; keyboard-safe root",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "vendor-no-show",
+      "file": "vendor-app/components/menucomponents/OrderDetailsComponent.tsx",
+      "must_contain": [
+        "Mark customer no-show"
+      ],
+      "why": "the poster confirms a customer no-show",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "vendor-status-gate",
+      "file": "vendor-app/app/index.tsx",
+      "must_contain": [
+        "fetchVendorStatus"
+      ],
+      "why": "a vendor waiting for approval lands on the status page",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "customer-no-invented-phone",
+      "file": "customer-app/app/auth/index.tsx",
+      "must_contain": [
+        "never register with an invented number"
+      ],
+      "why": "registration needs the customer's real mobile number",
+      "since": "2026-10-14"
+    },
+    {
+      "id": "driver-finished-trip-no-customer-number",
+      "file": "backend/app/crud/order_assignments.py",
+      "must_contain": [
+        "a finished trip never shows the customer number"
+      ],
+      "why": "owner rule: the customer number is never shown to the driver after the trip is completed",
+      "since": "2026-10-15"
+    },
+    {
+      "id": "driver-complete-stays-in-duty",
+      "file": "driver-app/app/trip/complete.tsx",
+      "must_contain": [
+        "never to the fleet home"
+      ],
+      "why": "after a trip the duty driver stays in the duty area (no forced fleet/Owner mode)",
+      "since": "2026-10-15"
+    },
+    {
+      "id": "driver-owner-switch-keeps-token",
+      "file": "driver-app/app/quick-dashboard.tsx",
+      "must_contain": [
+        "must NOT wipe it"
+      ],
+      "why": "a network blip must not delete the fleet login (caused Wallet 'No authentication token')",
+      "since": "2026-10-15"
+    },
+    {
+      "id": "waiting-charge-all-trip-types",
+      "file": "backend/app/crud/end_records.py",
+      "must_contain": [
+        "def _waiting_applies"
+      ],
+      "why": "waiting time is billed on every trip type except hourly rental (was multi-city only)",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-number-opens-at-time",
+      "file": "driver-app/components/CustomerNumberCountdown.tsx",
+      "must_contain": [
+        "Customer number opens at"
+      ],
+      "why": "owner request: show the clock time the customer number opens, in the number's place",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-tab-counts-no-false-zero",
+      "file": "driver-app/app/quick-dashboard.tsx",
+      "must_contain": [
+        "ordersLoaded ?",
+        "historyLoaded ?"
+      ],
+      "why": "tab counters show a dash until data arrives (zero flash)",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-waiting-timer",
+      "file": "driver-app/app/quick-dashboard.tsx",
+      "must_contain": [
+        "<WaitingTimer",
+        "<SosButton"
+      ],
+      "why": "waiting stopwatch (pre-fills End Trip) and emergency SOS on the running trip card",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-real-version-line",
+      "file": "driver-app/app/(tabs)/settings.tsx",
+      "must_contain": [
+        "Update: built-in version"
+      ],
+      "why": "Settings shows the real app version + which OTA update runs, so we can tell old APK lines from new",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-offline-banner-mounted",
+      "file": "driver-app/app/_layout.tsx",
+      "must_contain": [
+        "<OfflineBanner />"
+      ],
+      "why": "a red 'No internet' strip with Retry (was built but never mounted)",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-review-qr-on-trip-report",
+      "file": "driver-app/app/trip/report.tsx",
+      "must_contain": [
+        "<ReviewQrCard"
+      ],
+      "why": "owner: after a trip the driver shows a QR so the customer can rate the service (in every build since 24 Sep 2026)",
+      "since": "2026-09-24"
+    },
+    {
+      "id": "driver-review-qr-component",
+      "file": "driver-app/components/ReviewQrCard.tsx",
+      "must_contain": [
+        "Ask the customer to rate your service",
+        "/api/trip-review/link/"
+      ],
+      "why": "the QR card itself",
+      "since": "2026-09-24"
+    },
+    {
+      "id": "driver-rating-page-after-trip",
+      "file": "driver-app/app/trip/complete.tsx",
+      "must_contain": [
+        "One last step",
+        "Rate the customer"
+      ],
+      "why": "rating + cash collected page that every finished trip must pass",
+      "since": "2026-09-24"
+    },
+    {
+      "id": "website-no-password-in-browser-js",
+      "file": "website/assets/js/ui-controls.js",
+      "must_not_contain": [
+        "DropCars@"
+      ],
+      "must_contain": [
+        "credentials must never be in browser code"
+      ],
+      "why": "the admin password was written in this PUBLIC javascript file",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-signup-messages-translated",
+      "file": "driver-app/components/signup/SignupSinglePage.tsx",
+      "must_contain": [
+        "signupSinglePage.passwordsMismatch",
+        "signupSinglePage.verifyEmailFirst"
+      ],
+      "why": "signup problems are translated in all 5 languages",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "backend-waiting-own-settings",
+      "file": "backend/app/crud/end_records.py",
+      "must_contain": [
+        "waiting_rate_per_hour",
+        "multicity=(order.trip_type == OrderTypeEnum.MULTY_CITY)"
+      ],
+      "why": "waiting on non multi-city trips has its own admin settings",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "ota-text-diff-in-publish",
+      "file": "driver-app/scripts/publish-ota.js",
+      "must_contain": [
+        "ota_text_diff.py"
+      ],
+      "why": "every OTA prints which screen texts disappear compared with the live one",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "driver-profile-change-request-button",
+      "file": "driver-app/app/(tabs)/profile.tsx",
+      "must_contain": [
+        "setShowEditRequestModal(true)",
+        "Need to Change Profile Details?"
+      ],
+      "why": "the only way to open the Request Profile Update popup (KYC / bank corrections); it had been dropped when the apps were merged (found by Antigravity audit 2026-10-16)",
+      "since": "2026-09-21"
+    },
+    {
+      "id": "driver-qr-card-never-silent",
+      "file": "driver-app/components/ReviewQrCard.tsx",
+      "must_not_contain": [
+        "if (failed) return null"
+      ],
+      "must_contain": [
+        "Try again"
+      ],
+      "why": "the rating QR must show a retry line instead of vanishing when the link cannot load",
+      "since": "2026-10-16"
+    },
+    {
+      "id": "recreate-keeps-rates",
+      "file": "admin-panel/app/trip-detail.tsx",
+      "must_contain": [
+        "cost_per_km: str(order.cost_per_km)",
+        "extra_driver_allowance: str(order.extra_driver_allowance)",
+        "start_date: startD"
+      ],
+      "why": "Recreate / Edit & Post New must carry the booking's own rates, allowances, tolls and date, not re-price it from the default tariff",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "quote-separate-whatsapp",
+      "file": "admin-panel/app/quote-estimate.tsx",
+      "must_contain": [
+        "Different WhatsApp number (optional)",
+        "setWhatsAppPhone"
+      ],
+      "why": "an estimate can be sent to a WhatsApp number that differs from the mobile number",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "admin-list-bottom-padding",
+      "file": "admin-panel/app/(tabs)/chats.tsx",
+      "must_contain": [
+        "paddingBottom: 110"
+      ],
+      "why": "last list items must not sit behind the bottom navigation",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "indic-lineheight-driver",
+      "file": "driver-app/utils/uiTranslate.ts",
+      "must_contain": [
+        "indic line-height guard"
+      ],
+      "why": "Tamil / Telugu / Kannada / Hindi text is taller than English; a small fixed lineHeight made headers overlap",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "indic-lineheight-vendor",
+      "file": "vendor-app/utils/uiTranslate.ts",
+      "must_contain": [
+        "indic line-height guard"
+      ],
+      "why": "same as driver",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "indic-lineheight-customer",
+      "file": "customer-app/utils/uiTranslate.ts",
+      "must_contain": [
+        "indic line-height guard"
+      ],
+      "why": "same as driver",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "website-bridge-external-id",
+      "file": "backend/app/api/routes/website_bookings.py",
+      "must_contain": [
+        "external_booking_id",
+        "clean_external_booking_id"
+      ],
+      "why": "a website booking keeps the website's own booking reference (SDTC... etc.)",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "website-bridge-model",
+      "file": "backend/app/models/customer_booking_request.py",
+      "must_contain": [
+        "external_booking_id"
+      ],
+      "why": "column for the website booking reference",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "ui-kit-vendor",
+      "file": "vendor-app/components/ui/UiKit.tsx",
+      "must_contain": [
+        "Shimmer"
+      ],
+      "why": "shared design kit (cards, pills, empty states) built by Antigravity round 4",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "ui-kit-customer",
+      "file": "customer-app/components/ui/UiKit.tsx",
+      "must_contain": [
+        "Shimmer"
+      ],
+      "why": "shared design kit built by Antigravity round 4",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "empty-state-art-vendor",
+      "file": "vendor-app/components/ui/EmptyStateIllustrations.tsx",
+      "must_contain": [
+        "NoBookingsSvg"
+      ],
+      "why": "empty-state illustrations",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "empty-state-art-customer",
+      "file": "customer-app/components/ui/EmptyStateIllustrations.tsx",
+      "must_contain": [
+        "NoBookingsSvg"
+      ],
+      "why": "empty-state illustrations",
+      "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "admin-native-backup-no-password",
+      "file": "admin-panel/native-backup/android/app/build.gradle",
+      "must_contain": [
+        "ADMIN_KEYSTORE_PASSWORD"
+      ],
+      "must_not_contain": [
+        "DropCarsAdmin2026Rel"
+      ],
+      "why": "native Android project snapshot must never contain the release keystore password",
+      "since": "2026-10-23 (full audit)"
+    }
   ]
 }

@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   pendingBadge: { backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   pendingBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   scroll: { flex: 1 },
-  scrollInner: { padding: 16, gap: 14, paddingBottom: 40 },
+  scrollInner: { padding: 16, gap: 14, paddingBottom: 110 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   emptySub: { color: '#94A3B8', fontSize: 13, fontWeight: '500' },

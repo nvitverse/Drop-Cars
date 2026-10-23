@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingBottom: 110,
     flexGrow: 1,
   },
   card: {

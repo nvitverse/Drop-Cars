@@ -460,6 +460,7 @@ export default function QuoteEstimateScreen() {
   // Customer Contact
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');   // optional: the customer's WhatsApp number when it differs from the mobile number
   const [customerEmail, setCustomerEmail] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
 
@@ -624,7 +625,7 @@ export default function QuoteEstimateScreen() {
           travel_time: travelTime,
           fare_estimate: totalFare,
           advance_requested: advanceAmount,
-          notes: `[Ref: ${refId}] ${stopsNote ? stopsNote + ' | ' : ''}${specialNotes ? specialNotes + ' | ' : ''}Quoted via ${selectedBrand.name}`,
+          notes: `[Ref: ${refId}] ${stopsNote ? stopsNote + ' | ' : ''}${specialNotes ? specialNotes + ' | ' : ''}Quoted via ${selectedBrand.name}${whatsAppPhone.replace(/\D/g, '') ? ` | WhatsApp: ${whatsAppPhone.replace(/\D/g, '')}` : ''}`,
           website: selectedBrand.name,
         });
         if (res && res.id) {
@@ -697,7 +698,7 @@ Thank you for choosing ${selectedBrand.name}!`;
 
   const handleShareWhatsApp = async () => {
     const text = getWhatsAppMessage();
-    const cleanDigits = customerPhone.replace(/\D/g, '').slice(-10);
+    const cleanDigits = (whatsAppPhone.replace(/\D/g, '') || customerPhone.replace(/\D/g, '')).slice(-10);
     const targetPhone = cleanDigits ? `91${cleanDigits}` : '';
     const url = targetPhone
       ? `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`
@@ -1212,6 +1213,21 @@ Thank you for choosing ${selectedBrand.name}!`;
                     placeholderTextColor="#94A3B8"
                     value={customerPhone}
                     onChangeText={setCustomerPhone}
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginBottom: 10 }}>
+                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Different WhatsApp number (optional)</Text>
+                <View style={[styles.inputWrap, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: themeColors.border }]}>
+                  <Phone size={16} color="#10B981" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.inputField, { color: themeColors.text }]}
+                    keyboardType="phone-pad"
+                    placeholder="Leave empty if the same as above"
+                    placeholderTextColor="#94A3B8"
+                    value={whatsAppPhone}
+                    onChangeText={setWhatsAppPhone}
                   />
                 </View>
               </View>
