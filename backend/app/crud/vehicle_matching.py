@@ -98,6 +98,24 @@ def vehicle_match_status(db: Session, vehicle_owner_id: str, required_car_type) 
     return "OK" if any(is_car_verified(c) for c in cars) else "UNVERIFIED"
 
 
+def vehicle_problems(db: Session, vehicle_owner_id: str, required_car_type) -> list:
+    """The real reason(s) each suitable car of this owner cannot take the booking, one plain line per problem ("TN83MF4460: Insurance has
+    expired"). The Driver App used to say "a document has expired" for EVERY reason (invalid document, switched off, low rating...)."""
+    from app.crud.verification import car_document_problems
+    values = list(compatible_car_types(required_car_type))
+    cars = db.query(CarDetails).filter(
+        CarDetails.vehicle_owner_id == vehicle_owner_id,
+        CarDetails.removed_at.is_(None),
+        CarDetails.car_type.in_(values),
+    ).all()
+    out = []
+    for c in cars:
+        reg = getattr(c, "car_number", None) or getattr(c, "registration_number", None) or "Car"
+        for p in car_document_problems(c):
+            out.append(f"{reg}: {p}")
+    return out
+
+
 def has_matching_verified_car(db: Session, vehicle_owner_id: str, required_car_type) -> bool:
     return vehicle_match_status(db, vehicle_owner_id, required_car_type) == "OK"
 

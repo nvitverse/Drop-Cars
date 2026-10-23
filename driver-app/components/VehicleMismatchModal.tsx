@@ -16,11 +16,13 @@ interface VehicleMismatchModalProps {
   orderId: number;
   requiredCarType: string;
   reason?: 'NO_CAR' | 'UNVERIFIED' | string;
+  /** The server's real reasons the car cannot take this booking ("TN83MF4460: Insurance has expired") */
+  problems?: string[];
 }
 
 const formatCarType = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export default function VehicleMismatchModal({ visible, onClose, orderId, requiredCarType, reason }: VehicleMismatchModalProps) {
+export default function VehicleMismatchModal({ visible, onClose, orderId, requiredCarType, reason, problems }: VehicleMismatchModalProps) {
   const { colors, isDarkMode } = useTheme();
   const router = useRouter();
 
@@ -148,7 +150,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
               {step === 'sent'
                 ? 'Request sent'
                 : reason === 'UNVERIFIED'
-                  ? 'A Car Document Has Expired'
+                  ? (problems && problems.length && !problems.every((p) => /expired/i.test(p)) ? 'Your car cannot take bookings yet' : 'A Car Document Has Expired')
                   : `Needs a ${formatCarType(requiredCarType)} (${requiredSeats} Seats)`}
             </Text>
             <TouchableOpacity onPress={close}>
@@ -158,9 +160,23 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
 
           {step === 'intro' && reason === 'UNVERIFIED' && (
             <View style={{ gap: 14 }}>
-              <Text style={[styles.body, { color: colors.textSecondary }]}>
-                You have a car that fits this {formatCarType(requiredCarType)} booking, but one of its documents (RC, Insurance or Permit) has expired. Renew it and update the new date in My Fleet, then you can accept this booking.
-              </Text>
+              {problems && problems.length ? (
+                <>
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>
+                    You have a car that fits this {formatCarType(requiredCarType)} booking, but it cannot take bookings right now:
+                  </Text>
+                  {problems.map((p, i) => (
+                    <Text key={i} style={[styles.body, { color: colors.text, fontFamily: 'Inter-SemiBold' }]}>{'•'} {p}</Text>
+                  ))}
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>
+                    Fix this in My Fleet (upload the correct document or the right date), then you can accept this booking.
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.body, { color: colors.textSecondary }]}>
+                  You have a car that fits this {formatCarType(requiredCarType)} booking, but one of its documents (RC, Insurance or Permit) has expired or is not valid. Open My Fleet to fix it, then you can accept this booking.
+                </Text>
+              )}
               <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={addCarNow}>
                 <CarIcon size={18} color="#FFFFFF" />
                 <Text style={styles.primaryBtnText}>Open My Fleet</Text>

@@ -809,6 +809,24 @@
       ],
       "why": "the server already takes each hold out of the wallet at accept; subtracting it again made a small booking ask for double (Rs 1000)",
       "since": "2026-10-23"
+    },
+    {
+      "id": "car-inactive-reason-shown",
+      "file": "driver-app/app/my-cars.tsx",
+      "must_contain": [
+        "activity.inactive_reasons.slice(0, 2)"
+      ],
+      "why": "the My Cars card says WHY a car is inactive (drivers could not tell)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "accept-popup-real-car-problems",
+      "file": "driver-app/components/VehicleMismatchModal.tsx",
+      "must_contain": [
+        "problems.map"
+      ],
+      "why": "the accept popup lists the real problems of the car instead of always saying 'a document has expired'",
+      "since": "2026-10-24"
     }
   ]
 }

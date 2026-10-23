@@ -678,6 +678,10 @@ export default function MyCarsScreen() {
                           </View>
                         </View>
                       )}
+                      {/* Say WHY the car is inactive right on the card - drivers could not tell and thought "new car, nothing expired" */}
+                      {!!activity && !activity.active && activity.inactive_reasons.slice(0, 2).map((r) => (
+                        <Text key={r} style={{ fontSize: 11.5, color: '#B91C1C', marginTop: 4, flexShrink: 1 }}>{'⚠'} {r}</Text>
+                      ))}
                     </View>
                   </View>
 

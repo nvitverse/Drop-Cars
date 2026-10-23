@@ -242,7 +242,7 @@ export default function DashboardScreen() {
     title: '',
     message: '',
   });
-  const [vehicleMismatch, setVehicleMismatch] = useState<{ visible: boolean; orderId: number; requiredCarType: string; reason?: string }>({
+  const [vehicleMismatch, setVehicleMismatch] = useState<{ visible: boolean; orderId: number; requiredCarType: string; reason?: string; problems?: string[] }>({
     visible: false,
     orderId: 0,
     requiredCarType: '',
@@ -1926,7 +1926,7 @@ export default function DashboardScreen() {
       // check - so it must be detected before the generic String(...)
       // stringification below turns it into "[object Object]".
       if (rawDetail && typeof rawDetail === 'object' && rawDetail.error === 'VEHICLE_TYPE_MISMATCH') {
-        setVehicleMismatch({ visible: true, orderId: Number(order.order_id), requiredCarType: rawDetail.required_car_type || '', reason: rawDetail.reason });
+        setVehicleMismatch({ visible: true, orderId: Number(order.order_id), requiredCarType: rawDetail.required_car_type || '', reason: rawDetail.reason, problems: Array.isArray(rawDetail.problems) ? rawDetail.problems : [] });
         return;
       }
       const backendMsg = String(error?.response?.data?.detail || error?.response?.data?.message || error?.message || '');
@@ -3157,6 +3157,7 @@ export default function DashboardScreen() {
         orderId={vehicleMismatch.orderId}
         requiredCarType={vehicleMismatch.requiredCarType}
         reason={vehicleMismatch.reason}
+        problems={vehicleMismatch.problems}
       />
 
       {/* KYC/wallet/document/generic accept-booking errors - was imported and

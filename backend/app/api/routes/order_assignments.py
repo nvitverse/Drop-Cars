@@ -237,7 +237,11 @@ async def accept_order(
                     log_mismatch_attempt(db, order.id, vehicle_owner_id, order.car_type)
                     message = f"This booking needs a verified {type_label}. Add one to your fleet to accept it, or request to fulfil it with a different car of yours."
                 else:
-                    message = f"You have a car that fits this {type_label} booking, but one of its documents is expired or not valid (RC, Insurance or Permit). Fix it in My Cars to accept this booking."
+                    from app.crud.vehicle_matching import vehicle_problems
+                    problems = vehicle_problems(db, vehicle_owner_id, order.car_type)
+                    message = (f"You have a car that fits this {type_label} booking, but it cannot take bookings right now: " + "; ".join(problems)
+                               if problems else
+                               f"You have a car that fits this {type_label} booking, but one of its documents is expired or not valid (RC, Insurance or Permit). Fix it in My Cars to accept this booking.")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={
@@ -245,6 +249,7 @@ async def accept_order(
                         "reason": match,
                         "required_car_type": order.car_type.value,
                         "message": message,
+                        "problems": (problems if match != "NO_CAR" else []),
                     }
                 )
 
