@@ -1,4 +1,4 @@
-import { Text, TextInput } from 'react-native';
+import { StyleSheet, Text, TextInput } from 'react-native';
 import ta from '@/locales/ui/ta.json';
 import te from '@/locales/ui/te.json';
 import kn from '@/locales/ui/kn.json';
@@ -119,6 +119,15 @@ export function installUiTranslation() {
     if (T && typeof T.render === 'function') {
       const original = T.render;
       T.render = function patchedTextRender(props: any, ref: any) {
+        // indic line-height guard: Tamil / Telugu / Kannada / Hindi glyphs are taller than English ones. A fixed lineHeight that is fine for
+        // English (e.g. 24 for 18px) draws the next line over them - the "header overlaps" report after the app started showing Tamil.
+        if (current !== 'en' && props && props.style) {
+          const flat: any = StyleSheet.flatten(props.style);
+          if (flat && typeof flat.lineHeight === 'number') {
+            const need = Math.round((typeof flat.fontSize === 'number' ? flat.fontSize : 14) * 1.55);
+            if (flat.lineHeight < need) props = { ...props, style: [props.style, { lineHeight: need }] };
+          }
+        }
         if (current !== 'en' && props && props.children !== undefined) {
           const nc = trChildren(props.children);
           if (nc !== props.children) props = { ...props, children: nc };
