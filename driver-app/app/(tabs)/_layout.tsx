@@ -15,6 +15,8 @@ import ProfilePhotoReminder from '@/components/ProfilePhotoReminder';
 import OverlayPermissionPrompt from '@/components/OverlayPermissionPrompt';
 import AppLoadingScreen from '@/components/AppLoadingScreen';
 import axiosDriver from '@/app/api/axiosDriver';
+import axiosInstance from '@/app/api/axiosInstance';
+import { isEffectivelyRunning } from '@/utils/bookingStatus';
 
 // Total unread across booking chats + the general Support thread - polled
 // here (not inside chats.tsx) so the Chat tab shows a badge even when the
@@ -49,6 +51,29 @@ function useUnreadChatCount(enabled: boolean) {
   return count;
 }
 
+// Bookings the owner accepted but has not given a driver AND a car yet: the red number on the My Trips tab (what to do next).
+function useToAssignCount(enabled: boolean) {
+  const [count, setCount] = useState(0);
+  const refresh = useCallback(async () => {
+    if (!enabled) return;
+    try {
+      const res = await axiosInstance.get('/api/orders/vehicle-owner/pending');
+      const rows: any[] = Array.isArray(res.data) ? res.data : (res.data?.orders ?? []);
+      setCount(rows.filter((r) => !isEffectivelyRunning(r) && String(r.trip_status || '').toUpperCase() !== 'CANCELLED'
+        && (!r.assigned_driver_name || !r.assigned_car_name)).length);
+    } catch {}
+  }, [enabled]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!enabled) return;
+      refresh();
+      const stop = setForegroundInterval(refresh, 30000);
+      return stop;
+    }, [enabled, refresh])
+  );
+  return count;
+}
+
 export default function TabLayout() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -57,6 +82,7 @@ export default function TabLayout() {
   const { t } = useLanguage();
   const [authReady, setAuthReady] = useState(false);
   const unreadChats = useUnreadChatCount(authReady);
+  const toAssign = useToAssignCount(authReady);
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 12 : 8);
 
@@ -179,6 +205,8 @@ export default function TabLayout() {
           tabBarIcon: ({ size, color }) => (
             <Navigation size={size} color={color} />
           ),
+          tabBarBadge: toAssign > 0 ? (toAssign > 99 ? '99+' : toAssign) : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#EF4444', fontSize: 10 },
         }}
       />
 

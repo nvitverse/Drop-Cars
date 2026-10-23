@@ -914,6 +914,16 @@
       ],
       "why": "owner who drives: 'You drive' + Start trip on the card, own name pinned first when assigning",
       "since": "2026-10-24"
+    },
+    {
+      "id": "driver-mytrips-badge",
+      "file": "driver-app/app/(tabs)/_layout.tsx",
+      "must_contain": [
+        "useToAssignCount",
+        "tabBarBadge: toAssign"
+      ],
+      "why": "red number on My Trips = bookings still needing a driver and car",
+      "since": "2026-10-24"
     }
   ]
 }

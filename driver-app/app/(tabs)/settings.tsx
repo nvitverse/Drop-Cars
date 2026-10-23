@@ -1173,7 +1173,9 @@ export default function SettingsScreen() {
             onPress={() => router.push('/notifications' as any)}
           />
 
-          <SettingItem
+          {/* Hidden 2026-10-24: this picker only changed a label on the screen (nothing was saved or applied). The real alert sounds are the
+              MP3s Drop Cars uploads per event (Admin App > Notification Sounds). Brought back when a per-phone choice really works. */}
+          {false && <SettingItem
             icon={<Volume2 color={colors.primary} size={20} />}
             title="Booking Alert Sound Tone"
             subtitle="Custom notification horn sound for high priority bookings"
@@ -1186,7 +1188,7 @@ export default function SettingsScreen() {
                 <ChevronRight color={colors.textSecondary} size={18} />
               </View>
             }
-          />
+          />}
 
           <SettingItem
             icon={<MessageCircle color={colors.textSecondary} size={20} />}
