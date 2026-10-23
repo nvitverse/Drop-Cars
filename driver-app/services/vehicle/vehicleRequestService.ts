@@ -1,8 +1,15 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useEffect } from 'react';
+import axiosInstance from '@/app/api/axiosInstance';
 
+/**
+ * "Request for my car": a fleet without the booking's exact vehicle type offers another car of its own.
+ * The SERVER is the only truth now (it used to be a phone-only marker, so a request the server refused still showed as "Requested"
+ * and the poster / office never saw anything). The booking's poster or the office approves; approval is a pass - the driver then accepts
+ * the booking the normal way (wallet hold as usual, and he is told how much to recharge if he is short).
+ */
 export interface VehicleRequestItem {
   orderId: number | string;
+  requestId?: number;
   carId?: number | string;
   carName?: string;
   carType: string;
@@ -12,16 +19,17 @@ export interface VehicleRequestItem {
   requestedAt: string;
   approvedAt?: string;
   vendorNotes?: string;
+  /** rupees still to recharge when it was approved (0 = the wallet already covers the hold) */
+  fundsNeeded?: number;
+  requiredHold?: number;
+  decidedBy?: string;
 }
-
-const STORAGE_KEY = 'dropcars_vehicle_substitution_requests';
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
-// In-memory cache for fast synchronous access
 let memoryCache: Record<string, VehicleRequestItem> = {};
-let isInitialized = false;
+let lastRefreshAt = 0;
 
 const notifyListeners = () => {
   listeners.forEach((listener) => {
@@ -33,34 +41,59 @@ const notifyListeners = () => {
   });
 };
 
-const initCache = async () => {
-  if (isInitialized) return;
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      memoryCache = JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Failed to load vehicle requests from storage', e);
-  } finally {
-    isInitialized = true;
-  }
+const messageOf = (e: any): string => {
+  const d = e?.response?.data?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d) && d[0]?.msg) return String(d[0].msg);
+  return e?.message || 'Could not send the request. Please try again.';
 };
 
-// Initial call
-initCache();
-
 export const vehicleRequestService = {
+  /** Pull the fleet's requests from the server (PENDING, REJECTED and approved-but-not-yet-accepted). */
+  async refresh(force = false): Promise<void> {
+    const now = Date.now();
+    if (!force && now - lastRefreshAt < 8000) return;
+    lastRefreshAt = now;
+    try {
+      const res = await axiosInstance.get('/api/orders/vehicle-owner/substitution-requests', { noCache: true } as any);
+      const next: Record<string, VehicleRequestItem> = {};
+      for (const r of Array.isArray(res?.data) ? res.data : []) {
+        const status = String(r.request_status || 'PENDING').toUpperCase() as VehicleRequestItem['status'];
+        next[String(r.order_id)] = {
+          orderId: r.order_id,
+          requestId: r.request_id,
+          carType: r.offered_car_type || r.required_car_type,
+          carName: r.assigned_car_name || r.offered_car_type,
+          driverName: r.assigned_driver_name,
+          status,
+          requestedAt: r.created_at,
+          approvedAt: status === 'APPROVED' ? r.decided_at : undefined,
+          vendorNotes: r.admin_notes || undefined,
+          fundsNeeded: r.funds_needed ?? undefined,
+          requiredHold: r.required_hold ?? undefined,
+          decidedBy: r.decided_by_name || r.decided_by_kind || undefined,
+        };
+      }
+      memoryCache = next;
+      notifyListeners();
+    } catch {
+      // offline / server hiccup: keep what we have
+    }
+  },
+
   async getAll(): Promise<Record<string, VehicleRequestItem>> {
-    await initCache();
     return { ...memoryCache };
   },
 
   getRequest(orderId: number | string): VehicleRequestItem | null {
-    const key = String(orderId);
-    return memoryCache[key] || null;
+    return memoryCache[String(orderId)] || null;
   },
 
+  hasPending(): boolean {
+    return Object.values(memoryCache).some((r) => r.status === 'PENDING');
+  },
+
+  /** Send the request to the server. Throws with the server's own reason (expired document, not enough seats, no driver chosen ...). */
   async submitRequest(item: {
     orderId: number | string;
     carType: string;
@@ -69,9 +102,17 @@ export const vehicleRequestService = {
     driverId?: number | string;
     driverName?: string;
   }): Promise<VehicleRequestItem> {
-    await initCache();
-    const key = String(item.orderId);
-    const newItem: VehicleRequestItem = {
+    if (!item.carId) throw new Error('Choose the car you want to offer.');
+    try {
+      await axiosInstance.post('/api/assignments/car-substitution-request', {
+        order_id: Number(item.orderId),
+        car_id: String(item.carId),
+        driver_id: item.driverId ? String(item.driverId) : undefined,
+      });
+    } catch (e: any) {
+      throw new Error(messageOf(e));
+    }
+    const created: VehicleRequestItem = {
       orderId: item.orderId,
       carType: item.carType,
       carName: item.carName || item.carType,
@@ -81,63 +122,10 @@ export const vehicleRequestService = {
       status: 'PENDING',
       requestedAt: new Date().toISOString(),
     };
-    memoryCache[key] = newItem;
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(memoryCache));
-    } catch (e) {
-      console.error('Error saving vehicle request', e);
-    }
+    memoryCache[String(item.orderId)] = created;
     notifyListeners();
-    return newItem;
-  },
-
-  async approveRequest(orderId: number | string, notes?: string): Promise<VehicleRequestItem | null> {
-    await initCache();
-    const key = String(orderId);
-    const existing = memoryCache[key] || {
-      orderId,
-      carType: 'SUV',
-      status: 'PENDING',
-      requestedAt: new Date().toISOString(),
-    };
-    const updated: VehicleRequestItem = {
-      ...existing,
-      status: 'APPROVED',
-      approvedAt: new Date().toISOString(),
-      vendorNotes: notes || 'Approved by Vendor',
-    };
-    memoryCache[key] = updated;
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(memoryCache));
-    } catch (e) {
-      console.error('Error saving approved vehicle request', e);
-    }
-    notifyListeners();
-    return updated;
-  },
-
-  async rejectRequest(orderId: number | string, reason?: string): Promise<VehicleRequestItem | null> {
-    await initCache();
-    const key = String(orderId);
-    const existing = memoryCache[key] || {
-      orderId,
-      carType: 'SUV',
-      status: 'PENDING',
-      requestedAt: new Date().toISOString(),
-    };
-    const updated: VehicleRequestItem = {
-      ...existing,
-      status: 'REJECTED',
-      vendorNotes: reason || 'Declined by Vendor',
-    };
-    memoryCache[key] = updated;
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(memoryCache));
-    } catch (e) {
-      console.error('Error saving rejected vehicle request', e);
-    }
-    notifyListeners();
-    return updated;
+    this.refresh(true);
+    return created;
   },
 
   subscribe(listener: Listener): () => void {

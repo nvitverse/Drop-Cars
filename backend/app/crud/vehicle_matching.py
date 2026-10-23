@@ -148,9 +148,19 @@ def create_substitution_request(db: Session, order_id: int, vehicle_owner_id: st
     car = db.query(CarDetails).filter(CarDetails.id == car_id, CarDetails.vehicle_owner_id == vehicle_owner_id, CarDetails.removed_at.is_(None)).first()
     if not car:
         raise ValueError("That car isn't in your fleet")
-    driver = db.query(CarDriver).filter(CarDriver.id == driver_id, CarDriver.vehicle_owner_id == vehicle_owner_id, CarDriver.removed_at.is_(None)).first()
+    driver = None
+    try:
+        import uuid as _uuid
+        _uuid.UUID(str(driver_id))                         # the old app sent a placeholder "1": not a UUID, so do not even ask the database
+        driver = db.query(CarDriver).filter(CarDriver.id == driver_id, CarDriver.vehicle_owner_id == vehicle_owner_id, CarDriver.removed_at.is_(None)).first()
+    except (ValueError, AttributeError, TypeError):
+        driver = None
     if not driver:
-        raise ValueError("That driver isn't in your fleet")
+        fleet_drivers = db.query(CarDriver).filter(CarDriver.vehicle_owner_id == vehicle_owner_id, CarDriver.removed_at.is_(None)).all()
+        if len(fleet_drivers) == 1:
+            driver = fleet_drivers[0]                      # a one-driver fleet: it can only be him
+        else:
+            raise ValueError("Choose which of your drivers will drive this booking")
     if not is_car_verified(car):
         raise ValueError("One of this car's documents (RC, Insurance or Permit) has expired. Renew it before offering this car")
 
@@ -175,7 +185,7 @@ def create_substitution_request(db: Session, order_id: int, vehicle_owner_id: st
         order_id=order_id,
         vehicle_owner_id=vehicle_owner_id,
         car_id=car_id,
-        driver_id=driver_id,
+        driver_id=driver.id,
         required_car_type=order.car_type,
         # car.car_type is a car_details.CarTypeEnum instance - a different
         # Python class from the new_orders.CarTypeEnum this column is bound
@@ -241,12 +251,39 @@ def list_pending_substitution_requests(db: Session) -> list:
     return items
 
 
-def decide_substitution_request(db: Session, request_id: int, approve: bool, admin_id: str, notes: Optional[str] = None):
-    """Approve: actually creates the OrderAssignment with the offered
-    car+driver, exactly like a normal accept+assign would (bypassing the
-    type gate this whole system exists to enforce - that's the point of
-    an explicit admin-approved exception). Reject: just closes the
-    request out; the requesting owner is notified either way."""
+def substitution_pass(db: Session, order_id: int, vehicle_owner_id: str):
+    """The approved, not-yet-used request that lets this fleet accept this booking with a different car (or None)."""
+    return db.query(CarSubstitutionRequest).filter(
+        CarSubstitutionRequest.order_id == order_id,
+        CarSubstitutionRequest.vehicle_owner_id == vehicle_owner_id,
+        CarSubstitutionRequest.status == SubstitutionRequestStatusEnum.APPROVED,
+        CarSubstitutionRequest.assignment_id.is_(None),
+    ).order_by(CarSubstitutionRequest.id.desc()).first()
+
+
+def approved_pass_for_car(db: Session, order_id: int, vehicle_owner_id: str, car_id: str):
+    """An approved request (used or not) for exactly this order + car: lets that car be attached although its type differs."""
+    return db.query(CarSubstitutionRequest).filter(
+        CarSubstitutionRequest.order_id == order_id,
+        CarSubstitutionRequest.vehicle_owner_id == vehicle_owner_id,
+        CarSubstitutionRequest.car_id == car_id,
+        CarSubstitutionRequest.status == SubstitutionRequestStatusEnum.APPROVED,
+    ).first()
+
+
+def poster_owns_order(order, poster_kind: str, poster_id) -> bool:
+    """The vendor (or fleet owner) who POSTED the booking."""
+    if poster_kind == "vendor":
+        return getattr(order, "vendor_id", None) is not None and str(order.vendor_id) == str(poster_id)
+    return getattr(order, "posted_by_vehicle_owner_id", None) is not None and str(order.posted_by_vehicle_owner_id) == str(poster_id)
+
+
+def decide_substitution_request(db: Session, request_id: int, approve: bool, decider_id: Optional[str], notes: Optional[str] = None,
+                                decider_kind: str = "ADMIN", decider_name: Optional[str] = None):
+    """Approve: records the approval as a PASS and works out what the driver still has to recharge. It does NOT assign anything by
+    itself and does NOT skip the wallet hold - the driver accepts the booking the normal way (accept_order honours the pass), or it is
+    accepted for him at once when his wallet already covers the hold (see services/substitution_flow.py).
+    Reject: closes the request. The requesting owner is notified either way."""
     from datetime import datetime
     from app.models.order_assignments import OrderAssignment, AssignmentStatusEnum
 
@@ -259,42 +296,63 @@ def decide_substitution_request(db: Session, request_id: int, approve: bool, adm
     req.status = SubstitutionRequestStatusEnum.APPROVED if approve else SubstitutionRequestStatusEnum.REJECTED
     req.admin_notes = notes
     req.decided_at = datetime.utcnow()
-    req.decided_by_admin_id = admin_id
+    req.decided_by_kind = decider_kind
+    req.decided_by_name = decider_name
+    try:
+        req.decided_by_admin_id = decider_id if decider_kind == "ADMIN" else None
+    except Exception:  # noqa: BLE001
+        pass
 
-    assignment = None
     if approve:
-        # NOTE: unlike a normal accept_order, this does NOT run the wallet-
-        # hold check/debit (commission hold, driver-payout guarantee) -
-        # admin is manually overriding the vehicle-type gate for what
-        # should be a rare, individually-reviewed exception, not routing
-        # around the whole financial safety system. If this path sees real
-        # volume, move the hold logic from accept_order into a shared
-        # helper both call instead of duplicating it here.
         existing_assignment = db.query(OrderAssignment).filter(
             OrderAssignment.order_id == req.order_id,
             OrderAssignment.assignment_status != AssignmentStatusEnum.CANCELLED,
         ).first()
         if existing_assignment:
+            db.rollback()
             raise ValueError("This booking already has an active assignment - can't approve a substitution for it anymore")
-
-        import secrets
-        assignment = OrderAssignment(
-            order_id=req.order_id,
-            vehicle_owner_id=req.vehicle_owner_id,
-            driver_id=req.driver_id,
-            car_id=req.car_id,
-            assignment_status=AssignmentStatusEnum.ASSIGNED,
-            assigned_at=datetime.utcnow(),
-            created_at=datetime.utcnow(),
-            held_amount=0,
-        )
-        db.add(assignment)
-        db.flush()
-        from app.crud.trip_otp import apply_order_otps_to_assignment
-        apply_order_otps_to_assignment(db, assignment)
-        assignment.trip_link_token = secrets.token_urlsafe(24)
+        from app.crud.accept_hold import compute_accept_hold
+        from app.crud.wallet import get_owner_balance
+        order = db.query(Order).filter(Order.id == req.order_id).first()
+        hold, _vendor_hold, _is_vendor = compute_accept_hold(db, order)
+        try:
+            balance = int(get_owner_balance(db, str(req.vehicle_owner_id)) or 0)
+        except Exception:  # noqa: BLE001
+            balance = 0
+        req.required_hold = int(hold or 0)
+        req.funds_needed = max(0, int(hold or 0) - balance)
 
     db.commit()
-    if assignment:
-        db.refresh(assignment)
-    return req, assignment
+    db.refresh(req)
+    return req
+
+
+def list_for_poster(db: Session, poster_kind: str, poster_id) -> list:
+    """Pending requests (and the last decided ones) on bookings this vendor / fleet owner posted."""
+    from sqlalchemy import or_ as _or
+    q = db.query(CarSubstitutionRequest, Order).join(Order, Order.id == CarSubstitutionRequest.order_id)
+    if poster_kind == "vendor":
+        q = q.filter(Order.vendor_id == poster_id)
+    else:
+        q = q.filter(Order.posted_by_vehicle_owner_id == poster_id)
+    q = q.filter(_or(CarSubstitutionRequest.status == SubstitutionRequestStatusEnum.PENDING,
+                     CarSubstitutionRequest.decided_at >= (__import__("datetime").datetime.utcnow() - __import__("datetime").timedelta(days=3))))
+    rows = q.order_by(CarSubstitutionRequest.created_at.desc()).limit(60).all()
+    out = []
+    for r, order in rows:
+        owner = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == r.vehicle_owner_id).first()
+        car = db.query(CarDetails).filter(CarDetails.id == r.car_id).first()
+        driver = db.query(CarDriver).filter(CarDriver.id == r.driver_id).first()
+        _v = lambda x: getattr(x, "value", x)
+        out.append({
+            "id": r.id, "order_id": r.order_id, "status": str(_v(r.status)),
+            "customer_name": order.customer_name, "pickup_drop_location": order.pickup_drop_location,
+            "start_date_time": order.start_date_time.isoformat() if order.start_date_time else None,
+            "required_car_type": str(_v(r.required_car_type)), "offered_car_type": str(_v(r.offered_car_type)),
+            "owner_name": owner.full_name if owner else None, "owner_phone": owner.primary_number if owner else None,
+            "car_name": car.car_name if car else None, "car_number": car.car_number if car else None,
+            "driver_name": driver.full_name if driver else None,
+            "funds_needed": r.funds_needed, "decided_by_kind": r.decided_by_kind, "decided_by_name": r.decided_by_name,
+            "assignment_id": r.assignment_id, "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    return out

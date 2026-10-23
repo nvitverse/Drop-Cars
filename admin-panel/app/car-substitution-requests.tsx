@@ -83,7 +83,7 @@ export default function CarSubstitutionRequestsScreen() {
     Alert.alert(
       `${verb} This Request?`,
       approve
-        ? `Assign Booking #${item.order_id} to ${item.driver_name || 'this driver'} with their ${formatType(item.offered_car_type)} (${item.car_number || ''}) instead of the requested ${formatType(item.required_car_type)}?`
+        ? `Approve Booking #${item.order_id} for ${item.driver_name || 'this driver'} with their ${formatType(item.offered_car_type)} (${item.car_number || ''}) instead of the requested ${formatType(item.required_car_type)}?`
         : `Decline this substitution request? ${item.owner_name || 'The fleet'} will be notified.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -93,8 +93,9 @@ export default function CarSubstitutionRequestsScreen() {
           onPress: async () => {
             setProcessingId(item.id);
             try {
-              await apiService.decideCarSubstitutionRequest(item.id, approve);
+              const res = await apiService.decideCarSubstitutionRequest(item.id, approve);
               setItems((prev) => prev.filter((i) => i.id !== item.id));
+              if (approve && res?.message) Alert.alert('Approved', res.message);       // assigned at once, or the driver was told what to recharge
             } catch (err: any) {
               Alert.alert('Error', err?.message || `Failed to ${verb.toLowerCase()} this request.`);
             } finally {

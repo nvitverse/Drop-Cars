@@ -1423,7 +1423,8 @@ export default function BookingCard({
             }}>
               <CheckCircle size={14} color="#10B981" />
               <Text style={{ fontSize: 11.5, fontFamily: 'Inter-Bold', color: isDarkMode ? '#6EE7B7' : '#047857' }}>
-                Vehicle Approved by Vendor ({vehicleReq?.carType || 'SUV'})
+                {vehicleReq?.decidedBy ? `Vehicle approved by ${vehicleReq.decidedBy}` : 'Vehicle approved'} ({vehicleReq?.carType || 'SUV'})
+                {(vehicleReq?.fundsNeeded ?? 0) > 0 ? ` - add ₹${vehicleReq?.fundsNeeded} to your wallet, then tap Accept` : ' - tap Accept'}
               </Text>
             </View>
           )}

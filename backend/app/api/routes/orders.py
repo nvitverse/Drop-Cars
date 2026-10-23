@@ -206,7 +206,8 @@ def get_vehicle_owner_substitution_requests_endpoint(
         db.query(CarSubstitutionRequest)
         .filter(
             CarSubstitutionRequest.vehicle_owner_id == vehicle_owner_id,
-            CarSubstitutionRequest.status != SubstitutionRequestStatusEnum.APPROVED,
+            # PENDING, REJECTED, and APPROVED requests whose pass is not used yet (the driver still has to recharge / tap Accept)
+            (CarSubstitutionRequest.status != SubstitutionRequestStatusEnum.APPROVED) | (CarSubstitutionRequest.assignment_id.is_(None)),
         )
         .order_by(CarSubstitutionRequest.created_at.desc())
         .limit(limit)
@@ -226,6 +227,10 @@ def get_vehicle_owner_substitution_requests_endpoint(
             "request_id": r.id,
             "request_status": str(_v(r.status)),
             "admin_notes": r.admin_notes,
+            "funds_needed": r.funds_needed,
+            "required_hold": r.required_hold,
+            "decided_by_kind": r.decided_by_kind,
+            "decided_by_name": r.decided_by_name,
             "created_at": r.created_at,
             "decided_at": r.decided_at,
             "trip_type": str(_v(order.trip_type)),

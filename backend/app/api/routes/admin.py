@@ -6303,31 +6303,20 @@ class SubstitutionRequestDecision(BaseModel):
 
 
 @router.post("/admin/car-substitution-requests/{request_id}/approve")
-def approve_car_substitution_request_endpoint(
+async def approve_car_substitution_request_endpoint(
     request_id: int,
     payload: SubstitutionRequestDecision,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ):
-    from app.crud.vehicle_matching import decide_substitution_request
+    """Any admin may approve a request on ANY booking (the poster can too - see substitution_poster.py). Approval is a pass: the driver
+    still needs the normal wallet hold; if it is there the booking is accepted and assigned at once, otherwise he is told what to recharge."""
+    from app.services.substitution_flow import approve_and_accept
     try:
-        req, assignment = decide_substitution_request(db, request_id, approve=True, admin_id=str(current_admin.id), notes=payload.notes)
+        req, auto, message = await approve_and_accept(db, request_id, str(current_admin.id), "ADMIN", getattr(current_admin, "username", None), payload.notes)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    try:
-        from app.crud.notification import send_new_booking_notification_to_driver_sync
-        send_new_booking_notification_to_driver_sync(
-            db,
-            title="✅ Substitution Request Approved",
-            message=f"Your request to fulfil Booking #{req.order_id} with your {req.offered_car_type.value.replace('_', ' ').title()} was approved - it's now assigned to you.",
-            driver_id=str(req.driver_id),
-            order_id=req.order_id,
-        )
-    except Exception as e:
-        print(f"Substitution-approved notification failed (assignment still created): {e}")
-
-    return {"status": "approved", "assignment_id": assignment.id if assignment else None}
+    return {"status": "approved", "assigned": auto, "funds_needed": req.funds_needed or 0, "required_hold": req.required_hold, "message": message}
 
 
 @router.post("/admin/car-substitution-requests/{request_id}/reject")
@@ -6338,22 +6327,13 @@ def reject_car_substitution_request_endpoint(
     current_admin=Depends(get_current_admin),
 ):
     from app.crud.vehicle_matching import decide_substitution_request
+    from app.services.substitution_flow import notify_driver_decision
     try:
-        req, _ = decide_substitution_request(db, request_id, approve=False, admin_id=str(current_admin.id), notes=payload.notes)
+        req = decide_substitution_request(db, request_id, approve=False, decider_id=str(current_admin.id), notes=payload.notes,
+                                          decider_kind="ADMIN", decider_name=getattr(current_admin, "username", None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    try:
-        from app.crud.notification import send_new_booking_notification_to_driver_sync
-        send_new_booking_notification_to_driver_sync(
-            db,
-            title="Substitution Request Declined",
-            message=f"Your request to fulfil Booking #{req.order_id} with your {req.offered_car_type.value.replace('_', ' ').title()} wasn't approved." + (f" {payload.notes}" if payload.notes else ""),
-            driver_id=str(req.driver_id),
-        )
-    except Exception as e:
-        print(f"Substitution-rejected notification failed (status still updated): {e}")
-
+    notify_driver_decision(db, req, False, False)
     return {"status": "rejected"}
 
 

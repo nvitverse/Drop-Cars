@@ -64,22 +64,12 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
         carsResponse = [];
       }
 
-      // If no drivers exist, create fallback Self driver
-      if (!driversResponse || driversResponse.length === 0) {
-        driversResponse = [{
-          id: 1,
-          full_name: 'Self (Driver)',
-          primary_number: 'Registered Mobile',
-          verification_status: 'VERIFIED',
-        } as any];
-      }
-
       setDrivers(driversResponse);
       setCars(carsResponse || []);
 
-      // If only 1 driver, auto-select and proceed to car selection
-      if (driversResponse.length === 1) {
-        setSelectedDriver(driversResponse[0]);
+      // No drivers at all: go on to the car; the server uses the fleet's only driver or explains what is missing.
+      if (driversResponse.length <= 1) {
+        setSelectedDriver(driversResponse[0] || null);
         setStep('pickCar');
       } else {
         setStep('pickDriver');
@@ -105,22 +95,13 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
         carName: carName || carType,
         carId,
         driverId: selectedDriver?.id,
-        driverName: selectedDriver?.full_name || 'Assigned Driver',
+        driverName: selectedDriver?.full_name,
       });
-
-      // Also attempt backend substitution request gracefully
-      try {
-        await axiosInstance.post('/api/assignments/car-substitution-request', {
-          order_id: orderId,
-          car_id: carId || 1,
-          driver_id: selectedDriver?.id || 1,
-        });
-      } catch {}
-
       setSubmittedCar({ carType, carName });
       setStep('sent');
     } catch (e: any) {
-      Alert.alert('Error', 'Failed to send request. Please try again.');
+      // the server's own reason (expired document, not enough seats, choose a driver ...) - never a fake "sent"
+      Alert.alert('Request not sent', e?.message || 'Please try again.');
       setStep('pickCar');
     }
   };
@@ -134,7 +115,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Send Request to Vendor',
+            text: 'Send request',
             onPress: () => doSendRequest(car.car_type, car.car_name, car.id),
           },
         ]
@@ -165,7 +146,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
             ) : null}
             <Text style={[styles.title, { color: colors.text }]}>
               {step === 'sent'
-                ? 'Request Sent to Vendor'
+                ? 'Request sent'
                 : reason === 'UNVERIFIED'
                   ? 'A Car Document Has Expired'
                   : `Needs a ${formatCarType(requiredCarType)} (${requiredSeats} Seats)`}
@@ -216,7 +197,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
               </TouchableOpacity>
 
               <Text style={[styles.footnote, { color: colors.textSecondary }]}>
-                Offer a vehicle from your fleet. Once requested, you can chat directly with the vendor and get instant approval.
+                Offer a vehicle from your fleet. The person who posted this booking (or the Drop Cars office) approves it; then you accept it as usual.
               </Text>
             </View>
           )}
@@ -318,7 +299,7 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
             <View style={{ gap: 14, alignItems: 'center', paddingVertical: 10 }}>
               <CheckCircle size={44} color="#10B981" />
               <Text style={[styles.title, { color: colors.text, textAlign: 'center' }]}>
-                Request Sent to Vendor!
+                Request sent! The person who posted this booking and the Drop Cars office have been told.
               </Text>
               
               <View style={{ backgroundColor: isDarkMode ? '#1E293B' : '#FEF3C7', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#FDE68A', width: '100%' }}>
@@ -329,12 +310,12 @@ export default function VehicleMismatchModal({ visible, onClose, orderId, requir
                   </Text>
                 </View>
                 <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.textSecondary, textAlign: 'center', marginTop: 4 }}>
-                  Status: Pending Vendor Approval • Please wait
+                  Status: Waiting for approval • Please wait
                 </Text>
               </View>
 
               <Text style={[styles.body, { color: colors.textSecondary, textAlign: 'center', fontSize: 13, lineHeight: 18 }]}>
-                Your request has been registered. You can chat directly with the vendor right now to get this booking approved!
+                Your request is registered. When it is approved you will be told - if your wallet is short, the app shows how much to add, then tap Accept.
               </Text>
 
               <TouchableOpacity

@@ -273,9 +273,13 @@ export default function DashboardScreen() {
 
   const [, setVehicleUpdateTrigger] = useState(0);
   useEffect(() => {
-    return vehicleRequestService.subscribe(() => {
+    vehicleRequestService.refresh(true);                                  // what the server says about my "request for my car"
+    const unsub = vehicleRequestService.subscribe(() => {
       setVehicleUpdateTrigger((prev) => prev + 1);
     });
+    // a pending request is answered by someone else: look again every minute, but only while one is waiting
+    const timer = setInterval(() => { if (vehicleRequestService.hasPending()) vehicleRequestService.refresh(); }, 60000);
+    return () => { unsub(); clearInterval(timer); };
   }, []);
 
   useEffect(() => {

@@ -225,7 +225,9 @@ async def accept_order(
                 detail="You posted this booking, so you can't accept it yourself. Another driver will accept it - you can cancel it from My Trips."
             )
 
-        if order.car_type is not None:
+        from app.crud.vehicle_matching import substitution_pass
+        _sub_pass = substitution_pass(db, order.id, vehicle_owner_id)       # approved request for this booking = allowed with the car he offered
+        if order.car_type is not None and _sub_pass is None:
             from app.crud.vehicle_matching import vehicle_match_status, log_mismatch_attempt
             match = vehicle_match_status(db, vehicle_owner_id, order.car_type)
             if match != "OK":
@@ -286,46 +288,9 @@ async def accept_order(
                            f"Complete or reassign an existing booking on this date before accepting more."
                 )
 
-        # Symmetrical Wallet Hold Guarantee System:
-        # Commission rate: 2% for Vendor-posted bookings, 15% for Website/Direct/DropBid bookings.
-        import math
-        is_vendor_booking = bool(getattr(order, "vendor_id", None))
-        comm_rate = 0.02 if is_vendor_booking else 0.15
-
-        total_booking = getattr(order, "total_booking_amount", None) or getattr(order, "estimated_price", None) or 0
-        extra_amt = getattr(order, "extra_amount", None) or 0
-        advance_rec = getattr(order, "advance_received", None) or 0
-
-        admin_comm = math.ceil(total_booking * comm_rate)
-        driver_earnings = max(0, total_booking - admin_comm)
-        cash_to_collect = max(0, (total_booking + extra_amt) - advance_rec)
-
-        if cash_to_collect > driver_earnings:
-            hold_amount = math.ceil((cash_to_collect - driver_earnings) + admin_comm)
-            vendor_hold_amount = 0
-        else:
-            hold_amount = admin_comm
-            vendor_hold_amount = math.ceil(driver_earnings - cash_to_collect)
-
-        # Every booking (vendor, driver-posted, website, admin) uses the shared commission split
-        # (utils/commission.py) - the same numbers trip close settles with, so the amount held here is
-        # exactly what the driver hands over at the end. The old formula above kept counting the cash excess
-        # on top of the commission, and used 15% for every booking without a vendor. Vendor bookings and
-        # Hourly Rental keep the formula above.
-        _src = getattr(getattr(order, "source", None), "value", getattr(order, "source", None))
-        if _src != "HOURLY_RENTAL":
-            from app.utils.commission import estimate_split_for_order, expected_hold
-            _split = estimate_split_for_order(db, order)
-            hold_amount = expected_hold(_split, advance_rec)
-            # no separate vendor payout hold any more: the vendor's advance already sits in their wallet and the
-            # trip-close settlement moves the exact difference (see end_records._settle_trip)
-            vendor_hold_amount = 0
-        else:
-            # Hourly Rental keeps the formula above, plus the convenience fee: the driver collects it from the
-            # customer in cash and it is settled to the platform out of his wallet at trip close (end_records.py)
-            from app.utils.commission import convenience_fee_amount, min_hold_amount
-            hold_amount += convenience_fee_amount(db)
-            hold_amount = max(hold_amount, min_hold_amount(db))      # the minimum hold applies to every booking
+        # Symmetrical Wallet Hold Guarantee System (see crud/accept_hold.py - the same amount is shown to a driver whose substitution request was approved)
+        from app.crud.accept_hold import compute_accept_hold
+        hold_amount, vendor_hold_amount, is_vendor_booking = compute_accept_hold(db, order)
 
         # Check if fleet owner has sufficient balance for the hold
         if hold_amount > 0 and not check_vehicle_owner_balance(db, vehicle_owner_id, hold_amount):
@@ -371,6 +336,8 @@ async def accept_order(
                 notes=f"Held for Booking ID {order.id} - the commission is deducted when the trip completes and the rest is refunded to your wallet (full refund if the booking is cancelled)",
             )
 
+        if _sub_pass is not None:
+            _sub_pass.assignment_id = assignment.id             # the pass is used up
         db.commit()
         print("Order is Accepted",assignment.order_id)
 
@@ -627,7 +594,9 @@ async def assign_car_driver(
         # falsely blocked every single matching assignment. Compare on
         # .value instead.
         from app.crud.vehicle_matching import car_type_satisfies
-        if order_for_assignment and order_for_assignment.car_type is not None and not car_type_satisfies(car_to_assign.car_type, order_for_assignment.car_type):
+        from app.crud.vehicle_matching import approved_pass_for_car
+        _car_pass = approved_pass_for_car(db, assignment.order_id, str(assignment.vehicle_owner_id), str(payload.car_id))
+        if order_for_assignment and order_for_assignment.car_type is not None and _car_pass is None and not car_type_satisfies(car_to_assign.car_type, order_for_assignment.car_type):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -739,8 +708,8 @@ async def assign_car_driver(
 
 class CarSubstitutionRequestCreate(BaseModel):
     order_id: int
-    car_id: str
-    driver_id: str
+    car_id: Union[str, int]
+    driver_id: Optional[Union[str, int]] = None
 
 
 @router.post("/car-substitution-request", status_code=status.HTTP_201_CREATED)
@@ -756,19 +725,18 @@ async def create_car_substitution_request_endpoint(
     from app.crud.vehicle_matching import create_substitution_request
     vehicle_owner_id = str(current_user.vehicle_owner_id)
     try:
-        req = create_substitution_request(db, payload.order_id, vehicle_owner_id, payload.car_id, payload.driver_id)
+        req = create_substitution_request(db, payload.order_id, vehicle_owner_id, str(payload.car_id), str(payload.driver_id) if payload.driver_id is not None else "")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # tell the booking's poster (vendor / fleet owner) AND the office - nobody got anything before
     try:
-        from app.crud.notification import send_push_notification_to_admin
-        await send_push_notification_to_admin(
-            db,
-            title="🚗 Car Substitution Request",
-            message=f"A fleet wants to fulfil Booking #{payload.order_id} with a {req.offered_car_type.value.replace('_', ' ').title()} instead of the requested {req.required_car_type.value.replace('_', ' ').title()}.",
-        )
+        from app.models.orders import Order
+        from app.services.substitution_flow import notify_new_request
+        order = db.query(Order).filter(Order.id == payload.order_id).first()
+        await notify_new_request(db, req, order)
     except Exception as e:
-        print(f"Substitution-request admin notification failed (request still created): {e}")
+        print(f"Substitution-request notification failed (request still created): {e}")
 
     return {"id": req.id, "status": req.status.value if hasattr(req.status, "value") else str(req.status)}
 

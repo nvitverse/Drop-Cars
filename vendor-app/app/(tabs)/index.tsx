@@ -90,6 +90,10 @@ export default function VendorDashboardScreen() {
   const [walletFetchFailed, setWalletFetchFailed] = useState(false);
   const [profileFetchFailed, setProfileFetchFailed] = useState(false);
   const [unreadChats, setUnreadChats] = useState(0);
+  const [vehicleRequestsWaiting, setVehicleRequestsWaiting] = useState(0);
+  useEffect(() => {
+    api.get('/poster/substitution-requests').then((r: any) => setVehicleRequestsWaiting(Number(r?.data?.pending || 0))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadDashboardData();
@@ -378,6 +382,24 @@ export default function VendorDashboardScreen() {
               </View>
               <Text style={styles.quickActionLabel} numberOfLines={1} adjustsFontSizeToFit>Invoices</Text>
               <Text style={styles.quickActionSub} numberOfLines={1}>In your name</Text>
+            </TouchableOpacity>
+
+            {/* A driver offering another car for a booking you posted */}
+            <TouchableOpacity
+              style={styles.quickActionTile}
+              onPress={() => router.push('/(menu)/vehicle-requests' as any)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickActionIconBg, { backgroundColor: '#FEF3C7' }]}>
+                <Car size={20} color="#B45309" />
+                {vehicleRequestsWaiting > 0 && (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{vehicleRequestsWaiting > 99 ? '99+' : vehicleRequestsWaiting}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.quickActionLabel} numberOfLines={1} adjustsFontSizeToFit>Vehicle requests</Text>
+              <Text style={styles.quickActionSub} numberOfLines={1}>Approve another car</Text>
             </TouchableOpacity>
           </View>
         </View>

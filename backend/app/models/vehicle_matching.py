@@ -63,3 +63,10 @@ class CarSubstitutionRequest(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=False)
     decided_at = Column(TIMESTAMP, nullable=True)
     decided_by_admin_id = Column(UUID(as_uuid=True), nullable=True)
+    # Approval flow (2026-10-23): the booking's poster OR the office approves. Approval is a PASS - the driver then accepts the booking the normal way
+    # (wallet hold as usual); if his wallet is short he is told how much to recharge (funds_needed) and taps Accept afterwards.
+    decided_by_kind = Column(String, nullable=True)       # ADMIN | POSTER
+    decided_by_name = Column(String, nullable=True)
+    funds_needed = Column(Integer, nullable=True)          # rupees still to recharge when it was approved (0 = enough)
+    required_hold = Column(Integer, nullable=True)         # the hold this booking needs
+    assignment_id = Column(Integer, nullable=True)         # set when the driver accepted with this pass

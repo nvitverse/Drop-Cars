@@ -298,6 +298,8 @@ from app.api.routes import quality as quality_router
 app.include_router(quality_router.router, prefix="/api", tags=["Ratings & Quality"])
 from app.api.routes import payment_claims as _payment_claims
 app.include_router(_payment_claims.owner_router, prefix="/api", tags=["Payment claims"])
+from app.api.routes import substitution_poster as _substitution_poster
+app.include_router(_substitution_poster.router, prefix="/api", tags=["Vehicle requests (poster)"])
 app.include_router(_payment_claims.admin_router, prefix="/api", tags=["Payment claims"])
 from app.api.routes import account_activity_routes as _activity_routes
 app.include_router(_activity_routes.admin_router, prefix="/api", tags=["Active / Inactive"])
@@ -580,6 +582,11 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS post_at_override TIMESTAMPTZ',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS external_booking_id VARCHAR',
+        'ALTER TABLE car_substitution_requests ADD COLUMN IF NOT EXISTS decided_by_kind VARCHAR',
+        'ALTER TABLE car_substitution_requests ADD COLUMN IF NOT EXISTS decided_by_name VARCHAR',
+        'ALTER TABLE car_substitution_requests ADD COLUMN IF NOT EXISTS funds_needed INTEGER',
+        'ALTER TABLE car_substitution_requests ADD COLUMN IF NOT EXISTS required_hold INTEGER',
+        'ALTER TABLE car_substitution_requests ADD COLUMN IF NOT EXISTS assignment_id INTEGER',
         'ALTER TABLE customer_booking_requests ADD COLUMN IF NOT EXISTS custom_driver_fare BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE guest_help_tokens ADD COLUMN IF NOT EXISTS language VARCHAR(2)',
         'ALTER TABLE vehicle_owner_details ADD COLUMN IF NOT EXISTS billing_suspended_at TIMESTAMPTZ',

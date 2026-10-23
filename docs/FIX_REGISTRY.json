@@ -712,6 +712,91 @@
       ],
       "why": "same sentence on the withdraw screen",
       "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "subst-pass-accept",
+      "file": "backend/app/api/routes/order_assignments.py",
+      "must_contain": [
+        "substitution_pass(",
+        "approved_pass_for_car(",
+        "compute_accept_hold"
+      ],
+      "why": "an approved \"request for my car\" is a pass through the vehicle-type gate; the normal wallet hold still applies",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-accept-hold-one-place",
+      "file": "backend/app/crud/accept_hold.py",
+      "must_contain": [
+        "def compute_accept_hold"
+      ],
+      "why": "the hold shown to a driver after approval is the same one accept_order takes",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-approve-flow",
+      "file": "backend/app/services/substitution_flow.py",
+      "must_contain": [
+        "approve_and_accept",
+        "notify_new_request",
+        "funds_needed"
+      ],
+      "why": "poster / office approval: accept at once when the wallet covers the hold, else tell the driver what to recharge; poster and office are pushed on a new request",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-poster-router",
+      "file": "backend/app/main.py",
+      "must_contain": [
+        "_substitution_poster"
+      ],
+      "why": "the booking's poster can approve / decline",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-poster-routes",
+      "file": "backend/app/api/routes/substitution_poster.py",
+      "must_contain": [
+        "/poster/substitution-requests",
+        "Only the person who posted this booking"
+      ],
+      "why": "only the poster (and the office through admin routes) decides",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-driver-server-truth",
+      "file": "driver-app/services/vehicle/vehicleRequestService.ts",
+      "must_contain": [
+        "/api/assignments/car-substitution-request",
+        "substitution-requests"
+      ],
+      "must_not_contain": [
+        "AsyncStorage"
+      ],
+      "why": "the request lives on the server; the phone-only \"requested\" marker hid 25 of 31 failed requests",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-driver-no-fake-ids",
+      "file": "driver-app/components/VehicleMismatchModal.tsx",
+      "must_contain": [
+        "Request not sent"
+      ],
+      "must_not_contain": [
+        "driver_id: selectedDriver?.id || 1",
+        "full_name: 'Self (Driver)'"
+      ],
+      "why": "no invented driver / car ids and no swallowed errors",
+      "since": "2026-10-23 (request for my car)"
+    },
+    {
+      "id": "subst-vendor-screen",
+      "file": "vendor-app/app/(menu)/vehicle-requests.tsx",
+      "must_contain": [
+        "/poster/substitution-requests"
+      ],
+      "why": "the vendor who posted the booking approves / declines the offered car",
+      "since": "2026-10-23 (request for my car)"
     }
   ]
 }
