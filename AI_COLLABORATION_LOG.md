@@ -389,3 +389,8 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - 2026-10-24 (Claude): LIVE - backend rev 00348 (commit 04c0c90: permanent block + identifier blocklist + account gate, subscription lifecycle (dormant until Owner switches on), request-for-my-car approval by poster/any admin, Rs 500 wallet text, vendor chat 500 fix). OTAs: Driver 862d1fef, Admin 078f6e2a (EAS production), Vendor dddaf1ab. Website NOT deployed. Saravanan block not yet applied.
 
 - 2026-10-24 (Claude): Saravanan (9884628317) fleet owner 33d5c91e + driver d33b5f9b permanently blocked on live DB (reason: Left the platform - account closed); identifier blocklist verified. Owner can undo via permanent-unblock (then reactivate + re-upload docs).
+
+## 2026-10-24 (Claude) - what went live (owner said deploy pannu / OTA pannu)
+- Backend rev 00349 (bbb1feb) and rev 00350 (ef695ac): documents - validity date read from the photo is saved; typed past (start) date no longer makes a car INACTIVE; Admin "Re-read all documents and fill dates"; real car problem reasons in the accept popup; colour-marks original check.
+- Driver OTA 3dc92a6c (double-hold fix, valid-doc count, voice language) and OTA 5063d73a (My Trips is the one place for accepted work, accept -> assign, "I will drive it myself", Start trip on the card, More tab instead of Duty for owners, red To-assign badge, renamed tabs in 5 languages, sound-tone picker hidden).
+- Admin OTA preview 844a1ace + production 968008b6.
