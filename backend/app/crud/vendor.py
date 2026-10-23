@@ -14,6 +14,9 @@ def create_vendor(db: Session, vendor_data: VendorSignupForm, aadhar_image: Uplo
     Create a new vendor with both credentials and details
     Handles GCS image upload with rollback on failure
     """
+    from app.utils.blocklist import assert_not_blocked      # a permanently blocked person cannot open a new account
+    assert_not_blocked(db, phone=vendor_data.primary_number, phone2=getattr(vendor_data, "gpay_number", None), email=getattr(vendor_data, "email", None),
+                       aadhaar=getattr(vendor_data, "aadhar_number", None))
     # Check if vendor already exists with the same primary number
     existing_vendor = db.query(VendorCredentials).filter(
         VendorCredentials.primary_number == vendor_data.primary_number

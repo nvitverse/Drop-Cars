@@ -19,6 +19,7 @@ import app.models.worker_management
 import app.models.document_model  # document_models table must be known before create_all()
 import app.models.chat_trash  # chat_trash table must be known before create_all()
 import app.models.payment_claim  # payment_claims table must be known before create_all()
+import app.models.blocked_identifier  # blocked_identifiers table (permanent-block list) must be known before create_all()
 import app.models.billing  # billing_brands / billing_documents tables
 import app.models.unaccepted_case  # unaccepted_cases table
 import app.models.portal_trip  # portal_trips table (web execution portal)
@@ -171,6 +172,17 @@ async def _record_request_health(request: Request, call_next):
     if not request.url.path.endswith("/admin/system-health"):
         _sh.record_request(_t.perf_counter() - t0, response.status_code)
     return response
+
+
+@app.middleware("http")
+async def _account_gate_mw(request: Request, call_next):
+    """Blocked accounts get 403 [ACCOUNT_BLOCKED] on every call; accounts whose subscription lifecycle ran out get 403
+    [ACCOUNT_SUSPENDED_SUBSCRIPTION] except for the calls that let them pay. Fails open (see core/account_gate.py)."""
+    from app.core import account_gate as _gate
+    denied = await _gate.check(request)
+    if denied is not None:
+        return denied
+    return await call_next(request)
 
 
 # CORS: required for the web versions of the apps (expo web / browser testing).

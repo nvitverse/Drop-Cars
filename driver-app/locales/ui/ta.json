@@ -1931,5 +1931,6 @@
  "How can we help?": "நாங்கள் எவ்வாறு உதவலாம்?",
  "Tell us your problem. Our team replies here.": "உங்கள் பிரச்சனையை சொல்லுங்கள். எங்கள் குழு இங்கே பதிலளிக்கும்.",
  "Type your message...": "உங்கள் செய்தியை தட்டச்சு செய்யவும்...",
- "My help chat": "என் உதவி சாட்"
+ "My help chat": "என் உதவி சாட்",
+  "Wallet balance below ₹{0} is non-refundable (it stays as your booking security hold). Only the amount above ₹{1} can be withdrawn.": "வாலெட்டில் ₹{0}-க்குக் கீழே உள்ள தொகையை திரும்பப் பெற முடியாது (booking security hold-ஆக வைக்கப்படும்). ₹{1}-க்கு மேல் உள்ள தொகையை மட்டும் எடுக்கலாம்."
 }

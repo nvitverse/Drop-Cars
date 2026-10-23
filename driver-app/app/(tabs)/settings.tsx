@@ -1003,6 +1003,16 @@ export default function SettingsScreen() {
             )}
           </View>
 
+          {billingStatus?.standing?.enabled && billingStatus?.standing?.state === 'STANDARD' && billingStatus?.standing?.days_left != null ? (
+            <SettingItem
+              icon={<CalendarClock color={billingStatus.standing.days_left <= 7 ? colors.error : colors.textSecondary} size={20} />}
+              title={`Free Standard period: ${billingStatus.standing.days_left} days left`}
+              subtitle={`After ${billingStatus.standing.free_until} you need the monthly plan (₹${billingStatus.standing.monthly_fee || 199}) to keep using the app. Tap to subscribe.`}
+              onPress={() => router.push('/subscription')}
+              rightComponent={<ChevronRight color={colors.textSecondary} size={20} />}
+            />
+          ) : null}
+
           {billingStatus?.subscription_type === 'MONTHLY' ? (
             <>
               <SettingItem

@@ -8,6 +8,9 @@ from typing import Optional
 from uuid import UUID
 
 def create_user(db: Session, user_in: VehicleOwnerForm) -> VehicleOwnerCredentials:
+    from app.utils.blocklist import assert_not_blocked      # a permanently blocked person (any of his numbers / IDs) cannot open a new account
+    assert_not_blocked(db, phone=user_in.primary_number, phone2=getattr(user_in, "secondary_number", None), email=getattr(user_in, "email", None),
+                       aadhaar=getattr(user_in, "aadhar_number", None), pan=getattr(user_in, "pan_number", None))
     # Check for duplicate primary number in main vehicle_owner table
     existing_user = db.query(VehicleOwnerCredentials).filter(
         VehicleOwnerCredentials.primary_number == user_in.primary_number

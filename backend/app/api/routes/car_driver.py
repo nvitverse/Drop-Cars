@@ -260,7 +260,7 @@ def signin_car_driver(
     if getattr(driver, "permanently_blocked", False):
         raise HTTPException(
             status_code=403,
-            detail="This account has been permanently blocked. Contact support if you believe this is a mistake."
+            detail="Your Drop Cars account is blocked. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]"
         )
 
     if getattr(driver, "removed_at", None) is not None:
@@ -332,7 +332,7 @@ def signin_car_driver_firebase(body: DriverFirebaseVerifyRequest, db: Session = 
     if not driver:
         raise HTTPException(status_code=404, detail="NOT_REGISTERED")
     if getattr(driver, "permanently_blocked", False):
-        raise HTTPException(status_code=403, detail="This account has been permanently blocked. Contact support if you believe this is a mistake.")
+        raise HTTPException(status_code=403, detail="Your Drop Cars account is blocked. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]")
     if getattr(driver, "removed_at", None) is not None:
         raise HTTPException(status_code=403, detail="You were removed from this fleet. Ask a fleet owner to add you, or contact Drop Cars.")
     if driver.driver_status == AccountStatusEnum.BLOCKED:
@@ -468,7 +468,7 @@ def signin_car_driver_as_owner(
     if getattr(driver, "permanently_blocked", False):
         raise HTTPException(
             status_code=403,
-            detail="This account has been permanently blocked. Contact support if you believe this is a mistake."
+            detail="Your Drop Cars account is blocked. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]"
         )
     if driver.driver_status == AccountStatusEnum.BLOCKED:
         raise HTTPException(status_code=403, detail="Driver account is blocked. Please contact the admin.")

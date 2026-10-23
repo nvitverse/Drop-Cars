@@ -552,6 +552,166 @@
       ],
       "why": "native Android project snapshot must never contain the release keystore password",
       "since": "2026-10-23 (full audit)"
+    },
+    {
+      "id": "gate-middleware",
+      "file": "backend/app/main.py",
+      "must_contain": [
+        "_account_gate_mw"
+      ],
+      "why": "blocked / subscription-suspended accounts are refused on every call",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "gate-codes",
+      "file": "backend/app/core/account_gate.py",
+      "must_contain": [
+        "[ACCOUNT_BLOCKED]",
+        "[ACCOUNT_SUSPENDED_SUBSCRIPTION]",
+        "ALLOWED_WHEN_SUSPENDED"
+      ],
+      "why": "the apps recognise these codes and show the account screen; a suspended owner can still pay",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "blocklist-owner-signup",
+      "file": "backend/app/crud/vehicle_owner.py",
+      "must_contain": [
+        "assert_not_blocked"
+      ],
+      "why": "a permanently blocked person cannot register again with any of his numbers",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "blocklist-driver-signup",
+      "file": "backend/app/crud/car_driver.py",
+      "must_contain": [
+        "assert_not_blocked"
+      ],
+      "why": "same, drivers",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "blocklist-vendor-signup",
+      "file": "backend/app/crud/vendor.py",
+      "must_contain": [
+        "assert_not_blocked"
+      ],
+      "why": "same, vendors",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "blocklist-car-signup",
+      "file": "backend/app/crud/car_details.py",
+      "must_contain": [
+        "assert_not_blocked"
+      ],
+      "why": "a blocked owner's vehicle cannot be registered again",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "blocklist-admin-create",
+      "file": "backend/app/api/routes/admin.py",
+      "must_contain": [
+        "assert_not_blocked(db, phone=p_num",
+        "assert_not_blocked(db, phone=d_num"
+      ],
+      "why": "staff cannot onboard a blocked person by accident",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "permanent-block-side-effects",
+      "file": "backend/app/crud/admin_management.py",
+      "must_contain": [
+        "_permanent_block_side_effects",
+        "owner_identifiers",
+        "SWITCHED_OFF"
+      ],
+      "why": "a permanent block records every identifier, takes drivers and cars with the owner and cuts sessions; the Block button's \"Blocked\" status is accepted",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "lifecycle-not-undone-by-balance",
+      "file": "backend/app/crud/billing.py",
+      "must_contain": [
+        "SUBSCRIPTION_REQUIRED",
+        "run_subscription_lifecycle",
+        "lift_suspension"
+      ],
+      "why": "a subscription suspension is lifted only by buying the plan, never by a wallet balance",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "lifecycle-module",
+      "file": "backend/app/crud/subscription_lifecycle.py",
+      "must_contain": [
+        "standard_free_days",
+        "lapse_grace_days",
+        "lifecycle_start_date"
+      ],
+      "why": "30 days Standard, 30 days grace after a plan lapses, then suspended; dormant until switched on; existing accounts start fresh",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "driver-account-screen",
+      "file": "driver-app/app/account-blocked.tsx",
+      "must_contain": [
+        "Call operations team",
+        "Subscribe now"
+      ],
+      "why": "one plain screen for blocked / suspended accounts",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "driver-gate-interceptor",
+      "file": "driver-app/app/api/axiosInstance.tsx",
+      "must_contain": [
+        "gateKindOf",
+        "routeToGate"
+      ],
+      "why": "a 403 account answer opens the account screen",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "admin-block-menu",
+      "file": "admin-panel/app/fleet-owner-detail.tsx",
+      "must_contain": [
+        "handleBlockChoices",
+        "permanentBlockAccount",
+        "Start Monthly plan from wallet"
+      ],
+      "must_not_contain": [
+        "isAccountBlocked ? 'Active' : 'Blocked'"
+      ],
+      "why": "the Block button sends a real status or a permanent block with a reason (it used to send \"Blocked\" and fail)",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "admin-subscription-rule-card",
+      "file": "admin-panel/app/fleet-subscriptions.tsx",
+      "must_contain": [
+        "SubscriptionRuleCard"
+      ],
+      "why": "the Owner switches the subscription rule on / off and previews who would be suspended",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "wallet-500-nonrefundable-help",
+      "file": "backend/app/utils/help_center.py",
+      "must_contain": [
+        "non-refundable"
+      ],
+      "why": "wallet balance below Rs 500 is non-refundable - stated where withdrawals are explained",
+      "since": "2026-10-23 (block + subscription rule)"
+    },
+    {
+      "id": "wallet-500-nonrefundable-modal",
+      "file": "driver-app/components/wallet/WithdrawModal.tsx",
+      "must_contain": [
+        "is non-refundable"
+      ],
+      "why": "same sentence on the withdraw screen",
+      "since": "2026-10-23 (block + subscription rule)"
     }
   ]
 }

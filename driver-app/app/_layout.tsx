@@ -111,6 +111,7 @@ export default function RootLayout() {
                   <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 240, gestureEnabled: true }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="login" options={{ animation: 'fade' }} />
+                    <Stack.Screen name="account-blocked" options={{ animation: 'fade', gestureEnabled: false }} />
                     <Stack.Screen name="signup" />
                     <Stack.Screen name="quick-login" />
                     <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 260 }} />

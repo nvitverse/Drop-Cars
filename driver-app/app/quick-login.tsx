@@ -18,6 +18,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Smartphone, Lock, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
 import { loginDriver } from '@/services/driver/driverService';
 import * as SecureStore from '@/utils/secureStore';
+import { gateKindOf } from '@/utils/accountGate';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function QuickLoginScreen() {
@@ -147,6 +148,7 @@ export default function QuickLoginScreen() {
         throw new Error('No access token received from server');
       }
     } catch (error: any) {
+      if (gateKindOf(error)) { return; }   // blocked / switched off / subscription needed: the account screen is already open
       console.error('❌ Driver login failed:', error);
       Alert.alert(t('quickLogin.loginFailedTitle'), error.message || t('quickLogin.loginFailedBody'));
     } finally {

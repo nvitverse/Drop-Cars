@@ -3139,6 +3139,11 @@ def get_vehicle_owner_details(
             trusted_override_by=vehicle_owner_details.trusted_override_by,
             trusted_override_reason=vehicle_owner_details.trusted_override_reason,
             trusted_override_at=vehicle_owner_details.trusted_override_at,
+            permanently_blocked=bool(getattr(vehicle_owner_credentials, "permanently_blocked", False)),
+            permanently_blocked_reason=getattr(vehicle_owner_credentials, "permanently_blocked_reason", None),
+            blocked_reason=getattr(vehicle_owner_credentials, "blocked_reason", None),
+            billing_suspended_reason=vehicle_owner_details.billing_suspended_reason,
+            standing=_owner_standing_safe(db, vehicle_owner_details.vehicle_owner_id),
             current_password=curr_pass,
         )
         
@@ -3659,6 +3664,14 @@ def update_driver_licence_expiry(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {str(e)}")
 
 
+def _owner_standing_safe(db, vehicle_owner_id):
+    try:
+        from app.crud.subscription_lifecycle import owner_standing
+        return owner_standing(db, vehicle_owner_id)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 class PermanentBlockRequest(_StaffBaseModel):
     reason: str
 
@@ -3678,7 +3691,7 @@ def permanent_block_account(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can permanently block an account.")
     from app.crud.admin_management import set_permanent_block
     from app.crud.admin_activity_log import log_admin_action, resolve_account_display_name
-    result = set_permanent_block(db, str(account_id), account_type, body.reason, blocked=True)
+    result = set_permanent_block(db, str(account_id), account_type, body.reason, blocked=True, by=current_admin.username)
     log_admin_action(
         db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
         action="PERMANENT_BLOCK", target_type=account_type, target_id=str(account_id),
@@ -3702,7 +3715,7 @@ def permanent_unblock_account(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Owner can remove a permanent block.")
     from app.crud.admin_management import set_permanent_block
     from app.crud.admin_activity_log import log_admin_action, resolve_account_display_name
-    result = set_permanent_block(db, str(account_id), account_type, "", blocked=False)
+    result = set_permanent_block(db, str(account_id), account_type, "", blocked=False, by=current_admin.username)
     log_admin_action(
         db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
         action="PERMANENT_UNBLOCK", target_type=account_type, target_id=str(account_id),
@@ -7807,6 +7820,9 @@ def admin_create_fleet_owner(
         raise HTTPException(status_code=400, detail="Primary mobile number must be at least 10 digits")
     p_num = p_num[-10:]
 
+    from app.utils.blocklist import assert_not_blocked      # a permanently blocked person cannot be onboarded again (unblock him first)
+    assert_not_blocked(db, phone=p_num, phone2=getattr(payload, "secondary_number", None), aadhaar=getattr(payload, "aadhar_number", None), pan=getattr(payload, "pan_number", None), email=getattr(payload, "email", None))
+
     # Check duplicates
     existing = db.query(VehicleOwnerCredentials).filter(VehicleOwnerCredentials.primary_number == p_num).first()
     if existing:
@@ -7943,6 +7959,8 @@ def admin_create_vendor(
     from app.utils.reg_id import assign_reg_id
 
     p_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+    from app.utils.blocklist import assert_not_blocked
+    assert_not_blocked(db, phone=p_num, aadhaar=getattr(payload, "aadhar_number", None), email=getattr(payload, "email", None))
     existing = db.query(VendorCredentials).filter(VendorCredentials.primary_number == p_num).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Mobile number {p_num} is already registered as a Vendor.")
@@ -8152,6 +8170,8 @@ def admin_add_driver_to_fleet(
     from app.core.security import get_password_hash
 
     d_num = payload.primary_number.strip().replace("+91", "").replace(" ", "").replace("-", "")[-10:]
+    from app.utils.blocklist import assert_not_blocked
+    assert_not_blocked(db, phone=d_num, phone2=getattr(payload, "secondary_number", None), licence=getattr(payload, "licence_number", None), aadhaar=getattr(payload, "aadhar_number", None))
     exist_driver = db.query(CarDriver).filter(CarDriver.primary_number == d_num).first()
     if exist_driver:
         raise HTTPException(status_code=400, detail=f"Driver mobile {d_num} is already registered.")

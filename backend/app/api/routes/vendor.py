@@ -152,7 +152,7 @@ def vendor_signin(
         if getattr(vendor_credentials, "permanently_blocked", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This account has been permanently blocked. Contact support if you believe this is a mistake.",
+                detail="Your Drop Cars account is blocked. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]",
             )
 
         # Get vendor details

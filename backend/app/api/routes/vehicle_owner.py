@@ -94,6 +94,8 @@ def send_email_otp(
     email = email.strip().lower()
     if not email or '@' not in email or '.' not in email.split('@')[-1]:
         raise HTTPException(status_code=400, detail="Please provide a valid email address.")
+    from app.utils.blocklist import assert_not_blocked
+    assert_not_blocked(db, email=email)
 
     # Rate limit: only 1 OTP per email per 60 seconds
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
@@ -338,7 +340,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if getattr(db_user, "permanently_blocked", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account has been permanently blocked. Contact support if you believe this is a mistake.",
+            detail="Your Drop Cars account is blocked. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]",
         )
 
     # Instant auto-verification / Free Standard Tier: Auto-activate legacy INACTIVE accounts if not manually blocked
@@ -347,6 +349,11 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         db_user.account_status = AccountStatusEnum.ACTIVE
         db.commit()
         db.refresh(db_user)
+    elif db_user.account_status == AccountStatusEnum.INACTIVE and getattr(db_user, "blocked_reason", None):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your Drop Cars account is switched off. You cannot use the app. Please contact the Drop Cars operations team. [ACCOUNT_BLOCKED]",
+        )
 
     # Get counts of related records
     counts = get_vehicle_owner_counts(db, db_user.id)
@@ -890,7 +897,13 @@ def owner_billing_status(
     """Owner's own yearly-fee countdown (shown in the app menu).
     Each account has its own due date based on its registration anniversary."""
     from app.crud.billing import get_owner_billing_status
-    return get_owner_billing_status(db, current_user.vehicle_owner_id)
+    from app.crud.subscription_lifecycle import owner_standing
+    res = get_owner_billing_status(db, current_user.vehicle_owner_id)
+    try:
+        res["standing"] = owner_standing(db, current_user.vehicle_owner_id)       # SUBSCRIBED | STANDARD (days left) | SUSPENDED
+    except Exception:  # noqa: BLE001
+        res["standing"] = None
+    return res
 
 
 @router.put("/vehicle-owner/auto-renew")

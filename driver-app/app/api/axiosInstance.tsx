@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from '@/utils/secureStore';
 import { emitSessionExpired } from '@/utils/session';
+import { gateKindOf, routeToGate } from '@/utils/accountGate';
 
 const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined' && !!window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
@@ -214,6 +215,13 @@ axiosInstance.interceptors.response.use(
     // "click a trip card, session expires" report traced to exactly this
     // 2026-09-05.
     if ((error.config as any)?.silentAuthCheck) {
+      return Promise.reject(error);
+    }
+
+    // blocked for good / switched off / subscription needed: one plain screen instead of a failing app
+    const accountGate = gateKindOf(error);
+    if (accountGate) {
+      routeToGate(accountGate);
       return Promise.reject(error);
     }
 

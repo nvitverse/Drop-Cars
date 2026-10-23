@@ -8,6 +8,9 @@ from uuid import UUID
 
 def create_car_driver(db: Session, driver_data: CarDriverForm) -> CarDriver:
     """Create a new car driver record in the database"""
+    from app.utils.blocklist import assert_not_blocked      # a permanently blocked person cannot be added again
+    assert_not_blocked(db, phone=driver_data.primary_number, phone2=getattr(driver_data, "secondary_number", None), email=getattr(driver_data, "email", None),
+                       licence=getattr(driver_data, "licence_number", None), aadhaar=getattr(driver_data, "aadhar_number", None))
     
     # Check for duplicate primary number
     existing_primary = db.query(CarDriver).filter(

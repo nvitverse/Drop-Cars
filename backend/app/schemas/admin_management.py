@@ -150,6 +150,12 @@ class VehicleOwnerFullDetailsResponse(BaseModel):
     trusted_override_by: Optional[str] = None
     trusted_override_reason: Optional[str] = None
     trusted_override_at: Optional[datetime] = None
+    # permanent block (the account is dead; its identifiers are on the blocklist) and the subscription rule (30 days Standard, grace, suspended)
+    permanently_blocked: bool = False
+    permanently_blocked_reason: Optional[str] = None
+    blocked_reason: Optional[str] = None
+    billing_suspended_reason: Optional[str] = None
+    standing: Optional[dict] = None
     current_password: Optional[str] = None
 
     class Config:

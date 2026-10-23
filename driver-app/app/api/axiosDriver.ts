@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from '@/utils/secureStore';
 import { emitSessionExpired } from '@/utils/session';
+import { gateKindOf, routeToGate } from '@/utils/accountGate';
 import { loginDriverAsOwner } from '@/services/driver/driverService';
 
 const getApiBaseUrl = (): string => {
@@ -149,6 +150,12 @@ axiosDriver.interceptors.response.use(
     // report this was chasing, since the failure had nothing to do with
     // whatever screen the user was actually looking at. Found 2026-09-05.
     if ((originalRequest as any)?.silentAuthCheck) {
+      return Promise.reject(error);
+    }
+
+    const accountGate = gateKindOf(error);
+    if (accountGate) {
+      routeToGate(accountGate);
       return Promise.reject(error);
     }
 

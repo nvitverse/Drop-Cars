@@ -74,6 +74,11 @@ interface OwnerProfile {
   billing_next_date?: string | null;
   billing_last_charged_at?: string | null;
   billing_suspended?: boolean;
+  billing_suspended_reason?: string | null;
+  permanently_blocked?: boolean;
+  permanently_blocked_reason?: string | null;
+  blocked_reason?: string | null;
+  standing?: { state?: string; free_until?: string | null; days_left?: number | null; enabled?: boolean; valid_until?: string | null; monthly_fee?: number } | null;
   yearly_fee?: number | null;
   tier?: 'PREFERRED' | 'STANDARD' | null;
   subscription_type?: 'MONTHLY' | 'YEARLY' | null;
@@ -154,6 +159,7 @@ export default function FleetOwnerDetailScreen() {
   const [ledgerTotalCount, setLedgerTotalCount] = useState(0);
   const [ledgerLoadingMore, setLedgerLoadingMore] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [choice, setChoice] = useState<null | { title: string; message: string; options: { label: string; danger?: boolean; onPress: () => void }[] }>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>((tab as DetailTab) || 'overview');
 
   // Wallet adjust form
@@ -471,37 +477,135 @@ export default function FleetOwnerDetailScreen() {
     }
   };
 
-  const isAccountBlocked = (owner?.account_status || '').toUpperCase() === 'BLOCKED';
+  const isPermanentlyBlocked = !!owner?.permanently_blocked;
+  const isSwitchedOff = !isPermanentlyBlocked && (owner?.account_status || '').toUpperCase() === 'INACTIVE' && !!owner?.blocked_reason;
+  const isAccountBlocked = isPermanentlyBlocked || isSwitchedOff;
 
-  const handleToggleBlockAccount = () => {
-    if (!owner) return;
-    const nextStatus = isAccountBlocked ? 'Active' : 'Blocked';
-    Alert.alert(
-      isAccountBlocked ? 'Unblock Fleet Account' : 'Block Fleet Account',
-      isAccountBlocked
-        ? `Are you sure you want to unblock ${owner.full_name}'s fleet account? They will regain access to their portal and vehicles.`
-        : `Are you sure you want to block ${owner.full_name}'s fleet account? They will be locked out from logging in and accepting bookings.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isAccountBlocked ? 'Unblock Account' : 'Block Account',
-          style: isAccountBlocked ? 'default' : 'destructive',
-          onPress: async () => {
-            setUpdatingStatus(true);
-            try {
-              await apiService.updateVehicleOwnerAccountStatus(owner.vehicle_owner_id, nextStatus);
-              setOwner(prev => prev ? { ...prev, account_status: nextStatus } : null);
-              showToast(`Fleet account ${isAccountBlocked ? 'unblocked' : 'blocked'} successfully!`, 'success');
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to update account status.');
-            } finally {
-              setUpdatingStatus(false);
-            }
-          },
-        },
-      ]
-    );
+  const PERMANENT_REASONS = [
+    'Fraud / fake documents',
+    'Misuse or abuse of the app',
+    'Left the platform (money settled)',
+    'Other - operations decision',
+  ];
+
+  const runBlockAction = async (label: string, fn: () => Promise<any>, after: (prev: OwnerProfile) => OwnerProfile, done: string) => {
+    setChoice(null);
+    setUpdatingStatus(true);
+    try {
+      await fn();
+      setOwner((prev) => (prev ? after(prev) : prev));
+      showToast(done, 'success');
+    } catch (err: any) {
+      Alert.alert('Could not ' + label, err?.message || 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
+
+  const askPermanentReason = () => {
+    if (!owner) return;
+    setChoice({
+      title: 'Block for good - why?',
+      message:
+        owner.full_name +
+        "'s documents are erased, the drivers and cars under this fleet are blocked too, and their phone, alternate phone, Aadhaar, PAN, licence and vehicle numbers can never be used to register again. This cannot be undone by the user.",
+      options: PERMANENT_REASONS.map((reason) => ({
+        label: reason,
+        danger: true,
+        onPress: () =>
+          runBlockAction(
+            'block the account',
+            () => apiService.permanentBlockAccount(owner.vehicle_owner_id, 'vehicle_owner', reason),
+            (prev) => ({ ...prev, permanently_blocked: true, permanently_blocked_reason: reason, account_status: 'Inactive' }),
+            'Account blocked for good. Their numbers cannot register again.'
+          ),
+      })),
+    });
+  };
+
+  const handleBlockChoices = () => {
+    if (!owner) return;
+    if (isPermanentlyBlocked) {
+      setChoice({
+        title: 'Blocked for good',
+        message: 'Reason: ' + (owner.permanently_blocked_reason || '-') + '. Remove the block only if it was a mistake: the numbers become free to register again.',
+        options: [
+          {
+            label: 'Remove the permanent block',
+            onPress: () =>
+              runBlockAction(
+                'remove the block',
+                () => apiService.permanentUnblockAccount(owner.vehicle_owner_id, 'vehicle_owner'),
+                (prev) => ({ ...prev, permanently_blocked: false, permanently_blocked_reason: null }),
+                'Permanent block removed.'
+              ),
+          },
+        ],
+      });
+      return;
+    }
+    setChoice({
+      title: 'Block ' + owner.full_name,
+      message: isSwitchedOff
+        ? 'This account is switched off for now. They see "Account blocked - contact the operations team" when they log in.'
+        : 'Switch off = they cannot use the app until you switch it on again. Block for good = it can never be opened again with any of their numbers.',
+      options: [
+        isSwitchedOff
+          ? {
+              label: 'Switch ON again',
+              onPress: () =>
+                runBlockAction(
+                  'switch on',
+                  () => apiService.updateVehicleOwnerAccountStatus(owner.vehicle_owner_id, 'Active'),
+                  (prev) => ({ ...prev, account_status: 'Active', blocked_reason: null }),
+                  'Account switched on.'
+                ),
+            }
+          : {
+              label: 'Switch OFF for now',
+              onPress: () =>
+                runBlockAction(
+                  'switch off',
+                  () => apiService.updateVehicleOwnerAccountStatus(owner.vehicle_owner_id, 'Inactive'),
+                  (prev) => ({ ...prev, account_status: 'Inactive', blocked_reason: 'Blocked by admin' }),
+                  'Account switched off.'
+                ),
+            },
+        { label: 'Block for good...', danger: true, onPress: askPermanentReason },
+      ],
+    });
+  };
+
+  const handleStartPlanFromWallet = () => {
+    if (!owner) return;
+    const fee = owner.standing?.monthly_fee || 199;
+    setChoice({
+      title: 'Start the Monthly plan',
+      message: 'Takes Rs ' + fee + ' from the wallet (balance Rs ' + (owner.wallet_balance ?? 0) + ') and starts the 30-day plan now. Use it when the owner paid into the wallet but never started the plan.',
+      options: [
+        {
+          label: 'Start the plan from the wallet',
+          onPress: () =>
+            runBlockAction('start the plan', () => apiService.startFleetPlanFromWallet(owner.vehicle_owner_id), (prev) => prev, 'Monthly plan started.').then(fetchDetails),
+        },
+      ],
+    });
+  };
+
+  const handleGrantDays = () => {
+    if (!owner) return;
+    setChoice({
+      title: 'Give plan days',
+      message: 'Reactivates a suspended account without a payment, for the days you choose. Use it when operations has agreed with the owner.',
+      options: [7, 15, 30].map((days) => ({
+        label: days + ' days',
+        onPress: () =>
+          runBlockAction('give days', () => apiService.grantFleetPlanDays(owner.vehicle_owner_id, days, 'Given by operations'), (prev) => prev, days + ' days given.').then(fetchDetails),
+      })),
+    });
+  };
+
+  const handleToggleBlockAccount = handleBlockChoices;
 
   const handlePermanentDeleteAccount = () => {
     if (!owner) return;
@@ -1162,10 +1266,18 @@ export default function FleetOwnerDetailScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 {isAccountBlocked ? <ShieldCheck size={16} color="#FFFFFF" /> : <ShieldAlert size={16} color="#FFFFFF" />}
                 <Text style={styles.dangerButtonText}>
-                  {isAccountBlocked ? 'Unblock Fleet Account' : 'Block Fleet Account'}
+                  {isPermanentlyBlocked ? 'Blocked for good - options' : isSwitchedOff ? 'Switched off - options' : 'Block Fleet Account'}
                 </Text>
               </View>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.dangerOutlineButton, { borderColor: themeColors.primary, backgroundColor: isDark ? themeColors.surfaceAlt : '#EFF6FF' }]} onPress={handleStartPlanFromWallet} activeOpacity={0.8}>
+            <Text style={{ color: themeColors.primary, fontWeight: '700', fontSize: 14, textAlign: 'center' }}>Start Monthly plan from wallet</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.dangerOutlineButton, { borderColor: themeColors.primary, backgroundColor: isDark ? themeColors.surfaceAlt : '#EFF6FF' }]} onPress={handleGrantDays} activeOpacity={0.8}>
+            <Text style={{ color: themeColors.primary, fontWeight: '700', fontSize: 14, textAlign: 'center' }}>Give plan days (reactivate)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1672,6 +1784,28 @@ export default function FleetOwnerDetailScreen() {
           onSuccess={fetchDetails}
         />
       )}
+
+      <Modal visible={!!choice} transparent animationType="fade" onRequestClose={() => setChoice(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: themeColors.surface, borderRadius: 16, padding: 18 }}>
+            <Text style={{ fontSize: 17, lineHeight: 26, fontWeight: '800', color: themeColors.text }}>{choice?.title}</Text>
+            <Text style={{ marginTop: 6, marginBottom: 12, fontSize: 13.5, lineHeight: 21, color: themeColors.textSecondary }}>{choice?.message}</Text>
+            {choice?.options.map((o) => (
+              <TouchableOpacity
+                key={o.label}
+                onPress={o.onPress}
+                activeOpacity={0.8}
+                style={{ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, marginBottom: 8, backgroundColor: o.danger ? themeColors.error : themeColors.primary }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, lineHeight: 20, textAlign: 'center' }}>{o.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setChoice(null)} activeOpacity={0.7} style={{ minHeight: 42, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: themeColors.textSecondary, fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
     </View>

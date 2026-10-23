@@ -67,11 +67,11 @@ TOPICS: Dict[str, Dict[str, Any]] = {
         "title": {"en": "How do I withdraw money?", "ta": "பணத்தை எப்படி எடுப்பது (withdraw)?", "hi": "पैसा कैसे निकालें?", "te": "డబ్బు ఎలా తీసుకోవాలి?", "kn": "ಹಣ ಹೇಗೆ ಹಿಂಪಡೆಯುವುದು?"},
         "kw": ["withdraw", "withdrawal", "payout", "cash out", "take money", "transfer to bank", "panam edukka", "bank la poda", "பணம் எடுக்க", "withdraw பண்ண", "निकाल", "విత్‌డ్రా", "తీసుకోవాలి", "ಹಿಂಪಡೆ", "ವಿತ್‌ಡ್ರಾ"],
         "a": {
-            "en": "🏦 Wallet tab → Withdraw → enter the amount and your UPI / bank details → Submit. Drop Cars checks it and pays it to you. You see the status in the same screen.",
-            "ta": "🏦 Wallet tab → Withdraw → தொகை, உங்கள் UPI / bank விவரம் → Submit. Drop Cars சரிபார்த்து உங்களுக்குச் செலுத்தும். நிலை அதே திரையில் தெரியும்.",
-            "hi": "🏦 Wallet tab → Withdraw → रकम और अपना UPI / bank विवरण → Submit। Drop Cars जाँच कर आपको भुगतान करता है। स्थिति उसी स्क्रीन पर दिखती है।",
-            "te": "🏦 Wallet tab → Withdraw → మొత్తం, మీ UPI / bank వివరాలు → Submit. Drop Cars పరిశీలించి చెల్లిస్తుంది. స్థితి అదే స్క్రీన్‌లో కనిపిస్తుంది.",
-            "kn": "🏦 Wallet tab → Withdraw → ಮೊತ್ತ, ನಿಮ್ಮ UPI / bank ವಿವರ → Submit. Drop Cars ಪರಿಶೀಲಿಸಿ ಪಾವತಿಸುತ್ತದೆ. ಸ್ಥಿತಿ ಅದೇ ಪರದೆಯಲ್ಲಿ ಕಾಣುತ್ತದೆ."},
+            "en": "🏦 Wallet tab → Withdraw → enter the amount and your UPI / bank details → Submit. Drop Cars checks it and pays it to you. You see the status in the same screen. Wallet balance below ₹500 is non-refundable (it stays as your booking security hold). Only the amount above ₹500 can be withdrawn.",
+            "ta": "🏦 Wallet tab → Withdraw → தொகை, உங்கள் UPI / bank விவரம் → Submit. Drop Cars சரிபார்த்து உங்களுக்குச் செலுத்தும். நிலை அதே திரையில் தெரியும். வாலெட்டில் ₹500-க்குக் கீழே உள்ள தொகையை திரும்பப் பெற முடியாது (booking security hold-ஆக வைக்கப்படும்). ₹500-க்கு மேல் உள்ள தொகையை மட்டும் எடுக்கலாம்.",
+            "hi": "🏦 Wallet tab → Withdraw → रकम और अपना UPI / bank विवरण → Submit। Drop Cars जाँच कर आपको भुगतान करता है। स्थिति उसी स्क्रीन पर दिखती है। वॉलेट में ₹500 से कम की राशि वापस नहीं की जाती (यह बुकिंग सिक्योरिटी होल्ड के रूप में रखी जाती है)। केवल ₹500 से ऊपर की राशि निकाली जा सकती है।",
+            "te": "🏦 Wallet tab → Withdraw → మొత్తం, మీ UPI / bank వివరాలు → Submit. Drop Cars పరిశీలించి చెల్లిస్తుంది. స్థితి అదే స్క్రీన్‌లో కనిపిస్తుంది. వాలెట్‌లో ₹500 కంటే తక్కువ ఉన్న మొత్తం తిరిగి ఇవ్వబడదు (బుకింగ్ సెక్యూరిటీ హోల్డ్‌గా ఉంచబడుతుంది). ₹500 కంటే ఎక్కువ ఉన్న మొత్తాన్ని మాత్రమే తీసుకోవచ్చు.",
+            "kn": "🏦 Wallet tab → Withdraw → ಮೊತ್ತ, ನಿಮ್ಮ UPI / bank ವಿವರ → Submit. Drop Cars ಪರಿಶೀಲಿಸಿ ಪಾವತಿಸುತ್ತದೆ. ಸ್ಥಿತಿ ಅದೇ ಪರದೆಯಲ್ಲಿ ಕಾಣುತ್ತದೆ. ವಾಲೆಟ್‌ನಲ್ಲಿ ₹500 ಕ್ಕಿಂತ ಕಡಮೆ ಇರುವ ಮೊತ್ತವನ್ನು ಹಿಂತಿರುಗಿಸಲಾಗುವುದಿಲ್ಲ (ಬುಕಿಂಗ್ ಸೆಕ್ಯೂರಿಟಿ ಹೋಲ್ಡ್ ಆಗಿ ಇರಿಸಲಾಗುತ್ತದೆ). ₹500 ಕ್ಕಿಂತ ಹೆಚ್ಚಿನ ಮೊತ್ತವನ್ನು ಮಾತ್ರ ತೆಗೆದುಕೊಳ್ಳಬಹುದು."},
     },
     "commission": {
         "title": {"en": "How much commission / fee do I pay?", "ta": "Commission / கட்டணம் எவ்வளவு?", "hi": "Commission / fee कितनी लगती है?", "te": "Commission / fee ఎంత?", "kn": "Commission / fee ಎಷ್ಟು?"},

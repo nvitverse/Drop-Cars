@@ -21,6 +21,7 @@ from app.models.platform_setting import PlatformSetting
 from app.models.vehicle_owner_details import VehicleOwnerDetails
 from app.models.vehicle_owner import VehicleOwnerCredentials, AccountStatusEnum
 from app.models.wallet_ledger import WalletLedger, WalletEntryTypeEnum
+from app.crud.subscription_lifecycle import lift_suspension      # a bought plan ends a "subscription required" suspension
 
 BILLING_CYCLE_DAYS = 365
 
@@ -249,6 +250,7 @@ def start_monthly_subscription(db: Session, vehicle_owner_id) -> dict:
     details.auto_renew_from_wallet = True
     if details.registration_fee_paid_at is None:
         details.registration_fee_paid_at = datetime.now(timezone.utc)
+    lift_suspension(details)
     details.billing_suspended = False
     details.billing_next_date = date.today() + timedelta(days=MONTHLY_CYCLE_DAYS)
     details.billing_last_charged_at = datetime.now(timezone.utc)
@@ -287,6 +289,7 @@ def upgrade_to_yearly(db: Session, vehicle_owner_id) -> dict:
     details.subscription_type = "YEARLY"
     if details.registration_fee_paid_at is None:
         details.registration_fee_paid_at = datetime.now(timezone.utc)
+    lift_suspension(details)
     details.billing_suspended = False
     details.billing_next_date = date.today() + timedelta(days=BILLING_CYCLE_DAYS)
     details.billing_last_charged_at = datetime.now(timezone.utc)
@@ -417,6 +420,8 @@ def run_billing(db: Session, dry_run: bool = True) -> dict:
         .all()
     )
     for details, creds in suspended_rows:
+        if (details.billing_suspended_reason or "") == "SUBSCRIPTION_REQUIRED":
+            continue        # lifted only by buying the plan (subscription_lifecycle), never by a balance above the threshold
         if (details.wallet_balance or 0) >= threshold:
             summary["reactivated"].append({
                 "vehicle_owner_id": str(details.vehicle_owner_id),
@@ -425,6 +430,7 @@ def run_billing(db: Session, dry_run: bool = True) -> dict:
             })
             if not dry_run:
                 creds.account_status = AccountStatusEnum.ACTIVE
+                lift_suspension(details)
                 details.billing_suspended = False
                 db.add(creds)
                 db.add(details)
@@ -513,6 +519,7 @@ def activate_membership(db: Session, details: VehicleOwnerDetails, start: Option
     details.registration_fee_paid_at = datetime.now(timezone.utc)
     details.billing_next_date = new_next
     details.billing_last_charged_at = datetime.now(timezone.utc)
+    lift_suspension(details)
     details.billing_suspended = False
     db.add(details)
     return new_next
@@ -549,6 +556,7 @@ def activate_plan_from_payment(db: Session, vehicle_owner_id, plan: str) -> Opti
         details.billing_next_date = today + timedelta(days=BILLING_CYCLE_DAYS)
     details.auto_renew_from_wallet = True
     details.registration_fee_paid_at = details.registration_fee_paid_at or datetime.now(timezone.utc)
+    lift_suspension(details)
     details.billing_suspended = False
     details.billing_last_charged_at = datetime.now(timezone.utc)
     db.add(details)
@@ -659,6 +667,11 @@ def run_member_auto_renewals(db: Session) -> dict:
             out[k] += m.get(k, 0)
         r = recover_recent_fee_topups(db)       # Rs 199 paid on an older app build, only wallet money so far: buy the plan now
         out["renewed"] += r.get("activated", 0)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    try:                                   # no plan for longer than the free window -> suspended (switched on by an admin; dormant by default)
+        from app.crud.subscription_lifecycle import run_subscription_lifecycle
+        run_subscription_lifecycle(db, dry_run=False)
     except Exception:  # noqa: BLE001
         db.rollback()
     if fee <= 0:

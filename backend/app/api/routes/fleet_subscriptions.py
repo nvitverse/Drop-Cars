@@ -482,3 +482,92 @@ def get_fleet_subscription_history(
         }
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------
+# Subscription lifecycle (30 days Standard -> plan -> 30 days grace after it lapses -> suspended) and the two hand tools staff need
+# ---------------------------------------------------------------------------------------------------------------------------------------
+class LifecycleSettingsRequest(BaseModel):
+    enabled: Optional[bool] = None
+    standard_free_days: Optional[int] = Field(None, ge=1, le=365)
+    lapse_grace_days: Optional[int] = Field(None, ge=1, le=365)
+
+
+class LifecycleRunRequest(BaseModel):
+    dry_run: bool = True
+
+
+class GrantDaysRequest(BaseModel):
+    days: int = Field(..., ge=1, le=365, description="Days of plan to give (reactivates a suspended account for that long)")
+    notes: Optional[str] = None
+
+
+@router.get("/lifecycle")
+def get_lifecycle(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Current settings and who WOULD be suspended today (nothing is changed)."""
+    from app.crud.subscription_lifecycle import run_subscription_lifecycle, get_settings
+    settings = get_settings(db)
+    preview = run_subscription_lifecycle(db, dry_run=True) if settings["enabled"] else {"suspended": [], "ending_soon": [], "checked": 0}
+    return {"settings": settings, "would_suspend": preview["suspended"][:100], "would_suspend_count": len(preview["suspended"]),
+            "ending_soon": preview["ending_soon"][:100], "ending_soon_count": len(preview["ending_soon"])}
+
+
+@router.post("/lifecycle/settings")
+def set_lifecycle(payload: LifecycleSettingsRequest, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    if current_admin.role != "Owner":
+        raise HTTPException(status_code=403, detail="Only the Owner can change the subscription rule.")
+    from app.crud.subscription_lifecycle import update_settings
+    res = update_settings(db, enabled=payload.enabled, standard_free_days=payload.standard_free_days, lapse_grace_days=payload.lapse_grace_days)
+    log_admin_action(db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
+                     action="SUBSCRIPTION_RULE_CHANGED", target_type="platform", target_id="subscription_lifecycle", target_name="Subscription rule",
+                     details=payload.model_dump(exclude_none=True))
+    db.commit()
+    return res
+
+
+@router.post("/lifecycle/run")
+def run_lifecycle_now(payload: LifecycleRunRequest, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    if not payload.dry_run and current_admin.role != "Owner":
+        raise HTTPException(status_code=403, detail="Only the Owner can run the suspension for real.")
+    from app.crud.subscription_lifecycle import run_subscription_lifecycle
+    return run_subscription_lifecycle(db, dry_run=payload.dry_run)
+
+
+@router.post("/{vehicle_owner_id}/grant-days")
+def grant_plan_days(vehicle_owner_id: uuid.UUID, payload: GrantDaysRequest, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Operations reactivation: give N days of plan (no payment). Lifts a 'subscription required' suspension at once."""
+    from app.crud.subscription_lifecycle import lift_suspension
+    details = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).first()
+    if not details:
+        raise HTTPException(status_code=404, detail="Fleet Owner account details not found")
+    today = date.today()
+    base = details.billing_next_date if details.billing_next_date and details.billing_next_date >= today else today
+    details.billing_next_date = base + timedelta(days=payload.days)
+    details.registration_fee_paid_at = details.registration_fee_paid_at or datetime.now(timezone.utc)
+    lift_suspension(details)
+    details.billing_suspended = False
+    db.add(FleetSubscriptionHistory(id=uuid.uuid4(), vehicle_owner_id=vehicle_owner_id, event_type="GRANTED", duration_days=payload.days,
+                                    reason=payload.notes or f"{payload.days} days given by operations", admin_id=current_admin.id,
+                                    admin_username=getattr(current_admin, "username", "Admin"), created_at=datetime.now(timezone.utc)))
+    log_admin_action(db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
+                     action="FLEET_PLAN_DAYS_GRANTED", target_type="vehicle_owner", target_id=str(vehicle_owner_id), target_name=details.full_name,
+                     details={"days": payload.days, "valid_until": details.billing_next_date.isoformat()})
+    db.commit()
+    return {"success": True, "billing_next_date": details.billing_next_date.isoformat()}
+
+
+@router.post("/{vehicle_owner_id}/start-plan-from-wallet")
+def start_plan_from_wallet(vehicle_owner_id: uuid.UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Start the Monthly plan for an owner by taking the fee from his wallet (the owner paid Rs 199 into the wallet by mistake and never
+    started the plan). Needs wallet >= the monthly fee; the normal rule - the plan is activated by paying its fee."""
+    from app.crud.billing import start_monthly_subscription
+    res = start_monthly_subscription(db, vehicle_owner_id)
+    det = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).first()
+    db.add(FleetSubscriptionHistory(id=uuid.uuid4(), vehicle_owner_id=vehicle_owner_id, event_type="STARTED_FROM_WALLET", duration_days=30,
+                                    reason="Monthly plan started by staff from the owner's wallet", admin_id=current_admin.id,
+                                    admin_username=getattr(current_admin, "username", "Admin"), created_at=datetime.now(timezone.utc)))
+    log_admin_action(db, admin_id=str(current_admin.id), admin_username=current_admin.username, admin_role=current_admin.role,
+                     action="FLEET_PLAN_STARTED_FROM_WALLET", target_type="vehicle_owner", target_id=str(vehicle_owner_id),
+                     target_name=det.full_name if det else None)
+    db.commit()
+    return res

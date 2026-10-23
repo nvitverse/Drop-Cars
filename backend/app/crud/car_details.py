@@ -50,6 +50,8 @@ def create_car_details(db: Session, car_data: CarDetailsForm) -> CarDetails:
     threshold. Older cars can still register under the regular SEDAN type.
     Not enforced for admin-created cars (see create_car_admin)."""
     _check_duplicate_car_number(db, car_data.car_number)
+    from app.utils.blocklist import assert_not_blocked      # a vehicle of a permanently blocked owner cannot be registered again
+    assert_not_blocked(db, vehicle=car_data.car_number)
     # The previous owner removed this car: it moves to whoever adds it now (the same owner gets his old record back)
     _gone = db.query(CarDetails).filter(CarDetails.car_number == car_data.car_number, CarDetails.removed_at.isnot(None)).first()
     if _gone is not None:

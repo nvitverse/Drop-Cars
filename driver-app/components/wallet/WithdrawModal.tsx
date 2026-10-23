@@ -101,7 +101,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             <View style={styles.infoRow}>
               <Info size={13} color={colors.text.muted} />
               <AppText variant="caption" color={colors.text.secondary} style={{ flex: 1 }}>
-                வால்லெட்டில் குறைந்தபட்சம் ₹{minRetainedBalance} இருப்பு வைக்கப்பட வேண்டும்.
+                {`Wallet balance below ₹${minRetainedBalance} is non-refundable (it stays as your booking security hold). Only the amount above ₹${minRetainedBalance} can be withdrawn.`}
               </AppText>
             </View>
           </View>

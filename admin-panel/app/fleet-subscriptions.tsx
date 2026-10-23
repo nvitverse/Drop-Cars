@@ -14,6 +14,7 @@ import {
   Share,
 } from 'react-native';
 import { TouchableOpacity } from '@/components/ui/TouchableOpacity';
+import SubscriptionRuleCard from '@/components/SubscriptionRuleCard';
 import Modal from '@/components/KeyboardSafe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -364,6 +365,8 @@ export default function FleetSubscriptionsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor="#0D47A1" />}
       >
+        <SubscriptionRuleCard isDark={isDark} cardBg={cardBg} borderCol={borderCol} textCol={textCol} subText={subText} />
+
         {/* KPI Strip */}
         <View style={styles.kpiContainer}>
           <View style={[styles.kpiCard, { backgroundColor: cardBg, borderColor: '#10B981', borderLeftWidth: 4 }]}>

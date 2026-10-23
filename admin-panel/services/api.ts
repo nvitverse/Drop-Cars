@@ -665,6 +665,27 @@ class ApiService {
     });
   }
 
+  // Subscription rule: 30 days Standard, 30 days grace after a plan lapses, then suspended until the plan is bought
+  async getSubscriptionLifecycle(): Promise<any> {
+    return this.makeRequest('/admin/fleet-subscriptions/lifecycle');
+  }
+
+  async setSubscriptionLifecycle(body: { enabled?: boolean; standard_free_days?: number; lapse_grace_days?: number }): Promise<any> {
+    return this.makeRequest('/admin/fleet-subscriptions/lifecycle/settings', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async runSubscriptionLifecycle(dryRun: boolean): Promise<any> {
+    return this.makeRequest('/admin/fleet-subscriptions/lifecycle/run', { method: 'POST', body: JSON.stringify({ dry_run: dryRun }) });
+  }
+
+  async grantFleetPlanDays(vehicleOwnerId: string, days: number, notes?: string): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/grant-days`, { method: 'POST', body: JSON.stringify({ days, notes }) });
+  }
+
+  async startFleetPlanFromWallet(vehicleOwnerId: string): Promise<any> {
+    return this.makeRequest(`/admin/fleet-subscriptions/${vehicleOwnerId}/start-plan-from-wallet`, { method: 'POST' });
+  }
+
   async permanentBlockAccount(
     accountId: string,
     accountType: 'vendor' | 'vehicle_owner' | 'driver' | 'quickdriver',

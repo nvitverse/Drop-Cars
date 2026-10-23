@@ -49,6 +49,8 @@ def update_vendor_account_status(db: Session, vendor_id: str, account_status: st
     
     # Try to match by enum name first (ACTIVE, INACTIVE, PENDING)
     account_status_upper = account_status.upper()
+    if account_status_upper in ("BLOCKED", "SUSPENDED", "DISABLED", "SWITCHED_OFF", "OFF"):
+        account_status_upper = "INACTIVE"       # the Admin App's Block button used to send "Blocked", which is no status value
     try:
         vendor.account_status = VendorAccountStatusEnum[account_status_upper]
     except KeyError:
@@ -236,6 +238,8 @@ def update_vehicle_owner_account_status(db: Session, vehicle_owner_id: str, acco
     
     # Try to match by enum name first (ACTIVE, INACTIVE, PENDING)
     account_status_upper = account_status.upper()
+    if account_status_upper in ("BLOCKED", "SUSPENDED", "DISABLED", "SWITCHED_OFF", "OFF"):
+        account_status_upper = "INACTIVE"       # the Admin App's Block button used to send "Blocked", which is no status value
     try:
         vehicle_owner.account_status = VehicleOwnerAccountStatusEnum[account_status_upper]
     except KeyError:
@@ -1481,7 +1485,68 @@ def update_driver_licence_expiry_date(db: Session, driver_id: str, expiry_date) 
     return {"driver_id": str(driver_id), "expiry_date": expiry_date.isoformat() if expiry_date else None}
 
 
-def set_permanent_block(db: Session, account_id: str, account_type: str, reason: str, blocked: bool = True) -> dict:
+def _permanent_block_side_effects(db: Session, kind: str, row, blocked: bool, reason: str, by: str) -> None:
+    """Everything that must follow a permanent block / un-block besides the flag itself (does not commit):
+    - remember every identifier (phone, alternate phone, e-mail, Aadhaar, PAN, licence, vehicle number) so the same person cannot sign up again,
+    - a fleet owner takes his drivers and cars with him,
+    - sessions are cut at once (token_version), and the request gate forgets its cached answer."""
+    from app.utils import blocklist
+    from app.core import account_gate
+    from app.utils.gcs import delete_gcs_file_by_url
+
+    def _bump(r) -> None:
+        r.token_version = (getattr(r, "token_version", 0) or 0) + 1
+
+    def _erase(urls) -> None:
+        for u in urls:
+            if u:
+                try:
+                    delete_gcs_file_by_url(u)
+                except Exception:  # noqa: BLE001
+                    pass
+
+    touched = [row.id]
+    why = (reason or "").strip() or "Blocked by admin"
+    if kind == "vehicle_owner":
+        drivers = db.query(CarDriver).filter(CarDriver.vehicle_owner_id == row.id).all()
+        cars = db.query(CarDetails).filter(CarDetails.vehicle_owner_id == row.id).all()
+        if blocked:
+            blocklist.block_identifiers(db, blocklist.owner_identifiers(db, row.id), reason=why, by=by, source_type=kind, source_id=row.id)
+            _bump(row)
+            row.blocked_reason = why
+            for d in drivers:
+                d.permanently_blocked = True
+                d.permanently_blocked_reason = "Fleet owner blocked: " + why
+                d.driver_status = DriverStatusEnum.BLOCKED
+                _bump(d)
+                _erase([d.licence_front_img, d.licence_back_img, d.aadhar_front_img, d.aadhar_back_img])
+                d.licence_front_img = d.licence_back_img = d.aadhar_front_img = d.aadhar_back_img = None
+                touched.append(d.id)
+            for c in cars:
+                c.car_status = CarStatusEnum.BLOCKED
+        else:
+            blocklist.unblock_by_source(db, row.id)
+            for d in drivers:
+                if (d.permanently_blocked_reason or "").startswith("Fleet owner blocked"):
+                    d.permanently_blocked = False
+                    d.permanently_blocked_reason = None
+                    touched.append(d.id)
+    elif kind == "vendor":
+        if blocked:
+            blocklist.block_identifiers(db, blocklist.vendor_identifiers(db, row.id), reason=why, by=by, source_type=kind, source_id=row.id)
+            _bump(row)
+        else:
+            blocklist.unblock_by_source(db, row.id)
+    elif kind == "driver":
+        if blocked:
+            blocklist.block_identifiers(db, blocklist.driver_items(row), reason=why, by=by, source_type=kind, source_id=row.id)
+            _bump(row)
+        else:
+            blocklist.unblock_by_source(db, row.id)
+    account_gate.invalidate(*touched)
+
+
+def set_permanent_block(db: Session, account_id: str, account_type: str, reason: str, blocked: bool = True, by: str = "") -> dict:
     """Permanent block/unblock (fraud/confirmed-bad-actor) - a separate,
     deliberate flag from the everyday Active/Inactive/BLOCKED toggle, so a
     genuinely fraudulent account (e.g. fake documents) can't be casually
@@ -1517,6 +1582,7 @@ def set_permanent_block(db: Session, account_id: str, account_type: str, reason:
             if details:
                 _delete_doc_images([details.aadhar_front_img])
                 details.aadhar_front_img = None
+        _permanent_block_side_effects(db, "vendor", row, blocked, reason, by)
         db.commit()
         return {"id": row.id, "account_type": "vendor", "permanently_blocked": row.permanently_blocked}
 
@@ -1534,6 +1600,7 @@ def set_permanent_block(db: Session, account_id: str, account_type: str, reason:
                 details.aadhar_front_img = None
                 details.aadhar_back_img = None
                 details.pan_img = None
+        _permanent_block_side_effects(db, "vehicle_owner", row, blocked, reason, by)
         db.commit()
         return {"id": row.id, "account_type": "vehicle_owner", "permanently_blocked": row.permanently_blocked}
 
@@ -1548,6 +1615,7 @@ def set_permanent_block(db: Session, account_id: str, account_type: str, reason:
             _delete_doc_images([row.licence_front_img, row.licence_back_img])
             row.licence_front_img = None
             row.licence_back_img = None
+        _permanent_block_side_effects(db, "driver", row, blocked, reason, by)
         db.commit()
         return {"id": row.id, "account_type": "driver", "permanently_blocked": row.permanently_blocked}
 

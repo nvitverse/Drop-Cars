@@ -37,6 +37,7 @@ import { needsWelcome } from '@/services/appContent';
 import axiosInstance from '@/app/api/axiosInstance';
 import { extractUserIdFromJWT } from '@/utils/jwtDecoder';
 import * as SecureStore from '@/utils/secureStore';
+import { gateKindOf } from '@/utils/accountGate';
 import { loginDriver } from '@/services/driver/driverService';
 import {
   getSavedGuestHelpSession,
@@ -186,6 +187,8 @@ export default function LoginScreen() {
       }
 
     } catch (error: any) {
+
+      if (gateKindOf(error)) { return; }   // blocked / switched off / subscription needed: the account screen is already open
       if (error.response?.status === 404 && error.response?.data?.detail === 'NOT_REGISTERED') {
         const { ten } = formatForBackend(phoneNumber);
         // Check if registered as a Duty Driver
@@ -303,6 +306,7 @@ export default function LoginScreen() {
         throw new Error('No access token received from server');
       }
     } catch (error: any) {
+      if (gateKindOf(error)) { return; }   // blocked / switched off / subscription needed: the account screen is already open
       if (
         error.message === 'NOT_REGISTERED_AS_DRIVER' ||
         (error.response?.status === 404 && error.response?.data?.detail === 'NOT_REGISTERED')
