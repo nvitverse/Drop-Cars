@@ -927,6 +927,10 @@ async def update_end_trip_record(
             "driver_profit": int(order.driver_profit or 0), "vendor_profit": int(order.vendor_profit or 0), "admin_profit": int(order.admin_profit or 0),
             "commision_amount": order.commision_amount, "closing_breakdown": order.closing_breakdown,
         }
+        try:                                # the customer-safe bill of the simulated close (Driver App "Generate bill" preview)
+            _figures["customer_bill"] = build_customer_bill(db, order)
+        except Exception as _e:  # noqa: BLE001
+            print(f"customer bill preview failed: {_e}")
         db.rollback()                       # nothing of the simulated close is kept
         return _figures
 

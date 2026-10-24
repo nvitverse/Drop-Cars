@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, ArrowLeft, Check, IndianRupee, KeyRound, Gauge, CheckCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { endTrip } from '@/services/driver/carDriverService';
+import axiosDriver from '@/app/api/axiosDriver';
 import * as SecureStore from '@/utils/secureStore';
 import { readWaiting, waitingMinutes, waitKey } from '@/components/WaitingTimer';
 import { stopTripLocationSharing } from '@/services/locationService';
@@ -58,6 +59,13 @@ export default function EndTripScreen() {
   const [distanceInfo, setDistanceInfo] = useState<null | { message: string; km_driven: number; route_km: number }>(null);
   const [distanceChoice, setDistanceChoice] = useState<string>('');
   const [distanceNote, setDistanceNote] = useState('');
+  // Two steps on this screen: 'form' (what the driver fills) -> 'bill' (the generated bill, End Code, Complete Trip).
+  // Nothing is saved until Complete Trip: Generate Bill only asks the server to work the bill out.
+  const [step, setStep] = useState<'form' | 'bill'>('form');
+  const [preview, setPreview] = useState<any>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [distanceMode, setDistanceMode] = useState<'preview' | 'final'>('final');
+  const [savedReason, setSavedReason] = useState<string | undefined>(undefined);
 
   const router = useRouter();
   const { t } = useLanguage();
@@ -172,7 +180,53 @@ export default function EndTripScreen() {
     return totalKm * farePerKm;
   };
 
-  const handleEndTrip = async (distanceReason?: string) => {
+  const waitTotalMin = waitingTime !== '' ? (parseInt(waitingTime, 10) || 0) : 0;
+  const setWaitParts = (h: number, m: number) => {
+    const total = Math.max(0, h) * 60 + Math.min(59, Math.max(0, m));
+    setWaitingTime(total > 0 ? String(total) : '');
+  };
+
+  const formReady = !!endKm && !!odometerPhoto && endingKmShown && !(tollChargeUpdate === true && !tollCharge) && !(isMulticity && !waitingTime);
+
+  // "Generate Bill": ask the server for the customer's bill of this close (nothing is saved), then show it on the next step.
+  const generateBill = async (reason?: string) => {
+    if (!formReady) {
+      Alert.alert(t('tripEnd.errorTitle'), t('tripEnd.missingFieldsBody'));
+      return;
+    }
+    if (parseInt(endKm, 10) < startKm) {
+      Alert.alert(t('tripEnd.invalidKmTitle'), t('tripEnd.invalidKmLessThanStart'));
+      return;
+    }
+    if (previewing) return;
+    setPreviewing(true);
+    try {
+      const res = await axiosDriver.post(`/api/orders/driver/trip-bill-preview/${params.order_id}`, {
+        end_km: parseInt(endKm, 10),
+        updated_toll_charges: tollChargeUpdate === true ? Math.round(parseFloat(tollCharge) || 0) : undefined,
+        waiting_time: waitingTime !== '' ? parseInt(waitingTime, 10) : undefined,
+        extra_charges_collected: extraChargeItems.map((item) => ({ label: item.label, amount: parseInt(extraChargeAmounts[item.label] || '0', 10) || 0 })),
+        distance_reason: reason,
+      });
+      const d = res.data?.distance_check;
+      if (d) {
+        setDistanceMode('preview');
+        setDistanceInfo({ message: String(d.message || ''), km_driven: Number(d.km_driven), route_km: Number(d.route_km) });
+        return;
+      }
+      setSavedReason(reason);
+      setPreview(res.data);
+      setStep('bill');
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      Alert.alert(t('tripEnd.errorTitle'), typeof detail === 'string' ? detail : (e?.message || 'The bill could not be generated. Please check your internet and try again.'));
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const handleEndTrip = async (distanceReasonArg?: string) => {
+    const distanceReason = distanceReasonArg ?? savedReason;
     // Check required fields (removed contact number requirement)
     if (!endKm || !odometerPhoto || !endingKmShown) {
       Alert.alert(t('tripEnd.errorTitle'), t('tripEnd.missingFieldsBody'));
@@ -234,9 +288,9 @@ export default function EndTripScreen() {
       // is closed before it is done.
       try { await SecureStore.setItemAsync('pendingTripCompletion', String(params.order_id || '')); } catch {}
 
-      // Navigate to trip report screen (the customer bill)
+      // The bill was already shown before Complete Trip - go straight to the last step (rating, review QR, cash)
       router.replace({
-        pathname: '/trip/report',
+        pathname: '/trip/complete',
         params: { order_id: String(params.order_id || '0') }
       });
     } catch (error: any) {
@@ -245,6 +299,7 @@ export default function EndTripScreen() {
       // Distance differs from the real route: not a failure - ask for a reason, then resubmit
       const _detail = error.response?.data?.detail;
       if (error.response?.status === 400 && _detail && typeof _detail === 'object' && _detail.code === 'DISTANCE_REASON_REQUIRED') {
+        setDistanceMode('final');
         setDistanceInfo({ message: String(_detail.message || ''), km_driven: Number(_detail.km_driven), route_km: Number(_detail.route_km) });
         setSubmitting(false);
         return;
@@ -323,7 +378,7 @@ export default function EndTripScreen() {
       />
 
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => safeBack(router)}>
+        <TouchableOpacity onPress={() => (step === 'bill' ? setStep('form') : safeBack(router))}>
           <ArrowLeft color={colors.text} size={24} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>{t('tripEnd.headerTitle')}</Text>
@@ -335,45 +390,8 @@ export default function EndTripScreen() {
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('tripEnd.subtitle')}</Text>
         </View>
 
-        {/* At a glance: what this bill is made of, before the driver fills anything */}
-        <View style={[styles.cardSection, { backgroundColor: colors.surface, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 8 }]}>This booking at a glance</Text>
-          {[
-            ['Start km', startKm ? String(startKm) : '-'],
-            ['End km', endKm || 'enter below'],
-            ['Km driven', drivenKm === null ? '-' : `${drivenKm} km`],
-          ].map(([k, v]) => (
-            <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{k}</Text>
-              <Text style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>{v}</Text>
-            </View>
-          ))}
-          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
-          <Text style={{ color: '#047857', fontSize: 12.5, fontFamily: 'Inter-Bold' }}>
-            Included in the fare: {includedChargeItems.length === 0 ? 'nothing extra' : `${includedChargeItems.length} item${includedChargeItems.length > 1 ? 's' : ''}${includedTotal > 0 ? ` (₹${includedTotal})` : ''}`}
-          </Text>
-          {includedChargeItems.map((i, idx) => (
-            <Text key={`g-in-${idx}`} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
-              • {i.label}{Number(i.amount) > 0 ? ` - ₹${i.amount}` : ''}
-            </Text>
-          ))}
-          <Text style={{ color: '#B45309', fontSize: 12.5, fontFamily: 'Inter-Bold', marginTop: 8 }}>
-            Not in the fare (collect from the customer): {extraChargeItems.length === 0 && !tollChargeUpdate ? 'nothing' : ''}
-          </Text>
-          {extraChargeItems.map((i, idx) => (
-            <Text key={`g-ex-${idx}`} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>• {i.label}</Text>
-          ))}
-          {tollChargeUpdate && (
-            <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>• Toll - on actuals, enter the real toll below</Text>
-          )}
-          {!tollChargeUpdate && tollIncludedItem && (
-            <Text style={{ color: '#047857', fontSize: 12, marginTop: 6 }}>Toll is already included (₹{tollIncludedItem.amount ?? 0}) - do not charge it again.</Text>
-          )}
-          {isMulticity && (
-            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 6 }}>Multi-city: enter the waiting minutes below; waiting hours covered by the booking are free.</Text>
-          )}
-        </View>
-
+        {step === 'form' && (
+          <>
         {/* 1. Odometer Photo Viewfinder Card */}
         <View style={styles.cardSection}>
           <View style={styles.sectionHeaderRow}>
@@ -436,107 +454,21 @@ export default function EndTripScreen() {
           </View>
         </View>
 
-        {/* 3. Toll Charge Input - Only show if toll_charge_update is true */}
-        {tollChargeUpdate === true && (
-          <View style={styles.cardSection}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('tripEnd.tollCharges')}</Text>
-            <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: tollCharge ? colors.primary : colors.border }]}>
-              <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.unitBadgeText, { color: colors.primary }]}>₹</Text>
-              </View>
-              <TextInput
-                style={[styles.numericInput, { color: colors.text }]}
-                placeholder={t('tripEnd.tollPlaceholder')}
-                placeholderTextColor={colors.textSecondary}
-                value={tollCharge}
-                onChangeText={setTollCharge}
-                keyboardType="numeric"
-              />
-            </View>
-            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-              {t('tripEnd.tollHelper')}
-            </Text>
-          </View>
-        )}
-
-        {/* 4. Waiting time - every trip type except hourly rental (compulsory only on multi-city; blank = no waiting) */}
-        {!tripTypeLower.includes('hour') && (
-          <View style={styles.cardSection}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('tripEnd.waitingTimeMinutes')}</Text>
-            <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: waitingTime ? colors.primary : colors.border }]}>
-              <TextInput
-                style={[styles.numericInput, { color: colors.text }]}
-                placeholder={t('tripEnd.waitingTimePlaceholder')}
-                placeholderTextColor={colors.textSecondary}
-                value={waitingTime}
-                onChangeText={handleWaitingTimeChange}
-                keyboardType="numeric"
-              />
-              <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.unitBadgeText, { color: colors.primary }]}>MINS</Text>
-              </View>
-            </View>
-            {!!waitingTime && parseInt(waitingTime, 10) >= 60 && (
-              <Text style={[styles.helperText, { color: colors.primary }]}>
-                = {Math.floor(parseInt(waitingTime, 10) / 60)} h {parseInt(waitingTime, 10) % 60} min
-              </Text>
-            )}
-            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-              {isMulticity ? t('tripEnd.waitingTimeHelper') : 'Only if the customer made you wait. Leave blank for no waiting. The bill adds it at the platform waiting rate.'}
-            </Text>
-          </View>
-        )}
-
-        {/* 5. Trip End Code */}
+        {/* Travelled Distance - worked out from the two odometer readings, not typed */}
         <View style={styles.cardSection}>
-          <View style={styles.sectionHeaderRow}>
-            <KeyRound size={16} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trip End Code{otpRequired ? '' : ' (Optional)'}</Text>
-          </View>
-          <Text style={[styles.helperText, { color: colors.textSecondary, marginBottom: 8 }]}>
-            {otpRequired
-              ? 'Ask the customer for the 4-digit completion code from their SMS or booking page.'
-              : 'Not needed for self-sourced bookings — you can complete the trip directly.'}
-          </Text>
-          <View style={[styles.otpInputContainer, { backgroundColor: colors.surface, borderColor: tripOtp.length === 4 ? colors.success : colors.border }]}>
-            <TextInput
-              style={[styles.otpInput, { color: colors.text }]}
-              placeholder="• • • •"
-              placeholderTextColor={colors.textSecondary}
-              value={tripOtp}
-              onChangeText={(v) => {
-                setTripOtp(v);
-                if (v.length === 4) {
-                  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-                }
-              }}
-              keyboardType="number-pad"
-              maxLength={4}
-            />
-            {tripOtp.length === 4 && (
-              <View style={[styles.otpVerifiedBadge, { backgroundColor: colors.success + '20' }]}>
-                <CheckCircle size={16} color={colors.success} />
-              </View>
-            )}
-          </View>
-        </View>
-
-        {includedChargeItems.length > 0 && (
-          <View style={[styles.cardSection, { backgroundColor: colors.surface, padding: 14, borderRadius: 6, borderWidth: 1, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 4 }]}>Included in the trip fare</Text>
-            <Text style={[styles.helperText, { color: colors.textSecondary, marginBottom: 10 }]}>
-              These are already paid through the fare. Do not ask the customer for them again.
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Travelled Distance</Text>
+          <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.numericInput, { color: drivenKm === null ? colors.textSecondary : colors.text }]}>
+              {drivenKm === null ? 'Fills in from the odometer readings' : String(drivenKm)}
             </Text>
-            {includedChargeItems.map((item, idx) => (
-              <View key={`incl-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : '#ECFDF5', marginBottom: 6 }}>
-                <Text style={{ flex: 1, marginRight: 8, fontSize: 13.5, fontFamily: 'Inter-Medium', color: colors.text }}>{item.label}</Text>
-                <View style={{ backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'Inter-Bold' }}>{Number(item.amount) > 0 ? `Included  ₹${item.amount}` : 'Included'}</Text>
-                </View>
-              </View>
-            ))}
+            <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
+              <Text style={[styles.unitBadgeText, { color: colors.primary }]}>KM</Text>
+            </View>
           </View>
-        )}
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+            Starting reading {startKm ? startKm : '-'} km. Closing reading minus starting reading.
+          </Text>
+        </View>
 
         {/* Extra charges NOT bundled */}
         {extraChargeItems.length > 0 && (
@@ -567,6 +499,73 @@ export default function EndTripScreen() {
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Collected outside the fare</Text>
               <Text style={{ color: colors.text, fontSize: 14, fontFamily: 'Inter-Bold' }}>₹{collectedTotal}</Text>
             </View>
+          </View>
+        )}
+
+        {/* 3. Toll Charge Input - Only show if toll_charge_update is true */}
+        {tollChargeUpdate === true && (
+          <View style={styles.cardSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('tripEnd.tollCharges')}</Text>
+            <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: tollCharge ? colors.primary : colors.border }]}>
+              <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
+                <Text style={[styles.unitBadgeText, { color: colors.primary }]}>₹</Text>
+              </View>
+              <TextInput
+                style={[styles.numericInput, { color: colors.text }]}
+                placeholder={t('tripEnd.tollPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
+                value={tollCharge}
+                onChangeText={setTollCharge}
+                keyboardType="numeric"
+              />
+            </View>
+            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+              {t('tripEnd.tollHelper')}
+            </Text>
+          </View>
+        )}
+
+        {/* Waiting time - hours + minutes (every trip type except hourly rental). The charge is worked out by the server. */}
+        {!tripTypeLower.includes('hour') && (
+          <View style={styles.cardSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Waiting Time</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: waitTotalMin > 0 ? colors.primary : colors.border }]}>
+                  <TextInput
+                    style={[styles.numericInput, { color: colors.text }]}
+                    placeholder="0"
+                    placeholderTextColor={colors.textSecondary}
+                    value={waitTotalMin > 0 ? String(Math.floor(waitTotalMin / 60)) : ''}
+                    onChangeText={(v) => setWaitParts(parseInt(v.replace(/[^0-9]/g, '') || '0', 10) || 0, waitTotalMin % 60)}
+                    keyboardType="numeric"
+                    maxLength={2}
+                  />
+                  <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
+                    <Text style={[styles.unitBadgeText, { color: colors.primary }]}>HRS</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: waitTotalMin > 0 ? colors.primary : colors.border }]}>
+                  <TextInput
+                    style={[styles.numericInput, { color: colors.text }]}
+                    placeholder="0"
+                    placeholderTextColor={colors.textSecondary}
+                    value={waitTotalMin > 0 ? String(waitTotalMin % 60) : ''}
+                    onChangeText={(v) => setWaitParts(Math.floor(waitTotalMin / 60), parseInt(v.replace(/[^0-9]/g, '') || '0', 10) || 0)}
+                    keyboardType="numeric"
+                    maxLength={2}
+                  />
+                  <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
+                    <Text style={[styles.unitBadgeText, { color: colors.primary }]}>MINS</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+              {isMulticity ? t('tripEnd.waitingTimeHelper') : 'Only if the customer made you wait. Leave blank for no waiting.'} The waiting charge is worked out for you and shown on the bill.
+            </Text>
           </View>
         )}
 
@@ -606,21 +605,130 @@ export default function EndTripScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* 8. End Trip Button */}
+        {/* Generate Bill */}
+        <TouchableOpacity
+          style={[styles.endButton, { backgroundColor: colors.primary }, (!formReady || previewing) && [styles.disabledButton, { backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' }]]}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+            generateBill();
+          }}
+          disabled={!formReady || previewing}
+          activeOpacity={0.85}
+        >
+          {previewing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color="white" size="small" />
+              <Text style={styles.endButtonText}>Working out the bill...</Text>
+            </View>
+          ) : (
+            <Text style={styles.endButtonText}>Generate Bill</Text>
+          )}
+        </TouchableOpacity>
+          </>
+        )}
+
+        {step === 'bill' && (
+          <>
+        {/* Bill breakdown: every line is read-only. What the customer was promised (rate + extra rate, bata + extra bata) is already one figure here. */}
+        <View style={[styles.cardSection, { backgroundColor: colors.surface, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 2 }]}>Bill breakdown</Text>
+          {!!(preview?.from || preview?.to) && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginBottom: 8 }}>{[preview?.from, preview?.to].filter(Boolean).join(' → ')}</Text>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Travelled distance</Text>
+            <Text style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>{preview?.km_driven ?? drivenKm ?? '-'} km</Text>
+          </View>
+          {preview?.km_billed && preview?.km_driven != null && preview.km_billed !== preview.km_driven && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Billed distance (minimum coverage)</Text>
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>{preview.km_billed} km</Text>
+            </View>
+          )}
+          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
+          {(preview?.lines || []).map((l: any, i: number) => (
+            <View key={`bl-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+              <Text style={{ flex: 1, marginRight: 10, color: colors.text, fontSize: 13.5 }}>{l.label}</Text>
+              <Text style={{ color: colors.text, fontSize: 13.5, fontFamily: 'Inter-SemiBold' }}>₹{l.amount}</Text>
+            </View>
+          ))}
+          {includedChargeItems.length > 0 && (
+            <Text style={{ color: '#047857', fontSize: 12, marginTop: 6 }}>
+              Already included in the fare: {includedChargeItems.map((i) => i.label).join(', ')}
+            </Text>
+          )}
+          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'Inter-Bold' }}>Total Booking Amount</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontFamily: 'Inter-Bold' }}>₹{preview?.total ?? 0}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13.5 }}>Advance Received</Text>
+            <Text style={{ color: colors.text, fontSize: 13.5, fontFamily: 'Inter-SemiBold' }}>₹{preview?.advance_received ?? 0}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, marginTop: 4, borderRadius: 8, backgroundColor: colors.primary + '12' }}>
+            <Text style={{ color: colors.primary, fontSize: 14.5, fontFamily: 'Inter-Bold' }}>Cash to Collect</Text>
+            <Text style={{ color: colors.primary, fontSize: 18, fontFamily: 'Inter-Bold' }}>₹{preview?.cash_to_collect ?? 0}</Text>
+          </View>
+          {(preview?.extra_charges_paid_directly || []).length > 0 && (
+            <View style={{ marginTop: 10 }}>
+              <Text style={{ color: '#B45309', fontSize: 12.5, fontFamily: 'Inter-Bold' }}>Collected from the customer outside the booking amount</Text>
+              {(preview.extra_charges_paid_directly as any[]).map((e, i) => (
+                <View key={`ex-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{e.label}</Text>
+                  <Text style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter-SemiBold' }}>₹{e.amount}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* 5. Trip End Code */}
+        <View style={styles.cardSection}>
+          <View style={styles.sectionHeaderRow}>
+            <KeyRound size={16} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trip End Code{otpRequired ? '' : ' (Optional)'}</Text>
+          </View>
+          <Text style={[styles.helperText, { color: colors.textSecondary, marginBottom: 8 }]}>
+            {otpRequired
+              ? 'Ask the customer for the 4-digit completion code from their SMS or booking page.'
+              : 'Not needed for self-sourced bookings — you can complete the trip directly.'}
+          </Text>
+          <View style={[styles.otpInputContainer, { backgroundColor: colors.surface, borderColor: tripOtp.length === 4 ? colors.success : colors.border }]}>
+            <TextInput
+              style={[styles.otpInput, { color: colors.text }]}
+              placeholder="• • • •"
+              placeholderTextColor={colors.textSecondary}
+              value={tripOtp}
+              onChangeText={(v) => {
+                setTripOtp(v);
+                if (v.length === 4) {
+                  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+                }
+              }}
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+            {tripOtp.length === 4 && (
+              <View style={[styles.otpVerifiedBadge, { backgroundColor: colors.success + '20' }]}>
+                <CheckCircle size={16} color={colors.success} />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Complete Trip - the real close (red). Needs the customer's Trip End Code. */}
         <TouchableOpacity
           style={[
             styles.endButton,
-            { backgroundColor: colors.error },
-            (!endKm || !odometerPhoto || !endingKmShown || (otpRequired && !tripOtp.trim()) || (tollChargeUpdate === true && !tollCharge) || (isMulticity && !waitingTime) || submitting) && [
-              styles.disabledButton,
-              { backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' },
-            ],
+            { backgroundColor: '#DC2626' },
+            ((otpRequired && !tripOtp.trim()) || submitting) && [styles.disabledButton, { backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' }],
           ]}
           onPress={() => {
             try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
             handleEndTrip();
           }}
-          disabled={!endKm || !odometerPhoto || !endingKmShown || (otpRequired && !tripOtp.trim()) || (tollChargeUpdate === true && !tollCharge) || (isMulticity && !waitingTime) || submitting}
+          disabled={(otpRequired && !tripOtp.trim()) || submitting}
           activeOpacity={0.85}
         >
           {submitting ? (
@@ -632,6 +740,8 @@ export default function EndTripScreen() {
             <Text style={styles.endButtonText}>{t('tripEnd.completeTripButton')}</Text>
           )}
         </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
       <Modal visible={!!distanceInfo} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setDistanceInfo(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', justifyContent: 'flex-end' }}>
@@ -676,11 +786,11 @@ export default function EndTripScreen() {
                 onPress={() => {
                   const reason = distanceChoice === 'Other' ? distanceNote.trim() : distanceChoice;
                   setDistanceInfo(null);
-                  handleEndTrip(reason);
+                  if (distanceMode === 'preview') generateBill(reason); else handleEndTrip(reason);
                 }}
                 style={{ flex: 1.4, minHeight: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: !distanceChoice || (distanceChoice === 'Other' && !distanceNote.trim()) ? '#CBD5E1' : colors.primary }}
               >
-                <Text style={{ fontFamily: 'Inter-SemiBold', color: '#FFFFFF' }}>Send reason & complete</Text>
+                <Text style={{ fontFamily: 'Inter-SemiBold', color: '#FFFFFF' }}>{distanceMode === 'preview' ? 'Send reason & continue' : 'Send reason & complete'}</Text>
               </TouchableOpacity>
             </View>
           </View>

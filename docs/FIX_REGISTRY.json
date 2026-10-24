@@ -984,6 +984,38 @@
       ],
       "why": "permanent-unblock makes the owner's drivers and cars usable again (status was left BLOCKED)",
       "since": "2026-10-24"
+    },
+    {
+      "id": "trip-end-generate-bill-step",
+      "file": "driver-app/app/trip/end.tsx",
+      "must_contain": [
+        "trip-bill-preview",
+        "Generate Bill",
+        "step === 'bill'",
+        "Travelled Distance"
+      ],
+      "why": "owner spec: End Trip = closing ODO photo, Full ODO Closing KM, auto Travelled Distance, excluded items, waiting hrs+mins, Generate Bill -> bill breakdown (customer price only) + End Code + red Complete Trip",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "trip-bill-preview-endpoint",
+      "file": "backend/app/api/routes/order_assignments.py",
+      "must_contain": [
+        "trip-bill-preview",
+        "recalc=True",
+        "distance_check"
+      ],
+      "why": "Generate Bill only simulates the close (rolled back) and returns the customer-safe bill; never driver fare / commission",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "trip-last-step-review-qr",
+      "file": "driver-app/app/trip/complete.tsx",
+      "must_contain": [
+        "ReviewQrCard"
+      ],
+      "why": "the customer review QR lives on the One last step screen",
+      "since": "2026-10-24"
     }
   ]
 }

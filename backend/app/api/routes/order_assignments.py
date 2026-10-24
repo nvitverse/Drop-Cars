@@ -1066,6 +1066,46 @@ def get_driver_trip_bill(order_id: int, db: Session = Depends(get_db), current_d
     return bill
 
 
+class TripBillPreviewIn(BaseModel):
+    end_km: int = Field(..., ge=0)
+    updated_toll_charges: Optional[int] = Field(None, ge=0)
+    waiting_time: Optional[int] = Field(None, ge=0, description="waiting MINUTES")
+    extra_charges_collected: Optional[list] = Field(None, description='[{"label":"State Tax","amount":150}] - the excluded items the driver entered')
+    distance_reason: Optional[str] = Field(None, max_length=500)
+
+
+@router.post("/driver/trip-bill-preview/{order_id}")
+async def preview_driver_trip_bill(order_id: int, body: TripBillPreviewIn, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
+    """"Generate bill" on the End Trip screen: the customer-safe bill this close would produce. NOTHING is saved or moved - the whole close
+    is simulated and rolled back (update_end_trip_record recalc=True). If the km driven is far from the route distance the answer is
+    {"distance_check": {...}} so the app can ask for a reason first. Never contains the driver's fare, commission or wallet figures."""
+    from app.crud.end_records import update_end_trip_record, DistanceReasonRequired
+    a, order = _driver_trip_or_404(db, order_id, current_driver)
+    if a.assignment_status == AssignmentStatusEnum.COMPLETED:
+        raise HTTPException(status_code=400, detail="This trip is already completed")
+    try:
+        figures = await update_end_trip_record(
+            db=db, order_id=order_id, driver_id=str(current_driver.id), end_km=body.end_km,
+            updated_toll_charges=body.updated_toll_charges, waiting_time=body.waiting_time, cash_collection=None,
+            extra_charges_collected=body.extra_charges_collected, distance_reason=body.distance_reason, recalc=True,
+        )
+    except DistanceReasonRequired as e:
+        db.rollback()
+        return {"distance_check": {"message": str(e), "km_driven": e.km_driven, "route_km": e.route_km, "allowed_min": e.allowed_min, "allowed_max": e.allowed_max}}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.rollback()                        # belt and braces: a preview never keeps anything
+    bill = figures.get("customer_bill")
+    if not bill:
+        raise HTTPException(status_code=500, detail="The bill could not be worked out. Please try again.")
+    # whitelist: nothing but what the customer is allowed to see
+    keep = ("order_id", "trip_type", "from", "to", "pickup_time", "km_driven", "km_billed", "lines", "total", "advance_received",
+            "cash_to_collect", "extra_charges_paid_directly", "extra_total")
+    return {"distance_check": None, **{k: bill.get(k) for k in keep}}
+
+
 class TripCompletionIn(BaseModel):
     customer_rating: int = Field(..., ge=1, le=5)
     customer_feedback: Optional[str] = Field(None, max_length=500)

@@ -10,6 +10,7 @@ import axiosDriver from '@/app/api/axiosDriver';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFriendlyError } from '@/utils/errorMessage';
 import { formatBookingId } from '@/utils/format';
+import ReviewQrCard from '@/components/ReviewQrCard';
 
 export const PENDING_COMPLETION_KEY = 'pendingTripCompletion';
 
@@ -161,6 +162,9 @@ export default function TripCompleteScreen() {
                   multiline
                 />
               </View>
+
+              {/* The customer scans this and rates the trip on the website; the stars above are the driver's rating of the customer */}
+              <ReviewQrCard orderId={orderId} />
 
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Money you collected</Text>

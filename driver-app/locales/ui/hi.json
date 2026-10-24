@@ -302,7 +302,7 @@
  "Advance already paid": "अग्रिम पहले ही चुकाया गया",
  "Advance Paid by Customer:": "ग्राहक द्वारा दिया गया अग्रिम:",
  "Advance received": "अग्रिम प्राप्त",
- "Advance Received": "अग्रिम प्राप्त",
+ "Advance Received": "एडवांस मिला",
  "Advance Received: ₹": "प्राप्त अग्रिम: ₹",
  "Advance updated.": "अग्रिम अपडेट हो गया।",
  "Alerts for standard new trip offers and bids": "सामान्य नई ट्रिप ऑफ़र और बोलियों के लिए अलर्ट",
@@ -1946,5 +1946,18 @@
  "Free days, automatic debit, wallet refunds, suspension and blocking": "मुफ़्त दिन, ऑटोमैटिक डेबिट, वॉलेट रिफ़ंड, निलंबन और ब्लॉक",
  "Free days, automatic debit, wallet and account rules": "मुफ़्त दिन, ऑटोमैटिक डेबिट, वॉलेट और खाता नियम",
  "Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.": "ऑटोमैटिक डेबिट: आपके मुफ़्त दिन या 30 दिन का प्लान खत्म होने पर, अगर वॉलेट में काफ़ी पैसा है तो प्लान फ़ीस अपने आप कट जाती है। कम हो तो कुछ नहीं कटता। वॉलेट में ₹500 से कम राशि वापस नहीं होती; जो फ़ीस कट चुकी है वह वापस नहीं होती। पूरे नियम: Settings > Plans & Account Rules।",
- "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "आपके वॉलेट का पैसा सुरक्षित है। वॉलेट में मासिक फ़ीस जितना पैसा जोड़ें - प्लान अपने आप शुरू होगा और आपका खाता तुरंत खुल जाएगा। नियम: Settings > Plans & Account Rules।"
+ "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "आपके वॉलेट का पैसा सुरक्षित है। वॉलेट में मासिक फ़ीस जितना पैसा जोड़ें - प्लान अपने आप शुरू होगा और आपका खाता तुरंत खुल जाएगा। नियम: Settings > Plans & Account Rules।",
+ "Travelled Distance": "तय की गई दूरी",
+ "Fills in from the odometer readings": "ओडोमीटर रीडिंग से अपने आप भर जाता है",
+ "Waiting Time": "इंतज़ार का समय",
+ "Generate Bill": "बिल बनाएँ",
+ "Working out the bill...": "बिल निकाला जा रहा है...",
+ "Bill breakdown": "बिल का ब्यौरा",
+ "Cash to Collect": "वसूलने वाली नकद राशि",
+ "Travelled distance": "तय की गई दूरी",
+ "Billed distance (minimum coverage)": "बिल की दूरी (न्यूनतम कवरेज)",
+ "Send reason & continue": "कारण भेजकर आगे बढ़ें",
+ "Collected from the customer outside the booking amount": "बुकिंग राशि के बाहर ग्राहक से वसूला गया",
+ "Closing reading minus starting reading.": "अंतिम रीडिंग घटाइए शुरुआती रीडिंग।",
+ "HRS": "घंटे"
 }
