@@ -5082,6 +5082,7 @@ export default function OrdersScreen() {
         needsStartKm={!!manualCloseOrder && !isOrderStarted(manualCloseOrder)}
         tollMustBeEntered={!!manualCloseOrder?.toll_charge_update}
         isMultiCity={/multi/i.test(String(manualCloseOrder?.trip_type || ''))}
+        isMultiDay={/multi|round/i.test(String(manualCloseOrder?.trip_type || ''))}
         isDark={isDark}
         onClose={() => setManualCloseOrder(null)}
         onDone={(res) => {

@@ -33,11 +33,12 @@ class ManualCloseIn(BaseModel):
     waiting_minutes: Optional[int] = Field(None, ge=0, description="Waiting minutes (multi-city bookings)")
     extra_charges_collected: Optional[List[dict]] = Field(None, description='Audit only, e.g. [{"label":"State Tax","amount":150}]')
     confirm_cash: bool = Field(False, description="true = the cash entered really differs from (bill - advance) and staff know the driver wallet moves by the difference")
+    trip_days: Optional[int] = Field(None, ge=1, le=30, description="Round Trip / Multi City: how many days the trip really ran. Blank = counted automatically up to NOW, which adds a day when the trip is closed the morning after")
 
 
 def _preview_args(body: ManualCloseIn) -> dict:
     return dict(updated_toll_charges=body.updated_toll_charges, waiting_time=body.waiting_minutes, cash_collection=body.cash_collection,
-                extra_charges_collected=body.extra_charges_collected)
+                extra_charges_collected=body.extra_charges_collected, force_days=body.trip_days)
 
 
 @router.post("/{order_id}/manual-close")
@@ -80,7 +81,8 @@ async def manual_close_trip(order_id: int, body: ManualCloseIn, db: Session = De
     # 2026-10-24) - so the real maths is run once without saving and staff must confirm a big difference.
     if body.cash_collection is not None and not body.confirm_cash:
         try:
-            sim = await update_end_trip_record(db=db, order_id=order_id, driver_id=driver_id, end_km=body.end_km, recalc=True,
+            from datetime import datetime as _dt
+            sim = await update_end_trip_record(db=db, order_id=order_id, driver_id=driver_id, end_km=body.end_km, recalc=True, ended_at=_dt.utcnow(),
                                                distance_reason=f"Closed by {admin_name} (staff): {body.reason.strip()}", **_preview_args(body))
         except (DistanceReasonRequired, ValueError):
             db.rollback()
@@ -90,13 +92,16 @@ async def manual_close_trip(order_id: int, body: ManualCloseIn, db: Session = De
             advance = int(order.advance_received or 0)
             bill = int(sim.get("closed_vendor_price") or 0)
             expected_cash = max(0, bill - advance)
+            days = int(((sim.get("closing_breakdown") or {}).get("days")) or 1)
+            days_note = (f" The system counted this trip as {days} days (each day bills at least the minimum km plus the driver allowance) - "
+                         f"if it ran fewer days, enter the days in the 'Days the trip ran' box.") if days > 1 else ""
             if abs(int(body.cash_collection) - expected_cash) > max(300, int(expected_cash * 0.1)):
                 lower = int(body.cash_collection) < expected_cash
                 raise HTTPException(status_code=409, detail=(
                     f"{CASH_DIFFERS_MARK} The bill is Rs {bill}" + (f" and Rs {advance} advance is already paid" if advance else "") +
                     f", so the driver should have collected about Rs {expected_cash}. You entered Rs {body.cash_collection}. "
                     f"The driver's wallet will be {'credited' if lower else 'debited'} Rs {abs(expected_cash - int(body.cash_collection))} "
-                    f"more than a normal close. Leave the cash box blank to use Rs {expected_cash}."))
+                    f"more than a normal close. Leave the cash box blank to use Rs {expected_cash}.{days_note}"))
     try:
         result = await update_end_trip_record(
             db=db, order_id=order_id, driver_id=driver_id, end_km=body.end_km,

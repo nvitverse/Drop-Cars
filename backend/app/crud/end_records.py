@@ -508,6 +508,8 @@ async def update_end_trip_record(
     distance_reason: str | None = None,
     recalc: bool = False,
     toll_receipt_url: str | None = None,
+    force_days: int | None = None,
+    ended_at: datetime | None = None,
 ) -> dict:
     """Update end trip record and calculate fare.
 
@@ -738,7 +740,12 @@ async def update_end_trip_record(
         # time. Scale both to the ACTUAL day count so an overrun trip bills
         # correctly instead of quietly absorbing the extra day for free.
         if order.trip_type in (OrderTypeEnum.ROUND_TRIP, OrderTypeEnum.MULTY_CITY):
-            actual_days = max(1, _actual_trip_days(order.start_date_time, (trip_record.updated_at or datetime.utcnow()) if recalc else datetime.utcnow()))
+            # force_days / ended_at: staff closing a trip AFTER it ended (Admin manual close) say how many days it really ran -
+            # counting up to "now" billed an extra day (250 km minimum + allowance, ~Rs 3300) on a one-day round trip closed next morning
+            if force_days:
+                actual_days = max(1, int(force_days))
+            else:
+                actual_days = max(1, _actual_trip_days(order.start_date_time, ended_at or ((trip_record.updated_at or datetime.utcnow()) if recalc else datetime.utcnow())))
             min_km_key = "round_trip_min_km_per_day" if order.trip_type == OrderTypeEnum.ROUND_TRIP else "multicity_min_km_per_day"
             min_km_total = _min_rules[min_km_key] * actual_days   # floor applies from day 1, not only on overrun days
             if updated_km < min_km_total:

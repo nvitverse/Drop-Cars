@@ -11,6 +11,8 @@ interface Props {
   needsStartKm: boolean;
   tollMustBeEntered?: boolean;
   isMultiCity?: boolean;
+  /** Round Trip or Multi City: the bill depends on how many days the trip ran */
+  isMultiDay?: boolean;
   isDark?: boolean;
   onClose: () => void;
   onDone: (result: any) => void;
@@ -20,7 +22,8 @@ interface Props {
  * Close a trip by hand when the driver cannot. The server runs the same closing code as the Driver App (same fare rules, same
  * commission split, same wallet settlement) - this form only collects what the driver would have entered.
  */
-export default function ManualCloseTripModal({ visible, orderId, needsStartKm, tollMustBeEntered, isMultiCity, isDark, onClose, onDone }: Props) {
+export default function ManualCloseTripModal({ visible, orderId, needsStartKm, tollMustBeEntered, isMultiCity, isMultiDay, isDark, onClose, onDone }: Props) {
+  const [days, setDays] = useState('');
   const [startKm, setStartKm] = useState('');
   const [endKm, setEndKm] = useState('');
   const [cash, setCash] = useState('');
@@ -30,7 +33,7 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (visible) { setStartKm(''); setEndKm(''); setCash(''); setToll(''); setWaiting(''); setReason(''); }
+    if (visible) { setStartKm(''); setEndKm(''); setCash(''); setToll(''); setWaiting(''); setReason(''); setDays(''); }
   }, [visible, orderId]);
 
   const bg = isDark ? '#0F172A' : '#FFFFFF';
@@ -54,6 +57,7 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
         cash_collection: num(cash),
         updated_toll_charges: num(toll),
         waiting_minutes: num(waiting),
+        trip_days: isMultiDay ? num(days) : undefined,
         reason: reason.trim(),
         confirm_cash: confirmCash,
       });
@@ -92,6 +96,12 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
             )}
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>End km *</Text>
             <TextInput style={input} keyboardType="number-pad" value={endKm} onChangeText={setEndKm} placeholder="Odometer at end" placeholderTextColor={sub} />
+            {isMultiDay && (
+              <>
+                <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>Days the trip ran</Text>
+                <TextInput style={input} keyboardType="number-pad" value={days} onChangeText={setDays} placeholder="Blank = counted up to now (a late close adds a day)" placeholderTextColor={sub} />
+              </>
+            )}
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>Cash collected from the customer (₹)</Text>
             <TextInput style={input} keyboardType="number-pad" value={cash} onChangeText={setCash} placeholder="Leave BLANK unless the driver really got a different amount" placeholderTextColor={sub} />
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>Actual toll (₹){tollMustBeEntered ? ' *' : ''}</Text>

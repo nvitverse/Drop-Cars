@@ -33,3 +33,12 @@ def test_cash_higher_than_expected_is_flagged_the_other_way():
 
 def test_small_differences_are_ignored():
     assert classify(customer_total=BILL, driver_net=NET, advance=0, cash=3300, hold=HOLD, completion_net=500, manual=False) is None
+
+
+def test_round_trip_closed_the_next_morning_counts_a_second_day():
+    """The cause: a one-day round trip closed by staff after 6 AM next day was billed 2 days (500 km minimum + 2 allowances)."""
+    from datetime import datetime
+    from app.crud.end_records import _actual_trip_days
+    start = datetime(2026, 10, 23, 8, 0)
+    assert _actual_trip_days(start, datetime(2026, 10, 23, 21, 0)) == 1      # closed the same evening
+    assert _actual_trip_days(start, datetime(2026, 10, 24, 9, 0)) == 2       # closed next morning -> second day billed
