@@ -1089,6 +1089,24 @@
       ],
       "why": "Admin Needs-attention list shows allocations that nothing will cancel by itself",
       "since": "2026-10-24"
+    },
+    {
+      "id": "no-customer-number-in-email",
+      "file": "backend/app/utils/trip_emails.py",
+      "must_contain": [
+        "NEVER put in an e-mail"
+      ],
+      "why": "owner rule: a customer phone number is never e-mailed to anyone (the accept e-mail to the fleet owner used to carry it)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "no-phone-on-emailed-invoice",
+      "file": "backend/app/utils/pdf_invoice.py",
+      "must_contain": [
+        "cust_phone = ''"
+      ],
+      "why": "the GST invoice PDF that is e-mailed does not print the customer phone",
+      "since": "2026-10-24"
     }
   ]
 }

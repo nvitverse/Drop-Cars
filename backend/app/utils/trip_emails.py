@@ -43,7 +43,8 @@ def send_trip_accepted_email(db: Session, vehicle_owner_id, order) -> None:
         f"You accepted a booking.\n\n"
         f"Booking ID: {order.id}\n"
         f"Trip type: {order.trip_type.value if order.trip_type else ''}\n"
-        f"Customer: {order.customer_name} ({order.customer_number})\n"
+        # the customer's phone number is NEVER put in an e-mail (owner rule 2026-10-24): it is shown in the app only, at the reveal time
+        f"Customer: {order.customer_name}\n"
         f"Pickup: {pickup}\n"
         f"Drop: {drop}\n"
         f"Start: {__import__('app.utils.timezone', fromlist=['format_pickup_time_ist']).format_pickup_time_ist(order.start_date_time)} (IST)\n\n"

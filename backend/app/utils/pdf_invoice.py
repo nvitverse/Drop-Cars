@@ -134,7 +134,7 @@ def generate_tax_invoice_pdf(data: Dict[str, Any]) -> bytes:
 
     # 2. Billed To & Journey Summary Box
     cust_name = data.get('customer_name', 'Valued Customer')
-    cust_phone = data.get('customer_phone', '')
+    cust_phone = ''   # the customer's phone number is never printed on a document that is e-mailed (owner rule 2026-10-24)
     cust_email = data.get('customer_email', '')
     cust_gstin = data.get('customer_gstin', '')
     cust_comp = data.get('customer_company', '')
