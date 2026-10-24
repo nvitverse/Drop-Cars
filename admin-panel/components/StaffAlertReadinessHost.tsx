@@ -26,9 +26,14 @@ import {
   stopOnDutyService,
 } from '@/services/staffAlertOverlay';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
+import { apiService } from '@/services/api';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
 
 const LAST_PROMPT_KEY = 'dropcars_alert_readiness_prompt_at_v1';
 const REPEAT_EVERY_MS = 4 * 60 * 60 * 1000;     // while on duty and still missing something: at most every 4 hours
+const LAST_REPORT_KEY = 'dropcars_alert_readiness_report_v1';
+const REPORT_EVERY_MS = 3 * 60 * 60 * 1000;     // the server hears from the phone at least every 3 hours (and at once when something changes)
 
 export default function StaffAlertReadinessHost() {
   const { themeColors: c } = useTheme();
@@ -41,12 +46,31 @@ export default function StaffAlertReadinessHost() {
   dutyRef.current = isOnDuty;
   readyRef.current = ready;
 
+  // tell the office what this phone can do (best effort; never shown to the staff member, never blocks anything)
+  const report = useCallback(async (r: AlertReadiness) => {
+    try {
+      const signature = [r.notifications, r.overlay, r.battery, r.nativeAvailable].join('|');
+      const last = JSON.parse((await AsyncStorage.getItem(LAST_REPORT_KEY)) || '{}');
+      if (last.sig === signature && Date.now() - (last.at || 0) < REPORT_EVERY_MS) return;
+      await apiService.makeRequest('/admin/staff/alert-health', {
+        method: 'POST',
+        body: JSON.stringify({
+          notifications: r.notifications, overlay: r.overlay, battery: r.battery, native_available: r.nativeAvailable,
+          app_version: String(Constants.expoConfig?.version || ''), platform: Platform.OS,
+          device_label: `${Device.manufacturer || ''} ${Device.modelName || ''}`.trim(),
+        }),
+      }, true);
+      await AsyncStorage.setItem(LAST_REPORT_KEY, JSON.stringify({ sig: signature, at: Date.now() }));
+    } catch { /* not signed in yet / offline: the next check reports */ }
+  }, []);
+
   const refresh = useCallback(async () => {
     if (Platform.OS !== 'android') return null;
     const r = await getAlertReadiness();
     setReady(r);
+    report(r);
     return r;
-  }, []);
+  }, [report]);
 
   const maybePrompt = useCallback(async (force: boolean) => {
     const r = await refresh();

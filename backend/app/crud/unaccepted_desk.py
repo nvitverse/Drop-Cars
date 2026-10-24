@@ -444,6 +444,40 @@ def resolve_accepted(db: Session) -> int:
     return n
 
 
+ESCALATE_AFTER_MINUTES = 8       # an alarm push that nobody has acknowledged after this long is sent again
+MAX_ESCALATIONS = 3
+
+
+async def _escalate_unseen(db: Session, case: UnacceptedCase, o, now: datetime) -> int:
+    """Staff alerts were being missed (silent notifications, app asleep). One push is not enough for a customer who is about to be left
+    without a car: while the alarm is still unacknowledged it is pushed again every 8 min (max 3), and from the 2nd reminder
+    the Owner / managers are told by name that nobody has picked it up."""
+    last = _utc(case.last_push_at)
+    if last is None or case.escalation_count >= MAX_ESCALATIONS or now < last + timedelta(minutes=ESCALATE_AFTER_MINUTES):
+        return 0
+    case.escalation_count += 1
+    case.last_push_at = now
+    db.commit()
+    mins = int((_utc(o.start_date_time) - now).total_seconds() // 60)
+    where = _route(o) or "Trip"
+    try:
+        from app.crud.notification import send_push_notification_to_admin
+        if case.escalation_count >= 2:
+            from app.models.admin import Admin
+            bosses = [a.id for a in db.query(Admin).all() if (a.role or "").lower() in ("owner", "manager", "founder")]
+            await send_push_notification_to_admin(
+                db, f"NOBODY has picked up booking #{o.id}",
+                f"{where} - pickup in {mins} min and the staff alert was not acknowledged for {case.escalation_count * ESCALATE_AFTER_MINUTES}+ min. Open the Unaccepted desk now.",
+                only_admin_ids=bosses)
+        await send_push_notification_to_admin(
+            db, f"STILL UNSEEN: booking #{o.id} - nobody has accepted it",
+            f"{where} - pickup in {mins} min. Reminder {case.escalation_count}: open the Unaccepted desk and tap Seen, or share / hand it over.")
+        return 1
+    except Exception as e:      # noqa: BLE001
+        logger.warning("desk escalation failed for %s: %s", o.id, e)
+        return 0
+
+
 async def push_due_alarms(db: Session) -> int:
     """Called by the minute sweep: when a case's alarm is due, send the staff a push notification ONCE for that alarm number (so staff who are
     not looking at the app still hear about it). The in-app ringing comes from the alarm list the Admin App polls."""
@@ -453,9 +487,14 @@ async def push_due_alarms(db: Session) -> int:
     sent = 0
     for o in open_orders(db, now):
         case = get_or_create_case(db, o, c)
-        if not is_due(case, now, c) or case.notified_alarm_no >= case.alarms_fired + 1:
+        if not is_due(case, now, c):
+            continue
+        if case.notified_alarm_no >= case.alarms_fired + 1:
+            sent += await _escalate_unseen(db, case, o, now)          # already pushed once and nobody has acknowledged it
             continue
         case.notified_alarm_no = case.alarms_fired + 1
+        case.last_push_at = now
+        case.escalation_count = 0
         db.commit()
         mins = int((_utc(o.start_date_time) - now).total_seconds() // 60)
         try:

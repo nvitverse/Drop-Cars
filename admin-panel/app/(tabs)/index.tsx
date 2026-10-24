@@ -1715,6 +1715,13 @@ export default function DashboardScreen() {
                   route: '/needs-attention',
                 },
                 {
+                  label: 'Staff Reachability',
+                  sub: 'Which staff phones can actually receive alerts - notifications, floating bubble, battery, last opened',
+                  icon: AlertTriangle,
+                  color: '#0F766E',
+                  route: '/staff-alert-health',
+                },
+                {
                   label: 'Unaccepted Bookings',
                   sub: 'Posted but nobody accepted - snooze, share, hand to a vendor, or cancel',
                   icon: AlertTriangle,

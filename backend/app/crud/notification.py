@@ -458,11 +458,14 @@ async def send_push_notifications_vehicle_owner(db: Session, title: str, message
     }
 
 
-async def send_push_notification_to_admin(db: Session, title: str, message: str):
+async def send_push_notification_to_admin(db: Session, title: str, message: str, only_admin_ids=None):
     """Alarm push for admins: fires whenever a website booking is created and
     needs approval. One-shot per booking - the persistent nag-until-acted-on
     behaviour lives in the website's in-panel siren, not in repeated pushes."""
     admins = db.query(Notification).filter(Notification.user == "admin").all()
+    if only_admin_ids is not None:
+        keep = {str(i) for i in only_admin_ids}
+        admins = [row for row in admins if str(row.sub) in keep]
     tokens = [row.token for row in admins if row.token and not _is_muted(row)]
 
     if not tokens:

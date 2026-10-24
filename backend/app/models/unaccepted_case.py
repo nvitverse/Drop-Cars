@@ -23,6 +23,8 @@ class UnacceptedCase(Base):
     next_alarm_at = Column(TIMESTAMP(timezone=True), nullable=True)
     snoozed_until = Column(TIMESTAMP(timezone=True), nullable=True)
     snooze_count = Column(Integer, nullable=False, server_default="0")
+    last_push_at = Column(TIMESTAMP(timezone=True), nullable=True)               # when the last push for the pending alarm went out
+    escalation_count = Column(Integer, nullable=False, server_default="0")        # how many 'still unseen' reminders were sent for the pending alarm
     notified_alarm_no = Column(Integer, nullable=False, server_default="0")        # the alarm number a push notification was already sent for
 
     shared_count = Column(Integer, nullable=False, server_default="0")

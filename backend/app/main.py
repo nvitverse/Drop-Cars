@@ -31,6 +31,7 @@ import app.models.support_message
 import app.models.guest_help_token
 import app.models.fleet_subscription
 import app.models.trip_review
+import app.models.staff_device_health
 import app.models.stale_document_file
 import app.models.car_details
 import app.models.vendor
@@ -314,6 +315,8 @@ from app.api.routes import trip_exceptions as _trip_exceptions
 app.include_router(_trip_exceptions.router, prefix="/api", tags=["Trip exceptions"])
 from app.api.routes import unaccepted_desk as _unaccepted_desk
 app.include_router(_unaccepted_desk.router, prefix="/api", tags=["Unaccepted Bookings Desk"])
+from app.api.routes import staff_alert_health as _staff_alert_health
+app.include_router(_staff_alert_health.router, prefix="/api", tags=["Staff alert health"])
 from app.api.routes import portal as _portal
 app.include_router(_portal.router, tags=["Web execution portal"])
 from app.api.routes import help_events as _help_events      # Antigravity round 4: help / error telemetry + Admin Help Insights
@@ -542,6 +545,8 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS is_owner_driver BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE car_driver ADD COLUMN IF NOT EXISTS aadhar_number VARCHAR',
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_amount INTEGER',
+        'ALTER TABLE unaccepted_cases ADD COLUMN IF NOT EXISTS last_push_at TIMESTAMPTZ',
+        'ALTER TABLE unaccepted_cases ADD COLUMN IF NOT EXISTS escalation_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_paid_at TIMESTAMPTZ',
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS flagged BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS toll_receipt_image VARCHAR',

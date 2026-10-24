@@ -1209,6 +1209,62 @@
       ],
       "why": "setBalance(prev => prev + amount) is used by the add / deduct paths; a number-only setter made the balance a function",
       "since": "2026-10-24"
+    },
+    {
+      "id": "desk-unseen-alarm-escalates",
+      "file": "backend/app/crud/unaccepted_desk.py",
+      "must_contain": [
+        "_escalate_unseen",
+        "MAX_ESCALATIONS"
+      ],
+      "why": "a pushed alarm nobody acknowledged is pushed again every 8 min and the owner/managers are told by name",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "push-to-chosen-staff-only",
+      "file": "backend/app/crud/notification.py",
+      "must_contain": [
+        "only_admin_ids"
+      ],
+      "why": "owner escalation must reach the bosses, not everybody",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "staff-alert-health-route",
+      "file": "backend/app/api/routes/staff_alert_health.py",
+      "must_contain": [
+        "/admin/staff/alert-health"
+      ],
+      "why": "owner sees which staff phones cannot receive alerts",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "staff-alert-health-registered",
+      "file": "backend/app/main.py",
+      "must_contain": [
+        "staff_alert_health",
+        "unaccepted_cases ADD COLUMN IF NOT EXISTS last_push_at"
+      ],
+      "why": "router + columns must be registered at startup",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "staff-on-duty-needs-notifications",
+      "file": "admin-panel/context/StaffDutyContext.tsx",
+      "must_contain": [
+        "Allow notifications first"
+      ],
+      "why": "a staff member must not go ON DUTY with notifications off",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "staff-phone-reports-readiness",
+      "file": "admin-panel/components/StaffAlertReadinessHost.tsx",
+      "must_contain": [
+        "/admin/staff/alert-health"
+      ],
+      "why": "the phone tells the office whether it can receive alerts",
+      "since": "2026-10-25"
     }
   ]
 }

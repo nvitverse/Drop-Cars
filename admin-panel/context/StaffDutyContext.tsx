@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { Alert, AppState, AppStateStatus, Linking, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
 
@@ -204,7 +205,10 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [isOnDuty, isOnBreak, lastActiveTimestamp]);
 
-  const toggleDuty = useCallback((forceState?: boolean) => {
+  const dutyRef = useRef(false);
+  dutyRef.current = isOnDuty;
+
+  const applyDutyToggle = useCallback((forceState?: boolean) => {
     setIsOnDuty((prev) => {
       const next = typeof forceState === 'boolean' ? forceState : !prev;
       AsyncStorage.setItem(STORAGE_KEYS.DUTY_STATE, next ? 'true' : 'false');
@@ -222,6 +226,33 @@ export const StaffDutyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return next;
     });
   }, []);
+
+  // ON DUTY is refused while notifications are switched off: an enquiry / unaccepted-booking alert could not reach the person who is
+  // supposed to be catching it (owner rule 2026-10-25). Going OFF duty is never blocked, and a failure of the check itself never blocks.
+  const toggleDuty = useCallback((forceState?: boolean) => {
+    const goingOn = typeof forceState === 'boolean' ? forceState : !dutyRef.current;
+    if (!goingOn || dutyRef.current || Platform.OS !== 'android') {
+      applyDutyToggle(forceState);
+      return;
+    }
+    (async () => {
+      try {
+        let granted = (await Notifications.getPermissionsAsync()).status === 'granted';
+        if (!granted) granted = (await Notifications.requestPermissionsAsync()).status === 'granted';
+        if (!granted) {
+          Alert.alert(
+            'Allow notifications first',
+            'You cannot go ON DUTY while notifications are off: new enquiries and unaccepted-booking alerts would not reach you. Open Settings > Notifications, allow Drop Cars Admin, then press GO ON again.',
+            [{ text: 'Open settings', onPress: () => { Linking.openSettings().catch(() => {}); } }, { text: 'Cancel', style: 'cancel' }],
+          );
+          return;
+        }
+      } catch {
+        /* the check failed: do not stop the staff member from starting work */
+      }
+      applyDutyToggle(forceState);
+    })();
+  }, [applyDutyToggle]);
 
   const startBreak = useCallback((durationMinutes: number) => {
     setIsOnBreak(true);
