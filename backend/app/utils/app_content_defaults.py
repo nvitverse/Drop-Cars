@@ -379,8 +379,15 @@ OTP ಮತ್ತು ಆ್ಯಪ್ ಬಿಲ್ ಮಾತ್ರ: ಪ್ರತ�
 सहायता: Drop Cars सपोर्ट से कभी भी संपर्क करें। जुर्माने को अपने कारणों के साथ चुनौती दे सकते हैं।""",
 }
 
+from app.utils import plan_rules_content as _pr  # noqa: E402
+
+# Subscription / automatic debit / wallet / block clauses go in before "CHANGES TO THESE TERMS" (12 -> 15, 13 -> 16)
+TERMS_EN = TERMS_EN.replace("12. CHANGES TO THESE TERMS", _pr.TERMS_PLAN_EN + "15. CHANGES TO THESE TERMS").replace("13. SUPPORT AND DISPUTES", "16. SUPPORT AND DISPUTES")
+TERMS_TA = TERMS_TA.replace("12. விதிமுறைகளில் மாற்றங்கள்", _pr.TERMS_PLAN_TA + "15. விதிமுறைகளில் மாற்றங்கள்").replace("13. சப்போர்ட் மற்றும் தகராறுகள்", "16. சப்போர்ட் மற்றும் தகராறுகள்")
+assert "12.2. AUTOMATIC DEBIT" in TERMS_EN and "12.2. தானியங்கி கழிவு" in TERMS_TA
+
 DRIVER_TERMS = {
-    "version": 2,
+    "version": 3,
     "title": {
         "en": "Terms and Conditions", "ta": "விதிமுறைகள் மற்றும் நிபந்தனைகள்",
         "te": "నిబంధనలు మరియు షరతులు", "hi": "नियम और शर्तें",
@@ -501,6 +508,13 @@ DRIVER_FEE_INFO = {
     "body": {"en": FEE_INFO_EN, "ta": FEE_INFO_TA, "te": FEE_INFO_TE, "hi": FEE_INFO_HI},
 }
 
+DRIVER_PLAN_RULES = {
+    "version": 1,
+    "title": {"en": "Plans & Account Rules", "ta": "திட்டங்கள் & கணக்கு விதிகள்", "te": "ప్లాన్లు & ఖాతా నియమాలు", "kn": "ಪ್ಲಾನ್ & ಖಾತೆ ನಿಯಮಗಳು", "hi": "प्लान और खाता नियम"},
+    "body": {"en": _pr.PLAN_RULES_EN, "ta": _pr.PLAN_RULES_TA, "te": _pr.PLAN_RULES_TE, "kn": _pr.PLAN_RULES_KN, "hi": _pr.PLAN_RULES_HI},
+    "summary": _pr.PLAN_RULES_SUMMARY,
+}
+
 BOT_KNOWLEDGE = {
     "version": 1,
     "text": (
@@ -510,6 +524,12 @@ BOT_KNOWLEDGE = {
         "HOW TO: add a car -> Menu > My Cars > Add. Add a driver -> Menu > My Drivers > Add (Aadhaar photo + number needed). Update a document -> "
         "the document card on My Cars / My Drivers or the KYC pop-up. Assign a driver -> after accepting, open the booking and choose car and driver. "
         "Talk to the booking's poster -> the Chat button on the booking card. Talk to a person -> Chats > Drop Cars Support > Talk to a person.\n"
+        "PLANS AND RULES: a new account is Standard and free for the first 30 days; after that the Monthly plan (fee shown in Menu > Subscription) "
+        "is needed. When the wallet has at least the plan fee it is taken automatically, without asking, at the end of the free days and at the end of "
+        "every 30-day plan. Wallet short = nothing is taken, 30 more days to add money, then the account is suspended; adding money starts the plan "
+        "at once. Wallet balance below the booking security hold is non-refundable; fees already taken are not refunded. Permanent block (fraud, fake "
+        "documents, unauthorised swaps): documents deleted, the numbers cannot register again, only the Owner can lift it. Full text: Settings > "
+        "Plans & Account Rules.\n"
         "OFF-TOPIC HANDLING: politely say you help only with Drop Cars and steer back to what the user can do in the app (bookings, wallet, "
         "documents, trip rules, support). For general knowledge, politics, personal advice, coding, or anything unrelated, do not answer it; "
         "offer two Drop Cars topics instead. Never discuss servers, databases, code, keys, admin tools or how Drop Cars is built - say that is "
@@ -523,6 +543,7 @@ DEFAULTS = {
     "driver_onboarding": DRIVER_ONBOARDING,
     "driver_terms": DRIVER_TERMS,
     "driver_fee_info": DRIVER_FEE_INFO,
+    "driver_plan_rules": DRIVER_PLAN_RULES,
     "bot_knowledge": BOT_KNOWLEDGE,
     "vendor_terms": VENDOR_TERMS,
 }

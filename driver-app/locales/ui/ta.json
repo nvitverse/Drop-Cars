@@ -1941,5 +1941,10 @@
  "Assign driver and car now": "இப்போ driver + car ஒதுக்கு",
  "Booking accepted": "Booking ஏற்றாச்சு",
  "bookings need a driver": "booking-க்கு driver வேணும்",
- "Assign": "ஒதுக்கு"
+ "Assign": "ஒதுக்கு",
+ "Plans & Account Rules": "திட்டங்கள் & கணக்கு விதிகள்",
+ "Free days, automatic debit, wallet refunds, suspension and blocking": "இலவச நாட்கள், தானியங்கி கழிவு, வாலட் திரும்பப் பெறுதல், நிறுத்தம் மற்றும் தடை",
+ "Free days, automatic debit, wallet and account rules": "இலவச நாட்கள், தானியங்கி கழிவு, வாலட் மற்றும் கணக்கு விதிகள்",
+ "Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.": "தானியங்கி கழிவு: உங்கள் இலவச நாட்கள் அல்லது 30 நாள் plan முடியும்போது, வாலட்டில் போதுமான பணம் இருந்தால் plan கட்டணம் தானாக எடுக்கப்படும். குறைவாக இருந்தால் எதுவும் எடுக்கப்படாது. வாலட்டில் ₹500-க்குக் கீழே உள்ள தொகை திரும்பப் பெற முடியாது; ஏற்கனவே எடுக்கப்பட்ட கட்டணம் திரும்பத் தரப்படாது. முழு விதிகள்: Settings > Plans & Account Rules.",
+ "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "உங்கள் வாலட் பணம் பாதுகாப்பாக உள்ளது. வாலட்டில் மாதாந்திரக் கட்டணம் இருக்கும்படி பணம் சேர்க்கவும் - plan தானாகத் தொடங்கி உங்கள் கணக்கு உடனே திறக்கும். விதிகள்: Settings > Plans & Account Rules."
 }

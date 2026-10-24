@@ -924,6 +924,66 @@
       ],
       "why": "red number on My Trips = bookings still needing a driver and car",
       "since": "2026-10-24"
+    },
+    {
+      "id": "plan-fee-auto-debit",
+      "file": "backend/app/crud/subscription_lifecycle.py",
+      "must_contain": [
+        "def auto_start_plans",
+        "_activate_monthly_from_wallet",
+        "AUTO_STARTED_FROM_WALLET"
+      ],
+      "why": "owner rule: wallet covers the plan fee = taken automatically without asking (free days over / lapsed plan), before anyone is suspended",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "plan-fee-auto-debit-hooks",
+      "file": "backend/app/crud/billing.py",
+      "must_contain": [
+        "auto_start_plans(db)"
+      ],
+      "why": "the 3-hourly sweep starts funded owners' plans before the lifecycle suspension runs",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "plan-fee-auto-debit-topup",
+      "file": "backend/app/api/routes/wallet.py",
+      "must_contain": [
+        "auto_start_plans(db, only_owner=vehicle_owner_id)"
+      ],
+      "why": "a wallet top-up that covers the fee starts the plan and lifts the subscription suspension at once",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "plan-rules-content",
+      "file": "backend/app/utils/app_content_defaults.py",
+      "must_contain": [
+        "DRIVER_PLAN_RULES",
+        "12.2. AUTOMATIC DEBIT",
+        "\"version\": 3"
+      ],
+      "why": "Terms clauses 12-14 (subscription, automatic debit, wallet refunds, block) + the Plans & Account Rules page in 5 languages",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "plan-rules-driver-settings",
+      "file": "driver-app/app/(tabs)/settings.tsx",
+      "must_contain": [
+        "driver_plan_rules",
+        "Plans & Account Rules"
+      ],
+      "why": "Driver App Settings has one place with every plan / wallet / suspension / block rule",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "unblock-restores-fleet",
+      "file": "backend/app/crud/admin_management.py",
+      "must_contain": [
+        "DriverStatusEnum.OFFLINE",
+        "c.car_status = CarStatusEnum.ONLINE"
+      ],
+      "why": "permanent-unblock makes the owner's drivers and cars usable again (status was left BLOCKED)",
+      "since": "2026-10-24"
     }
   ]
 }

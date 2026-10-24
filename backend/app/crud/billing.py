@@ -670,7 +670,8 @@ def run_member_auto_renewals(db: Session) -> dict:
     except Exception:  # noqa: BLE001
         db.rollback()
     try:                                   # no plan for longer than the free window -> suspended (switched on by an admin; dormant by default)
-        from app.crud.subscription_lifecycle import run_subscription_lifecycle
+        from app.crud.subscription_lifecycle import run_subscription_lifecycle, auto_start_plans
+        auto_start_plans(db)                # wallet covers the fee -> the plan starts by itself, before anybody is suspended
         run_subscription_lifecycle(db, dry_run=False)
     except Exception:  # noqa: BLE001
         db.rollback()

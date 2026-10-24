@@ -81,6 +81,7 @@ PUBLIC_BY_DESIGN = {
     "GET /api/public/app-content/{key}",
     "GET /api/public/support-contact",
     "GET /api/public/terms/driver",
+    "GET /api/public/page/{key}",
     "GET /api/public/gst-business-info",
     "GET /api/cities/public",
     "GET /api/cities/local-serviceable",

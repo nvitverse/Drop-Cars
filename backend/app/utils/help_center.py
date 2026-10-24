@@ -144,6 +144,16 @@ TOPICS: Dict[str, Dict[str, Any]] = {
             "te": "⭐ Trusted Partners కి కొన్ని bookings ('Trusted Partners Only') ముందుగా దొరుకుతాయి, priority visibility ఉంటుంది. Plans: Monthly ₹{monthly}, Yearly ₹{yearly}.\nఎలా: Menu → Subscription → plan ఎంచుకోండి → చెల్లించండి (wallet నుండి కొంటారు; balance తక్కువైతే app Add Money కి తీసుకెళ్ళి తర్వాత కొంటుంది).\nచెల్లించినా 'Standard' గానే ఉందా? chat లో 'paid but not added' అని అడగండి.",
             "kn": "⭐ Trusted Partners ಗೆ ಕೆಲವು bookings ('Trusted Partners Only') ಮೊದಲು ಸಿಗುತ್ತವೆ, priority visibility ಇರುತ್ತದೆ. Plans: Monthly ₹{monthly}, Yearly ₹{yearly}.\nಹೇಗೆ: Menu → Subscription → plan ಆರಿಸಿ → ಪಾವತಿಸಿ (wallet ನಿಂದ ಖರೀದಿಯಾಗುತ್ತದೆ; balance ಕಡಿಮೆ ಇದ್ದರೆ app Add Money ಗೆ ಕರೆದೊಯ್ದು ನಂತರ ಖರೀದಿಸುತ್ತದೆ).\nಪಾವತಿಸಿದರೂ 'Standard' ಆಗಿಯೇ ಇದೆಯೇ? chat ನಲ್ಲಿ 'paid but not added' ಎಂದು ಕೇಳಿ."},
     },
+    "subscription_rules": {
+        "title": {"en": "Free days, automatic debit and suspension", "ta": "இலவச நாட்கள், தானியங்கி கழிவு, கணக்கு நிறுத்தம்", "hi": "मुफ़्त दिन, ऑटो डेबिट और खाता निलंबन", "te": "ఉచిత రోజులు, ఆటో డెబిట్, ఖాతా నిలిపివేత", "kn": "ಉಚಿತ ದಿನ, ಸ್ವಯಂ ಡೆಬಿಟ್, ಖಾತೆ ನಿಲ್ಲಿಸುವುದು"},
+        "kw": ["free days", "free period", "auto debit", "autodebit", "automatic", "auto renew", "renewal", "suspended", "suspend", "account blocked", "blocked", "subscription fee", "199", "plan money", "why plan taken", "plan panam", "subscription panam eduthutanga", "இலவச", "தானியங்கி", "நிறுத்த", "தடை", "சந்தா கட்டணம்", "ऑटो डेबिट", "निलंबित", "ब्लॉक", "मुफ़्त दिन", "ఆటో డెబిట్", "నిలిపివేత", "నిషేధం", "ఉచిత", "ಸ್ವಯಂ ಡೆಬಿಟ್", "ನಿಲ್ಲಿಸ", "ನಿರ್ಬಂಧ", "ಉಚಿತ"],
+        "a": {
+            "en": "📋 How plans work:\n• A new account is free for {free_days} days. After that the Monthly plan (₹{monthly}) is needed.\n• If your wallet has at least ₹{monthly}, the fee is taken automatically - at the end of the free days and every 30 days - and you get a notification. Money is taken only from your Drop Cars wallet.\n• Wallet short? Nothing is taken. You get {grace_days} more days to add money, then the account is suspended. Add money and the plan starts and the account opens at once.\n• Wallet balance below ₹{hold} is non-refundable (booking security hold). Fees already taken are not refunded.\n• Blocked for good (fraud / fake documents / unauthorised swaps): documents deleted, the numbers cannot register again.\nFull rules: Settings → Plans & Account Rules. Help: {phone}.",
+            "ta": "📋 Plan எப்படி வேலை செய்கிறது:\n• புதிய கணக்கு {free_days} நாட்கள் இலவசம். அதன் பிறகு Monthly plan (₹{monthly}) தேவை.\n• Wallet-ல் குறைந்தது ₹{monthly} இருந்தால், இலவச நாட்கள் முடியும்போதும் ஒவ்வொரு 30 நாட்களுக்கும் கட்டணம் தானாக எடுக்கப்படும்; notification வரும். பணம் உங்கள் Drop Cars wallet-ல் இருந்து மட்டுமே எடுக்கப்படும்.\n• Wallet-ல் குறைவா? எதுவும் எடுக்கப்படாது. பணம் சேர்க்க மேலும் {grace_days} நாட்கள்; பிறகு கணக்கு நிறுத்தப்படும். பணம் சேர்த்ததும் plan தொடங்கி கணக்கு உடனே திறக்கும்.\n• Wallet-ல் ₹{hold}-க்குக் கீழே உள்ளது திரும்பப் பெற முடியாது (booking security hold). எடுக்கப்பட்ட கட்டணம் திரும்பத் தரப்படாது.\n• நிரந்தரத் தடை (மோசடி / போலி ஆவணம் / அனுமதியில்லா மாற்றம்): ஆவணங்கள் அழிக்கப்படும், அந்த எண்களால் மீண்டும் பதிவு செய்ய முடியாது.\nமுழு விதிகள்: Settings → Plans & Account Rules. உதவி: {phone}.",
+            "hi": "📋 प्लान कैसे काम करता है:\n• नया खाता {free_days} दिन मुफ़्त है। उसके बाद Monthly plan (₹{monthly}) चाहिए।\n• Wallet में कम से कम ₹{monthly} हो तो फ़ीस अपने आप कट जाती है - मुफ़्त दिन खत्म होने पर और हर 30 दिन - और notification आता है। पैसा सिर्फ़ आपके Drop Cars wallet से लिया जाता है।\n• Wallet कम है? कुछ नहीं कटता। पैसा जोड़ने के लिए {grace_days} दिन और, फिर खाता निलंबित। पैसा जोड़ते ही plan शुरू होकर खाता तुरंत खुल जाता है।\n• Wallet में ₹{hold} से कम वापस नहीं होता (booking security hold)। कट चुकी फ़ीस वापस नहीं होती।\n• स्थायी ब्लॉक (धोखाधड़ी / नकली दस्तावेज़ / बिना अनुमति बदलाव): दस्तावेज़ मिटते हैं, उन नंबरों से दोबारा रजिस्ट्रेशन नहीं होता।\nपूरे नियम: Settings → Plans & Account Rules। मदद: {phone}।",
+            "te": "📋 ప్లాన్ ఎలా పనిచేస్తుంది:\n• కొత్త ఖాతా {free_days} రోజులు ఉచితం. ఆ తర్వాత Monthly plan (₹{monthly}) అవసరం.\n• Wallet లో కనీసం ₹{monthly} ఉంటే రుసుము ఆటోమేటిక్‌గా తీసుకుంటారు - ఉచిత రోజులు ముగిసినప్పుడు, ప్రతి 30 రోజులకు - notification వస్తుంది. డబ్బు మీ Drop Cars wallet నుండి మాత్రమే.\n• Wallet తక్కువా? ఏమీ తీసుకోరు. డబ్బు జోడించడానికి మరో {grace_days} రోజులు, తర్వాత ఖాతా నిలిపివేత. డబ్బు జోడిస్తే plan మొదలై ఖాతా వెంటనే తెరుచుకుంటుంది.\n• Wallet లో ₹{hold} కంటే తక్కువ తిరిగి ఇవ్వబడదు (booking security hold). తీసుకున్న రుసుము తిరిగి ఇవ్వబడదు.\n• శాశ్వత నిషేధం (మోసం / నకిలీ పత్రాలు / అనుమతి లేని మార్పు): పత్రాలు తొలగింపు, ఆ నంబర్లతో మళ్ళీ రిజిస్టర్ చేయలేరు.\nపూర్తి నియమాలు: Settings → Plans & Account Rules. సహాయం: {phone}.",
+            "kn": "📋 ಪ್ಲಾನ್ ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ:\n• ಹೊಸ ಖಾತೆ {free_days} ದಿನ ಉಚಿತ. ನಂತರ Monthly plan (₹{monthly}) ಬೇಕು.\n• Wallet ನಲ್ಲಿ ಕನಿಷ್ಠ ₹{monthly} ಇದ್ದರೆ ಶುಲ್ಕ ತಾನಾಗಿ ತೆಗೆದುಕೊಳ್ಳಲಾಗುತ್ತದೆ - ಉಚಿತ ದಿನ ಮುಗಿದಾಗ, ಪ್ರತಿ 30 ದಿನಕ್ಕೆ - notification ಬರುತ್ತದೆ. ಹಣ ನಿಮ್ಮ Drop Cars wallet ನಿಂದ ಮಾತ್ರ.\n• Wallet ಕಡಿಮೆಯೇ? ಏನೂ ತೆಗೆಯುವುದಿಲ್ಲ. ಹಣ ಸೇರಿಸಲು ಇನ್ನೂ {grace_days} ದಿನ, ನಂತರ ಖಾತೆ ನಿಲ್ಲಿಸಲಾಗುತ್ತದೆ. ಹಣ ಸೇರಿಸಿದರೆ plan ಶುರುವಾಗಿ ಖಾತೆ ತಕ್ಷಣ ತೆರೆಯುತ್ತದೆ.\n• Wallet ನಲ್ಲಿ ₹{hold} ಕ್ಕಿಂತ ಕಡಿಮೆ ಇದ್ದರೆ ಹಿಂತಿರುಗಿಸುವುದಿಲ್ಲ (booking security hold). ತೆಗೆದುಕೊಂಡ ಶುಲ್ಕ ಮರುಪಾವತಿ ಇಲ್ಲ.\n• ಶಾಶ್ವತ ನಿರ್ಬಂಧ (ವಂಚನೆ / ನಕಲಿ ದಾಖಲೆ / ಅನುಮತಿ ಇಲ್ಲದ ಬದಲಾವಣೆ): ದಾಖಲೆಗಳು ಅಳಿಸಲಾಗುತ್ತವೆ, ಆ ಸಂಖ್ಯೆಗಳಿಂದ ಮತ್ತೆ ನೋಂದಣಿ ಸಾಧ್ಯವಿಲ್ಲ.\nಪೂರ್ಣ ನಿಯಮ: Settings → Plans & Account Rules. ಸಹಾಯ: {phone}."},
+    },
     "toll_parking": {
         "title": {"en": "Toll, parking, waiting - who pays?", "ta": "Toll, parking, waiting - யார் செலுத்துவது?", "hi": "Toll, parking, waiting - कौन देता है?", "te": "Toll, parking, waiting - ఎవరు చెల్లిస్తారు?", "kn": "Toll, parking, waiting - ಯಾರು ಪಾವತಿಸುವರು?"},
         "kw": ["toll", "fastag", "parking", "waiting", "waiting charge", "night charge", "extra km", "permit", "border tax", "state tax", "toll evlo", "parking evlo", "டோல்", "பார்க்கிங்", "வெயிட்டிங்", "टोल", "पार्किंग", "वेटिंग", "టోల్", "పార్కింగ్", "ವೇಟಿಂಗ್", "ಟೋಲ್"],
@@ -226,7 +236,7 @@ TOPICS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-MENU_ORDER = ["wallet_deduction", "wallet_hold", "add_money", "accept_assign", "trip_codes", "customer_cancelled", "commission", "documents", "add_remove_car_driver", "trusted_plan", "support"]
+MENU_ORDER = ["wallet_deduction", "wallet_hold", "add_money", "accept_assign", "trip_codes", "customer_cancelled", "commission", "documents", "add_remove_car_driver", "trusted_plan", "subscription_rules", "support"]
 
 _INTRO = {
     "en": "👋 I'm the Drop Cars Help Center. Ask me anything about the app - wallet, bookings, documents, payments - in any language. Tap a topic or type your question:",
@@ -364,7 +374,7 @@ def rank(message: str) -> List[Tuple[str, float, bool]]:
 
 # --------------------------------------------------------------------------------------------------------------------
 def _live_values(db) -> Dict[str, Any]:
-    v: Dict[str, Any] = {"hold": 500, "comm_min": 200, "conv": 30, "pct": 10, "monthly": 199, "yearly": 1000, "phone": "the number shown in Settings"}
+    v: Dict[str, Any] = {"hold": 500, "comm_min": 200, "conv": 30, "pct": 10, "monthly": 199, "yearly": 1000, "free_days": 30, "grace_days": 30, "phone": "the number shown in Settings"}
     try:
         from app.utils.commission import get_fee_settings
         f = get_fee_settings(db)
@@ -380,6 +390,12 @@ def _live_values(db) -> Dict[str, Any]:
         from app.crud.billing import get_billing_settings
         b = get_billing_settings(db)
         v.update(monthly=int(b.get("monthly_fee") or v["monthly"]), yearly=int(b.get("yearly_fee") or v["yearly"]))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from app.crud.subscription_lifecycle import get_settings as _lifecycle
+        lc = _lifecycle(db)
+        v.update(free_days=lc["standard_free_days"], grace_days=lc["lapse_grace_days"])
     except Exception:  # noqa: BLE001
         pass
     try:

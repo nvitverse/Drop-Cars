@@ -53,6 +53,8 @@ export default function SettingsScreen() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const feeInfo = useAppContent<TermsContent>('driver_fee_info', language);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const planRules = useAppContent<TermsContent>('driver_plan_rules', language);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showBubblePermissionModal, setShowBubblePermissionModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -949,6 +951,13 @@ export default function SettingsScreen() {
           />
 
           <SettingItem
+            icon={<Shield color={colors.textSecondary} size={20} />}
+            title="Plans & Account Rules"
+            subtitle="Free days, automatic debit, wallet refunds, suspension and blocking"
+            onPress={() => setShowRulesModal(true)}
+          />
+
+          <SettingItem
             icon={<Landmark color={colors.textSecondary} size={20} />}
             title="Payment Details"
             subtitle={
@@ -1801,6 +1810,18 @@ export default function SettingsScreen() {
         title={feeInfo?.title || 'Fees & Commission'}
         subtitle="How money works on a booking"
         body={feeInfo?.body || ''}
+        agreeButtonText="Close"
+      />
+
+      {/* Plans & Account Rules (admin-editable: Admin App > App Content > Plans & Rules) */}
+      <TermsModal
+        visible={showRulesModal}
+        onClose={() => setShowRulesModal(false)}
+        title={planRules?.title || 'Plans & Account Rules'}
+        subtitle="Free days, automatic debit, wallet and account rules"
+        body={planRules?.body || ''}
+        summary={planRules?.summary}
+        fullUrl={planRules?.full_url}
         agreeButtonText="Close"
       />
 

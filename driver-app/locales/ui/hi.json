@@ -1941,5 +1941,10 @@
  "Assign driver and car now": "अभी ड्राइवर + कार सौंपें",
  "Booking accepted": "बुकिंग स्वीकार हुई",
  "bookings need a driver": "बुकिंग को ड्राइवर चाहिए",
- "Assign": "सौंपें"
+ "Assign": "सौंपें",
+ "Plans & Account Rules": "प्लान और खाता नियम",
+ "Free days, automatic debit, wallet refunds, suspension and blocking": "मुफ़्त दिन, ऑटोमैटिक डेबिट, वॉलेट रिफ़ंड, निलंबन और ब्लॉक",
+ "Free days, automatic debit, wallet and account rules": "मुफ़्त दिन, ऑटोमैटिक डेबिट, वॉलेट और खाता नियम",
+ "Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.": "ऑटोमैटिक डेबिट: आपके मुफ़्त दिन या 30 दिन का प्लान खत्म होने पर, अगर वॉलेट में काफ़ी पैसा है तो प्लान फ़ीस अपने आप कट जाती है। कम हो तो कुछ नहीं कटता। वॉलेट में ₹500 से कम राशि वापस नहीं होती; जो फ़ीस कट चुकी है वह वापस नहीं होती। पूरे नियम: Settings > Plans & Account Rules।",
+ "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "आपके वॉलेट का पैसा सुरक्षित है। वॉलेट में मासिक फ़ीस जितना पैसा जोड़ें - प्लान अपने आप शुरू होगा और आपका खाता तुरंत खुल जाएगा। नियम: Settings > Plans & Account Rules।"
 }

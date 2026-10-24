@@ -53,7 +53,7 @@ export default function AccountBlockedScreen() {
           </Text>
           {needsSubscription ? (
             <Text style={[styles.note, { color: sub }]}>
-              Your wallet money is safe. Subscribing takes the monthly fee from your wallet or lets you pay it now.
+              Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings &gt; Plans &amp; Account Rules.
             </Text>
           ) : null}
 

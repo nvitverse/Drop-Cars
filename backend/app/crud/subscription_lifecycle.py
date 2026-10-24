@@ -164,3 +164,96 @@ def lift_suspension(details: VehicleOwnerDetails) -> None:
             account_gate.invalidate(details.vehicle_owner_id)
         except Exception:  # noqa: BLE001
             pass
+
+
+def _activate_monthly_from_wallet(db: Session, vehicle_owner_id, fee: int, why: str) -> bool:
+    """Take the monthly fee from the owner's wallet and start (or renew) the Monthly plan - no question asked (owner rule 2026-10-24:
+    enough money in the wallet = automatic debit). Re-checks the balance under a row lock so a double run can never charge twice."""
+    from app.crud.billing import MONTHLY_CYCLE_DAYS
+    from app.crud.wallet import debit_wallet_allow_negative
+    from app.models.fleet_subscription import FleetSubscriptionHistory
+    import uuid as _uuid
+
+    d = (db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == vehicle_owner_id).with_for_update().first())
+    if d is None or (d.wallet_balance or 0) < fee:
+        db.rollback()
+        return False
+    today = date.today()
+    if d.tier == "PREFERRED" or (d.billing_next_date is not None and d.billing_next_date >= today and d.subscription_type == "MONTHLY"):
+        db.rollback()
+        return False                                  # already subscribed: nothing to charge
+    debit_wallet_allow_negative(
+        db, vehicle_owner_id=str(vehicle_owner_id), amount=fee, reference_id=None, reference_type="MONTHLY_SUBSCRIPTION_FEE",
+        notes=f"Monthly subscription Rs.{fee} taken automatically from your wallet ({why})",
+    )
+    d.subscription_type = "MONTHLY"
+    d.auto_renew_from_wallet = True
+    if d.registration_fee_paid_at is None:
+        d.registration_fee_paid_at = datetime.now(timezone.utc)
+    lift_suspension(d)
+    d.billing_suspended = False
+    d.billing_next_date = today + timedelta(days=MONTHLY_CYCLE_DAYS)
+    d.billing_last_charged_at = datetime.now(timezone.utc)
+    db.add(d)
+    db.add(FleetSubscriptionHistory(
+        id=_uuid.uuid4(), vehicle_owner_id=vehicle_owner_id, event_type="AUTO_STARTED_FROM_WALLET", plan_type="MONTHLY", amount=fee,
+        duration_days=MONTHLY_CYCLE_DAYS, period_start=today, period_end=d.billing_next_date, reason=why, admin_username="system",
+        created_at=datetime.now(timezone.utc)))
+    db.commit()
+    try:
+        from app.core import account_gate
+        account_gate.invalidate(vehicle_owner_id)
+        from app.services.substitution_flow import push_to
+        push_to(db, "vehicle_owner", str(vehicle_owner_id), "Monthly plan started",
+                f"Rs {fee} was taken from your wallet and your Monthly plan is active until {d.billing_next_date.strftime('%d %b %Y')}.",
+                {"type": "subscription_started"})
+    except Exception:  # noqa: BLE001
+        pass
+    return True
+
+
+def auto_start_plans(db: Session, only_owner=None, dry_run: bool = False) -> dict:
+    """Owners whose free window is over and who have no plan: when the wallet already covers the monthly fee it is taken and the plan
+    starts - BEFORE anyone is suspended. Wallet short -> nothing is taken (the sweep then suspends; adding money starts the plan at once
+    because wallet top-ups call this for that owner). Dormant until the rule is switched on."""
+    import logging
+    log = logging.getLogger(__name__)
+    settings = get_settings(db)
+    out = {"dry_run": dry_run, "enabled": settings["enabled"], "started": [], "checked": 0}
+    if not settings["enabled"]:
+        return out
+    fee = _raw_fee(db)
+    if fee <= 0:
+        return out
+    today = date.today()
+    q = (
+        db.query(VehicleOwnerDetails, VehicleOwnerCredentials)
+        .join(VehicleOwnerCredentials, VehicleOwnerCredentials.id == VehicleOwnerDetails.vehicle_owner_id)
+        .filter(VehicleOwnerCredentials.permanently_blocked.is_(False))
+    )
+    if only_owner is not None:
+        q = q.filter(VehicleOwnerDetails.vehicle_owner_id == only_owner)
+    else:
+        q = q.filter(VehicleOwnerDetails.wallet_balance >= fee)
+    for d, c in q.all():
+        out["checked"] += 1
+        if getattr(getattr(c, "account_status", None), "value", "Active") != "Active":
+            continue                                   # switched off by staff: not ours to bill
+        if d.billing_suspended and (d.billing_suspended_reason or "") != REASON:
+            continue
+        if (d.wallet_balance or 0) < fee:
+            continue
+        st = standing(d, d.created_at or c.created_at, settings, today)
+        if st["state"] != "SUSPENDED":
+            continue                                   # still inside the free window (or subscribed)
+        item = {"vehicle_owner_id": str(d.vehicle_owner_id), "name": d.full_name, "wallet": d.wallet_balance, "free_until": st["free_until"]}
+        if dry_run:
+            out["started"].append(item)
+            continue
+        try:
+            if _activate_monthly_from_wallet(db, d.vehicle_owner_id, fee, "free period over - taken automatically as the terms say"):
+                out["started"].append(item)
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            log.exception("auto start plan failed for %s", d.vehicle_owner_id)
+    return out

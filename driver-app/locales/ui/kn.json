@@ -3075,5 +3075,10 @@
  "Assign driver and car now": "ಈಗಲೇ ಡ್ರೈವರ್ + ಕಾರು ನಿಯೋಜಿಸಿ",
  "Booking accepted": "ಬುಕಿಂಗ್ ಸ್ವೀಕರಿಸಲಾಗಿದೆ",
  "bookings need a driver": "ಬುಕಿಂಗ್‌ಗಳಿಗೆ ಡ್ರೈವರ್ ಬೇಕು",
- "Assign": "ನಿಯೋಜಿಸಿ"
+ "Assign": "ನಿಯೋಜಿಸಿ",
+ "Plans & Account Rules": "ಪ್ಲಾನ್ & ಖಾತೆ ನಿಯಮಗಳು",
+ "Free days, automatic debit, wallet refunds, suspension and blocking": "ಉಚಿತ ದಿನ, ಸ್ವಯಂ ಡೆಬಿಟ್, ವಾಲೆಟ್ ಮರುಪಾವತಿ, ನಿಲ್ಲಿಸುವುದು ಮತ್ತು ನಿರ್ಬಂಧ",
+ "Free days, automatic debit, wallet and account rules": "ಉಚಿತ ದಿನ, ಸ್ವಯಂ ಡೆಬಿಟ್, ವಾಲೆಟ್ ಮತ್ತು ಖಾತೆ ನಿಯಮಗಳು",
+ "Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.": "ಸ್ವಯಂ ಡೆಬಿಟ್: ನಿಮ್ಮ ಉಚಿತ ದಿನಗಳು ಅಥವಾ 30 ದಿನದ ಪ್ಲಾನ್ ಮುಗಿದಾಗ, ವಾಲೆಟ್‌ನಲ್ಲಿ ಸಾಕಷ್ಟು ಹಣ ಇದ್ದರೆ ಪ್ಲಾನ್ ಶುಲ್ಕ ತಾನಾಗಿ ತೆಗೆದುಕೊಳ್ಳಲಾಗುತ್ತದೆ. ಕಡಿಮೆ ಇದ್ದರೆ ಏನೂ ತೆಗೆಯುವುದಿಲ್ಲ. ವಾಲೆಟ್‌ನಲ್ಲಿ ₹500 ಕ್ಕಿಂತ ಕಡಿಮೆ ಇರುವ ಮೊತ್ತ ಹಿಂತಿರುಗಿಸಲಾಗುವುದಿಲ್ಲ; ಈಗಾಗಲೇ ತೆಗೆದುಕೊಂಡ ಶುಲ್ಕ ಮರುಪಾವತಿ ಇಲ್ಲ. ಪೂರ್ಣ ನಿಯಮ: Settings > Plans & Account Rules.",
+ "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "ನಿಮ್ಮ ವಾಲೆಟ್ ಹಣ ಸುರಕ್ಷಿತವಾಗಿದೆ. ವಾಲೆಟ್‌ನಲ್ಲಿ ಮಾಸಿಕ ಶುಲ್ಕ ಇರುವಂತೆ ಹಣ ಸೇರಿಸಿ - ಪ್ಲಾನ್ ತಾನಾಗಿ ಶುರುವಾಗಿ ನಿಮ್ಮ ಖಾತೆ ತಕ್ಷಣ ತೆರೆಯುತ್ತದೆ. ನಿಯಮಗಳು: Settings > Plans & Account Rules."
 }

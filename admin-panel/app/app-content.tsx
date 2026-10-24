@@ -8,7 +8,7 @@ import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Bot, 
 import { apiService } from '@/services/api';
 import { useTheme } from '@/context/ThemeContext';
 
-type Tab = 'cards' | 'terms' | 'vterms' | 'fees' | 'bot' | 'ai';
+type Tab = 'cards' | 'terms' | 'vterms' | 'fees' | 'rules' | 'bot' | 'ai';
 type LangMap = Record<string, string>;
 type Card = { icon: string; color: string; title: LangMap; subtitle: LangMap; description: LangMap };
 
@@ -35,6 +35,8 @@ export default function AppContentScreen() {
   const [vTermsBody, setVTermsBody] = useState<LangMap>({});
   const [feeTitle, setFeeTitle] = useState<LangMap>({});
   const [feeBody, setFeeBody] = useState<LangMap>({});
+  const [rulesTitle, setRulesTitle] = useState<LangMap>({});
+  const [rulesBody, setRulesBody] = useState<LangMap>({});
   const [botText, setBotText] = useState('');
   const [bump, setBump] = useState(false);
   const [isDefault, setIsDefault] = useState<Record<string, boolean>>({});
@@ -44,10 +46,13 @@ export default function AppContentScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [o, t, b, s, f, v]: any[] = await Promise.all([
+      const [o, t, b, s, f, v, r]: any[] = await Promise.all([
         apiService.getAppContent('driver_onboarding'), apiService.getAppContent('driver_terms'), apiService.getAppContent('bot_knowledge'),
         apiService.getSystemSettings(), apiService.getAppContent('driver_fee_info'), apiService.getAppContent('vendor_terms'),
+        apiService.getAppContent('driver_plan_rules'),
       ]);
+      setRulesTitle(r?.content?.title || {});
+      setRulesBody(r?.content?.body || {});
       setVTermsTitle(v.content?.title || {});
       setVTermsBody(v.content?.body || {});
       setFeeTitle(f.content?.title || {});
@@ -74,12 +79,12 @@ export default function AppContentScreen() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const key = tab === 'cards' ? 'driver_onboarding' : tab === 'terms' ? 'driver_terms' : tab === 'vterms' ? 'vendor_terms' : tab === 'fees' ? 'driver_fee_info' : 'bot_knowledge';
+  const key = tab === 'cards' ? 'driver_onboarding' : tab === 'terms' ? 'driver_terms' : tab === 'vterms' ? 'vendor_terms' : tab === 'fees' ? 'driver_fee_info' : tab === 'rules' ? 'driver_plan_rules' : 'bot_knowledge';
 
   const save = async () => {
     setSaving(true);
     try {
-      const content = tab === 'cards' ? { steps: cards } : tab === 'terms' ? { title: termsTitle, body: termsBody } : tab === 'vterms' ? { title: vTermsTitle, body: vTermsBody } : tab === 'fees' ? { title: feeTitle, body: feeBody } : { text: botText };
+      const content = tab === 'cards' ? { steps: cards } : tab === 'terms' ? { title: termsTitle, body: termsBody } : tab === 'vterms' ? { title: vTermsTitle, body: vTermsBody } : tab === 'fees' ? { title: feeTitle, body: feeBody } : tab === 'rules' ? { title: rulesTitle, body: rulesBody } : { text: botText };
       const res: any = await apiService.saveAppContent(key, content, bump && tab !== 'bot');
       Alert.alert('Saved', bump && tab !== 'bot' ? `Saved as version ${res.version}. Drivers will see it again on their next login.` : 'Saved. Drivers get the new text the next time they open the app.');
       setBump(false);
@@ -127,7 +132,7 @@ export default function AppContentScreen() {
 
   const Tabs = () => (
     <View style={[styles.tabs, { borderColor: c.border }]}>
-      {([['cards', 'Cards', LayoutList], ['terms', 'Terms', FileText], ['vterms', 'Vendor', FileText], ['fees', 'Fees', FileText], ['bot', 'Bot', Bot], ['ai', 'AI', Sparkles]] as const).map(([k, label, Icon]) => (
+      {([['cards', 'Cards', LayoutList], ['terms', 'Terms', FileText], ['vterms', 'Vendor', FileText], ['fees', 'Fees', FileText], ['rules', 'Rules', FileText], ['bot', 'Bot', Bot], ['ai', 'AI', Sparkles]] as const).map(([k, label, Icon]) => (
         <TouchableOpacity key={k} onPress={() => setTab(k)} style={[styles.tab, tab === k && { backgroundColor: '#6366F1' }]}>
           <Icon size={15} color={tab === k ? '#FFF' : c.textSecondary} />
           <Text style={[styles.tabText, { color: tab === k ? '#FFF' : c.textSecondary }]}>{label}</Text>
@@ -245,6 +250,19 @@ export default function AppContentScreen() {
               </>
             )}
 
+            {tab === 'rules' && (
+              <>
+                <Text style={[styles.help, { color: c.textSecondary }]}>
+                  The "Plans & Account Rules" page inside the Driver App (Settings): free days, automatic debit, wallet refunds, suspension and permanent block. Numbers written like {'{free_days}'}, {'{grace_days}'}, {'{monthly_fee}'}, {'{yearly_fee}'}, {'{min_driver_hold}'}, {'{support_phone}'} are filled from your live settings. Keep it in step with the Terms (clauses 12-14).
+                </Text>
+                <LangPicker />
+                <Text style={[styles.label, { color: c.textSecondary }]}>Page title ({lang.toUpperCase()})</Text>
+                <TextInput value={rulesTitle[lang] || ''} onChangeText={(v) => setRulesTitle((p) => ({ ...p, [lang]: v }))} style={inputStyle} placeholderTextColor={c.textSecondary} />
+                <Text style={[styles.label, { color: c.textSecondary }]}>Text ({lang.toUpperCase()})</Text>
+                <TextInput value={rulesBody[lang] || ''} onChangeText={(v) => setRulesBody((p) => ({ ...p, [lang]: v }))} style={[inputStyle, { minHeight: 380, textAlignVertical: 'top' }]} multiline placeholderTextColor={c.textSecondary} />
+              </>
+            )}
+
             {tab === 'bot' && (
               <>
                 <Text style={[styles.help, { color: c.textSecondary }]}>
@@ -290,7 +308,7 @@ export default function AppContentScreen() {
 
             {tab !== 'ai' && canEdit && (
               <View style={{ marginTop: 16, gap: 10 }}>
-                {tab !== 'bot' && tab !== 'fees' && (
+                {tab !== 'bot' && tab !== 'fees' && tab !== 'rules' && (
                   <View style={[styles.rowBetween, styles.box, card]}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
                       <Text style={[styles.boxTitle, { color: c.text }]}>Show again to every driver</Text>

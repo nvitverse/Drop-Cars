@@ -1580,7 +1580,12 @@ def _permanent_block_side_effects(db: Session, kind: str, row, blocked: bool, re
                 if (d.permanently_blocked_reason or "").startswith("Fleet owner blocked"):
                     d.permanently_blocked = False
                     d.permanently_blocked_reason = None
+                    if d.driver_status == DriverStatusEnum.BLOCKED:
+                        d.driver_status = DriverStatusEnum.OFFLINE      # usable again; documents erased by the block must be uploaded again
                     touched.append(d.id)
+            for c in cars:
+                if c.car_status == CarStatusEnum.BLOCKED:
+                    c.car_status = CarStatusEnum.ONLINE
     elif kind == "vendor":
         if blocked:
             blocklist.block_identifiers(db, blocklist.vendor_identifiers(db, row.id), reason=why, by=by, source_type=kind, source_id=row.id)

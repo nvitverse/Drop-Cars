@@ -1941,5 +1941,10 @@
  "Assign driver and car now": "ఇప్పుడే డ్రైవర్ + కారు కేటాయించు",
  "Booking accepted": "బుకింగ్ అంగీకరించబడింది",
  "bookings need a driver": "బుకింగ్‌లకు డ్రైవర్ కావాలి",
- "Assign": "కేటాయించు"
+ "Assign": "కేటాయించు",
+ "Plans & Account Rules": "ప్లాన్లు & ఖాతా నియమాలు",
+ "Free days, automatic debit, wallet refunds, suspension and blocking": "ఉచిత రోజులు, ఆటోమేటిక్ డెబిట్, వాలెట్ రీఫండ్‌లు, నిలిపివేత మరియు నిషేధం",
+ "Free days, automatic debit, wallet and account rules": "ఉచిత రోజులు, ఆటోమేటిక్ డెబిట్, వాలెట్ మరియు ఖాతా నియమాలు",
+ "Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.": "ఆటోమేటిక్ డెబిట్: మీ ఉచిత రోజులు లేదా 30 రోజుల ప్లాన్ ముగిసినప్పుడు, వాలెట్‌లో సరిపడా డబ్బు ఉంటే ప్లాన్ రుసుము దానంతట అదే తీసుకోబడుతుంది. తక్కువగా ఉంటే ఏమీ తీసుకోరు. వాలెట్‌లో ₹500 కంటే తక్కువ ఉన్న మొత్తం తిరిగి ఇవ్వబడదు; ఇప్పటికే తీసుకున్న రుసుము తిరిగి ఇవ్వబడదు. పూర్తి నియమాలు: Settings > Plans & Account Rules.",
+ "Your wallet money is safe. Add money so that your wallet has the monthly fee - the plan then starts automatically and your account opens at once. Rules: Settings > Plans & Account Rules.": "మీ వాలెట్ డబ్బు సురక్షితంగా ఉంది. వాలెట్‌లో నెలవారీ రుసుము ఉండేలా డబ్బు జోడించండి - ప్లాన్ ఆటోమేటిక్‌గా మొదలై మీ ఖాతా వెంటనే తెరుచుకుంటుంది. నియమాలు: Settings > Plans & Account Rules."
 }

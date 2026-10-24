@@ -518,6 +518,10 @@ export default function DriverSubscriptionScreen() {
             </View>
           )}
 
+          <Text style={[styles.summaryNote, { color: palette.textMuted, marginTop: 10 }]}>
+            {t('Automatic debit: when your free days or a 30-day plan end, the plan fee is taken from your wallet by itself if the wallet has enough. Nothing is taken if it is short. Wallet balance below ₹500 is non-refundable, and fees already taken are not refunded. Full rules: Settings > Plans & Account Rules.')}
+          </Text>
+
           {/* MAIN UPGRADE BUTTON */}
           <TouchableOpacity
             style={[

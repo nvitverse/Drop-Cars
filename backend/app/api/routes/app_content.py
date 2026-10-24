@@ -23,7 +23,7 @@ from app.utils.app_content_defaults import DEFAULTS, LANGS
 
 router = APIRouter(tags=["AppContent"])
 
-KEYS = ("driver_onboarding", "driver_terms", "driver_fee_info", "bot_knowledge", "vendor_terms")
+KEYS = ("driver_onboarding", "driver_terms", "driver_fee_info", "driver_plan_rules", "bot_knowledge", "vendor_terms")
 ICONS = {"check-circle", "file-text", "map-pin", "clock", "indian-rupee", "shield", "shield-check", "users", "alert-triangle",
          "car", "phone", "star", "lock", "route", "heart", "navigation", "wallet", "bell", "camera", "id-card"}
 COLORS = {"emerald", "blue", "purple", "red", "indigo", "amber", "teal", "rose"}
@@ -62,7 +62,16 @@ def _placeholders(db: Session) -> Dict[str, str]:
         return str(row.value) if row and row.value else d
 
     fees = get_fee_settings(db)
+    try:
+        from app.crud.billing import get_billing_settings
+        from app.crud.subscription_lifecycle import get_settings as _lifecycle
+        b, lc = get_billing_settings(db), _lifecycle(db)
+        plan = {"monthly_fee": str(int(b.get("monthly_fee") or 199)), "yearly_fee": str(int(b.get("yearly_fee") or 1000)),
+                "free_days": str(lc["standard_free_days"]), "grace_days": str(lc["lapse_grace_days"])}
+    except Exception:  # noqa: BLE001
+        plan = {"monthly_fee": "199", "yearly_fee": "1000", "free_days": "30", "grace_days": "30"}
     return {
+        **plan,
         "commission_min": str(fees.get("commission_min", 200)),
         "convenience_fee": str(fees.get("convenience_fee", 30)),
         "min_driver_hold": str(fees.get("min_driver_hold", 500)),
@@ -118,7 +127,8 @@ def public_content(key: str, request: Request, response: Response, lang: str = Q
         "title": _pick(data.get("title"), lang),
         "body": fill(_pick(body_src, lang), ph),
         "summary": fill(_pick(data.get("summary"), lang), ph),
-        "full_url": f"{_public_base(request)}/api/public/terms/driver?lang={lang}",
+        "full_url": (f"{_public_base(request)}/api/public/page/{key}?lang={lang}" if key in ("driver_plan_rules", "driver_fee_info")
+                     else f"{_public_base(request)}/api/public/terms/driver?lang={lang}"),
         "lang_used": used,
     }
 
@@ -177,6 +187,19 @@ def public_terms_page(lang: str = Query("en"), db: Session = Depends(get_db)):
     body = fill(_pick(body_src, lang), _placeholders(db))
     title = _pick(data.get("title"), lang) or "Terms and Conditions"
     return HTMLResponse(_terms_html(title, int(data.get("version", 1)), body, lang if body_src.get(lang) else "en"),
+                        headers={"Cache-Control": "public, max-age=300"})
+
+
+@router.get("/public/page/{key}", response_class=HTMLResponse)
+def public_content_page(key: str, lang: str = Query("en"), db: Session = Depends(get_db)):
+    """Plans & Account Rules / Fees as a plain web page (linked from the Driver App and shareable with anybody who asks)."""
+    if key not in ("driver_plan_rules", "driver_fee_info"):
+        raise HTTPException(status_code=404, detail="Unknown page")
+    lang = lang if lang in LANGS else "en"
+    data = load_content(db, key)
+    body_src = data.get("body") or {}
+    body = fill(_pick(body_src, lang), _placeholders(db))
+    return HTMLResponse(_terms_html(_pick(data.get("title"), lang) or "Drop Cars", int(data.get("version", 1)), body, lang if body_src.get(lang) else "en"),
                         headers={"Cache-Control": "public, max-age=300"})
 
 
@@ -243,7 +266,7 @@ def admin_put(key: str, body: ContentIn, db: Session = Depends(get_db), current_
                 "description": _clean_lang_map(s.get("description"), MAX_FIELD),
             })
         new = {"version": version, "steps": clean_steps}
-    elif key in ("driver_terms", "driver_fee_info", "vendor_terms"):
+    elif key in ("driver_terms", "driver_fee_info", "driver_plan_rules", "vendor_terms"):
         body_map = _clean_lang_map(c.get("body"), MAX_TERMS)
         if not body_map.get("en"):
             raise HTTPException(status_code=400, detail="The English text is required.")

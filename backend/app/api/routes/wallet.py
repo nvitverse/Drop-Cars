@@ -144,6 +144,12 @@ def verify_rp_payment(
     except Exception as e:  # noqa: BLE001
         db.rollback()
         print(f"subscription activation after payment failed (will retry): {e}")
+    try:                                         # out of free days and the top-up now covers the fee: the plan starts at once
+        from app.crud.subscription_lifecycle import auto_start_plans
+        auto_start_plans(db, only_owner=vehicle_owner_id)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        print(f"auto start plan after top-up failed (the sweep will retry): {e}")
 
     return txn
 
