@@ -4507,6 +4507,19 @@ def admin_wallet_duplicate_audit(
     return audit(db, days=days, search=search)
 
 
+@router.get("/admin/wallet/settlement-audit")
+def admin_wallet_settlement_audit(
+    days: int = Query(60, ge=1, le=365),
+    only_manual: bool = Query(False, description="only trips staff closed by hand"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Closed bookings where the driver got back more (or less) than his hold: lists the bill, the advance, the cash entered and why. Read-only."""
+    require_payment_release_permission(current_admin)
+    from app.crud.settlement_audit import audit as settlement_audit
+    return settlement_audit(db, days=days, only_manual=only_manual)
+
+
 def _serialize_ledger_row(row) -> dict:
     return {
         "id": str(row.id),

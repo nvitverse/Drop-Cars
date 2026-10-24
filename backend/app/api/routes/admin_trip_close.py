@@ -21,6 +21,8 @@ from app.models.orders import Order
 
 router = APIRouter(prefix="/admin/orders", tags=["Admin Trip Close"])
 
+CASH_DIFFERS_MARK = "[CASH_DIFFERS]"     # the Admin App recognises this and asks staff to confirm (same idea as wallet_duplicates.DUPLICATE_MARK)
+
 
 class ManualCloseIn(BaseModel):
     end_km: int = Field(..., ge=0, description="Odometer reading at the end of the trip")
@@ -30,6 +32,7 @@ class ManualCloseIn(BaseModel):
     updated_toll_charges: Optional[int] = Field(None, ge=0, description="Actual toll - required when the booking asked for the toll to be updated at close")
     waiting_minutes: Optional[int] = Field(None, ge=0, description="Waiting minutes (multi-city bookings)")
     extra_charges_collected: Optional[List[dict]] = Field(None, description='Audit only, e.g. [{"label":"State Tax","amount":150}]')
+    confirm_cash: bool = Field(False, description="true = the cash entered really differs from (bill - advance) and staff know the driver wallet moves by the difference")
 
 
 def _preview_args(body: ManualCloseIn) -> dict:
@@ -72,6 +75,28 @@ async def manual_close_trip(order_id: int, body: ManualCloseIn, db: Session = De
         raise HTTPException(status_code=400, detail=f"End km cannot be less than the start km ({record.start_km})")
 
     admin_name = getattr(current_admin, "username", "Admin")
+    # The driver's wallet moves rupee for rupee with the cash typed here (driver_net - cash + hold). A cash figure far from
+    # (bill - advance) is almost always a slip - a Rs 500 hold came back as Rs 3800 that way (Virugambakkam - Kanchipuram,
+    # 2026-10-24) - so the real maths is run once without saving and staff must confirm a big difference.
+    if body.cash_collection is not None and not body.confirm_cash:
+        try:
+            sim = await update_end_trip_record(db=db, order_id=order_id, driver_id=driver_id, end_km=body.end_km, recalc=True,
+                                               distance_reason=f"Closed by {admin_name} (staff): {body.reason.strip()}", **_preview_args(body))
+        except (DistanceReasonRequired, ValueError):
+            db.rollback()
+            sim = None          # the real call below reports the actual problem
+        if sim:
+            db.refresh(order)
+            advance = int(order.advance_received or 0)
+            bill = int(sim.get("closed_vendor_price") or 0)
+            expected_cash = max(0, bill - advance)
+            if abs(int(body.cash_collection) - expected_cash) > max(300, int(expected_cash * 0.1)):
+                lower = int(body.cash_collection) < expected_cash
+                raise HTTPException(status_code=409, detail=(
+                    f"{CASH_DIFFERS_MARK} The bill is Rs {bill}" + (f" and Rs {advance} advance is already paid" if advance else "") +
+                    f", so the driver should have collected about Rs {expected_cash}. You entered Rs {body.cash_collection}. "
+                    f"The driver's wallet will be {'credited' if lower else 'debited'} Rs {abs(expected_cash - int(body.cash_collection))} "
+                    f"more than a normal close. Leave the cash box blank to use Rs {expected_cash}."))
     try:
         result = await update_end_trip_record(
             db=db, order_id=order_id, driver_id=driver_id, end_km=body.end_km,
@@ -96,4 +121,15 @@ async def manual_close_trip(order_id: int, body: ManualCloseIn, db: Session = De
         bill = build_customer_bill(db, order)
     except Exception:
         pass
-    return {"message": f"Booking {order_id} closed", "total_km": result["total_km"], "bill": bill}
+    wallet = None
+    try:   # what actually moved on the driver's wallet, so staff see it the moment they close
+        from app.models.wallet_ledger import WalletEntryTypeEnum, WalletLedger
+        rows = db.query(WalletLedger).filter(WalletLedger.vehicle_owner_id == assignment.vehicle_owner_id,
+                                             WalletLedger.reference_id == str(order_id),
+                                             WalletLedger.reference_type == "TRIP_COMPLETION").all()
+        if rows:
+            net = sum(int(r.amount or 0) if r.entry_type == WalletEntryTypeEnum.CREDIT else -int(r.amount or 0) for r in rows)
+            wallet = {"driver_wallet_change": net, "note": rows[-1].notes}
+    except Exception:
+        pass
+    return {"message": f"Booking {order_id} closed", "total_km": result["total_km"], "bill": bill, "wallet": wallet}

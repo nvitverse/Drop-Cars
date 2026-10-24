@@ -5088,7 +5088,8 @@ export default function OrdersScreen() {
           const id = manualCloseOrder?.id;
           setManualCloseOrder(null);
           setShowDetailsModal(false);
-          showToast(`Booking #${id} closed and settled`, 'success');
+          const wc = res?.wallet?.driver_wallet_change;
+          showToast(`Booking #${id} closed and settled` + (typeof wc === 'number' ? ` - driver wallet ${wc >= 0 ? '+' : '-'}₹${Math.abs(wc)}` : ''), 'success');
           fetchOrders(true);
           fetchSnapshotData();
         }}

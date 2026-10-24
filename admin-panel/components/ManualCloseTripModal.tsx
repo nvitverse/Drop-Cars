@@ -40,7 +40,7 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
   const input = { borderWidth: 1, borderColor: border, borderRadius: 6, padding: 10, color: text, marginBottom: 10, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' } as const;
   const num = (v: string) => (v.trim() === '' ? undefined : parseInt(v, 10));
 
-  const submit = async () => {
+  const submit = async (confirmCash = false) => {
     if (!orderId) return;
     if (num(endKm) === undefined || isNaN(num(endKm) as number)) return Alert.alert('End km needed', 'Enter the odometer reading at the end of the trip.');
     if (needsStartKm && (num(startKm) === undefined || isNaN(num(startKm) as number))) return Alert.alert('Start km needed', 'The driver never started this trip in the app - enter the start km.');
@@ -55,10 +55,20 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
         updated_toll_charges: num(toll),
         waiting_minutes: num(waiting),
         reason: reason.trim(),
+        confirm_cash: confirmCash,
       });
       onDone(res);
     } catch (e: any) {
-      Alert.alert('Could not close the trip', e?.message || 'Try again');
+      const msg = String(e?.message || '');
+      if (msg.includes('[CASH_DIFFERS]')) {
+        // the cash typed is far from (bill - advance): the driver's wallet would move by the difference - ask before closing
+        Alert.alert('Check the cash amount', msg.replace('[CASH_DIFFERS]', '').trim(), [
+          { text: 'Change it', style: 'cancel' },
+          { text: 'Close anyway', style: 'destructive', onPress: () => submit(true) },
+        ]);
+      } else {
+        Alert.alert('Could not close the trip', msg || 'Try again');
+      }
     } finally {
       setBusy(false);
     }
@@ -83,7 +93,7 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>End km *</Text>
             <TextInput style={input} keyboardType="number-pad" value={endKm} onChangeText={setEndKm} placeholder="Odometer at end" placeholderTextColor={sub} />
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>Cash collected from the customer (₹)</Text>
-            <TextInput style={input} keyboardType="number-pad" value={cash} onChangeText={setCash} placeholder="Blank = the expected amount (total - advance)" placeholderTextColor={sub} />
+            <TextInput style={input} keyboardType="number-pad" value={cash} onChangeText={setCash} placeholder="Leave BLANK unless the driver really got a different amount" placeholderTextColor={sub} />
             <Text style={{ color: text, fontWeight: '700', marginBottom: 4 }}>Actual toll (₹){tollMustBeEntered ? ' *' : ''}</Text>
             <TextInput style={input} keyboardType="number-pad" value={toll} onChangeText={setToll} placeholder="Only if the toll was different from the quote" placeholderTextColor={sub} />
             {isMultiCity && (
@@ -99,7 +109,7 @@ export default function ManualCloseTripModal({ visible, orderId, needsStartKm, t
             <TouchableOpacity onPress={onClose} disabled={busy} style={{ flex: 1, borderWidth: 1, borderColor: border, borderRadius: 8, paddingVertical: 12, alignItems: 'center' }}>
               <Text style={{ color: text, fontWeight: '700' }}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={submit} disabled={busy} style={{ flex: 1.4, backgroundColor: '#0D47A1', borderRadius: 8, paddingVertical: 12, alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => submit(false)} disabled={busy} style={{ flex: 1.4, backgroundColor: '#0D47A1', borderRadius: 8, paddingVertical: 12, alignItems: 'center' }}>
               {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Close Trip & Settle</Text>}
             </TouchableOpacity>
           </View>
