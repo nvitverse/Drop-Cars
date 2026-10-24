@@ -8,6 +8,8 @@ Keys: smtp_host (default smtp.gmail.com), smtp_port (587), smtp_user,
 smtp_app_password, smtp_from (defaults to smtp_user).
 """
 import smtplib
+import threading
+import time
 from typing import Optional, List, Union
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -89,7 +91,41 @@ def smtp_configured(db: Session) -> bool:
     return bool(s["smtp_user"] and s["smtp_app_password"])
 
 
+class EmailUnavailable(RuntimeError):
+    """The mail server keeps refusing us (Gmail daily limit / blocked sender). Raised at once, without connecting, while the cool-down lasts."""
+
+
+# Circuit breaker. Every failed send used to hold the request for ~40 s (two 20 s attempts) and hammer Gmail again on the next call:
+# 159 failures a day, signup OTPs hanging, and Gmail's own limit never getting a chance to recover. After 3 failures in a row the mail
+# server is left alone for 10 minutes; one success clears it. Per container, in memory.
+_BREAKER = {"fails": 0, "until": 0.0}
+_BREAKER_LOCK = threading.Lock()
+BREAKER_FAILS = 3
+BREAKER_COOLDOWN_SECONDS = 600
+
+
 def send_email(db: Session, to_email: str, subject: str, body: str, html_body: Optional[str] = None) -> None:
+    """Send an email (see _send_email_once) - but fail fast while the mail server is being refused."""
+    with _BREAKER_LOCK:
+        wait = _BREAKER["until"] - time.time()
+    if wait > 0:
+        raise EmailUnavailable(f"Email is temporarily unavailable (the mail server keeps refusing). Trying again in about {int(wait // 60) + 1} min.")
+    try:
+        _send_email_once(db, to_email, subject, body, html_body)
+    except Exception:
+        with _BREAKER_LOCK:
+            _BREAKER["fails"] += 1
+            if _BREAKER["fails"] >= BREAKER_FAILS:
+                _BREAKER["until"] = time.time() + BREAKER_COOLDOWN_SECONDS
+                _BREAKER["fails"] = 0
+        raise
+    else:
+        with _BREAKER_LOCK:
+            _BREAKER["fails"] = 0
+            _BREAKER["until"] = 0.0
+
+
+def _send_email_once(db: Session, to_email: str, subject: str, body: str, html_body: Optional[str] = None) -> None:
     """Send an email with full UTF-8 / emoji support and automatic port 587 (TLS) -> 465 (SSL) fallback."""
     from email.header import Header
     from email.utils import formataddr

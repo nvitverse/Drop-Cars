@@ -142,6 +142,8 @@ def send_email_otp(
         import logging
         logging.getLogger(__name__).error("OTP email send failed: %s", e, exc_info=True)
         db.execute(sa_text("DELETE FROM email_otps WHERE email = :e AND code = :c"), {"e": email, "c": code}); db.commit()
+        if "SMTP send failed" in str(e) or e.__class__.__name__ == "EmailUnavailable":      # not the customer's address: our mail server is refusing
+            raise HTTPException(status_code=503, detail="Our email service is busy right now. Please try again in a few minutes, or contact Drop Cars support to verify your email.")
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please check your email address and try again.")
 
     return {"message": "Verification code sent successfully.", "expires_in_minutes": 10}
