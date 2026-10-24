@@ -27,3 +27,15 @@ def test_the_e_mail_builders_never_read_the_customer_number():
 def test_the_emailed_invoice_pdf_does_not_print_the_phone():
     src = (APP / "utils/pdf_invoice.py").read_text(encoding="utf-8")
     assert "cust_phone = ''" in src
+
+
+def test_the_auto_assignment_whatsapp_does_not_carry_the_customer_number():
+    from app.utils import whatsapp_notifier
+    sent = []
+    orig = whatsapp_notifier.send_whatsapp_message
+    whatsapp_notifier.send_whatsapp_message = lambda phone, body: sent.append(body) or {"success": True}
+    try:
+        whatsapp_notifier.send_driver_assignment_whatsapp("9000000001", "Driver", "Chennai", "Madurai", "55", customer_name="Ravi", customer_phone="9876543210", estimated_fare=2500)
+    finally:
+        whatsapp_notifier.send_whatsapp_message = orig
+    assert sent and "Ravi" in sent[0] and "9876543210" not in sent[0]

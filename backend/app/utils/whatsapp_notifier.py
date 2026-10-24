@@ -98,7 +98,8 @@ def send_driver_assignment_whatsapp(
         f"நீங்கள் பதிவு செய்த விருப்ப பாதையின் படி புதிய பயணம் நேரடியாக ஒதுக்கப்பட்டுள்ளது!\n\n"
         f"📌 *Order ID:* #{order_id}\n"
         f"📍 *Route:* {pickup_city} ➔ {drop_city}\n"
-        f"👤 *Passenger:* {customer_name} ({customer_phone})\n"
+        # the customer's phone number is never put in a message sent outside the app (owner rule 2026-10-24); the app shows it at the reveal time
+        f"👤 *Passenger:* {customer_name}\n"
         f"💰 *Estimated Fare:* ₹{estimated_fare:,}\n\n"
         f"பயண விவரங்களை பார்க்க உங்கள் Drop Cars Driver App-ஐ திறக்கவும்!"
     )
