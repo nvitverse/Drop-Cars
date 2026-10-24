@@ -31,6 +31,7 @@ export default function EndTripScreen() {
   const { colors, isDarkMode } = useTheme();
   const [endKm, setEndKm] = useState('');
   const [tripOtp, setTripOtp] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');   // optional: the bill is mailed here when the trip closes
   const [odometerPhoto, setOdometerPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [thanked, setThanked] = useState(false);
@@ -270,6 +271,12 @@ export default function EndTripScreen() {
       return;
     }
 
+    const mail = customerEmail.trim();
+    if (mail && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(mail)) {
+      Alert.alert(t('tripEnd.errorTitle'), 'That e-mail address does not look right. Please correct it, or clear the box to skip.');
+      return;
+    }
+
     if (submitting) return;
 
     const totalKm = parseInt(endKm) - startKm;
@@ -279,6 +286,10 @@ export default function EndTripScreen() {
       setSubmitting(true);
       const assignment_id = String(params.assignment_id || '');
       let tripEndResponse = null;
+      if (mail) {
+        // best effort: a failure here must never stop the trip from closing
+        try { await axiosDriver.post(`/api/orders/driver/trip-customer-email/${params.order_id}`, { email: mail }); } catch {}
+      }
       
       if (assignment_id) {
         // Create a dummy contact number since it's no longer required from user
@@ -786,6 +797,24 @@ export default function EndTripScreen() {
                 <CheckCircle size={16} color={colors.success} />
               </View>
             )}
+          </View>
+        </View>
+
+        {/* Optional: the customer's e-mail - the bill is mailed there when the trip is closed (no phone numbers are ever mailed) */}
+        <View style={styles.cardSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Customer e-mail (optional)</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginBottom: 6 }}>Ask the customer. We will e-mail them this bill and a link to rate the trip.</Text>
+          <View style={[styles.inputRowContainer, { backgroundColor: colors.surface, borderColor: customerEmail ? colors.primary : colors.border }]}>
+            <TextInput
+              style={[styles.numericInput, { color: colors.text, fontSize: 15 }]}
+              placeholder="name@example.com"
+              placeholderTextColor={colors.textSecondary}
+              value={customerEmail}
+              onChangeText={setCustomerEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         </View>
 

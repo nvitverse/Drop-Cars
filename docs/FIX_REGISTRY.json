@@ -1265,6 +1265,34 @@
       ],
       "why": "the phone tells the office whether it can receive alerts",
       "since": "2026-10-25"
+    },
+    {
+      "id": "driver-types-customer-email",
+      "file": "backend/app/api/routes/order_assignments.py",
+      "must_contain": [
+        "/driver/trip-customer-email/"
+      ],
+      "why": "phone/admin/vendor bookings have no customer e-mail; the driver types it on the bill screen so the bill can be mailed",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "bill-mail-uses-driver-typed-email",
+      "file": "backend/app/utils/customer_bill_email.py",
+      "must_contain": [
+        "OrderCustomerEmail"
+      ],
+      "why": "customer_email_for must look at the driver-typed e-mail",
+      "since": "2026-10-25"
+    },
+    {
+      "id": "end-trip-customer-email-field",
+      "file": "driver-app/app/trip/end.tsx",
+      "must_contain": [
+        "Customer e-mail (optional)",
+        "trip-customer-email"
+      ],
+      "why": "bill step asks for the customer e-mail",
+      "since": "2026-10-25"
     }
   ]
 }

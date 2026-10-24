@@ -1113,6 +1113,33 @@ async def preview_driver_trip_bill(order_id: int, body: TripBillPreviewIn, db: S
     return {"distance_check": None, **{k: bill.get(k) for k in keep}}
 
 
+class TripCustomerEmailIn(BaseModel):
+    email: str = Field(..., max_length=120)
+
+
+_EMAIL_RE = __import__("re").compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+
+@router.post("/driver/trip-customer-email/{order_id}")
+def save_trip_customer_email(order_id: int, body: TripCustomerEmailIn, db: Session = Depends(get_db), current_driver=Depends(get_current_driver)):
+    """The driver asks the customer for an e-mail on the bill screen; the trip bill is mailed there when the trip is closed.
+    Only the e-mail is stored - nothing else about the customer is read or sent anywhere."""
+    from app.models.order_customer_email import OrderCustomerEmail
+    a, order = _driver_trip_or_404(db, order_id, current_driver)
+    if a.assignment_status == AssignmentStatusEnum.COMPLETED:
+        raise HTTPException(status_code=400, detail="This trip is already completed")
+    email = (body.email or "").strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Please enter a valid e-mail address")
+    row = db.query(OrderCustomerEmail).filter(OrderCustomerEmail.order_id == order_id).first()
+    if row:
+        row.email, row.added_by = email, str(current_driver.id)
+    else:
+        db.add(OrderCustomerEmail(order_id=order_id, email=email, added_by=str(current_driver.id)))
+    db.commit()
+    return {"saved": True}
+
+
 class TripCompletionIn(BaseModel):
     customer_rating: int = Field(..., ge=1, le=5)
     customer_feedback: Optional[str] = Field(None, max_length=500)

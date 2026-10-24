@@ -18,6 +18,13 @@ def customer_email_for(db: Session, order) -> Optional[str]:
     mail = (getattr(order, "customer_email", None) or "").strip()
     if mail:
         return mail
+    try:      # typed by the driver on the bill screen (phone / admin / vendor bookings)
+        from app.models.order_customer_email import OrderCustomerEmail
+        row = db.query(OrderCustomerEmail).filter(OrderCustomerEmail.order_id == order.id).first()
+        if row and (row.email or "").strip():
+            return row.email.strip()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from app.utils.website_status_webhook import _find_website_booking_request
         req = _find_website_booking_request(db, order.id)
