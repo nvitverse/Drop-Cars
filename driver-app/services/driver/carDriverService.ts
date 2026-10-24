@@ -96,7 +96,7 @@ export const requestNoShow = async (orderId: number, reason: string) => {
   return response.data;
 };
 
-export const endTrip = async (orderId: number, endKm?: number, contact?: string, imgUri?: string, tollCharges?: number, tollChargeUpdate?: boolean, waitingTime?: number, cashCollection?: number, otp?: string, extraChargesCollected?: { label: string; amount: number }[], distanceReason?: string) => {
+export const endTrip = async (orderId: number, endKm?: number, contact?: string, imgUri?: string, tollCharges?: number, tollChargeUpdate?: boolean, waitingTime?: number, cashCollection?: number, otp?: string, extraChargesCollected?: { label: string; amount: number }[], distanceReason?: string, tollReceiptUri?: string | null) => {
   try {
     console.log('🏁 Ending trip for order:', orderId);
 
@@ -125,6 +125,11 @@ export const endTrip = async (orderId: number, endKm?: number, contact?: string,
     // comment for why).
     await appendFileToFormData(form, 'close_speedometer_img', imgUri, 'close_speedometer.jpg', 'image/jpeg'); // string($binary) - required
     
+    // Optional photo of the toll receipt (the proof for the toll the driver typed)
+    if (tollReceiptUri) {
+      await appendFileToFormData(form, 'toll_receipt_img', tollReceiptUri, 'toll_receipt.jpg', 'image/jpeg');
+    }
+
     // Add toll charge update flag if provided
     if (tollChargeUpdate !== undefined) {
       form.append('toll_charge_update', String(tollChargeUpdate));

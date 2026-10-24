@@ -544,6 +544,7 @@ async def ensure_extra_kyc_document_columns() -> None:
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_amount INTEGER',
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS bonus_paid_at TIMESTAMPTZ',
         'ALTER TABLE trip_reviews ADD COLUMN IF NOT EXISTS flagged BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS toll_receipt_image VARCHAR',
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS distance_flagged BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS distance_reason TEXT',
         'ALTER TABLE end_records ADD COLUMN IF NOT EXISTS customer_rating INTEGER',

@@ -3093,5 +3093,11 @@
  "Send reason & continue": "ಕಾರಣ ಕಳುಹಿಸಿ ಮುಂದುವರಿಸಿ",
  "Collected from the customer outside the booking amount": "ಬುಕಿಂಗ್ ಮೊತ್ತದ ಹೊರಗೆ ಗ್ರಾಹಕರಿಂದ ವಸೂಲಿ ಮಾಡಿದ್ದು",
  "Closing reading minus starting reading.": "ಅಂತಿಮ ರೀಡಿಂಗ್ ಮೈನಸ್ ಆರಂಭಿಕ ರೀಡಿಂಗ್.",
- "HRS": "ಗಂಟೆ"
+ "HRS": "ಗಂಟೆ",
+ "Other charges (optional)": "ಇತರ ಶುಲ್ಕಗಳು (ಐಚ್ಛಿಕ)",
+ "Parking or any other charge the customer paid that is not on the booking. It is shown on the bill.": "ಪಾರ್ಕಿಂಗ್ ಅಥವಾ ಬುಕಿಂಗ್‌ನಲ್ಲಿ ಇಲ್ಲದ ಬೇರೆ ಶುಲ್ಕವನ್ನು ಗ್ರಾಹಕರು ಪಾವತಿಸಿದ್ದರೆ. ಇದು ಬಿಲ್‌ನಲ್ಲಿ ತೋರಿಸಲಾಗುತ್ತದೆ.",
+ "+ Add another charge": "+ ಇನ್ನೊಂದು ಶುಲ್ಕ ಸೇರಿಸಿ",
+ "Add a photo of the toll receipt (optional)": "ಟೋಲ್ ರಸೀದಿಯ ಫೋಟೋ ಸೇರಿಸಿ (ಐಚ್ಛಿಕ)",
+ "Toll receipt photo added - tap to retake": "ಟೋಲ್ ರಸೀದಿ ಫೋಟೋ ಸೇರಿಸಲಾಗಿದೆ - ಮತ್ತೆ ತೆಗೆಯಲು ಒತ್ತಿ",
+ "Taxes & Other Charges": "ತೆರಿಗೆಗಳು & ಇತರ ಶುಲ್ಕಗಳು"
 }

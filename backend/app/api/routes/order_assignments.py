@@ -950,6 +950,7 @@ async def end_trip(
     otp: Optional[str] = Form(default=""),
     distance_reason: Optional[str] = Form(default=None),
     close_speedometer_img: UploadFile = File(...),
+    toll_receipt_img: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
     current_driver=Depends(get_current_driver)
 ):
@@ -992,6 +993,11 @@ async def end_trip(
         from app.utils.gcs import upload_image_to_gcs
         folder_path = f"trip_records/{order_id}/end"
         close_speedometer_img_url = upload_image_to_gcs(close_speedometer_img, folder_path)
+        toll_receipt_url = None
+        if toll_receipt_img is not None and toll_receipt_img.filename:
+            if not (toll_receipt_img.content_type or '').startswith('image/'):
+                raise HTTPException(status_code=400, detail="The toll receipt must be a photo.")
+            toll_receipt_url = upload_image_to_gcs(toll_receipt_img, f"trip_records/{order_id}/toll")
         
         # Update end trip record
         from app.crud.end_records import update_end_trip_record
@@ -1007,6 +1013,7 @@ async def end_trip(
             cash_collection=cash_collection,
             extra_charges_collected=parsed_extra_charges,
             distance_reason=distance_reason,
+            toll_receipt_url=toll_receipt_url,
         )
 
         return {
@@ -1053,7 +1060,7 @@ def get_driver_trip_bill(order_id: int, db: Session = Depends(get_db), current_d
     from app.crud.end_records import build_customer_bill
     from app.models.end_records import EndRecord
     a, order = _driver_trip_or_404(db, order_id, current_driver)
-    bill = build_customer_bill(db, order)
+    bill = build_customer_bill(db, order, lump_taxes=True)
     er = db.query(EndRecord).filter(EndRecord.order_id == order_id).first()
     bill["completion_done"] = bool(er and er.completion_at)
     bill["review_link"] = None

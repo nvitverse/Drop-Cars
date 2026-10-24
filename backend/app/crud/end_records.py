@@ -251,7 +251,25 @@ class DistanceReasonRequired(ValueError):
         )
 
 
-def build_customer_bill(db, order) -> dict:
+def lump_taxes_and_extras(lines: list) -> list:
+    """The customer-facing view (owner rule 2026-10-24): GST, toll and whatever else makes up the difference between the visible lines and
+    the agreed total are shown as ONE line, "Taxes & Other Charges" - so a customer who sees a GST figure or a toll figure never asks why the
+    balance is bigger. Totals are untouched (the amounts are only merged). Negative adjustments are left alone."""
+    merged, kept = 0, []
+    for l in lines:
+        label = str(l.get("label") or "")
+        key = l.get("key")
+        is_tax_or_extra = key in ("toll", "extra_gst") or label.startswith("Toll") or label.startswith("GST") or label == "Other charges"
+        if is_tax_or_extra and int(l.get("amount") or 0) > 0:
+            merged += int(l["amount"])
+        else:
+            kept.append(l)
+    if merged > 0:
+        kept.append({"label": "Taxes & Other Charges", "amount": merged, "included": True})
+    return kept
+
+
+def build_customer_bill(db, order, lump_taxes: bool = False) -> dict:
     """The customer-facing bill for a finished trip: what the customer paid for and what is still to collect. Never
     contains the driver's fare, commission or any payout figure - the customer may be looking at the driver's phone."""
     from app.utils.commission import get_fee_settings
@@ -325,6 +343,8 @@ def build_customer_bill(db, order) -> dict:
         lines.append({"label": "Other charges" if residual > 0 else "Adjustment", "amount": residual, "included": True})
     elif not lines:
         lines.append({"label": "Trip fare", "amount": max(0, total - conv), "included": True})
+    if lump_taxes:
+        lines = lump_taxes_and_extras(lines)
     lines.append({"label": "Convenience fee", "amount": conv, "included": True})
 
     excluded = [
@@ -336,6 +356,11 @@ def build_customer_bill(db, order) -> dict:
     for e in excluded:
         if e["label"] in collected:
             e["amount"] = collected[e["label"]]
+    # a charge the driver added himself (parking, a bridge fee ...) is not on the booking, but the customer paid it and sees it on the bill
+    _known = {str(e["label"]) for e in excluded}
+    for lbl, amt in collected.items():
+        if lbl and lbl not in _known and amt > 0:
+            excluded.append({"label": lbl, "amount": amt})
     advance = int(order.advance_received or 0)
     loc = order.pickup_drop_location or {}
     keys = sorted(loc.keys(), key=lambda k: int(k) if str(k).isdigit() else 0) if isinstance(loc, dict) else []
@@ -482,6 +507,7 @@ async def update_end_trip_record(
     extra_charges_collected: list | None = None,
     distance_reason: str | None = None,
     recalc: bool = False,
+    toll_receipt_url: str | None = None,
 ) -> dict:
     """Update end trip record and calculate fare.
 
@@ -507,6 +533,8 @@ async def update_end_trip_record(
     # Update trip record
     trip_record.end_km = end_km
     trip_record.close_speedometer_image = close_speedometer_image_url  # Add close speedometer image
+    if toll_receipt_url:
+        trip_record.toll_receipt_image = toll_receipt_url
     trip_record.cash_collection = cash_collection
     trip_record.extra_charges_collected = extra_charges_collected
 
@@ -928,7 +956,7 @@ async def update_end_trip_record(
             "commision_amount": order.commision_amount, "closing_breakdown": order.closing_breakdown,
         }
         try:                                # the customer-safe bill of the simulated close (Driver App "Generate bill" preview)
-            _figures["customer_bill"] = build_customer_bill(db, order)
+            _figures["customer_bill"] = build_customer_bill(db, order, lump_taxes=True)
         except Exception as _e:  # noqa: BLE001
             print(f"customer bill preview failed: {_e}")
         db.rollback()                       # nothing of the simulated close is kept
@@ -1211,6 +1239,11 @@ async def update_end_trip_record(
     db.commit()
     db.refresh(trip_record)
     await send_trip_status_notification_to_vendor_and_vehicle_owner(db, order_id=order_id, status="ended")
+    try:        # the customer's bill by e-mail, once, only if we have the customer's e-mail (the trip is saved: sent after the commit above)
+        from app.utils.customer_bill_email import send_customer_trip_bill_email
+        await send_customer_trip_bill_email(db, order_id)
+    except Exception:  # noqa: BLE001
+        pass
     if _distance_flag:
         # distance was outside +/-20% of the real route: tell the poster and the admin (the driver's reason is stored)
         try:

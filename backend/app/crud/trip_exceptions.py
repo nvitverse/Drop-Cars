@@ -11,7 +11,7 @@ Everything here is plain functions on the session; the routes and the minute swe
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.models.end_records import EndRecord
@@ -81,7 +81,8 @@ async def _tell_driver_and_owner(db: Session, order_id: int, title: str, body: s
 # ------------------------------------------------------------------ trip not started after pickup
 async def alert_no_start_assignments(db: Session) -> int:
     """Driver and car assigned but the trip was never started: once `no_start_alert_after_minutes` (default 120) have passed since
-    pickup, tell the office, the poster and the driver - once. Nothing is closed and no money moves."""
+    pickup, tell the office, the poster and the driver. Nothing is closed and no money moves. The office and the driver are told AGAIN every 24 hours
+    until somebody decides (owner rule 2026-10-24: five trips sat open for days after one alert); the poster only the first time."""
     minutes = _int_setting(db, "no_start_alert_after_minutes", 120)
     now = datetime.now(timezone.utc)
     rows = (
@@ -90,7 +91,7 @@ async def alert_no_start_assignments(db: Session) -> int:
         .filter(
             OrderAssignment.assignment_status == AssignmentStatusEnum.ASSIGNED,
             OrderAssignment.driver_id.isnot(None),
-            OrderAssignment.no_start_alerted_at.is_(None),
+            or_(OrderAssignment.no_start_alerted_at.is_(None), OrderAssignment.no_start_alerted_at < datetime.utcnow() - timedelta(hours=24)),
             Order.trip_status == "PENDING",
             Order.start_date_time.isnot(None),
         )
@@ -104,14 +105,16 @@ async def alert_no_start_assignments(db: Session) -> int:
                 continue
             if db.query(EndRecord).filter(EndRecord.order_id == order.id).first():
                 continue                                    # it did start
+            first_time = a.no_start_alerted_at is None
             a.no_start_alerted_at = datetime.utcnow()
             db.commit()
             late = int((now - pickup).total_seconds() // 60)
             where = route_text(order)
             await _tell_admins(db, f"Booking #{order.id} was not started",
                                f"{where} - pickup was {late} min ago and the driver has not started the trip. Open the booking: close it by hand, mark a no-show, or cancel with refund.")
-            _tell_poster(db, order, f"Booking #{order.id} not started yet",
-                         f"{where} - the driver has not started the trip {late} min after pickup. Drop Cars has been told.")
+            if first_time:
+                _tell_poster(db, order, f"Booking #{order.id} not started yet",
+                             f"{where} - the driver has not started the trip {late} min after pickup. Drop Cars has been told.")
             await _tell_driver_and_owner(db, order.id, f"Booking #{order.id} - trip not started",
                                          "Start the trip with the customer's code, or call support if the customer is not there. The office will decide - nothing is closed automatically.")
             done += 1
@@ -323,7 +326,7 @@ def attention_list(db: Session) -> dict:
     """What needs a person right now: trips not started after pickup, no-show requests, reposts waiting for approval."""
     from app.models.car_driver import CarDriver
     now = datetime.now(timezone.utc)
-    out = {"not_started": [], "no_show_requests": [], "repost_waiting": []}
+    out = {"not_started": [], "no_show_requests": [], "repost_waiting": [], "waiting_for_driver": []}
 
     def _driver(a):
         d = db.query(CarDriver).filter(CarDriver.id == a.driver_id).first() if a.driver_id else None
@@ -345,6 +348,20 @@ def attention_list(db: Session) -> dict:
             out["no_show_requests"].append({**base, "reason": a.no_show_reason, "requested_at": a.no_show_requested_at.isoformat()})
         elif a.no_start_alerted_at and o.start_date_time:
             out["not_started"].append({**base, "minutes_late": int((now - _aware(o.start_date_time)).total_seconds() // 60)})
+    # accepted / allocated but no driver + car and NO deadline, so the minute sweep will never cancel it (Admin / vendor allocation sets none)
+    from app.models.vehicle_owner_details import VehicleOwnerDetails
+    stuck = (
+        db.query(OrderAssignment, Order).join(Order, Order.id == OrderAssignment.order_id)
+        .filter(OrderAssignment.assignment_status == AssignmentStatusEnum.PENDING, OrderAssignment.driver_id.is_(None), OrderAssignment.expires_at.is_(None),
+                OrderAssignment.created_at < datetime.utcnow() - timedelta(minutes=30), Order.trip_status == "PENDING")
+        .order_by(Order.start_date_time).all()
+    )
+    for a, o in stuck:
+        det = db.query(VehicleOwnerDetails).filter(VehicleOwnerDetails.vehicle_owner_id == a.vehicle_owner_id).first()
+        out["waiting_for_driver"].append({"order_id": o.id, "route": route_text(o), "pickup": _aware(o.start_date_time).isoformat() if o.start_date_time else None,
+                                         "driver_name": det.full_name if det else None, "driver_phone": det.primary_number if det else None,
+                                         "minutes_late": int((now - _aware(o.start_date_time)).total_seconds() // 60) if o.start_date_time else None,
+                                         "held": int(a.held_amount or 0), "allocated_by": a.assigned_by})
     held = db.query(Order).filter(Order.trip_status == "PENDING", Order.repost_hold_until.isnot(None), Order.repost_announced_at.is_(None),
                                   Order.repost_hold_until > now).order_by(Order.repost_hold_until).all()
     for o in held:

@@ -1016,6 +1016,79 @@
       ],
       "why": "the customer review QR lives on the One last step screen",
       "since": "2026-10-24"
+    },
+    {
+      "id": "bill-taxes-and-other-charges",
+      "file": "backend/app/crud/end_records.py",
+      "must_contain": [
+        "def lump_taxes_and_extras",
+        "Taxes & Other Charges",
+        "lump_taxes=True"
+      ],
+      "why": "customer bill shows GST / toll / the balance as ONE line \"Taxes & Other Charges\" (invoices keep the itemised view)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "customer-bill-email",
+      "file": "backend/app/utils/customer_bill_email.py",
+      "must_contain": [
+        "send_customer_trip_bill_email",
+        "lump_taxes=True",
+        "review_base_url"
+      ],
+      "why": "the customer gets the bill (+ review link) by e-mail at trip close when we know the e-mail; customer price only",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "bill-email-hook",
+      "file": "backend/app/crud/end_records.py",
+      "must_contain": [
+        "await send_customer_trip_bill_email(db, order_id)"
+      ],
+      "why": "sent after the trip is saved, never blocks the close",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "toll-receipt-photo",
+      "file": "backend/app/api/routes/order_assignments.py",
+      "must_contain": [
+        "toll_receipt_img",
+        "toll_receipt_url=toll_receipt_url"
+      ],
+      "why": "optional toll receipt photo stored on the end record",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "driver-other-charges",
+      "file": "driver-app/app/trip/end.tsx",
+      "must_contain": [
+        "extraPayload",
+        "Other charges (optional)",
+        "takeTollReceipt"
+      ],
+      "why": "driver can add parking / other charges (shown on the bill) and a toll receipt photo",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "stuck-trip-daily-alert",
+      "file": "backend/app/crud/trip_exceptions.py",
+      "must_contain": [
+        "timedelta(hours=24)",
+        "waiting_for_driver",
+        "first_time"
+      ],
+      "why": "an unstarted trip is alerted again every 24h; allocations with no deadline and no driver are listed for the office",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "admin-needs-attention-waiting-for-driver",
+      "file": "admin-panel/app/needs-attention.tsx",
+      "must_contain": [
+        "waiting_for_driver",
+        "Accepted, but no driver & car yet"
+      ],
+      "why": "Admin Needs-attention list shows allocations that nothing will cancel by itself",
+      "since": "2026-10-24"
     }
   ]
 }

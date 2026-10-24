@@ -1255,8 +1255,9 @@ def get_driver_assigned_orders(db: Session, driver_id: str) -> List[dict]:
         if order.trip_status in (Trip_status.CANCELLED, Trip_status.COMPLETED):
             continue
         # Also hide stale trips that never started: pickup time passed more
-        # than 24h ago and the driver hasn't begun driving. Late starts within
-        # a day stay visible.
+        # than 7 days ago and the driver hasn't begun driving (it used to be 24h -
+        # a never-started trip vanished from the driver's list while the office
+        # was still deciding, so nobody could start or cancel it).
         if (
             assignment.assignment_status == AssignmentStatusEnum.ASSIGNED
             and order.start_date_time is not None
@@ -1265,7 +1266,7 @@ def get_driver_assigned_orders(db: Session, driver_id: str) -> List[dict]:
             start_at = order.start_date_time
             if start_at.tzinfo is None:
                 start_at = start_at.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) - start_at > timedelta(hours=24):
+            if datetime.now(timezone.utc) - start_at > timedelta(days=7):
                 continue
         # No vendor on a self-sourced/driver-created or admin-posted
         # vendor-less booking (order.vendor_id is None) - don't crash the

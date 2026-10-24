@@ -66,6 +66,9 @@ export default function EndTripScreen() {
   const [previewing, setPreviewing] = useState(false);
   const [distanceMode, setDistanceMode] = useState<'preview' | 'final'>('final');
   const [savedReason, setSavedReason] = useState<string | undefined>(undefined);
+  // Optional proof for the toll the driver typed, and any charge that is not on the booking (parking, a bridge fee ...)
+  const [tollReceipt, setTollReceipt] = useState<string | null>(null);
+  const [otherCharges, setOtherCharges] = useState<{ label: string; amount: string }[]>([{ label: '', amount: '' }]);
 
   const router = useRouter();
   const { t } = useLanguage();
@@ -180,6 +183,23 @@ export default function EndTripScreen() {
     return totalKm * farePerKm;
   };
 
+  // Everything the driver collected outside the booking amount: the booking's excluded items + charges he added himself
+  const extraPayload = () => [
+    ...extraChargeItems.map((item) => ({ label: item.label, amount: parseInt(extraChargeAmounts[item.label] || '0', 10) || 0 })),
+    ...otherCharges
+      .filter((o) => o.label.trim() && (parseInt(o.amount || '0', 10) || 0) > 0)
+      .map((o) => ({ label: o.label.trim().slice(0, 40), amount: parseInt(o.amount, 10) })),
+  ];
+
+  const takeTollReceipt = async () => {
+    try {
+      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5 });
+      if (!result.canceled) setTollReceipt(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert(t('tripEnd.errorTitle'), t('tripEnd.photoErrorBody'));
+    }
+  };
+
   const waitTotalMin = waitingTime !== '' ? (parseInt(waitingTime, 10) || 0) : 0;
   const setWaitParts = (h: number, m: number) => {
     const total = Math.max(0, h) * 60 + Math.min(59, Math.max(0, m));
@@ -205,7 +225,7 @@ export default function EndTripScreen() {
         end_km: parseInt(endKm, 10),
         updated_toll_charges: tollChargeUpdate === true ? Math.round(parseFloat(tollCharge) || 0) : undefined,
         waiting_time: waitingTime !== '' ? parseInt(waitingTime, 10) : undefined,
-        extra_charges_collected: extraChargeItems.map((item) => ({ label: item.label, amount: parseInt(extraChargeAmounts[item.label] || '0', 10) || 0 })),
+        extra_charges_collected: extraPayload(),
         distance_reason: reason,
       });
       const d = res.data?.distance_check;
@@ -273,8 +293,9 @@ export default function EndTripScreen() {
           waitingTime !== '' ? parseInt(waitingTime, 10) : undefined,
           undefined, // cash collected is confirmed on the Completion page, after the bill is shown
           tripOtp,
-          extraChargeItems.map((item) => ({ label: item.label, amount: parseInt(extraChargeAmounts[item.label] || '0', 10) || 0 })),
-          distanceReason
+          extraPayload(),
+          distanceReason,
+          tollChargeUpdate === true ? tollReceipt : null
         );
       } else {
         console.warn('No assignment_id provided to end trip; finishing without API call');
@@ -522,8 +543,59 @@ export default function EndTripScreen() {
             <Text style={[styles.helperText, { color: colors.textSecondary }]}>
               {t('tripEnd.tollHelper')}
             </Text>
+            <TouchableOpacity
+              onPress={takeTollReceipt}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: tollReceipt ? colors.success : colors.border, backgroundColor: colors.surface }}
+              activeOpacity={0.8}
+            >
+              <Camera size={16} color={tollReceipt ? colors.success : colors.primary} />
+              <Text style={{ color: colors.text, fontSize: 13.5, fontFamily: 'Inter-SemiBold', flex: 1 }}>
+                {tollReceipt ? 'Toll receipt photo added - tap to retake' : 'Add a photo of the toll receipt (optional)'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
+
+        {/* Other charges: anything collected from the customer that is not on the booking (parking, bridge fee ...) */}
+        <View style={styles.cardSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Other charges (optional)</Text>
+          <Text style={[styles.helperText, { color: colors.textSecondary, marginBottom: 8 }]}>
+            Parking or any other charge the customer paid that is not on the booking. It is shown on the bill.
+          </Text>
+          {otherCharges.map((o, idx) => (
+            <View key={`oc-${idx}`} style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <View style={[styles.inputRowContainer, { flex: 1.4, backgroundColor: colors.surface, borderColor: o.label ? colors.primary : colors.border }]}>
+                <TextInput
+                  style={[styles.numericInput, { color: colors.text }]}
+                  placeholder="e.g. Parking"
+                  placeholderTextColor={colors.textSecondary}
+                  value={o.label}
+                  maxLength={40}
+                  onChangeText={(v) => setOtherCharges((prev) => prev.map((x, i) => (i === idx ? { ...x, label: v } : x)))}
+                />
+              </View>
+              <View style={[styles.inputRowContainer, { flex: 1, backgroundColor: colors.surface, borderColor: o.amount ? colors.primary : colors.border }]}>
+                <View style={[styles.unitBadge, { backgroundColor: colors.primary + '18' }]}>
+                  <Text style={[styles.unitBadgeText, { color: colors.primary }]}>₹</Text>
+                </View>
+                <TextInput
+                  style={[styles.numericInput, { color: colors.text }]}
+                  placeholder="0"
+                  placeholderTextColor={colors.textSecondary}
+                  value={o.amount}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  onChangeText={(v) => setOtherCharges((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: v.replace(/[^0-9]/g, '') } : x)))}
+                />
+              </View>
+            </View>
+          ))}
+          {otherCharges.length < 4 && (
+            <TouchableOpacity onPress={() => setOtherCharges((prev) => [...prev, { label: '', amount: '' }])} activeOpacity={0.7}>
+              <Text style={{ color: colors.primary, fontFamily: 'Inter-SemiBold', fontSize: 13.5 }}>+ Add another charge</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Waiting time - hours + minutes (every trip type except hourly rental). The charge is worked out by the server. */}
         {!tripTypeLower.includes('hour') && (

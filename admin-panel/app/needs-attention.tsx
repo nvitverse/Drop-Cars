@@ -13,8 +13,8 @@ import ManualCloseTripModal from '@/components/ManualCloseTripModal';
 //  1. a driver was assigned but never started the trip after pickup,
 //  2. a driver says the customer cancelled / did not turn up (only the office or the poster can confirm it),
 //  3. a booking whose driver was penalised is waiting to go back to all drivers.
-type Item = { order_id: number; route: string; pickup?: string | null; driver_name?: string | null; driver_phone?: string | null; minutes_late?: number; reason?: string; requested_at?: string; goes_out_at?: string };
-type Data = { not_started: Item[]; no_show_requests: Item[]; repost_waiting: Item[]; total: number };
+type Item = { order_id: number; route: string; pickup?: string | null; driver_name?: string | null; driver_phone?: string | null; minutes_late?: number; reason?: string; requested_at?: string; goes_out_at?: string; held?: number; allocated_by?: string };
+type Data = { not_started: Item[]; no_show_requests: Item[]; repost_waiting: Item[]; waiting_for_driver?: Item[]; total: number };
 
 const clock = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '-');
 const late = (m?: number) => (m == null ? '' : m >= 1440 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h late` : m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m late` : `${m} min late`);
@@ -98,6 +98,18 @@ export default function NeedsAttention() {
               <View style={s.wrap}>
                 <Btn label="Close trip" color="#1D4ED8" icon={Wrench} disabled={busy === x.order_id} onPress={() => setClosing(x)} />
                 <Btn label="No-show" color="#B45309" icon={UserX} disabled={busy === x.order_id} onPress={() => setAsk({ item: x, kind: 'noshow' })} />
+                <Btn label="Cancel + refund" color="#DC2626" icon={Ban} disabled={busy === x.order_id} onPress={() => setAsk({ item: x, kind: 'cancel' })} />
+              </View>
+            </>
+          ))}
+
+          {section('Accepted, but no driver & car yet', 'Allocated by the office or a vendor, or accepted with no deadline, so nothing cancels it by itself. Call the fleet owner, or cancel it and give the held amount back.', data.waiting_for_driver || [], (x) => (
+            <>
+              <Text style={[s.title, { color: c.text }]}>#{x.order_id} · {x.route}</Text>
+              <Text style={{ color: '#DC2626', fontSize: 12.5, fontWeight: '700' }}>Pickup {clock(x.pickup)} · {late(x.minutes_late)}</Text>
+              <Text style={{ color: c.textSecondary, fontSize: 12, marginTop: 2 }}>Fleet owner (not the driver): held ₹{x.held || 0}{x.allocated_by ? ` · allocated by ${x.allocated_by}` : ''}</Text>
+              {driverLine(x)}
+              <View style={s.wrap}>
                 <Btn label="Cancel + refund" color="#DC2626" icon={Ban} disabled={busy === x.order_id} onPress={() => setAsk({ item: x, kind: 'cancel' })} />
               </View>
             </>

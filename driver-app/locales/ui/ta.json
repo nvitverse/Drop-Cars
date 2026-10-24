@@ -1959,5 +1959,11 @@
  "Send reason & continue": "காரணம் அனுப்பி தொடர்",
  "Collected from the customer outside the booking amount": "புக்கிங் தொகைக்கு வெளியே வாடிக்கையாளரிடம் வசூலித்தவை",
  "Closing reading minus starting reading.": "இறுதி அளவு கழித்தல் தொடக்க அளவு.",
- "HRS": "மணி"
+ "HRS": "மணி",
+ "Other charges (optional)": "மற்ற கட்டணங்கள் (விருப்பம்)",
+ "Parking or any other charge the customer paid that is not on the booking. It is shown on the bill.": "பார்க்கிங் அல்லது புக்கிங்கில் இல்லாத வேறு கட்டணத்தை வாடிக்கையாளர் செலுத்தியிருந்தால். அது பில்லில் காட்டப்படும்.",
+ "+ Add another charge": "+ இன்னொரு கட்டணம் சேர்",
+ "Add a photo of the toll receipt (optional)": "டோல் ரசீது புகைப்படம் சேர் (விருப்பம்)",
+ "Toll receipt photo added - tap to retake": "டோல் ரசீது புகைப்படம் சேர்க்கப்பட்டது - மாற்ற தட்டுங்கள்",
+ "Taxes & Other Charges": "வரிகள் & மற்ற கட்டணங்கள்"
 }

@@ -15,6 +15,7 @@ class EndRecord(Base):
     contact_number = Column(String, nullable=False)
     img_url = Column(String, nullable=False)
     close_speedometer_image = Column(String, nullable=True)
+    toll_receipt_image = Column(String, nullable=True)       # optional photo of the toll receipt the driver typed the toll from
     # Cash settlement: what the driver actually collected from the customer
     # in cash at trip end (self-reported, entered alongside the odometer
     # photo). Compared against the order's driver_profit to compute the

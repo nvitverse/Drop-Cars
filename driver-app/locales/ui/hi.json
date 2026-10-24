@@ -1959,5 +1959,11 @@
  "Send reason & continue": "कारण भेजकर आगे बढ़ें",
  "Collected from the customer outside the booking amount": "बुकिंग राशि के बाहर ग्राहक से वसूला गया",
  "Closing reading minus starting reading.": "अंतिम रीडिंग घटाइए शुरुआती रीडिंग।",
- "HRS": "घंटे"
+ "HRS": "घंटे",
+ "Other charges (optional)": "अन्य शुल्क (वैकल्पिक)",
+ "Parking or any other charge the customer paid that is not on the booking. It is shown on the bill.": "पार्किंग या बुकिंग में न दिया गया कोई और शुल्क जो ग्राहक ने चुकाया। यह बिल में दिखता है।",
+ "+ Add another charge": "+ एक और शुल्क जोड़ें",
+ "Add a photo of the toll receipt (optional)": "टोल रसीद की फोटो जोड़ें (वैकल्पिक)",
+ "Toll receipt photo added - tap to retake": "टोल रसीद की फोटो जुड़ गई - दोबारा लेने के लिए दबाएँ",
+ "Taxes & Other Charges": "कर और अन्य शुल्क"
 }

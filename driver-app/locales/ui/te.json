@@ -1959,5 +1959,11 @@
  "Send reason & continue": "కారణం పంపి కొనసాగించు",
  "Collected from the customer outside the booking amount": "బుకింగ్ మొత్తం వెలుపల కస్టమర్ నుండి వసూలు చేసినవి",
  "Closing reading minus starting reading.": "ముగింపు రీడింగ్ మైనస్ ప్రారంభ రీడింగ్.",
- "HRS": "గంటలు"
+ "HRS": "గంటలు",
+ "Other charges (optional)": "ఇతర ఛార్జీలు (ఐచ్ఛికం)",
+ "Parking or any other charge the customer paid that is not on the booking. It is shown on the bill.": "పార్కింగ్ లేదా బుకింగ్‌లో లేని ఇతర ఛార్జీ కస్టమర్ చెల్లించి ఉంటే. ఇది బిల్లులో చూపబడుతుంది.",
+ "+ Add another charge": "+ మరో ఛార్జీ జోడించు",
+ "Add a photo of the toll receipt (optional)": "టోల్ రసీదు ఫోటో జోడించండి (ఐచ్ఛికం)",
+ "Toll receipt photo added - tap to retake": "టోల్ రసీదు ఫోటో జోడించబడింది - మళ్ళీ తీయడానికి నొక్కండి",
+ "Taxes & Other Charges": "పన్నులు & ఇతర ఛార్జీలు"
 }

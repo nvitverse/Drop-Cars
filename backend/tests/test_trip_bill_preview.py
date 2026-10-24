@@ -97,3 +97,54 @@ def test_preview_refuses_a_lower_end_km_and_a_stranger(pg_session, client_with_d
     assert low.status_code == 400 and "End KM" in low.text
     other_order, _, other_drv = _booking_with_open_trip(db, c, monkeypatch)
     assert c.post(f"/api/assignments/driver/trip-bill-preview/{order_id}", headers=_auth("driver", other_drv), json={"end_km": 1330}).status_code == 404
+
+
+# ---------------------------------------------------------------- "Taxes & Other Charges" and the customer e-mail
+def test_gst_toll_and_the_balance_are_one_line_for_the_customer():
+    from app.crud.end_records import lump_taxes_and_extras
+    lines = [{"key": "km", "label": "Distance 206 km x Rs 16", "amount": 3296}, {"key": "bata", "label": "Driver bata", "amount": 400},
+             {"key": "toll", "label": "Toll (actual, entered by driver)", "amount": 215}, {"label": "Other charges", "amount": 185},
+             {"key": "extra_gst", "label": "GST on extra km", "amount": 20}, {"key": "waiting", "label": "Waiting (30 min)", "amount": 60}]
+    out = lump_taxes_and_extras(lines)
+    labels = [l["label"] for l in out]
+    assert labels == ["Distance 206 km x Rs 16", "Driver bata", "Waiting (30 min)", "Taxes & Other Charges"]
+    assert out[-1]["amount"] == 215 + 185 + 20
+    assert sum(l["amount"] for l in out) == sum(l["amount"] for l in lines)             # only merged, never changed
+    # a negative adjustment is left alone, nothing to lump -> no empty line
+    neg = lump_taxes_and_extras([{"label": "Distance", "amount": 1000}, {"label": "Adjustment", "amount": -50}])
+    assert [l["label"] for l in neg] == ["Distance", "Adjustment"]
+
+
+def test_the_bill_email_shows_customer_figures_only_and_the_review_link():
+    from app.utils.customer_bill_email import render_bill
+    bill = {"from": "Tiruvannamalai", "to": "Trichy", "km_driven": 206, "total": 3735, "advance_received": 500, "cash_to_collect": 3235,
+            "lines": [{"label": "Distance 206 km x Rs 16", "amount": 3296}, {"label": "Taxes & Other Charges", "amount": 409}, {"label": "Convenience fee", "amount": 30}],
+            "extra_charges_paid_directly": [{"label": "Parking", "amount": 40}]}
+    text, html = render_bill(bill, 1042, "Ravi", "https://dropcars.in/review/abc")
+    for part in ("Distance 206 km x Rs 16", "Taxes & Other Charges", "Total booking amount: Rs 3735", "Balance paid to the driver: Rs 3235", "Parking", "https://dropcars.in/review/abc"):
+        assert part in text
+    assert "Rate your trip" in html and "Taxes &amp; Other Charges" in html
+    low = (text + html).lower()
+    for word in ("commission", "driver_net", "payout", "wallet"):
+        assert word not in low
+
+
+def test_the_bill_email_is_sent_only_when_we_know_the_email_and_mail_is_set_up(pg_session, client_with_db, monkeypatch):
+    import asyncio
+    from app.utils import customer_bill_email as cbe
+    db, c = pg_session, client_with_db
+    order_id, owner, drv = _booking_with_open_trip(db, c, monkeypatch)
+    sent = []
+    monkeypatch.setattr(cbe, "_send_with_own_session", lambda to, subject, text, html: sent.append((to, subject)))
+    monkeypatch.setattr("app.utils.emailer.smtp_configured", lambda db: True)
+
+    monkeypatch.setattr(cbe, "customer_email_for", lambda db, order: None)
+    assert asyncio.run(cbe.send_customer_trip_bill_email(db, order_id)) is False and sent == []          # no e-mail known -> nothing
+
+    monkeypatch.setattr(cbe, "customer_email_for", lambda db, order: "ravi@example.com")
+    monkeypatch.setattr("app.utils.emailer.smtp_configured", lambda db: False)
+    assert asyncio.run(cbe.send_customer_trip_bill_email(db, order_id)) is False and sent == []          # mail not set up -> nothing
+
+    monkeypatch.setattr("app.utils.emailer.smtp_configured", lambda db: True)
+    assert asyncio.run(cbe.send_customer_trip_bill_email(db, order_id)) is True
+    assert sent == [("ravi@example.com", f"Drop Cars - your trip bill (Booking #{order_id})")]

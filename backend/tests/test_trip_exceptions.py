@@ -76,7 +76,7 @@ def _assigned_order(db, pickup_hours_ago=30, held=500):
 
 
 # ---------------------------------------------------------------- never closed by a timer
-def test_a_trip_that_never_started_is_alerted_once_and_not_closed(pg_session, monkeypatch):
+def test_a_trip_that_never_started_is_alerted_again_every_day_and_never_closed(pg_session, monkeypatch):
     from app.crud import trip_exceptions as tx
     from app.crud.wallet import get_owner_balance
     owner, driver, order, a = _assigned_order(pg_session, pickup_hours_ago=30)
@@ -95,7 +95,15 @@ def test_a_trip_that_never_started_is_alerted_once_and_not_closed(pg_session, mo
     assert a.no_start_alerted_at is not None
     assert get_owner_balance(pg_session, str(owner.id)) == before            # no money moved
     assert {w for w, _ in told} == {"admin", "poster", "driver"}
-    assert asyncio.run(tx.alert_no_start_assignments(pg_session)) == 0       # once only
+    assert asyncio.run(tx.alert_no_start_assignments(pg_session)) == 0       # not again the same day
+    # ... but a day later, still unstarted: the office and the driver are told again (the poster only the first time)
+    from datetime import datetime, timedelta
+    a.no_start_alerted_at = datetime.utcnow() - timedelta(hours=25)
+    pg_session.flush()
+    told.clear()
+    assert asyncio.run(tx.alert_no_start_assignments(pg_session)) >= 1
+    assert {w for w, _ in told} == {"admin", "driver"}
+    assert str(order.trip_status.value if hasattr(order.trip_status, "value") else order.trip_status) == "PENDING"   # still never closed by a timer
     listing = tx.attention_list(pg_session)
     assert order.id in [x["order_id"] for x in listing["not_started"]]
 
@@ -270,3 +278,24 @@ def test_km_correction_posts_the_commission_difference_and_conserves_money(pg_se
     assert done.status_code == 400 and "completed" in done.text.lower()
     other_vendor = c.post(f"/api/orders/vendor/{order_id + 99999}/no-show", headers=vh, json={})
     assert other_vendor.status_code == 400 and "not found" in other_vendor.text.lower()
+
+
+def test_an_allocation_with_no_deadline_and_no_driver_shows_up_for_the_office(pg_session):
+    """Admin / vendor allocation sets no deadline, so nothing cancels it by itself: it must be on the Needs-attention list (bookings 505, 516)."""
+    from datetime import datetime, timedelta
+    from app.crud import trip_exceptions as tx
+    from app.models.order_assignments import AssignmentStatusEnum
+    owner, driver, order, a = _assigned_order(pg_session, pickup_hours_ago=-5)       # pickup in 5 hours
+    a.driver_id = None
+    a.assignment_status = AssignmentStatusEnum.PENDING
+    a.expires_at = None
+    a.assigned_by = "ADMIN"
+    a.created_at = datetime.utcnow() - timedelta(hours=2)
+    pg_session.flush()
+    listing = tx.attention_list(pg_session)
+    mine = [x for x in listing["waiting_for_driver"] if x["order_id"] == order.id]
+    assert len(mine) == 1 and mine[0]["held"] == 500 and mine[0]["allocated_by"] == "ADMIN"
+    # a normal accept (it has a deadline) is the sweep's job, not listed
+    a.expires_at = datetime.utcnow() + timedelta(minutes=10)
+    pg_session.flush()
+    assert order.id not in [x["order_id"] for x in tx.attention_list(pg_session)["waiting_for_driver"]]
