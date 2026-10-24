@@ -396,3 +396,5 @@ Logs (4 days): `send-email-otp` 429 x32 ("wait 60 seconds"), `vehicleowner/signu
 - Admin OTA preview 844a1ace + production 968008b6.
 
 - 2026-10-24 (Claude, third batch): LIVE backend rev 00351 (commit b38592a): plan fee auto-debit from wallet (dormant until the subscription rule is switched ON), Terms v3 clauses 12-14 + Plans & Account Rules page (5 languages), Help Center topic, unblock restores drivers/cars. NOT yet published: Driver OTA (Settings > Plans & Account Rules screen) and Admin OTA (App Content > Rules tab) - waiting for owner's explicit OTA go. Subscription rule still OFF.
+
+- 2026-10-24 (Claude): OTAs LIVE after owner said publish - Driver c4e930ef (Settings > Plans & Account Rules, auto-debit note, blocked-screen wording), Admin a18baf03 (App Content > Rules tab). Subscription rule still OFF (owner decides when to switch on). Booking/wallet audit report (read only, nothing changed): Desktop\Drop Cars Group\BOOKING_MONEY_AUDIT_2026-10-24.
