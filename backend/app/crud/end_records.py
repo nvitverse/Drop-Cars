@@ -168,10 +168,19 @@ def _actual_trip_days(start_date_time, actual_end_time, cutoff_hour: int = 6) ->
     but against the ACTUAL close time instead of the originally quoted one."""
     if not start_date_time or not actual_end_time:
         return 1
-    if start_date_time.tzinfo is not None:
-        start_date_time = start_date_time.replace(tzinfo=None)
-    if actual_end_time.tzinfo is not None:
-        actual_end_time = actual_end_time.replace(tzinfo=None)
+    # The 6 AM cutoff is a 6 AM in INDIA. Times are stored in UTC, and the clock hour was read straight off the UTC value, so the cutoff
+    # sat at 11:30 AM IST: booking 520 (Virugambakkam - Kanchipuram, 8:45 AM IST) closed at 2:22 PM IST the same day was billed 2 days
+    # (Rs 6630 instead of Rs 3330) and the driver's wallet got Rs 3800 back instead of Rs 470 (2026-10-24).
+    from datetime import timezone as _tz
+    _ist = _tz(timedelta(hours=5, minutes=30))
+
+    def _to_ist(dt):
+        if dt.tzinfo is None:           # naive values in this code base are UTC (datetime.utcnow())
+            dt = dt.replace(tzinfo=_tz.utc)
+        return dt.astimezone(_ist).replace(tzinfo=None)
+
+    start_date_time = _to_ist(start_date_time)
+    actual_end_time = _to_ist(actual_end_time)
     if actual_end_time <= start_date_time:
         return 1
     anchor = start_date_time.replace(hour=cutoff_hour, minute=0, second=0, microsecond=0)

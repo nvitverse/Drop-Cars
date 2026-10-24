@@ -35,10 +35,16 @@ def test_small_differences_are_ignored():
     assert classify(customer_total=BILL, driver_net=NET, advance=0, cash=3300, hold=HOLD, completion_net=500, manual=False) is None
 
 
-def test_round_trip_closed_the_next_morning_counts_a_second_day():
-    """The cause: a one-day round trip closed by staff after 6 AM next day was billed 2 days (500 km minimum + 2 allowances)."""
-    from datetime import datetime
+def test_round_trip_day_count_uses_the_indian_6am_cutoff():
+    """Booking 520 (2026-10-24): picked up 08:45 IST (03:15 UTC), closed 14:22 IST the same day. The UTC clock hour put the 6 AM cutoff at
+    11:30 IST, so it was billed 2 days (Rs 6630) instead of 1 (Rs 3330) and the driver wallet got Rs 3800 back instead of Rs 470."""
+    from datetime import datetime, timezone
     from app.crud.end_records import _actual_trip_days
-    start = datetime(2026, 10, 23, 8, 0)
-    assert _actual_trip_days(start, datetime(2026, 10, 23, 21, 0)) == 1      # closed the same evening
-    assert _actual_trip_days(start, datetime(2026, 10, 24, 9, 0)) == 2       # closed next morning -> second day billed
+    start = datetime(2026, 10, 24, 3, 15, tzinfo=timezone.utc)
+    assert _actual_trip_days(start, datetime(2026, 10, 24, 8, 52, tzinfo=timezone.utc)) == 1          # 14:22 IST same day
+    assert _actual_trip_days(start, datetime(2026, 10, 24, 8, 52)) == 1                              # naive = UTC (datetime.utcnow())
+    assert _actual_trip_days(start, datetime(2026, 10, 24, 20, 0, tzinfo=timezone.utc)) == 1         # 01:30 IST next day: still day 1
+    assert _actual_trip_days(start, datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)) == 2          # 06:30 IST next day: second day
+    evening = datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc)                                      # 19:30 IST pickup
+    assert _actual_trip_days(evening, datetime(2026, 10, 24, 23, 0, tzinfo=timezone.utc)) == 1       # 04:30 IST next day
+    assert _actual_trip_days(evening, datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc)) == 2        # 06:30 IST next day
