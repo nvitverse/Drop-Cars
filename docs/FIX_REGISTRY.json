@@ -1149,6 +1149,35 @@
       ],
       "why": "Admin App shows mail health in plain words and holds the backup server settings",
       "since": "2026-10-24"
+    },
+    {
+      "id": "staff-alert-overlay-plugin",
+      "file": "admin-panel/app.json",
+      "must_contain": [
+        "./plugins/withStaffAlertOverlay.js"
+      ],
+      "why": "Admin App native part: display-over-other-apps bubble + on-duty foreground service + battery whitelist (needs a new Admin build)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "staff-alert-readiness-host",
+      "file": "admin-panel/app/_layout.tsx",
+      "must_contain": [
+        "StaffAlertReadinessHost"
+      ],
+      "why": "staff are asked for notifications / display over other apps / battery whitelist when they go on duty",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "staff-alert-readiness-logic",
+      "file": "admin-panel/components/StaffAlertReadinessHost.tsx",
+      "must_contain": [
+        "Keep your alerts on",
+        "startOnDutyService",
+        "showAlertBubble"
+      ],
+      "why": "the readiness sheet + the on-duty service / bubble while the app is in the background",
+      "since": "2026-10-24"
     }
   ]
 }

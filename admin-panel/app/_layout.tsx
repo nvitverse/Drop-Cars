@@ -11,6 +11,7 @@ import EnquiryAlarmHost from '@/components/EnquiryAlarmHost';
 import { KeyboardSafeView } from '@/components/KeyboardSafe';
 import BookingAlarmHost from '@/components/BookingAlarmHost';
 import AlarmDutyGate from '@/components/AlarmDutyGate';
+import StaffAlertReadinessHost from '@/components/StaffAlertReadinessHost';
 import { installWebStyleFixes } from '@/utils/webStyleFixes';
 import UpdateGate from '@/components/UpdateGate';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
@@ -81,6 +82,7 @@ export default function RootLayout() {
               <WebAlertHost />
               {/* Alarms paused temporarily as requested to work freely in other sections */}
               <AlarmDutyGate />
+              <StaffAlertReadinessHost />
               <UpdateGate />
               <EnquiryAlarmHost />
               <BookingAlarmHost />

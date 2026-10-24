@@ -29,7 +29,8 @@
           }
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "./plugins/withStaffAlertOverlay.js"
     ],
     "experiments": {
       "typedRoutes": true
