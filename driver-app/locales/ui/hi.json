@@ -1965,5 +1965,13 @@
  "+ Add another charge": "+ एक और शुल्क जोड़ें",
  "Add a photo of the toll receipt (optional)": "टोल रसीद की फोटो जोड़ें (वैकल्पिक)",
  "Toll receipt photo added - tap to retake": "टोल रसीद की फोटो जुड़ गई - दोबारा लेने के लिए दबाएँ",
- "Taxes & Other Charges": "कर और अन्य शुल्क"
+ "Taxes & Other Charges": "कर और अन्य शुल्क",
+ "Enter the date": "तारीख दर्ज करें",
+ "Expiry date": "समाप्ति तिथि",
+ "Registration date": "पंजीकरण तिथि",
+ "Type the registration date printed on the RC (day / month / year).": "RC पर छपी पंजीकरण तिथि (दिन / माह / वर्ष) लिखें।",
+ "Type the date printed on the document, the day it is valid until (day / month / year).": "दस्तावेज़ पर छपी वह तिथि लिखें जिस दिन तक वह मान्य है (दिन / माह / वर्ष)।",
+ "Save date": "तारीख सहेजें",
+ "Type the date as day / month / year, for example 25/08/2027": "तारीख दिन / माह / वर्ष में लिखें, जैसे 25/08/2027",
+ "Could not save the date. Please check it and try again.": "तारीख सहेज नहीं सके। जाँचकर फिर कोशिश करें।"
 }

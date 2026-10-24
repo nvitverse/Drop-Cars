@@ -3099,5 +3099,13 @@
  "+ Add another charge": "+ ಇನ್ನೊಂದು ಶುಲ್ಕ ಸೇರಿಸಿ",
  "Add a photo of the toll receipt (optional)": "ಟೋಲ್ ರಸೀದಿಯ ಫೋಟೋ ಸೇರಿಸಿ (ಐಚ್ಛಿಕ)",
  "Toll receipt photo added - tap to retake": "ಟೋಲ್ ರಸೀದಿ ಫೋಟೋ ಸೇರಿಸಲಾಗಿದೆ - ಮತ್ತೆ ತೆಗೆಯಲು ಒತ್ತಿ",
- "Taxes & Other Charges": "ತೆರಿಗೆಗಳು & ಇತರ ಶುಲ್ಕಗಳು"
+ "Taxes & Other Charges": "ತೆರಿಗೆಗಳು & ಇತರ ಶುಲ್ಕಗಳು",
+ "Enter the date": "ದಿನಾಂಕ ನಮೂದಿಸಿ",
+ "Expiry date": "ಮುಕ್ತಾಯ ದಿನಾಂಕ",
+ "Registration date": "ನೋಂದಣಿ ದಿನಾಂಕ",
+ "Type the registration date printed on the RC (day / month / year).": "RC ಯಲ್ಲಿ ಮುದ್ರಿತವಾದ ನೋಂದಣಿ ದಿನಾಂಕವನ್ನು (ದಿನ / ತಿಂಗಳು / ವರ್ಷ) ನಮೂದಿಸಿ.",
+ "Type the date printed on the document, the day it is valid until (day / month / year).": "ದಾಖಲೆಯಲ್ಲಿ ಮುದ್ರಿತವಾದ, ಅದು ಮಾನ್ಯವಾಗಿರುವ ಕೊನೆಯ ದಿನಾಂಕವನ್ನು (ದಿನ / ತಿಂಗಳು / ವರ್ಷ) ನಮೂದಿಸಿ.",
+ "Save date": "ದಿನಾಂಕ ಉಳಿಸಿ",
+ "Type the date as day / month / year, for example 25/08/2027": "ದಿನಾಂಕವನ್ನು ದಿನ / ತಿಂಗಳು / ವರ್ಷ ಎಂದು ನಮೂದಿಸಿ, ಉದಾ. 25/08/2027",
+ "Could not save the date. Please check it and try again.": "ದಿನಾಂಕ ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
 }

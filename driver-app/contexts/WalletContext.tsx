@@ -49,7 +49,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [balance, setBalanceRaw] = useState(0);
   const [balanceLoaded, setBalanceLoaded] = useState(false);
-  const setBalance = (value: number) => { setBalanceRaw(value); setBalanceLoaded(true); };
+  // takes a number OR an updater (prev => prev + amount): the add / deduct paths below pass a function
+  const setBalance = (value: React.SetStateAction<number>) => { setBalanceRaw(value); setBalanceLoaded(true); };
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

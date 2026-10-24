@@ -1965,5 +1965,13 @@
  "+ Add another charge": "+ இன்னொரு கட்டணம் சேர்",
  "Add a photo of the toll receipt (optional)": "டோல் ரசீது புகைப்படம் சேர் (விருப்பம்)",
  "Toll receipt photo added - tap to retake": "டோல் ரசீது புகைப்படம் சேர்க்கப்பட்டது - மாற்ற தட்டுங்கள்",
- "Taxes & Other Charges": "வரிகள் & மற்ற கட்டணங்கள்"
+ "Taxes & Other Charges": "வரிகள் & மற்ற கட்டணங்கள்",
+ "Enter the date": "தேதியை உள்ளிடு",
+ "Expiry date": "முடிவு தேதி",
+ "Registration date": "பதிவு தேதி",
+ "Type the registration date printed on the RC (day / month / year).": "RC-யில் அச்சிடப்பட்டுள்ள பதிவு தேதியை (நாள் / மாதம் / ஆண்டு) உள்ளிடுங்கள்.",
+ "Type the date printed on the document, the day it is valid until (day / month / year).": "ஆவணத்தில் அச்சிடப்பட்டுள்ள, அது செல்லுபடியாகும் கடைசி தேதியை (நாள் / மாதம் / ஆண்டு) உள்ளிடுங்கள்.",
+ "Save date": "தேதியை சேமி",
+ "Type the date as day / month / year, for example 25/08/2027": "தேதியை நாள் / மாதம் / ஆண்டு என உள்ளிடுங்கள், எ.கா. 25/08/2027",
+ "Could not save the date. Please check it and try again.": "தேதியை சேமிக்க முடியவில்லை. சரிபார்த்து மீண்டும் முயற்சிக்கவும்."
 }

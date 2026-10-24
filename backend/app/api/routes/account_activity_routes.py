@@ -89,9 +89,57 @@ def my_activity(db: Session = Depends(get_db), vehicle_owner_id: str = Depends(g
     return {"cars": cars, "drivers": drivers}
 
 
-def _item(kind, entity_id, entity_name, document, problem, action, severity="warn"):
+def _item(kind, entity_id, entity_name, document, problem, action, severity="warn", fix="upload", doc_key=None):
     return {"kind": kind, "entity_id": str(entity_id), "entity_name": entity_name, "document": document,
-            "problem": problem, "action": action, "severity": severity}
+            "problem": problem, "action": action, "severity": severity, "fix": fix, "doc_key": doc_key}
+
+
+class DocumentDateBody(BaseModel):
+    kind: str            # car | driver
+    entity_id: str
+    document: str        # rc | insurance | permit | fc | licence
+    date: str            # YYYY-MM-DD, as printed on the document
+
+
+@owner_router.post("/vehicle-owner/document-date")
+def set_document_date(body: DocumentDateBody, db: Session = Depends(get_db), vehicle_owner_id: str = Depends(get_current_vehicleOwner_id)):
+    """Type the date printed on a document that is already uploaded, WITHOUT uploading it again (the popup asked for a date but the only way to
+    give it was a new photo). Only while no date is saved yet: changing a saved date means a renewed document, which must be uploaded again
+    so it is read and checked."""
+    from datetime import date as _date, timedelta
+    try:
+        d = _date.fromisoformat(body.date.strip()[:10])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Enter the date as day / month / year.")
+    today = _date.today()
+    doc = body.document.strip().lower()
+    row = _load(db, body.kind, body.entity_id)
+    if row is None or body.kind not in ("car", "driver") or str(row.vehicle_owner_id) != str(vehicle_owner_id):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    table = {
+        ("car", "rc"): ("registration_date", "rc_front_img_url"),
+        ("car", "insurance"): ("insurance_expiry_date", "insurance_img_url"),
+        ("car", "permit"): ("permit_expiry_date", "permit_img_url"),
+        ("car", "fc"): ("fc_expiry_date", "fc_img_url"),
+        ("driver", "licence"): ("licence_expiry_date", "licence_front_img"),
+    }
+    cols = table.get((body.kind, doc))
+    if not cols:
+        raise HTTPException(status_code=400, detail="This document has no date to enter.")
+    date_col, image_col = cols
+    if not getattr(row, image_col, None):
+        raise HTTPException(status_code=400, detail="Upload the document first, then enter its date.")
+    if getattr(row, date_col, None) is not None:
+        raise HTTPException(status_code=409, detail="The date is already saved. If the document was renewed, upload the new document.")
+    if doc == "rc":
+        if d > today or d < _date(1990, 1, 1):
+            raise HTTPException(status_code=400, detail="The registration date cannot be in the future.")
+    elif d < _date(2000, 1, 1) or d > today + timedelta(days=366 * 25):
+        raise HTTPException(status_code=400, detail="That date does not look right. Enter the date printed on the document.")
+    setattr(row, date_col, d)
+    db.commit()
+    return {"ok": True, "kind": body.kind, "document": doc, "date": d.isoformat(), "expired": (doc != "rc" and d <= today)}
 
 
 @owner_router.get("/vehicle-owner/document-todos")
@@ -108,13 +156,13 @@ def my_document_todos(db: Session = Depends(get_db), vehicle_owner_id: str = Dep
         name = f"{c.car_name} ({c.car_number})"
         notes = get_notes(c)
         if c.rc_front_img_url and c.registration_date is None:
-            items.append(_item("car", c.id, name, "RC", "Registration date is not entered", "Open the RC and enter the registration date printed on it"))
+            items.append(_item("car", c.id, name, "RC", "Registration date is not entered", "Open the RC and enter the registration date printed on it", fix="date", doc_key="rc"))
         fc_needed = fc_status_for_car(c, today)["required"]
         for label, img, exp, key in (("Insurance", c.insurance_img_url, c.insurance_expiry_date, "insurance"),
                                      ("Permit", c.permit_img_url, c.permit_expiry_date, "permit"),
                                      ("FC", c.fc_img_url if fc_needed else None, c.fc_expiry_date, "fc")):
             if img and exp is None:
-                items.append(_item("car", c.id, name, label, "Expiry date is not entered", f"Enter the expiry date printed on the {label}"))
+                items.append(_item("car", c.id, name, label, "Expiry date is not entered", f"Enter the expiry date printed on the {label}", fix="date", doc_key=key))
             elif img and exp <= today:
                 items.append(_item("car", c.id, name, label, f"Expiry date reached: {exp.strftime('%d %b %Y')}", f"Upload the renewed {label} and its new expiry date", "bad"))
         for label, key, st in (("RC front", "rc_front", c.rc_front_status), ("RC back", "rc_back", c.rc_back_status),
@@ -127,7 +175,7 @@ def my_document_todos(db: Session = Depends(get_db), vehicle_owner_id: str = Dep
     for d in get_drivers_by_vehicleOwner_id(db, str(vehicle_owner_id)):
         notes = get_notes(d)
         if d.licence_front_img and d.licence_expiry_date is None:
-            items.append(_item("driver", d.id, d.full_name, "Driving licence", "Expiry date is not entered", "Enter the validity date printed on the licence"))
+            items.append(_item("driver", d.id, d.full_name, "Driving licence", "Expiry date is not entered", "Enter the validity date printed on the licence", fix="date", doc_key="licence"))
         elif d.licence_front_img and d.licence_expiry_date <= today:
             items.append(_item("driver", d.id, d.full_name, "Driving licence", f"Expiry date reached: {d.licence_expiry_date.strftime('%d %b %Y')}", "Upload the renewed licence and its new date", "bad"))
         for label, key, st in (("Licence front", "licence", d.licence_front_status), ("Licence back", "licence_back", d.licence_back_status)):

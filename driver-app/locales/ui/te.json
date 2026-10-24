@@ -1965,5 +1965,13 @@
  "+ Add another charge": "+ మరో ఛార్జీ జోడించు",
  "Add a photo of the toll receipt (optional)": "టోల్ రసీదు ఫోటో జోడించండి (ఐచ్ఛికం)",
  "Toll receipt photo added - tap to retake": "టోల్ రసీదు ఫోటో జోడించబడింది - మళ్ళీ తీయడానికి నొక్కండి",
- "Taxes & Other Charges": "పన్నులు & ఇతర ఛార్జీలు"
+ "Taxes & Other Charges": "పన్నులు & ఇతర ఛార్జీలు",
+ "Enter the date": "తేదీని నమోదు చేయండి",
+ "Expiry date": "గడువు తేదీ",
+ "Registration date": "రిజిస్ట్రేషన్ తేదీ",
+ "Type the registration date printed on the RC (day / month / year).": "RC లో ముద్రించిన రిజిస్ట్రేషన్ తేదీని (రోజు / నెల / సంవత్సరం) నమోదు చేయండి.",
+ "Type the date printed on the document, the day it is valid until (day / month / year).": "పత్రంపై ముద్రించిన, అది చెల్లుబాటు అయ్యే చివరి తేదీని (రోజు / నెల / సంవత్సరం) నమోదు చేయండి.",
+ "Save date": "తేదీ సేవ్ చేయి",
+ "Type the date as day / month / year, for example 25/08/2027": "తేదీని రోజు / నెల / సంవత్సరం గా నమోదు చేయండి, ఉదా. 25/08/2027",
+ "Could not save the date. Please check it and try again.": "తేదీని సేవ్ చేయలేకపోయాం. సరిచూసి మళ్ళీ ప్రయత్నించండి."
 }

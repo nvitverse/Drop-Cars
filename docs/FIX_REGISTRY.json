@@ -1178,6 +1178,37 @@
       ],
       "why": "the readiness sheet + the on-duty service / bubble while the app is in the background",
       "since": "2026-10-24"
+    },
+    {
+      "id": "document-date-only-route",
+      "file": "backend/app/api/routes/account_activity_routes.py",
+      "must_contain": [
+        "/vehicle-owner/document-date",
+        "def set_document_date",
+        "fix=\"date\""
+      ],
+      "why": "a missing document date can be typed without uploading the photo again (the popup asked for a date but only a new photo could give it)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "document-todo-enter-date",
+      "file": "driver-app/components/DocumentTodoPrompt.tsx",
+      "must_contain": [
+        "Enter the date",
+        "document-date",
+        "formatDateInput"
+      ],
+      "why": "the documents popup has an Enter the date button that saves the date without a new upload",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "wallet-setbalance-accepts-updater",
+      "file": "driver-app/contexts/WalletContext.tsx",
+      "must_contain": [
+        "React.SetStateAction<number>"
+      ],
+      "why": "setBalance(prev => prev + amount) is used by the add / deduct paths; a number-only setter made the balance a function",
+      "since": "2026-10-24"
     }
   ]
 }
