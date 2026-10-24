@@ -79,6 +79,9 @@ def upload_signup_document(
     return response
 
 
+EMAIL_OTP_MAX_PER_HOUR = 150
+
+
 @router.post("/vehicleowner/send-email-otp")
 def send_email_otp(
     email: str = Form(...),
@@ -108,6 +111,13 @@ def send_email_otp(
         _age = (datetime.now(timezone.utc) - (recent_at if getattr(recent_at, "tzinfo", None) else recent_at.replace(tzinfo=timezone.utc))).total_seconds() if recent_at else 0
         _left = max(1, 60 - int(_age))
         raise HTTPException(status_code=429, detail=f"A code was sent to {email} a moment ago - it can take up to a minute to arrive, so please also look in Spam / Promotions. You can ask for another one in {_left} seconds.")
+
+    # Mail budget: the mail server has a daily sending limit shared by every user (it was reached on 25 Sep). More OTP requests in one
+    # hour than a real signup rush could ever make means somebody is burning the quota with made-up addresses - say so instead of sending.
+    _last_hour = datetime.now(timezone.utc) - timedelta(hours=1)
+    _sent = db.execute(sa_text("SELECT count(*) FROM email_otps WHERE created_at > :c"), {"c": _last_hour}).scalar() or 0
+    if _sent >= EMAIL_OTP_MAX_PER_HOUR:
+        raise HTTPException(status_code=429, detail="Too many verification emails are being requested right now. Please try again in a few minutes.")
 
     # Generate OTP
     code = ''.join(random.choices(string.digits, k=6))

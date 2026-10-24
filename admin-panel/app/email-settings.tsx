@@ -35,6 +35,16 @@ export default function EmailSettingsScreen() {
   const [smtpPort, setSmtpPort] = useState('587');
   const [configured, setConfigured] = useState(false);
 
+  // the BACKUP mail server (used automatically when the main one fails) and the health check result
+  const [bHost, setBHost] = useState('');
+  const [bPort, setBPort] = useState('587');
+  const [bUser, setBUser] = useState('');
+  const [bPass, setBPass] = useState('');
+  const [bFrom, setBFrom] = useState('');
+  const [health, setHealth] = useState<any>(null);
+  const [checking, setChecking] = useState(false);
+  const [savingBackup, setSavingBackup] = useState(false);
+
   const [linkRole, setLinkRole] = useState<UserRole>('vehicle_owner');
   const [linkNumber, setLinkNumber] = useState('');
   const [linkEmail, setLinkEmail] = useState('');
@@ -55,6 +65,13 @@ export default function EmailSettingsScreen() {
         setSmtpHost(s.smtp_host || 'smtp.gmail.com');
         setSmtpPort(String(s.smtp_port || '587'));
         setConfigured(!!s.configured);
+        const b = s.backup || {};
+        setBHost(b.smtp2_host || '');
+        setBPort(String(b.smtp2_port || '587'));
+        setBUser(b.smtp2_user || '');
+        setBPass(b.smtp2_app_password || '');
+        setBFrom(b.smtp2_from || '');
+        setHealth(s.health && s.health.providers ? s.health : null);
       } catch (error: any) {
         Alert.alert('Error', error?.message || 'Failed to load email settings');
       } finally {
@@ -82,6 +99,38 @@ export default function EmailSettingsScreen() {
       Alert.alert('Error', error?.message || 'Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveBackup = async () => {
+    if (!bHost.trim() || !bUser.trim()) {
+      Alert.alert('Error', 'Enter the backup mail server host and the sending address');
+      return;
+    }
+    setSavingBackup(true);
+    try {
+      await apiService.updateEmailSettings({
+        smtp2_host: bHost.trim(), smtp2_port: bPort.trim() || '587', smtp2_user: bUser.trim(),
+        smtp2_app_password: bPass.trim(), smtp2_from: bFrom.trim() || bUser.trim(),
+      });
+      showToast('Backup mail server saved!', 'success');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to save the backup server');
+    } finally {
+      setSavingBackup(false);
+    }
+  };
+
+  const handleCheckNow = async () => {
+    setChecking(true);
+    try {
+      const h = await apiService.makeRequest('/admin/email/health/check', { method: 'POST', body: JSON.stringify({}) });
+      setHealth(h);
+      showToast(h?.all_down ? 'Mail is DOWN - see below' : 'Check done', h?.all_down ? 'error' : 'success');
+    } catch (error: any) {
+      Alert.alert('Check failed', error?.message || 'Try again');
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -167,6 +216,36 @@ export default function EmailSettingsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
+        {/* Mail health: the server is logged in to every couple of hours (nothing is sent) and the owner is told BEFORE signups fail */}
+        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: health ? (health.all_down ? '#EF4444' : (Object.values(health.providers || {}).some((p: any) => !p.ok) ? '#F59E0B' : '#10B981')) : themeColors.border, borderWidth: 1.5 }]}>
+          <View style={styles.cardTitleRow}>
+            <Shield size={20} color={health && health.all_down ? '#EF4444' : '#10B981'} />
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Email health</Text>
+          </View>
+          {!health ? (
+            <Text style={[styles.cardHint, { color: themeColors.textSecondary }]}>Not checked yet. It is checked automatically every 2 hours; press the button to check now.</Text>
+          ) : (
+            <>
+              {health.all_down && (
+                <Text style={{ color: '#DC2626', fontWeight: '700', marginBottom: 6 }}>Email is DOWN - new drivers cannot verify their email until this is fixed.</Text>
+              )}
+              {Object.entries(health.providers || {}).map(([name, p]: any) => (
+                <View key={name} style={{ marginBottom: 8 }}>
+                  <Text style={{ color: themeColors.text, fontWeight: '700' }}>{name === 'primary' ? 'Main server' : 'Backup server'} ({p.user || '-'}): {p.ok ? 'working' : 'FAILING'}</Text>
+                  {!p.ok && !!p.diagnosis && <Text style={{ color: themeColors.textSecondary, fontSize: 13, lineHeight: 19 }}>{p.diagnosis}</Text>}
+                </View>
+              ))}
+              {!health.backup_configured && (
+                <Text style={{ color: '#B45309', fontSize: 13, lineHeight: 19 }}>No backup mail server is set. Add one below so a single blocked account cannot stop signups.</Text>
+              )}
+              {!!health.checked_at && <Text style={{ color: themeColors.textSecondary, fontSize: 12, marginTop: 4 }}>Checked {new Date(health.checked_at * 1000).toLocaleString('en-IN')}</Text>}
+            </>
+          )}
+          <TouchableOpacity style={[styles.testButton, { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderColor: isDark ? '#3B82F6' : '#BFDBFE' }]} onPress={handleCheckNow} disabled={checking}>
+            {checking ? <LoadingSpinner size="small" color="#3B82F6" /> : <Text style={[styles.testButtonText, { color: isDark ? '#93C5FD' : '#3B82F6' }]}>Check now (logs in, sends nothing)</Text>}
+          </TouchableOpacity>
+        </View>
+
         <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 }]}>
           <View style={styles.cardTitleRow}>
             <Mail size={20} color="#3B82F6" />
@@ -237,6 +316,34 @@ export default function EmailSettingsScreen() {
               )}
             </TouchableOpacity>
           )}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 }]}>
+          <View style={styles.cardTitleRow}>
+            <Mail size={20} color="#F59E0B" />
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Backup mail server</Text>
+          </View>
+          <Text style={[styles.cardHint, { color: themeColors.textSecondary }]}>
+            Used automatically when the main server (above) fails, so email verification keeps working. Any SMTP works, for example a mailbox on your website host (like noreply@dropcars.in) or a mail service.
+          </Text>
+          <Text style={[styles.inputLabel, { color: themeColors.text }]}>Backup SMTP Host</Text>
+          <TextInput style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]} value={bHost} onChangeText={setBHost} placeholder="e.g. smtp.hostinger.com" placeholderTextColor={themeColors.textMuted} autoCapitalize="none" />
+          <Text style={[styles.inputLabel, { color: themeColors.text }]}>Backup SMTP Port</Text>
+          <TextInput style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]} value={bPort} onChangeText={setBPort} placeholder="587" placeholderTextColor={themeColors.textMuted} keyboardType="number-pad" />
+          <Text style={[styles.inputLabel, { color: themeColors.text }]}>Backup user (login)</Text>
+          <TextInput style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]} value={bUser} onChangeText={setBUser} placeholder="noreply@dropcars.in" placeholderTextColor={themeColors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+          <Text style={[styles.inputLabel, { color: themeColors.text }]}>Backup password</Text>
+          <TextInput style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]} value={bPass} onChangeText={setBPass} placeholder="mailbox password" placeholderTextColor={themeColors.textMuted} secureTextEntry autoCapitalize="none" />
+          <Text style={[styles.inputLabel, { color: themeColors.text }]}>Send from (optional)</Text>
+          <TextInput style={[styles.input, { backgroundColor: themeColors.background, borderColor: themeColors.border, color: themeColors.text }]} value={bFrom} onChangeText={setBFrom} placeholder="same as the user" placeholderTextColor={themeColors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveBackup} disabled={savingBackup}>
+            {savingBackup ? <LoadingSpinner size="small" color="white" /> : (
+              <>
+                <Save size={18} color="white" />
+                <Text style={styles.saveButtonText}>Save Backup Server</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 }]}>

@@ -1178,6 +1178,7 @@ _LAST_HOUSEKEEPING = 0.0
 import time as _time_mod
 _LAST_PAYMENT_RECONCILE = 0.0
 _LAST_MEMBER_RENEWAL = 0.0
+_LAST_EMAIL_HEALTH = 0.0
 
 
 async def _run_assignment_sweep() -> dict:
@@ -1252,6 +1253,19 @@ async def _run_assignment_sweep() -> dict:
             except Exception as _e:
                 db.rollback()
                 print(f"member auto-renewal failed (continuing): {_e}")
+        # Mail health: log in to the mail server(s) every 2 hours (nothing is sent). A dead password / blocked Gmail account is found and the
+        # Admin App is told in plain words BEFORE signups start failing (email OTP is how a new account's email is verified).
+        global _LAST_EMAIL_HEALTH
+        if _time_mod.time() - _LAST_EMAIL_HEALTH > 7200:
+            _LAST_EMAIL_HEALTH = _time_mod.time()
+            try:
+                from app.utils.emailer import run_email_health_check
+                _eh = await run_email_health_check(db)
+                if _eh.get('all_down'):
+                    print('EMAIL HEALTH: every mail server is failing -', {k: v.get('diagnosis') for k, v in (_eh.get('providers') or {}).items()})
+            except Exception as _e:
+                db.rollback()
+                print(f"email health check failed (continuing): {_e}")
         # Payments Razorpay took but the app never confirmed (yearly fee / wallet top-up) - finish them (every ~5 minutes)
         global _LAST_PAYMENT_RECONCILE
         if _time_mod.time() - _LAST_PAYMENT_RECONCILE > 300:

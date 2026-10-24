@@ -5210,6 +5210,12 @@ class SmtpSettingsUpdate(BaseModel):
     smtp_user: Optional[str] = None
     smtp_app_password: Optional[str] = None
     smtp_from: Optional[str] = None
+    # the BACKUP mail server (used when the main one fails)
+    smtp2_host: Optional[str] = None
+    smtp2_port: Optional[str] = None
+    smtp2_user: Optional[str] = None
+    smtp2_app_password: Optional[str] = None
+    smtp2_from: Optional[str] = None
 
 
 class SetUserEmailRequest(BaseModel):
@@ -5230,7 +5236,35 @@ def admin_get_email_settings(
         settings["configured"] = True
     else:
         settings["configured"] = False
+    from app.utils.emailer import get_backup_smtp_settings
+    b = get_backup_smtp_settings(db)
+    settings["backup"] = {"smtp2_host": b["smtp_host"], "smtp2_port": b["smtp_port"], "smtp2_user": b["smtp_user"], "smtp2_from": b["smtp_from"],
+                          "smtp2_app_password": "********" if b["smtp_app_password"] else "", "configured": bool(b["smtp_user"] and b["smtp_app_password"])}
+    settings["health"] = _email_health(db)
     return settings
+
+
+def _email_health(db: Session) -> dict:
+    """What the last health check found (it logs in to each mail server every couple of hours - nothing is sent)."""
+    import json as _json
+    from app.models.platform_setting import PlatformSetting as _PS
+    row = db.query(_PS).filter(_PS.key == "email_health").first()
+    try:
+        return _json.loads(row.value) if row and row.value else {}
+    except ValueError:
+        return {}
+
+
+@router.get("/admin/email/health")
+def admin_email_health(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    return _email_health(db)
+
+
+@router.post("/admin/email/health/check")
+async def admin_email_health_check_now(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    """Log in to the main (and backup) mail server right now - nothing is sent - and say in plain words what is wrong."""
+    from app.utils.emailer import run_email_health_check
+    return await run_email_health_check(db)
 
 
 @router.put("/admin/email/settings")
@@ -5241,6 +5275,9 @@ def admin_update_email_settings(
 ):
     updates = {k: v for k, v in body.dict().items() if v is not None and v != "********"}
     settings = update_smtp_settings(db, updates)
+    from app.utils import emailer as _em
+    for n in ("primary", "backup"):      # a new password is tried at once, not after the cool-down
+        _em._BREAKERS[n].update(fails=0, until=0.0)
     if settings.get("smtp_app_password"):
         settings["smtp_app_password"] = "********"
     return settings

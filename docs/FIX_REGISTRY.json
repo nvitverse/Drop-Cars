@@ -1107,6 +1107,48 @@
       ],
       "why": "the GST invoice PDF that is e-mailed does not print the customer phone",
       "since": "2026-10-24"
+    },
+    {
+      "id": "email-backup-failover",
+      "file": "backend/app/utils/emailer.py",
+      "must_contain": [
+        "def get_backup_smtp_settings",
+        "_BREAKERS",
+        "def run_email_health_check",
+        "def probe_login"
+      ],
+      "why": "a dead Gmail account must not stop email verification: backup SMTP, per-server breaker, 2-hourly login-only health check with admin alert",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "email-health-in-sweep",
+      "file": "backend/app/main.py",
+      "must_contain": [
+        "_LAST_EMAIL_HEALTH",
+        "run_email_health_check"
+      ],
+      "why": "the mail health check runs every 2 hours so the owner is told before users complain",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "email-otp-hourly-budget",
+      "file": "backend/app/api/routes/vehicle_owner.py",
+      "must_contain": [
+        "EMAIL_OTP_MAX_PER_HOUR"
+      ],
+      "why": "nobody can burn the shared daily mail quota with made-up addresses (it was reached on 25 Sep)",
+      "since": "2026-10-24"
+    },
+    {
+      "id": "admin-email-health-screen",
+      "file": "admin-panel/app/email-settings.tsx",
+      "must_contain": [
+        "Email health",
+        "Backup mail server",
+        "handleCheckNow"
+      ],
+      "why": "Admin App shows mail health in plain words and holds the backup server settings",
+      "since": "2026-10-24"
     }
   ]
 }

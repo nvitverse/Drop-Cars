@@ -1740,6 +1740,11 @@ class ApiService {
     smtp_port?: string;
     smtp_user?: string;
     smtp_app_password?: string;
+    smtp2_host?: string;
+    smtp2_port?: string;
+    smtp2_user?: string;
+    smtp2_app_password?: string;
+    smtp2_from?: string;
     smtp_from?: string;
   }): Promise<any> {
     return this.makeRequest('/admin/email/settings', {
