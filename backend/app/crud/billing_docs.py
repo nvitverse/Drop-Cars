@@ -94,13 +94,16 @@ def seed_default_brands(db: Session) -> int:
                     b.rules_text = fixed
                     n += 1
             continue
-        db.add(BillingBrand(
+        fields = dict(
             code=code, name=name, legal_name=name, domain=domain, phone="9043990439", whatsapp="919043990439",
             email=f"support@{domain}", primary_color=color, invoice_prefix=prefix, estimate_prefix=f"{prefix}-EST",
             tagline=look["tagline"], footer_note=look["slogan"], highlights=look["highlights"], includes_text=billing_policies.STD_INCLUDES,
-            excludes_text=billing_policies.STD_EXCLUDES, **(billing_policies.STYLE.get(code) and
-            {"primary_color": billing_policies.STYLE[code]["primary"], "secondary_color": billing_policies.STYLE[code]["secondary"], "font_style": billing_policies.STYLE[code]["font"]} or {}), signatory="Authorised signatory", is_default=default, **pol,
-        ))
+            excludes_text=billing_policies.STD_EXCLUDES, signatory="Authorised signatory", is_default=default, **pol,
+        )
+        style = billing_policies.STYLE.get(code)
+        if style:       # the brand's own colours / type win over the plain default (passing primary_color twice crashed a fresh database)
+            fields.update(primary_color=style["primary"], secondary_color=style["secondary"], font_style=style["font"])
+        db.add(BillingBrand(**fields))
         n += 1
     if n:
         db.commit()
