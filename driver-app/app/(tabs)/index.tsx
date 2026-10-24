@@ -178,7 +178,7 @@ export interface ActiveRide {
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
-  const { balance, refreshBalance } = useWallet();
+  const { balance, balanceLoaded, refreshBalance } = useWallet();
   const { colors, isDarkMode } = useTheme();
   const { t, language: appLanguage } = useLanguage();
   const ttsLanguageRef = React.useRef<'en' | 'ta' | 'hi'>('en');
@@ -345,7 +345,7 @@ export default function DashboardScreen() {
     // The live feed pauses while the app is in the background (saves server cost; push notifications cover new
     // bookings) - refresh the list once when the driver comes back to the app.
     const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshData();
+      if (state === 'active') { refreshData(); refreshBalance(); }
     });
     return () => { unsubscribe(); appStateSub.remove(); };
   }, []);
@@ -510,7 +510,10 @@ export default function DashboardScreen() {
   const MAX_ACCEPTED_ORDERS = 3;
   
   // Get current wallet balance
-  const currentWallet = Number(dashboardData?.user_info?.wallet_balance ?? balance ?? 0);
+  // The live wallet balance wins once it has been read: the dashboard copy is taken when the app opens, so after a Razorpay
+  // top-up it still said the old amount and the driver kept getting "add Rs 1000" with money already in the wallet
+  // (booking 524, 24 Oct: Rs 764 + Rs 300 added, wallet Rs 1064, accept still refused).
+  const currentWallet = balanceLoaded ? Number(balance ?? 0) : Number(dashboardData?.user_info?.wallet_balance ?? balance ?? 0);
   
   // Fetch active rides and count accepted orders without driver/car assigned
   const fetchActiveRidesData = async () => {
@@ -786,6 +789,7 @@ export default function DashboardScreen() {
     React.useCallback(() => {
       if (user) {
         fetchAcceptedOrdersCount();
+        refreshBalance();      // money added / held since the last visit must show before the accept check
       }
     }, [user])
   );

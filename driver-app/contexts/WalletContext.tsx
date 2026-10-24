@@ -28,6 +28,8 @@ interface Transaction {
 
 interface WalletContextType {
   balance: number;
+  /** true once the balance has been read from the server at least once (before that `balance` is just the 0 placeholder) */
+  balanceLoaded: boolean;
   transactions: Transaction[];
   loading: boolean;
   error: string | null;
@@ -45,7 +47,9 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalanceRaw] = useState(0);
+  const [balanceLoaded, setBalanceLoaded] = useState(false);
+  const setBalance = (value: number) => { setBalanceRaw(value); setBalanceLoaded(true); };
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,8 +290,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <WalletContext.Provider value={{ 
-      balance, 
-      transactions, 
+      balance,
+      balanceLoaded,
+      transactions,
       loading, 
       error,
       refreshBalance,
